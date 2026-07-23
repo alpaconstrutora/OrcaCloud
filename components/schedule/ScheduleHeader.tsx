@@ -66,6 +66,22 @@ interface ScheduleHeaderProps {
     onAutoSchedule: () => void;
 }
 
+// Abas de navegação da tela (padrão UI UX tabela.md §3 — trilho + botões h-7).
+const VIEW_TABS = [
+    { key: 'table', label: 'Tabela' },
+    { key: 'gantt', label: 'Gantt' },
+    { key: 'network', label: 'Rede' },
+    { key: 's-curve', label: 'Curva S' },
+    { key: 'resources', label: 'Recursos' },
+    { key: 'risks', label: 'Riscos' },
+    { key: 'constraints', label: 'Restrições' },
+    { key: 'weekly', label: 'Last Planner' },
+    { key: 'scenarios', label: 'Cenários' },
+    { key: 'command', label: '⚡ Comando' },
+    { key: 'supply', label: '🛒 Suprimentos' },
+    { key: 'eap', label: '🏗️ EAP Física' },
+] as const;
+
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onBack,
     settings,
@@ -123,6 +139,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     const closeOverflow = () => setOverflowOpen(false);
 
     return (
+        // space-y-3 (12px) entre as barras de cromo — UI UX tabela.md: "12px entre KPIs → abas → botões".
+        <div className="space-y-3">
         <div className="bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-3">
             {/* ── Left: Title + Project selector ── */}
             <div className="flex flex-col gap-1 shrink-0">
@@ -171,44 +189,19 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             {/* ── Right: Controls ── */}
             <div className="flex items-center gap-2 flex-wrap justify-end">
 
-                {/* Group 1: View Mode */}
-                <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60">
-                    {([
-                        { key: 'table', label: 'Tabela' },
-                        { key: 'gantt', label: 'Gantt' },
-                        { key: 'network', label: 'Rede' },
-                        { key: 's-curve', label: 'Curva S' },
-                        { key: 'resources', label: 'Recursos' },
-                        { key: 'risks', label: 'Riscos' },
-                        { key: 'constraints', label: 'Restrições' },
-                        { key: 'weekly', label: 'Last Planner' },
-                        { key: 'scenarios', label: 'Cenários' },
-                        { key: 'command', label: '⚡ Comando' },
-                        { key: 'supply', label: '🛒 Suprimentos' },
-                        { key: 'eap',    label: '🏗️ EAP Física' },
-                    ] as const).map(({ key, label }) => (
-                        <button key={key} onClick={() => setViewMode(key)} className={`px-3 py-1.5 rounded-md text-button font-semibold transition-all ${viewMode === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                            {label}
-                        </button>
-                    ))}
-                </div>
-
                 {/* Group 2: Time Scale */}
                 {(viewMode === 'table' || viewMode === 'gantt') && (
-                    <>
-                        <div className="h-5 w-px bg-gray-200" />
-                        <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60">
-                            {(['day', 'week', 'month', 'year'] as const).map((scale) => (
-                                <button key={scale} onClick={() => setTimeScale(scale)} className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${timeScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                                    {{ day: 'Dia', week: 'Sem', month: 'Mês', year: 'Ano' }[scale]}
-                                </button>
-                            ))}
-                        </div>
-                    </>
+                    <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60">
+                        {(['day', 'week', 'month', 'year'] as const).map((scale) => (
+                            <button key={scale} onClick={() => setTimeScale(scale)} className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${timeScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                                {{ day: 'Dia', week: 'Sem', month: 'Mês', year: 'Ano' }[scale]}
+                            </button>
+                        ))}
+                    </div>
                 )}
 
                 {/* Group 3: Primary Actions */}
-                <div className="h-5 w-px bg-gray-200" />
+                {(viewMode === 'table' || viewMode === 'gantt') && <div className="h-5 w-px bg-gray-200" />}
                 <div className="flex items-center gap-1">
                     <Button onClick={onAutoSchedule} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" title="Recalcula todas as datas com base em predecessores e duração">
                         <Wand2 className="w-3.5 h-3.5" />
@@ -343,6 +336,24 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     </div>
                 </div>
             </div>
+        </div>
+
+        {/* Toolbar de abas — UI UX tabela.md §3 */}
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                {VIEW_TABS.map(({ key, label }) => (
+                    <button
+                        key={key}
+                        onClick={() => setViewMode(key)}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            viewMode === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+        </div>
         </div>
     );
 };

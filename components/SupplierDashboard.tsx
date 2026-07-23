@@ -26,7 +26,11 @@ import {
     FileCheck,
     RefreshCw,
     Gavel,
-    AlertCircle
+    AlertCircle,
+    ChevronDown,
+    Bell,
+    Settings2,
+    HelpCircle
 } from 'lucide-react';
 import { Supplier, UserProfile, PurchaseOrder, Invoice, QuotationRequest } from '../types';
 import { supplierAiService, SupplierAIInsight } from '../services/supplierAiService';
@@ -95,6 +99,23 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     const [searchQueryQuotations, setSearchQueryQuotations] = usePersistedState<string>('supplierDashboard:searchQuotations', '');
 
     const effectiveSupplier = supplierProfile || selectedAdminSupplier;
+
+    // Casca do portal público (link do fornecedor) — só aparece no acesso via token,
+    // espelhando o header/dropdown de perfil do Portal do Parceiro/Corretor.
+    const isStandalone = !!portalToken;
+    const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
+    const [showMyAccount, setShowMyAccount] = React.useState(false);
+    const accountMenuRef = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        if (!isAccountMenuOpen) return;
+        const handlePointerDown = (event: MouseEvent) => {
+            if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+                setIsAccountMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => document.removeEventListener('mousedown', handlePointerDown);
+    }, [isAccountMenuOpen]);
 
     React.useEffect(() => {
         if (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER) {
@@ -1058,8 +1079,100 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         { id: 'profile', label: 'Perfil', icon: <User className="w-4 h-4" /> },
     ];
 
+    const supplierDisplayName = effectiveSupplier ? getSupplierDisplayName(effectiveSupplier, appSettingsService.get().supplierNameDisplay) : 'Fornecedor';
+
     return (
         <div className="space-y-6 pb-12 bg-[#F8FAFC]">
+            {/* Casca do portal público (link do fornecedor) — banner + header com menu de conta,
+                espelhando o padrão do Portal do Parceiro/Corretor. Só aparece no acesso via token;
+                dentro do app autenticado o header já vem do Layout. */}
+            {isStandalone && (
+                <div className="-mx-4 -mt-4 md:-mx-8 md:-mt-8 mb-2">
+                    <div className="h-9 bg-blue-50 border-b border-blue-200 flex items-center justify-center gap-3 text-xs font-bold text-blue-700 uppercase tracking-wider">
+                        <span>Acesso via link público</span>
+                    </div>
+                    <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-6">
+                        <div className="flex items-center gap-3">
+                            <div className="px-2.5 py-1 bg-blue-600 text-white rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                                <Truck className="w-3.5 h-3.5" /> Supplier Portal
+                            </div>
+                            <h1 className="text-md font-bold text-gray-900 tracking-tight">Portal do Fornecedor</h1>
+                        </div>
+                        <div className="relative" ref={accountMenuRef}>
+                            <button
+                                type="button"
+                                onClick={() => setIsAccountMenuOpen(o => !o)}
+                                className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+                                aria-haspopup="menu"
+                                aria-expanded={isAccountMenuOpen}
+                            >
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
+                                    {supplierDisplayName.charAt(0).toUpperCase()}
+                                </span>
+                                <span className="font-semibold text-gray-600">{supplierDisplayName} (FORNECEDOR)</span>
+                                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isAccountMenuOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isAccountMenuOpen && (
+                                <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
+                                    <div className="border-b border-gray-100 px-4 py-3">
+                                        <div className="flex items-center gap-3">
+                                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                                                {supplierDisplayName.charAt(0).toUpperCase()}
+                                            </span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate text-sm font-bold text-gray-900">{supplierDisplayName}</div>
+                                                <div className="truncate text-xs text-gray-500">{effectiveSupplier?.email}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); setShowMyAccount(true); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            role="menuitem"
+                                        >
+                                            <User className="h-4 w-4 text-gray-400" />
+                                            <span className="flex-1">Minha conta</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); showToast('Personalização de tema estará disponível em breve.'); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            role="menuitem"
+                                        >
+                                            <Settings2 className="h-4 w-4 text-gray-400" />
+                                            <span className="flex-1">Preferências</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); showToast('Central de notificações do fornecedor estará disponível em breve.'); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            role="menuitem"
+                                        >
+                                            <Bell className="h-4 w-4 text-gray-400" />
+                                            <span className="flex-1">Notificações</span>
+                                        </button>
+                                    </div>
+                                    <div className="border-t border-gray-100 p-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); showToast('Dúvidas? Fale com a construtora responsável por esta obra.'); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            role="menuitem"
+                                        >
+                                            <HelpCircle className="h-4 w-4 text-gray-400" />
+                                            <span className="flex-1">Ajuda e comandos</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </header>
+                </div>
+            )}
+
             {/* 1. Título (guia §1) — muda por aba via TAB_META, nunca duplicado dentro do conteúdo */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -1138,6 +1251,48 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     {localToast.message}
+                </div>
+            )}
+
+            {/* MODAL: MINHA CONTA — só existe no portal público (link do fornecedor) */}
+            {showMyAccount && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div
+                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                                    <User className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Minha Conta</h2>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Dados cadastrais</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowMyAccount(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-4">
+                            {[
+                                ['Nome', supplierDisplayName],
+                                ['E-mail', effectiveSupplier?.email || '—'],
+                                ['Telefone', effectiveSupplier?.phone || '—'],
+                                ['CNPJ/CPF', effectiveSupplier?.document || '—'],
+                            ].map(([label, value]) => (
+                                <div key={label}>
+                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label}</div>
+                                    <div className="text-sm font-semibold text-gray-800">{value}</div>
+                                </div>
+                            ))}
+                            <p className="text-xs text-gray-400 pt-3 border-t border-gray-100">
+                                Para alterar seus dados cadastrais, entre em contato com a construtora.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

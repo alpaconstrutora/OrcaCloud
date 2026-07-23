@@ -830,6 +830,22 @@ export const documentService = {
     return data as OpuraDocument;
   },
 
+  // ─── ATUALIZAR METADADOS EM LOTE (mesmo valor p/ todos os IDs) ─
+  // Só para os campos "valor único para todos" da edição em lote (GED). Tags NÃO
+  // passam por aqui — cada documento mescla com as tags que já tinha, então
+  // precisa de um array final diferente por linha (loop com updateDocument).
+  async updateDocumentsBatch(ids: string[], updates: OpuraDocumentUpdate): Promise<void> {
+    const { error } = await supabase
+      .from('opura_documents')
+      .update(updates)
+      .in('id', ids);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao atualizar documentos em lote:', error);
+      throw new Error(`Erro ao atualizar documentos em lote: ${error.message}`);
+    }
+  },
+
   // ─── BLOQUEIO PARA EDIÇÃO (TRAVA) ────────────────────────────
   // A trava de fato mora nas RPCs SECURITY DEFINER abaixo + um trigger no
   // banco (migration 20270821000007) que rejeita UPDATE de conteúdo por

@@ -47,6 +47,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { DocumentsTable } from './documents/DocumentsTable';
 import { DocumentQrLabelModal } from './documents/DocumentQrLabelModal';
 import { BatchUploadSheet } from './documents/BatchUploadSheet';
+import { DocumentBatchEditModal } from './documents/DocumentBatchEditModal';
 import {
   documentService,
   OpuraDmsDiscipline, OpuraDmsDocumentType,
@@ -127,6 +128,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const tableColumns = useTableColumns(COLUMNS, 'opuraDocsColumns');
   const [uploadModalOpen, setUploadModalOpen] = React.useState(false);
   const [batchUploadOpen, setBatchUploadOpen] = React.useState(false);
+  // Seleção para edição em lote (§10/§10.1 do guia) — checkbox por linha + intervalo Shift+clique.
+  const [selectedDocIds, setSelectedDocIds] = React.useState<Set<string>>(new Set());
+  const [lastCheckedDocIndex, setLastCheckedDocIndex] = React.useState<number | null>(null);
+  const [batchEditOpen, setBatchEditOpen] = React.useState(false);
   const [selectedDocForVersions, setSelectedDocForVersions] = React.useState<OpuraDocument | null>(null);
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
   const [selectedDocForMarkup, setSelectedDocForMarkup] = React.useState<OpuraDocument | null>(null);
@@ -514,6 +519,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setCurrentFolderId(null);
     setSelectedDisciplineCode(null);
   }, [selectedProjectId, activeTab]);
+
+  // Zera a seleção de edição em lote sempre que a lista visível muda de contexto
+  // (aba, obra ou pasta) — evita editar em lote uma seleção que não é mais a
+  // que está na tela.
+  React.useEffect(() => {
+    setSelectedDocIds(new Set());
+    setLastCheckedDocIndex(null);
+  }, [activeTab, currentFolderId, selectedProjectId]);
 
   React.useEffect(() => {
     fetchDocs();
@@ -1553,6 +1566,52 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const isLockedByOther = (doc: OpuraDocument | null | undefined): boolean =>
     !!doc?.locked_by && doc.locked_by !== currentProfile?.email && !isOrgAdmin;
 
+  // Documento integrado (Contrato/NF/etc, sem linha própria em opura_documents) ou
+  // travado por outra pessoa não entra na edição em lote — mesma regra do "Editar" unitário.
+  const isDocSelectableForBatch = (doc: OpuraDocument): boolean =>
+    !doc.is_integrated && !isLockedByOther(doc);
+
+  // Seleção com intervalo via Shift+clique — mesmo padrão do §10.1 do guia de UI.
+  const handleToggleDocRow = (doc: OpuraDocument, index: number, shiftKey: boolean) => {
+    if (shiftKey && lastCheckedDocIndex !== null) {
+      const [start, end] = lastCheckedDocIndex < index ? [lastCheckedDocIndex, index] : [index, lastCheckedDocIndex];
+      const rangeIds = filteredDocuments
+        .slice(start, end + 1)
+        .filter(isDocSelectableForBatch)
+        .map((d) => d.id);
+      setSelectedDocIds((prev) => new Set([...prev, ...rangeIds]));
+    } else {
+      setSelectedDocIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(doc.id)) next.delete(doc.id);
+        else next.add(doc.id);
+        return next;
+      });
+      setLastCheckedDocIndex(index);
+    }
+  };
+
+  const selectableFilteredDocuments = React.useMemo(
+    () => filteredDocuments.filter(isDocSelectableForBatch),
+    [filteredDocuments]
+  );
+
+  const allDocsSelected =
+    selectableFilteredDocuments.length > 0 &&
+    selectableFilteredDocuments.every((d) => selectedDocIds.has(d.id));
+
+  const handleToggleAllDocs = () => {
+    setSelectedDocIds((prev) => {
+      if (allDocsSelected) return new Set();
+      return new Set(selectableFilteredDocuments.map((d) => d.id));
+    });
+  };
+
+  const selectedDocsForBatchEdit = React.useMemo(
+    () => filteredDocuments.filter((d) => selectedDocIds.has(d.id)),
+    [filteredDocuments, selectedDocIds]
+  );
+
   // Iniciar Edição do Documento
   const handleStartEditDoc = (doc: OpuraDocument) => {
     if (isLockedByOther(doc)) {
@@ -2289,6 +2348,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <DocumentsTable
               documents={filteredDocuments}
               tableColumns={tableColumns}
+              selectable={canAccessTab(activeTab)}
+              selectedIds={selectedDocIds}
+              isRowSelectable={isDocSelectableForBatch}
+              onToggleRow={handleToggleDocRow}
+              allSelectableSelected={allDocsSelected}
+              onToggleAll={handleToggleAllDocs}
               showValidade={activeTab !== 'engenharia'}
               resolveProjectName={(doc) => doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
               dynamicColumns={dynamicColumns}
@@ -2656,6 +2721,46 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         notify={notify}
         onFinished={fetchDocs}
       />
+
+      {/* ─── BARRA DE AÇÕES EM LOTE (§10 do guia) — fixa no rodapé, fora do fluxo normal ─── */}
+      {selectedDocIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+          <span className="flex-1 text-sm font-bold whitespace-nowrap">
+            {selectedDocIds.size} selecionado{selectedDocIds.size !== 1 ? 's' : ''}
+          </span>
+          <button
+            onClick={() => setBatchEditOpen(true)}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] font-medium text-[13px] hover:bg-blue-50 transition-all active:scale-95"
+          >
+            <Settings className="w-4 h-4" />
+            Editar em lote
+          </button>
+          <button
+            onClick={() => setSelectedDocIds(new Set())}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] font-medium text-[13px] hover:bg-blue-400 transition-all"
+          >
+            <X className="w-3.5 h-3.5" />
+            Desmarcar
+          </button>
+        </div>
+      )}
+
+      {batchEditOpen && (
+        <DocumentBatchEditModal
+          documents={selectedDocsForBatchEdit}
+          documentTypes={documentTypes}
+          disciplines={disciplines}
+          obras={obras}
+          companies={companies}
+          currentProfile={currentProfile}
+          notify={notify}
+          onClose={() => setBatchEditOpen(false)}
+          onSaved={() => {
+            fetchDocs();
+            setSelectedDocIds(new Set());
+          }}
+        />
+      )}
 
       {/* ─── MODAL DE HISTÓRICO DE VERSÕES / RENOVAÇÃO (Feature 4/5) ─── */}
       {selectedDocForVersions && (

@@ -50,6 +50,18 @@ export interface DocumentsTableProps {
   renderActions: (doc: OpuraDocument) => React.ReactNode;
   /** Estado vazio quando não há documento algum (antes de aplicar filtros). */
   emptyState?: React.ReactNode;
+
+  // ─── Seleção em lote (opt-in — omitir mantém o comportamento atual, ex: Portal
+  // do Parceiro não usa nenhuma destas props e continua sem coluna de checkbox) ───
+  /** Ativa a coluna de checkbox (cabeçalho + linhas). */
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  /** Documentos integrados de outro módulo ou travados por outra pessoa não entram na seleção. */
+  isRowSelectable?: (doc: OpuraDocument) => boolean;
+  /** `index` é a posição na lista renderizada — usada para o intervalo de Shift+clique (§10.1). */
+  onToggleRow?: (doc: OpuraDocument, index: number, shiftKey: boolean) => void;
+  allSelectableSelected?: boolean;
+  onToggleAll?: () => void;
 }
 
 const DEFAULT_EMPTY_STATE = (
@@ -73,6 +85,12 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   onRowClick,
   renderActions,
   emptyState,
+  selectable = false,
+  selectedIds,
+  isRowSelectable,
+  onToggleRow,
+  allSelectableSelected = false,
+  onToggleAll,
 }) => {
   const { visibleColumns, sortColumn, sortDirection, handleColumnSort } = tableColumns;
 
@@ -82,6 +100,16 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
             <tr>
+              {selectable && (
+                <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    checked={allSelectableSelected}
+                    onChange={onToggleAll}
+                  />
+                </th>
+              )}
               {visibleColumns.includes('nome') && (
                 <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
               )}
@@ -118,19 +146,32 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
           <tbody className="divide-y divide-gray-200">
             {documents.length === 0 ? (
               <tr>
-                <td colSpan={visibleColumns.length + dynamicColumns.length} className="px-6 py-20 text-center">
+                <td colSpan={visibleColumns.length + dynamicColumns.length + (selectable ? 1 : 0)} className="px-6 py-20 text-center">
                   {emptyState ?? DEFAULT_EMPTY_STATE}
                 </td>
               </tr>
             ) : (
-              documents.map((doc) => {
+              documents.map((doc, rowIndex) => {
                 const { statusColor, statusLabel } = getDocumentStatusPresentation(doc.status);
+                const rowSelectable = !selectable || !isRowSelectable || isRowSelectable(doc);
                 return (
                   <tr
                     key={doc.id}
-                    className={`hover:bg-blue-50/50 transition-colors group ${onRowClick ? 'cursor-pointer' : ''}`}
+                    className={`hover:bg-blue-50/50 transition-colors group ${onRowClick ? 'cursor-pointer' : ''} ${selectedIds?.has(doc.id) ? 'bg-blue-50/60' : ''}`}
                     onClick={onRowClick ? () => onRowClick(doc) : undefined}
                   >
+                    {selectable && (
+                      <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          title={rowSelectable ? undefined : 'Este documento não pode ser incluído na edição em lote (integrado de outro módulo ou bloqueado por outra pessoa).'}
+                          checked={selectedIds?.has(doc.id) ?? false}
+                          disabled={!rowSelectable}
+                          onChange={(e) => onToggleRow?.(doc, rowIndex, (e.nativeEvent as MouseEvent).shiftKey)}
+                        />
+                      </td>
+                    )}
                     {visibleColumns.includes('nome') && (
                       <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 min-w-[200px]">
                         <div className="flex items-center gap-3">

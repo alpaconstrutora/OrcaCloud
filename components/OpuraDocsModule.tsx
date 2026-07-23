@@ -156,6 +156,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
   const [namingPatterns, setNamingPatterns] = React.useState<OpuraDmsNamingPattern[]>([]);
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
+  // Organização escolhida no modal "Ajustes do GED" quando o seletor global está em
+  // "Todas as Organizações" — mesmo padrão de newDocOrgId/createFolderOrgId. Sem isto,
+  // criar Tipo/Disciplina/Padrão fica bloqueado sem nenhuma forma de escolher o alvo.
+  const [settingsOrgId, setSettingsOrgId] = React.useState('');
+  React.useEffect(() => {
+    if (showSettingsModal) setSettingsOrgId('');
+  }, [showSettingsModal]);
   const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns' | 'document_types'>('disciplines');
   const [newDiscCode, setNewDiscCode] = React.useState('');
   const [newDiscName, setNewDiscName] = React.useState('');
@@ -685,13 +692,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     // -- Document Types Handlers --
     const handleCreateDocTypeSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!activeOrganizationId) {
+      const targetOrgId = activeOrganizationId || settingsOrgId;
+      if (!targetOrgId) {
         notify('Selecione uma organização para cadastrar o tipo de documento.', 'error');
         return;
       }
       if (!newDocTypeName) return;
       try {
-        await documentService.createDocumentType(activeOrganizationId, newDocTypeName);
+        await documentService.createDocumentType(targetOrgId, newDocTypeName);
         setNewDocTypeName('');
         fetchDmsSettings();
       } catch (err: any) {
@@ -750,13 +758,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     const handleCreateDisciplineSubmit = async (e: React.FormEvent) => {
 
     e.preventDefault();
-    if (!activeOrganizationId) {
+    const targetOrgId = activeOrganizationId || settingsOrgId;
+    if (!targetOrgId) {
       notify('Selecione uma organização para cadastrar a disciplina.', 'error');
       return;
     }
     if (!newDiscCode || !newDiscName) return;
     try {
-      await documentService.createDiscipline(activeOrganizationId, newDiscCode, newDiscName);
+      await documentService.createDiscipline(targetOrgId, newDiscCode, newDiscName);
       setNewDiscCode('');
       setNewDiscName('');
       fetchDmsSettings();
@@ -785,13 +794,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Criar novo padrão de nomenclatura
   const handleCreateNamingPatternSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrganizationId) {
+    const targetOrgId = activeOrganizationId || settingsOrgId;
+    if (!targetOrgId) {
       notify('Selecione uma organização para cadastrar o padrão de nomenclatura.', 'error');
       return;
     }
     if (!newPatName || !newPatMask) return;
     try {
-      await documentService.createNamingPattern(activeOrganizationId, newPatName, newPatMask);
+      await documentService.createNamingPattern(targetOrgId, newPatName, newPatMask);
       setNewPatName('');
       setNewPatMask('');
       fetchDmsSettings();
@@ -3774,8 +3784,27 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </button>
             </div>
 
+            {/* Seletor de organização — só quando o seletor global está em "Todas as
+                Organizações". Sem ele, criar Tipo/Disciplina/Padrão não tem como saber
+                em qual org gravar (mesmo padrão de newDocOrgId no modal de upload). */}
+            {!activeOrganizationId && (
+              <div className="px-6 pt-4">
+                <label className="text-xs font-semibold text-slate-500">Organização (para cadastrar novos itens)</label>
+                <select
+                  value={settingsOrgId}
+                  onChange={(e) => setSettingsOrgId(e.target.value)}
+                  className="w-full mt-1.5 px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                >
+                  <option value="">Selecione uma organização...</option>
+                  {organizations.map(org => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Abas Internas */}
-            
+
               <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/20 px-6 overflow-x-auto">
                 <button
                   onClick={() => setSettingsTab('document_types')}

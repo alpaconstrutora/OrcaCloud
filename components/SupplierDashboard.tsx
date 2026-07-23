@@ -200,19 +200,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
     const renderOverview = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {/* KPI Cards (§4) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Negociações Ativas" value="12" icon={<Clock className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Cotações Pendentes" value={quotations.length} icon={<History className="w-5 h-5" />} color="amber" />
-                <KpiCard label="Pedidos Pendentes" value={orders.filter(o => ['Rascunho', 'Enviado'].includes(o.status)).length} icon={<Package className="w-5 h-5" />} color="amber" />
-                <KpiCard
-                    label="Volume Faturado"
-                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(orders.filter(o => o.status === 'Confirmado').reduce((sum, o) => sum + (o.items?.reduce((is: number, i: { total?: number }) => is + (i.total || 0), 0) || 0), 0) / 1000) + 'k'}
-                    icon={<DollarSign className="w-5 h-5" />}
-                    color="indigo"
-                />
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Recent Negotiations & Orders (3/4) */}
                 <div className="lg:col-span-3 space-y-6">
@@ -380,11 +367,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Oportunidades de Venda</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Negocie lances e acompanhe a concorrência em tempo real.</p>
-                </div>
-
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -738,11 +720,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Pedidos</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Acompanhe o ciclo de vida e logística dos suprimentos.</p>
-                </div>
-
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -945,13 +922,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Solicitações de Cotação</h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Responda às solicitações de orçamento das construtoras.</p>
-                    </div>
-                </div>
-
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -1029,10 +999,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
     const renderDocuments = () => (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Central de Documentos</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie suas Notas Fiscais, XMLs e comprovantes de entrega.</p>
-            </div>
             {effectiveSupplier ? (
                 <InvoiceManager supplier={effectiveSupplier} />
             ) : (
@@ -1047,49 +1013,78 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         </div>
     );
 
+    // Título único por aba (UI UX tabela.md §1) — nada de h1 duplicado dentro de cada render*
+    const TAB_META: Record<typeof activeTab, { title: string; subtitle: string }> = {
+        overview: {
+            title: effectiveSupplier?.name ? `Olá, ${effectiveSupplier.name.split(' ')[0]}` : 'Portal Prime',
+            subtitle: 'Supply Intelligence Dashboard.',
+        },
+        negotiations: { title: 'Oportunidades de Venda', subtitle: 'Negocie lances e acompanhe a concorrência em tempo real.' },
+        quotations: { title: 'Solicitações de Cotação', subtitle: 'Responda às solicitações de orçamento das construtoras.' },
+        orders: { title: 'Gestão de Pedidos', subtitle: 'Acompanhe o ciclo de vida e logística dos suprimentos.' },
+        documents: { title: 'Central de Documentos', subtitle: 'Gerencie suas Notas Fiscais, XMLs e comprovantes de entrega.' },
+        profile: { title: 'Perfil', subtitle: 'Dados cadastrais e configurações da conta.' },
+    };
+
+    const TABS: { id: typeof activeTab; label: string; icon: React.ReactNode }[] = [
+        { id: 'overview', label: 'Estatísticas', icon: <LayoutDashboard className="w-4 h-4" /> },
+        { id: 'negotiations', label: 'Lances', icon: <ArrowUpRight className="w-4 h-4" /> },
+        { id: 'quotations', label: 'Cotações', icon: <History className="w-4 h-4" /> },
+        { id: 'orders', label: 'Pedidos', icon: <Package className="w-4 h-4" /> },
+        { id: 'documents', label: 'Docs', icon: <FileCheck className="w-4 h-4" /> },
+        { id: 'profile', label: 'Perfil', icon: <User className="w-4 h-4" /> },
+    ];
+
     return (
         <div className="space-y-6 pb-12">
-            {/* Header (§20) */}
+            {/* 1. Título (guia §1) — muda por aba via TAB_META, nunca duplicado dentro do conteúdo */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                            {effectiveSupplier?.name ? `Olá, ${effectiveSupplier.name.split(' ')[0]}` : 'Portal Prime'}
-                        </h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Supply Intelligence Dashboard.</p>
-                    </div>
-                    {!supplierProfile && (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER) && (
-                        <select
-                            onChange={(e) => {
-                                const supplier = allSuppliers.find(s => s.id === e.target.value);
-                                if (supplier) setSelectedAdminSupplier(supplier);
-                            }}
-                            className="h-9 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-[6px] px-3 focus:ring-0 cursor-pointer hover:bg-amber-100 transition-colors"
-                            value={selectedAdminSupplier?.id || ''}
-                        >
-                            <option value="">Impersonar Fornecedor</option>
-                            {allSuppliers.map(s => (
-                                <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)} ({s.email})</option>
-                            ))}
-                        </select>
-                    )}
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{TAB_META[activeTab].title}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_META[activeTab].subtitle}</p>
                 </div>
+                {!supplierProfile && (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER) && (
+                    <select
+                        onChange={(e) => {
+                            const supplier = allSuppliers.find(s => s.id === e.target.value);
+                            if (supplier) setSelectedAdminSupplier(supplier);
+                        }}
+                        className="h-9 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-[6px] px-3 focus:ring-0 cursor-pointer hover:bg-amber-100 transition-colors"
+                        value={selectedAdminSupplier?.id || ''}
+                    >
+                        <option value="">Impersonar Fornecedor</option>
+                        {allSuppliers.map(s => (
+                            <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)} ({s.email})</option>
+                        ))}
+                    </select>
+                )}
+            </div>
 
-                {/* Navegação local de sub-abas do portal (§19 — vocabulário compacto) */}
-                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0 overflow-x-auto">
-                    {[
-                        { id: 'overview', label: 'Estatísticas', icon: <LayoutDashboard className="w-4 h-4" /> },
-                        { id: 'negotiations', label: 'Lances', icon: <ArrowUpRight className="w-4 h-4" /> },
-                        { id: 'quotations', label: 'Cotações', icon: <History className="w-4 h-4" /> },
-                        { id: 'orders', label: 'Pedidos', icon: <Package className="w-4 h-4" /> },
-                        { id: 'documents', label: 'Docs', icon: <FileCheck className="w-4 h-4" /> },
-                        { id: 'profile', label: 'Perfil', icon: <User className="w-4 h-4" /> },
-                    ].map(tab => (
+            {/* 2. KPI cards (guia §2) — só a aba Estatísticas tem; mb-3 = ritmo de cromo (§20.1) */}
+            {activeTab === 'overview' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                    <KpiCard label="Negociações Ativas" value="12" icon={<Clock className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Cotações Pendentes" value={quotations.length} icon={<History className="w-5 h-5" />} color="amber" />
+                    <KpiCard label="Pedidos Pendentes" value={orders.filter(o => ['Rascunho', 'Enviado'].includes(o.status)).length} icon={<Package className="w-5 h-5" />} color="violet" />
+                    <KpiCard
+                        label="Volume Faturado"
+                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(orders.filter(o => o.status === 'Confirmado').reduce((sum, o) => sum + (o.items?.reduce((is: number, i: { total?: number }) => is + (i.total || 0), 0) || 0), 0) / 1000) + 'k'}
+                        icon={<DollarSign className="w-5 h-5" />}
+                        color="emerald"
+                    />
+                </div>
+            )}
+
+            {/* 3. Toolbar de abas (guia §3) — trilho bg-gray-50, aba ativa bg-white text-blue-600 shadow-sm
+                (não é o azul sólido de botão/toggle — aquilo é ação, isto é navegação) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {TABS.map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                            onClick={() => setActiveTab(tab.id)}
                             className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id
-                                ? 'bg-blue-600 text-white'
+                                ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-400 hover:text-gray-600'
                                 }`}
                         >

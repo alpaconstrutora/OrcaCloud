@@ -43,6 +43,7 @@ import {
   Lock
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { DocumentsTable } from './documents/DocumentsTable';
 import {
   documentService,
   OpuraDmsDiscipline, OpuraDmsDocumentType,
@@ -1669,18 +1670,6 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Renderizador de Ícone com base no MIME-type/Extensão
-  const renderFileIcon = (mime: string, name?: string) => {
-    if (!name) return <FileText className="w-8 h-8 text-gray-400" />;
-    const ext = name.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') return <FileText className="w-8 h-8 text-rose-500" />;
-    if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet className="w-8 h-8 text-emerald-600" />;
-    if (ext === 'docx' || ext === 'doc') return <FileText className="w-8 h-8 text-blue-600" />;
-    if (ext === 'dwg') return <Briefcase className="w-8 h-8 text-amber-600" />;
-    if (['png', 'jpg', 'jpeg'].includes(ext || '')) return <ImageIcon className="w-8 h-8 text-violet-500" />;
-    return <FileText className="w-8 h-8 text-gray-400" />;
-  };
-
   return (
     <div className="space-y-6">
       {/* ─── TÍTULO (§1: h1 solto, nunca dentro de card/hero) ─── */}
@@ -2254,208 +2243,94 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             {/* §6.5 do guia: cabeçalho fixo (sticky) ainda não implementado aqui — pendência
                 documentada, não decisão fechada. Candidata legítima (acervo pode crescer bastante),
                 mas fica para uma tarefa própria em vez de decidir ad-hoc nesta correção. */}
-            <div className="bg-white overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    <tr>
-                      {tableColumns.visibleColumns.includes('nome') && (
-                        <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+            <DocumentsTable
+              documents={filteredDocuments}
+              tableColumns={tableColumns}
+              showValidade={activeTab !== 'engenharia'}
+              resolveProjectName={(doc) => doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
+              dynamicColumns={dynamicColumns}
+              getDynamicColumnLabel={getDynamicColumnLabel}
+              getDynamicCellValue={(doc, col) => {
+                // Usa o código exibido (doc.nome), não o nome físico no Storage: eles podem
+                // divergir quando o documento é renomeado depois do upload (edição de metadados
+                // não renomeia o arquivo no Storage) ou quando veio de import legado.
+                const cleanFileName = doc.nome;
+                if (col.toUpperCase().includes('OBRA')) return extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[OBRA]') || '-';
+                if (col.toUpperCase().includes('DISCIPLINA')) return extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[DISCIPLINA]') || '-';
+                if (col.toUpperCase().includes('NUMERO')) return extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[NUMERO]') || '-';
+                if (col.toUpperCase().includes('REVISAO')) return extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[REVISAO]') || '-';
+                return '-';
+              }}
+              onRowClick={async (doc) => {
+                const fullDoc = await documentService.getDocumentById(doc.id);
+                if (!fullDoc) return;
+                setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id); fetchOrgMembers(fullDoc.organization_id);
+              }}
+              emptyState={
+                folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center space-y-4">
+                    <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
+                      <FolderOpen className="w-12 h-12" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-700">Nenhum documento ou pasta encontrado</h3>
+                      <p className="text-slate-400 text-sm mt-1 max-w-sm mx-auto">
+                        Não existem arquivos ou subpastas neste diretório.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400 font-medium">
+                    Nenhum arquivo avulso nesta pasta. Navegue pelas subpastas acima.
+                  </div>
+                )
+              }
+              renderActions={(doc) => (
+                <>
+                  {doc.active_version && (
+                    <ActionIconButton kind="download" onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome, doc.id)} />
+                  )}
+                  {!doc.is_integrated && (
+                    <>
+                      {/* Sempre visíveis: Editar + (Download acima) */}
+                      <ActionIconButton
+                        kind="settings"
+                        onClick={() => handleStartEditDoc(doc)}
+                        disabled={isLockedByOther(doc)}
+                        title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by}` : undefined}
+                      />
+                      {/* Bloqueio para edição: informa quem está editando e trava edição/nova versão para os demais */}
+                      {doc.locked_by ? (
+                        <ActionIconButton
+                          kind="unlock"
+                          disabled={isLockedByOther(doc)}
+                          title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by} — apenas quem bloqueou ou um admin pode desbloquear` : 'Desbloquear'}
+                          onClick={() => handleUnlockDoc(doc)}
+                        />
+                      ) : (
+                        <ActionIconButton kind="lock" onClick={() => setLockModalDoc(doc)} />
                       )}
-                      
-                      {dynamicColumns.map((col, idx) => (
-                        <th key={`dyn-head-${idx}`} className="px-6 py-2 border-r border-gray-100 text-left text-table-header font-semibold text-gray-500 whitespace-nowrap">
-                          {getDynamicColumnLabel(col)}
-                        </th>
-                      ))}
-                      
-                      {tableColumns.visibleColumns.includes('autor') && (
-                        <SortableHeader colKey="autor" label="Autor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                      )}
-                      {tableColumns.visibleColumns.includes('tipo_documento') && (
-                        <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                      )}
-                      {tableColumns.visibleColumns.includes('project_id') && (
-                        <SortableHeader colKey="project_id" label="Obra Vinculada" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                      )}
-                      {tableColumns.visibleColumns.includes('data_emissao') && (
-                        <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                      )}
-                      {tableColumns.visibleColumns.includes('data_validade') && activeTab !== 'engenharia' && (
-                        <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                      )}
-                      {tableColumns.visibleColumns.includes('status') && (
-                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                      )}
-                      {tableColumns.visibleColumns.includes('actions') && (
-                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Ações</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {filteredDocuments.length === 0 ? (
-                      <tr>
-                        <td colSpan={tableColumns.visibleColumns.length + dynamicColumns.length} className="px-6 py-20 text-center">
-                          {folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length === 0 ? (
-                            <div className="flex flex-col items-center justify-center space-y-4">
-                              <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
-                                <FolderOpen className="w-12 h-12" />
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-slate-700">Nenhum documento ou pasta encontrado</h3>
-                                <p className="text-slate-400 text-sm mt-1 max-w-sm mx-auto">
-                                  Não existem arquivos ou subpastas neste diretório.
-                                </p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-sm text-slate-400 font-medium">
-                              Nenhum arquivo avulso nesta pasta. Navegue pelas subpastas acima.
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredDocuments.map((doc) => {
-                        // Determinar o status textual para o badge conforme o novo padrão
-                        const statusColor = doc.status === 'vencido' ? 'text-red-600' : doc.status === 'alerta' ? 'text-amber-600' : 'text-green-600';
-                        const statusLabel = doc.status === 'vencido' ? 'Vencido' : doc.status === 'alerta' ? 'Em Alerta' : 'Ativo';
-
-                        return (
-                          <tr
-                            key={doc.id}
-                            className="hover:bg-blue-50/50 transition-colors group cursor-pointer"
-                            onClick={async () => {
-                              const fullDoc = await documentService.getDocumentById(doc.id);
-                              if (!fullDoc) return;
-                              setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id); fetchOrgMembers(fullDoc.organization_id);
-                            }}
-                          >
-                            {tableColumns.visibleColumns.includes('nome') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 min-w-[200px]">
-                                <div className="flex items-center gap-3">
-                                  <div className="flex-shrink-0">
-                                    {doc.active_version ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path) : <FileText className="w-5 h-5 text-gray-400" />}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
-                                    {doc.descricao && <span className="text-xs text-gray-400 block truncate mt-0.5">{doc.descricao}</span>}
-                                    {doc.locked_by && (
-                                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-orange-600 mt-0.5">
-                                        <Lock className="w-3 h-3" />
-                                        Em edição por {doc.locked_by_name || doc.locked_by} — V{doc.locked_version}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </td>
-                            )}
-
-                            {dynamicColumns.map((col, idx) => {
-                              let val = '-';
-                              // Usa o código exibido (doc.nome), não o nome físico no Storage: eles podem
-                              // divergir quando o documento é renomeado depois do upload (edição de metadados
-                              // não renomeia o arquivo no Storage) ou quando veio de import legado.
-                              const cleanFileName = doc.nome;
-                              if (col.toUpperCase().includes('OBRA')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[OBRA]') || '-';
-                              else if (col.toUpperCase().includes('DISCIPLINA')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[DISCIPLINA]') || '-';
-                              else if (col.toUpperCase().includes('NUMERO')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[NUMERO]') || '-';
-                              else if (col.toUpperCase().includes('REVISAO')) {
-                                const rawRev = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[REVISAO]');
-                                val = rawRev || '-';
-                              }
-                              return (
-                                <td key={`dyn-body-${doc.id}-${idx}`} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 whitespace-nowrap bg-slate-50/30">
-                                  {val}
-                                </td>
-                              );
-                            })}
-
-                            {tableColumns.visibleColumns.includes('autor') && (
-                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                  {doc.autor || '-'}
-                                </td>
-                              )}
-                              {tableColumns.visibleColumns.includes('tipo_documento') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {doc.tipo_documento}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('project_id') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('data_emissao') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                {doc.data_emissao ? new Date(doc.data_emissao).toLocaleDateString() : '-'}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('data_validade') && activeTab !== 'engenharia' && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                {doc.data_validade ? new Date(doc.data_validade).toLocaleDateString() : '-'}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('status') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                                <span className={statusColor}>{statusLabel}</span>
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('actions') && (
-                              <td className="px-6 py-2.5 text-right whitespace-nowrap">
-                                <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                  {doc.active_version && (
-                                    <ActionIconButton kind="download" onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome, doc.id)} />
-                                  )}
-                                  {!doc.is_integrated && (
-                                    <>
-                                      {/* Sempre visíveis: Editar + (Download acima) */}
-                                      <ActionIconButton
-                                        kind="settings"
-                                        onClick={() => handleStartEditDoc(doc)}
-                                        disabled={isLockedByOther(doc)}
-                                        title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by}` : undefined}
-                                      />
-                                      {/* Bloqueio para edição: informa quem está editando e trava edição/nova versão para os demais */}
-                                      {doc.locked_by ? (
-                                        <ActionIconButton
-                                          kind="unlock"
-                                          disabled={isLockedByOther(doc)}
-                                          title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by} — apenas quem bloqueou ou um admin pode desbloquear` : 'Desbloquear'}
-                                          onClick={() => handleUnlockDoc(doc)}
-                                        />
-                                      ) : (
-                                        <ActionIconButton kind="lock" onClick={() => setLockModalDoc(doc)} />
-                                      )}
-                                      {/* Ações secundárias — bandeja horizontal (abre para a esquerda) */}
-                                      <InlineActionTray>
-                                        {isOrgAdmin && !doc.is_integrated && (
-                                          <ActionIconButton kind="move" onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} />
-                                        )}
-                                        <ActionIconButton kind="qrcode" onClick={() => setSelectedDocForQrCode(doc)} />
-                                        {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
-                                          <ActionIconButton kind="annotate" onClick={() => setSelectedDocForMarkup(doc)} />
-                                        )}
-                                        {isOrgAdmin && !doc.is_integrated && (
-                                          <ActionIconButton kind="share" onClick={() => openShareModal([doc.id])} />
-                                        )}
-                                        {isOrgAdmin && !doc.is_integrated && (
-                                          <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
-                                        )}
-                                      </InlineActionTray>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      {/* Ações secundárias — bandeja horizontal (abre para a esquerda) */}
+                      <InlineActionTray>
+                        {isOrgAdmin && !doc.is_integrated && (
+                          <ActionIconButton kind="move" onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} />
+                        )}
+                        <ActionIconButton kind="qrcode" onClick={() => setSelectedDocForQrCode(doc)} />
+                        {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
+                          <ActionIconButton kind="annotate" onClick={() => setSelectedDocForMarkup(doc)} />
+                        )}
+                        {isOrgAdmin && !doc.is_integrated && (
+                          <ActionIconButton kind="share" onClick={() => openShareModal([doc.id])} />
+                        )}
+                        {isOrgAdmin && !doc.is_integrated && (
+                          <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
+                        )}
+                      </InlineActionTray>
+                    </>
+                  )}
+                </>
+              )}
+            />
           </div>
         )}
       </div>

@@ -27,14 +27,17 @@ import {
   ChevronDown,
   Bell,
   HelpCircle,
-  Settings2
+  Settings2,
+  Filter
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
 import { contractService } from '../../services/contractService';
 import Button from '../ui/Button';
-import { usePersistedState } from '../ui/TableUtils';
+import ActionIconButton from '../ui/ActionIconButton';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState } from '../ui/TableUtils';
+import { DocumentsTable } from '../documents/DocumentsTable';
 import {
   PartnerWorkspace,
   PartnerUser,
@@ -45,7 +48,8 @@ import {
   Contract,
   ContractItem,
   ContractAddendum,
-  ContractMeasurement
+  ContractMeasurement,
+  OpuraDocument
 } from '../../types';
 
 interface PartnerPortalProps {
@@ -65,6 +69,19 @@ const CATEGORIA_LABELS: Record<string, string> = {
   comercial: 'Comercial',
 };
 const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
+
+// Mesmas colunas da Gestão de Documentos (OpuraDocsModule.tsx) — a tabela do parceiro é a
+// mesma <DocumentsTable>, então as colunas precisam ser as mesmas para o layout ficar idêntico.
+const PARTNER_DOC_COLUMNS: ColumnConfig[] = [
+  { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'autor', label: 'Autor', sortable: true },
+  { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
+  { key: 'project_id', label: 'Obra Vinculada', sortable: true },
+  { key: 'data_emissao', label: 'Emissão', sortable: true },
+  { key: 'data_validade', label: 'Validade', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
 
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken }) => {
   const isPreview = !!previewWorkspaceId;
@@ -214,25 +231,48 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const saldoAFaturar = detailContract ? Number(detailContract.current_value) - totalMeasured : 0;
 
   const [docSearchQuery, setDocSearchQuery] = usePersistedState('partnerPortalDocsFilters:search', '');
+  const [docCategoriaFilter, setDocCategoriaFilter] = usePersistedState<string>('partnerPortalDocsFilters:categoria', 'all');
+  const [docStatusFilter, setDocStatusFilter] = usePersistedState<'all' | 'ativo' | 'alerta' | 'vencido'>('partnerPortalDocsFilters:status', 'all');
+  const [showDocFilters, setShowDocFilters] = React.useState(false);
+  const partnerDocColumns = useTableColumns(PARTNER_DOC_COLUMNS, 'partnerDocsColumns');
 
-  // Documentos compartilhados, filtrados pela busca e agrupados por categoria (Onda 4)
-  const docsByCategoria = React.useMemo(() => {
-    const q = docSearchQuery.trim().toLowerCase();
-    const filtered = q
-      ? sharedDocs.filter((sd) =>
-          (sd.document?.nome || '').toLowerCase().includes(q) ||
-          (sd.document?.descricao || '').toLowerCase().includes(q)
-        )
-      : sharedDocs;
+  // Documentos GED por trás de cada vínculo — mesmo objeto que a Gestão de Documentos usa
+  // (PartnerSharedDocument.document é o próprio OpuraDocument, ver partnerService.listSharedDocuments).
+  const sharedOpuraDocuments = React.useMemo(
+    () => sharedDocs.map((sd) => sd.document).filter((d): d is OpuraDocument => !!d),
+    [sharedDocs]
+  );
 
-    const grouped: Record<string, PartnerSharedDocument[]> = {};
-    filtered.forEach((sd) => {
-      const key = sd.document?.categoria || 'outros';
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(sd);
+  // Quantos documentos compartilhados existem por categoria — alimenta a sidebar "Pastas e disciplinas".
+  const categoriaCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    sharedOpuraDocuments.forEach((doc) => {
+      const key = doc.categoria || 'outros';
+      counts[key] = (counts[key] || 0) + 1;
     });
-    return grouped;
-  }, [sharedDocs, docSearchQuery]);
+    return counts;
+  }, [sharedOpuraDocuments]);
+
+  // Documentos compartilhados, filtrados por categoria selecionada + status + busca — alimenta <DocumentsTable>.
+  const filteredSharedDocuments = React.useMemo(() => {
+    let result = sharedOpuraDocuments;
+
+    if (docCategoriaFilter !== 'all') {
+      result = result.filter((doc) => (doc.categoria || 'outros') === docCategoriaFilter);
+    }
+    if (docStatusFilter !== 'all') {
+      result = result.filter((doc) => doc.status === docStatusFilter);
+    }
+    const q = docSearchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((doc) =>
+        (doc.nome || '').toLowerCase().includes(q) ||
+        (doc.descricao || '').toLowerCase().includes(q) ||
+        (doc.tipo_documento || '').toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [sharedOpuraDocuments, docCategoriaFilter, docStatusFilter, docSearchQuery]);
 
   // 1. Carregar perfil e workspace inicial (ou o workspace de pré-visualização, se for o caso)
   useEffect(() => {
@@ -921,21 +961,44 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             </div>
           )}
 
-          {/* TAB: DOCUMENTOS */}
+          {/* TAB: DOCUMENTOS — mesma <DocumentsTable> da Gestão de Documentos (GED), só que
+              somente-leitura e restrita aos documentos que a construtora compartilhou com este
+              workspace. Fonte única de layout: qualquer ajuste na tabela do GED reflete aqui. */}
           {activeTab === 'documentos' && (
-            <div className="flex flex-col gap-6">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <h3 className="text-md font-bold text-gray-900">Documentos e Projetos Compartilhados</h3>
-                <div className="flex items-center gap-3">
-                  <div className="relative max-w-xs w-full">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                    <input
-                      value={docSearchQuery}
-                      onChange={(e) => setDocSearchQuery(e.target.value)}
-                      placeholder="Buscar documentos..."
-                      className="bg-gray-50 border border-gray-200 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-gray-900 focus:outline-none focus:border-orange-500"
-                    />
-                  </div>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Sidebar "Pastas e disciplinas" — versão read-only por categoria (o parceiro não
+                  enxerga a árvore de pastas interna do GED, só os documentos compartilhados com ele) */}
+              <div className="lg:col-span-1 flex flex-col gap-3">
+                <h4 className="text-xs font-black uppercase tracking-wider text-gray-400">Pastas e disciplinas</h4>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => setDocCategoriaFilter('all')}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all
+                      ${docCategoriaFilter === 'all' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600' : 'text-gray-500 hover:bg-gray-50 border border-transparent'}`}
+                  >
+                    <span className="flex items-center gap-2"><FolderOpen className="w-3.5 h-3.5" /> Todos os documentos</span>
+                    <span className="text-gray-400 font-bold">{sharedOpuraDocuments.length}</span>
+                  </button>
+                  {[...CATEGORIA_ORDER, ...Object.keys(categoriaCounts).filter((c) => !CATEGORIA_ORDER.includes(c))]
+                    .filter((cat) => categoriaCounts[cat] > 0)
+                    .map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setDocCategoriaFilter(cat)}
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all
+                          ${docCategoriaFilter === cat ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600' : 'text-gray-500 hover:bg-gray-50 border border-transparent'}`}
+                      >
+                        <span className="truncate">{CATEGORIA_LABELS[cat] || cat}</span>
+                        <span className="text-gray-400 font-bold shrink-0 ml-2">{categoriaCounts[cat]}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              {/* Coluna principal: toolbar + enviados por você + tabela */}
+              <div className="lg:col-span-3 flex flex-col gap-6 min-w-0">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <h3 className="text-md font-bold text-gray-900">Documentos Compartilhados</h3>
                   <Button
                     onClick={() => setIsSendDocModalOpen(true)}
                     disabled={isPreview}
@@ -946,100 +1009,126 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     Enviar Documento
                   </Button>
                 </div>
-              </div>
 
-              {sentDocuments.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                    Enviados por Você
-                    <span className="text-gray-400 font-bold">({sentDocuments.length})</span>
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {sentDocuments.map((req) => (
-                      <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm">
-                        <div className="flex items-start justify-between">
-                          <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Upload className="w-5 h-5" /></div>
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border
-                            ${req.status === 'CONCLUIDO' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-yellow-50 text-yellow-600 border-yellow-200'}`}>
-                            {req.status === 'CONCLUIDO' ? 'Incluído no GED' : 'Aguardando revisão'}
-                          </span>
+                {sentDocuments.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                      Enviados por Você
+                      <span className="text-gray-400 font-bold">({sentDocuments.length})</span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {sentDocuments.map((req) => (
+                        <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm">
+                          <div className="flex items-start justify-between">
+                            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Upload className="w-5 h-5" /></div>
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border
+                              ${req.status === 'CONCLUIDO' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-yellow-50 text-yellow-600 border-yellow-200'}`}>
+                              {req.status === 'CONCLUIDO' ? 'Incluído no GED' : 'Aguardando revisão'}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
+                            <p className="text-xs text-gray-400 mt-1 truncate">{req.description}</p>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
+                            <span>Enviado em: {new Date(req.created_at).toLocaleDateString()}</span>
+                            {req.attachment_paths?.[0] && (
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadAttachment(req.attachment_paths![0])}
+                                className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-semibold"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Ver</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
-                          <p className="text-xs text-gray-400 mt-1 truncate">{req.description}</p>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
-                          <span>Enviado em: {new Date(req.created_at).toLocaleDateString()}</span>
-                          {req.attachment_paths?.[0] && (
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadAttachment(req.attachment_paths![0])}
-                              className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-semibold"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Ver</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {sharedDocs.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
-                  Nenhum documento compartilhado com o seu portal no momento.
-                </div>
-              ) : Object.keys(docsByCategoria).length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
-                  Nenhum documento encontrado para "{docSearchQuery}".
-                </div>
-              ) : (
-                <div className="flex flex-col gap-8">
-                  {[...CATEGORIA_ORDER, ...Object.keys(docsByCategoria).filter((c) => !CATEGORIA_ORDER.includes(c))]
-                    .filter((cat) => docsByCategoria[cat]?.length)
-                    .map((cat) => (
-                      <div key={cat} className="flex flex-col gap-3">
-                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                          {CATEGORIA_LABELS[cat] || cat}
-                          <span className="text-gray-400 font-bold">({docsByCategoria[cat].length})</span>
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {docsByCategoria[cat].map((sd) => (
-                            <div key={sd.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm hover:border-gray-300 transition-all group">
-                              <div className="flex items-start justify-between">
-                                <div className="p-2 bg-orange-50 text-orange-500 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
-                                {isRecentlyShared(sd.shared_at) && (
-                                  <span className="text-[9px] font-black uppercase tracking-wider bg-green-50 text-green-600 px-1.5 py-0.5 rounded-md border border-green-200">
-                                    Novo
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-xs font-bold text-gray-900 truncate">{sd.document?.nome}</h4>
-                                <p className="text-xs text-gray-400 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
-                              </div>
-                              <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
-                                <span>Compartilhado em: {new Date(sd.shared_at).toLocaleDateString()}</span>
-                                {sd.document?.active_version?.storage_path && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDownloadSharedDocument(sd.document!.active_version!.storage_path)}
-                                    className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-semibold"
-                                  >
-                                    <Download className="w-3.5 h-3.5" />
-                                    <span>Baixar</span>
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                {/* Toolbar acoplada à tabela (§5.2 do guia de UI) — busca, filtros e config de colunas */}
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                      <div className="flex-1 relative w-full">
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          value={docSearchQuery}
+                          onChange={(e) => setDocSearchQuery(e.target.value)}
+                          placeholder="Buscar documento por nome, tipo ou código..."
+                          className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                        />
                       </div>
-                    ))}
+                      <button
+                        onClick={() => setShowDocFilters((v) => !v)}
+                        className={`h-9 px-3 flex items-center gap-1.5 rounded-[6px] text-sm font-medium transition-all shrink-0
+                          ${showDocFilters || docStatusFilter !== 'all' ? 'bg-orange-500 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                      >
+                        <Filter className="w-4 h-4" />
+                        Filtros
+                      </button>
+                      <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <ColumnConfigButton
+                          columns={PARTNER_DOC_COLUMNS.filter((c) => c.key !== 'actions')}
+                          visibleColumns={partnerDocColumns.visibleColumns}
+                          showColumnConfig={partnerDocColumns.showColumnConfig}
+                          onToggleShow={() => partnerDocColumns.setShowColumnConfig(!partnerDocColumns.showColumnConfig)}
+                          onToggleColumn={partnerDocColumns.toggleColumn}
+                          onReset={partnerDocColumns.resetColumns}
+                        />
+                      </div>
+                    </div>
+                    {showDocFilters && (
+                      <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-3 flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-500 mr-1">Status:</span>
+                        {([
+                          { id: 'all', label: 'Todos' },
+                          { id: 'ativo', label: 'Ativos' },
+                          { id: 'alerta', label: 'Em Alerta' },
+                          { id: 'vencido', label: 'Vencidos' },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => setDocStatusFilter(opt.id)}
+                            className={`px-3 h-7 rounded-[6px] text-xs font-medium transition-all
+                              ${docStatusFilter === opt.id ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'}`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <DocumentsTable
+                    documents={filteredSharedDocuments}
+                    tableColumns={partnerDocColumns}
+                    resolveProjectName={() => '-'}
+                    renderActions={(doc) => (
+                      doc.active_version?.storage_path ? (
+                        <ActionIconButton
+                          kind="download"
+                          onClick={() => handleDownloadSharedDocument(doc.active_version!.storage_path)}
+                        />
+                      ) : null
+                    )}
+                    emptyState={
+                      sharedDocs.length === 0 ? (
+                        <div className="text-sm text-slate-400 font-medium">
+                          Nenhum documento compartilhado com o seu portal no momento.
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-400 font-medium">
+                          Nenhum documento encontrado para os filtros aplicados.
+                        </div>
+                      )
+                    }
+                  />
                 </div>
-              )}
+              </div>
             </div>
           )}
 

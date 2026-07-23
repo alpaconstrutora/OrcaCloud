@@ -936,13 +936,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
 
                             return (
                                 <div
-                                    className="absolute top-2 h-[14px] z-20 overflow-visible flex items-center group/summary-bar"
+                                    className="absolute top-[10px] h-4 z-20 overflow-visible flex items-center group/summary-bar"
                                     style={{ left: `${left}px`, width: `${width}px` }}
                                 >
-                                    {/* Main Bar Background & Progress clipping */}
+                                    {/* Barra do grupo: retângulo cinza sólido (sem os ganchos em losango) */}
                                     <div
-                                        className="absolute inset-0 overflow-hidden rounded-sm shadow-sm border border-black/5 flex items-center"
-                                        style={{ backgroundColor: `${baseColor}44` }}
+                                        className="absolute inset-0 overflow-hidden rounded-sm shadow-sm border border-black/10 flex items-center"
+                                        style={{ backgroundColor: `${baseColor}59` }}
                                     >
                                         {/* Progress Fill */}
                                         <div
@@ -959,17 +959,6 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                 {progress > 5 ? `${progress.toFixed(0)}%` : ''}
                                             </div>
                                         )}
-
-                                        {/* Top accent line */}
-                                        <div className="absolute top-0 left-0 right-0 h-[3px] bg-black/10" />
-                                    </div>
-
-                                    {/* Summary hooks (brackets) - positioned outside the clipping div */}
-                                    <div className="absolute left-0 top-0 bottom-[-6px] w-[2px] overflow-hidden pointer-events-none">
-                                        <div className="w-[10px] h-[10px] rotate-45 translate-y-[8px] -translate-x-1/2 shadow-sm border border-black/10" style={{ backgroundColor: baseColor }} />
-                                    </div>
-                                    <div className="absolute right-0 top-0 bottom-[-6px] w-[2px] overflow-hidden pointer-events-none">
-                                        <div className="w-[10px] h-[10px] -rotate-45 translate-y-[8px] translate-x-1/2 shadow-sm border border-black/10" style={{ backgroundColor: baseColor }} />
                                     </div>
 
                                     <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">
@@ -1244,11 +1233,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 return (
                                     <div
                                         key={index}
-                                        className={`shrink-0 border-l border-gray-200 flex flex-col items-center justify-center px-1 py-1.5 ${column.isToday ? 'bg-orange-50/50' : isWeekend ? 'bg-gray-200/50' : ''}`}
+                                        className={`shrink-0 border-l border-gray-200 flex flex-col items-center justify-center px-1 py-1.5 ${column.isToday ? 'bg-red-50/50' : isWeekend ? 'bg-gray-200/50' : ''}`}
                                         style={{ width: `${column.width}px` }}
                                     >
                                         <span className="text-xs font-medium text-gray-400 leading-none">{column.label}</span>
-                                        <span className={`text-xs font-medium leading-none mt-1 ${column.isToday ? 'text-orange-600' : 'text-gray-300'}`}>{column.subLabel}</span>
+                                        <span className={`text-xs font-medium leading-none mt-1 ${column.isToday ? 'text-red-600' : 'text-gray-300'}`}>{column.subLabel}</span>
                                     </div>
                                 );
                             })}
@@ -1286,12 +1275,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 const left = offsetDays * pxPerDay + getGanttSidebarTotal();
                                 return (
                                     <div
-                                        className="absolute top-0 bottom-0 w-[2px] bg-orange-500/60 z-30 pointer-events-none"
+                                        className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-400 z-30 pointer-events-none"
                                         style={{ left: `${left}px` }}
                                     >
-                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-orange-500 rotate-45 flex items-center justify-center text-xs font-medium text-white shadow-lg">
-                                            H
-                                        </div>
+                                        {/* Marcador do dia atual: círculo vermelho no topo da linha pontilhada */}
+                                        <div className="absolute top-0 left-0 -translate-x-1/2 w-3 h-3 rounded-full border-2 border-red-500 bg-white shadow-sm" />
                                     </div>
                                 );
                             }

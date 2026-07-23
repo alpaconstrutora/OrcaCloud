@@ -13,7 +13,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
 import { renderFileIcon } from './DocumentsTable';
-import { documentService, OpuraDmsDocumentType } from '../../services/documentService';
+import { documentService, OpuraDmsDocumentType, OpuraDmsDiscipline } from '../../services/documentService';
 import { validateFileNameAgainstMask, extractTokenFromFileName, planBatchFileNames } from '../../utils/dmsUtils';
 import { OpuraDocumentCategoria, OpuraDocumentInsert, OpuraFolder } from '../../types';
 
@@ -27,6 +27,7 @@ type BatchItemStatus = 'pronto' | 'invalido' | 'enviando' | 'enviado' | 'erro';
 
 interface BatchItemOverrides {
   tipo_documento?: string;
+  discipline_code?: string;
   data_emissao?: string;
   data_validade?: string;
   alerta_dias_antecedencia?: number;
@@ -66,6 +67,7 @@ export interface BatchUploadSheetProps {
   selectedProjectId: string;
   companies: CompanyOption[];
   documentTypes: OpuraDmsDocumentType[];
+  disciplines: OpuraDmsDiscipline[];
   currentProfile: { email?: string };
   notify: (message: string, type?: 'success' | 'error') => void;
   onFinished: () => void;
@@ -134,6 +136,7 @@ export function BatchUploadSheet({
   selectedProjectId,
   companies,
   documentTypes,
+  disciplines,
   currentProfile,
   notify,
   onFinished,
@@ -147,6 +150,7 @@ export function BatchUploadSheet({
 
   // Padrões do lote — mesmos campos do modal de upload unitário.
   const [defaultTipo, setDefaultTipo] = React.useState('');
+  const [defaultDiscipline, setDefaultDiscipline] = React.useState('');
   const [defaultProjectId, setDefaultProjectId] = React.useState(
     selectedProjectId !== 'all' ? selectedProjectId : ''
   );
@@ -162,6 +166,7 @@ export function BatchUploadSheet({
     setOrgId('');
     setItems([]);
     setDefaultTipo('');
+    setDefaultDiscipline('');
     setDefaultProjectId(selectedProjectId !== 'all' ? selectedProjectId : '');
     setDefaultCompanyId('');
     setDefaultEmissao('');
@@ -275,6 +280,7 @@ export function BatchUploadSheet({
       autor: undefined,
       categoria,
       tipo_documento: item.overrides.tipo_documento ?? defaultTipo,
+      discipline_code: item.overrides.discipline_code ?? defaultDiscipline ?? undefined,
       status: 'ativo',
       data_emissao: item.overrides.data_emissao ?? defaultEmissao ?? undefined,
       data_validade: item.overrides.data_validade ?? defaultValidade ?? undefined,
@@ -453,6 +459,19 @@ export function BatchUploadSheet({
               </select>
             </div>
             <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500">Disciplina (Opcional)</label>
+              <select
+                value={defaultDiscipline}
+                onChange={(e) => setDefaultDiscipline(e.target.value)}
+                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+              >
+                <option value="">Nenhuma</option>
+                {disciplines.map((disc) => (
+                  <option key={disc.id} value={disc.code}>{disc.code} - {disc.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Obra/Empreendimento (Opcional)</label>
               <select
                 value={defaultProjectId}
@@ -562,7 +581,7 @@ export function BatchUploadSheet({
                   )}
 
                   {item.expanded && (item.status === 'pronto' || item.status === 'invalido') && (
-                    <div className="border-t border-slate-100 bg-slate-50/60 p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="border-t border-slate-100 bg-slate-50/60 p-3 grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div className="space-y-1">
                         <label className="text-[11px] font-semibold text-slate-500">Tipo de documento</label>
                         <select
@@ -573,6 +592,19 @@ export function BatchUploadSheet({
                           <option value="">(padrão do lote)</option>
                           {documentTypes.map((type) => (
                             <option key={type.id} value={type.name}>{type.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500">Disciplina</label>
+                        <select
+                          value={item.overrides.discipline_code ?? ''}
+                          onChange={(e) => updateOverride(item.key, { discipline_code: e.target.value || undefined })}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-[6px] text-xs font-medium"
+                        >
+                          <option value="">(padrão do lote)</option>
+                          {disciplines.map((disc) => (
+                            <option key={disc.id} value={disc.code}>{disc.code} - {disc.name}</option>
                           ))}
                         </select>
                       </div>

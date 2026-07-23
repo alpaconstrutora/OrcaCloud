@@ -10,6 +10,9 @@ export interface OpuraDocument {
   autor?: string;
   categoria: OpuraDocumentCategoria;
   tipo_documento: string;
+  // Código da disciplina (opura_dms_disciplines.code), escolhido explicitamente
+  // no upload/edição — não é extraído do nome do arquivo.
+  discipline_code?: string | null;
   status: OpuraDocumentStatus;
   data_emissao?: string;
   data_validade?: string;

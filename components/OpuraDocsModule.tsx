@@ -144,6 +144,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocProjectId, setEditDocProjectId] = React.useState('');
   const [editDocCompanyId, setEditDocCompanyId] = React.useState('');
   const [editDocType, setEditDocType] = React.useState('');
+  const [editDocDiscipline, setEditDocDiscipline] = React.useState('');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
   const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
   const [editFolderName, setEditFolderName] = React.useState('');
@@ -249,6 +250,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocDesc, setNewDocDesc] = React.useState('');
   const [newDocAutor, setNewDocAutor] = React.useState('');
   const [newDocType, setNewDocType] = React.useState('');
+  const [newDocDiscipline, setNewDocDiscipline] = React.useState('');
   // Organização escolhida no modal quando o seletor global está em "Todas as
   // Organizações" (activeOrganizationId nulo). Mesmo padrão de createFolderOrgId.
   const [newDocOrgId, setNewDocOrgId] = React.useState('');
@@ -1000,8 +1002,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         const treeIds = getFolderTreeIds(folder.id);
-                        const filterDisc = (docs: OpuraDocument[]) => docs.filter(d => 
-                          (extractTokenFromFileName(d.nome, folder.naming_mask || '', '[DISCIPLINA]')?.toUpperCase() === disc.code.toUpperCase() || d.nome.toUpperCase().includes(disc.code.toUpperCase()))
+                        const filterDisc = (docs: OpuraDocument[]) => docs.filter(d =>
+                          d.discipline_code
+                            ? d.discipline_code.toUpperCase() === disc.code.toUpperCase()
+                            : (extractTokenFromFileName(d.nome, folder.naming_mask || '', '[DISCIPLINA]')?.toUpperCase() === disc.code.toUpperCase() || d.nome.toUpperCase().includes(disc.code.toUpperCase()))
                         );
                         const targetProjectId = selectedProjectId !== 'all' ? selectedProjectId : undefined;
                         documentService.listDocuments(activeOrganizationId || undefined, { folderIds: treeIds, projectId: targetProjectId }).then(data => {
@@ -1208,7 +1212,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
     // 3. Filtrar por disciplina selecionada no painel esquerdo
     if (selectedDisciplineCode) {
+      const uppercaseCode = selectedDisciplineCode.toUpperCase();
       result = result.filter(doc => {
+        if (doc.discipline_code) {
+          return doc.discipline_code.toUpperCase() === uppercaseCode;
+        }
+
+        // Fallback p/ documentos sem o campo estruturado ainda (legado, ver
+        // project_opura_docs_avaliacao — disciplina era só regex no nome do arquivo).
         const docFolder = folders.find(f => f.id === doc.folder_id);
         const cleanFileName = doc.nome;
 
@@ -1216,16 +1227,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         if (docFolder?.naming_mask) {
           const extracted = extractTokenFromFileName(cleanFileName, docFolder.naming_mask, '[DISCIPLINA]');
           if (extracted) {
-            isMatch = extracted.toUpperCase() === selectedDisciplineCode.toUpperCase();
+            isMatch = extracted.toUpperCase() === uppercaseCode;
           }
         }
-        
+
         if (!isMatch) {
-          const uppercaseName = cleanFileName.toUpperCase();
-          const uppercaseCode = selectedDisciplineCode.toUpperCase();
-          isMatch = uppercaseName.includes(uppercaseCode);
+          isMatch = cleanFileName.toUpperCase().includes(uppercaseCode);
         }
-        
+
         return isMatch;
       });
     }
@@ -1339,6 +1348,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             autor: newDocAutor || undefined,
           categoria: newDocCategory,
           tipo_documento: newDocType,
+          discipline_code: newDocDiscipline || undefined,
           status: 'ativo',
           data_emissao: newDocEmissao || undefined,
           data_validade: newDocValidade || undefined,
@@ -1360,6 +1370,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       setNewDocName('');
       setNewDocDesc('');
       setNewDocType('');
+      setNewDocDiscipline('');
       setNewDocEmissao('');
       setNewDocValidade('');
       setNewDocAlertaDias(30);
@@ -1420,14 +1431,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         }
 
         // Validação adicional de Disciplinas permitidas na pasta
-        if (targetFolder.disciplines && targetFolder.disciplines.length > 0) {
-          const extractedDisc = extractTokenFromFileName(newDocFile.name, targetFolder.naming_mask, '[DISCIPLINA]');
-          if (extractedDisc) {
-            const isAllowed = targetFolder.disciplines.some(d => d.toUpperCase() === extractedDisc.toUpperCase());
-            if (!isAllowed) {
-              notify(`A disciplina extraída do nome do arquivo ("${extractedDisc}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${targetFolder.disciplines.join(', ')}`, 'error');
-              return;
-            }
+        if (targetFolder.disciplines && targetFolder.disciplines.length > 0 && newDocDiscipline) {
+          const isAllowed = targetFolder.disciplines.some(d => d.toUpperCase() === newDocDiscipline.toUpperCase());
+          if (!isAllowed) {
+            notify(`A disciplina selecionada ("${newDocDiscipline}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${targetFolder.disciplines.join(', ')}`, 'error');
+            return;
           }
         }
       }
@@ -1582,6 +1590,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditDocProjectId(doc.project_id || '');
     setEditDocCompanyId(doc.company_id || '');
     setEditDocType(doc.tipo_documento || '');
+    setEditDocDiscipline(doc.discipline_code || '');
   };
 
   // Submeter Edição do Documento
@@ -1608,17 +1617,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         notify(`O nome gerado ("${finalDocName}") não atende ao padrão exigido nesta pasta:\n"${docFolder.naming_mask}"\n\nPor favor, verifique se a quantidade de letras ou dígitos informada está correta.`, 'error');
         return;
       }
+    }
 
-      // Validação adicional de Disciplinas permitidas na pasta
-      if (docFolder.disciplines && docFolder.disciplines.length > 0) {
-        const extractedDisc = extractTokenFromFileName(dummyFileName, docFolder.naming_mask, '[DISCIPLINA]');
-        if (extractedDisc) {
-          const isAllowed = docFolder.disciplines.some(d => d.toUpperCase() === extractedDisc.toUpperCase());
-          if (!isAllowed) {
-            notify(`A disciplina extraída do nome do documento ("${extractedDisc}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${docFolder.disciplines.join(', ')}`, 'error');
-            return;
-          }
-        }
+    // Validação adicional de Disciplinas permitidas na pasta
+    if (docFolder?.disciplines && docFolder.disciplines.length > 0 && editDocDiscipline) {
+      const isAllowed = docFolder.disciplines.some(d => d.toUpperCase() === editDocDiscipline.toUpperCase());
+      if (!isAllowed) {
+        notify(`A disciplina selecionada ("${editDocDiscipline}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${docFolder.disciplines.join(', ')}`, 'error');
+        return;
       }
     }
 
@@ -1640,6 +1646,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         project_id: editDocProjectId || null,
         company_id: editDocCompanyId || null,
         tipo_documento: editDocType || null,
+        discipline_code: editDocDiscipline || null,
       } as any);
 
       if (activeOrganizationId && currentProfile?.email) {
@@ -2439,8 +2446,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </div>
               </div>
 
-              {/* Linha 1: Nome e Tipo de Doc */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Linha 1: Nome, Tipo de Doc e Disciplina */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500">Nome do Documento</label>
                   <input
@@ -2470,6 +2477,21 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       {newDocType && !documentTypes.find(t => t.name === newDocType) && (
                         <option value={newDocType}>{newDocType}</option>
                       )}
+                    </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Disciplina</label>
+                  <select
+                      value={newDocDiscipline}
+                      onChange={(e) => setNewDocDiscipline(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      <option value="">Nenhuma</option>
+                      {disciplines.map((disc) => (
+                        <option key={disc.id} value={disc.code}>
+                          {disc.code} - {disc.name}
+                        </option>
+                      ))}
                     </select>
                 </div>
               </div>
@@ -2629,6 +2651,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         selectedProjectId={selectedProjectId}
         companies={companies}
         documentTypes={documentTypes}
+        disciplines={disciplines}
         currentProfile={currentProfile}
         notify={notify}
         onFinished={fetchDocs}
@@ -3547,7 +3570,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">Tipo de Documento</label>
                     <select
@@ -3562,6 +3585,19 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       {editDocType && !documentTypes.find(t => t.name === editDocType) && (
                         <option value={editDocType}>{editDocType}</option>
                       )}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Disciplina</label>
+                    <select
+                      value={editDocDiscipline}
+                      onChange={(e) => setEditDocDiscipline(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      <option value="">Nenhuma</option>
+                      {disciplines.map((disc) => (
+                        <option key={disc.id} value={disc.code}>{disc.code} - {disc.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">

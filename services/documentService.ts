@@ -655,6 +655,7 @@ export const documentService = {
         autor: docData.autor || null,
         categoria: docData.categoria,
         tipo_documento: docData.tipo_documento,
+        discipline_code: docData.discipline_code || null,
         status: docData.status || 'ativo',
         data_emissao: docData.data_emissao || null,
         data_validade: docData.data_validade || null,

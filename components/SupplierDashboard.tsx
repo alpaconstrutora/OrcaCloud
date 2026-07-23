@@ -30,7 +30,8 @@ import {
     ChevronDown,
     Bell,
     Settings2,
-    HelpCircle
+    HelpCircle,
+    EyeOff
 } from 'lucide-react';
 import { Supplier, UserProfile, PurchaseOrder, Invoice, QuotationRequest } from '../types';
 import { supplierAiService, SupplierAIInsight } from '../services/supplierAiService';
@@ -72,6 +73,17 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     portalToken
 }) => {
     const { localToast, showToast } = useToast();
+
+    // Único critério de "é admin" do arquivo — antes havia 3 checagens divergentes
+    // (uma delas, uma const isAdmin solta, nunca era lida). Consolidado aqui porque
+    // controla tanto o seletor de impersonação quanto o botão "Configurar Abas".
+    // !portalToken garante que o fornecedor no link público nunca vê nenhum dos dois.
+    const isAdmin = !portalToken && (
+        profile?.role === UserProfile.ADMIN ||
+        profile?.role === UserProfile.DEVELOPER ||
+        profile?.group === 'DESENVOLVEDOR'
+    );
+
     const [activeTab, setActiveTab] = React.useState<'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'>(initialTab || 'overview');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplierDashboard:viewMode', 'list');
     const [searchNegotiations, setSearchNegotiations] = usePersistedState<string>('supplierDashboard:searchNegotiations', '');
@@ -85,6 +97,14 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     const [loadingOrders, setLoadingOrders] = React.useState(false);
     const [allSuppliers, setAllSuppliers] = React.useState<Supplier[]>([]);
     const [selectedAdminSupplier, setSelectedAdminSupplier] = React.useState<Supplier | null>(null);
+    // supplierProfile chega como prop imutável (via SupplierPortalManager). Sem este
+    // override, salvar as abas visíveis não refletiria na tela até um novo fetch —
+    // reseta sempre que o fornecedor selecionado muda, para não vazar settings de um
+    // fornecedor para o próximo.
+    const [supplierSettingsOverride, setSupplierSettingsOverride] = React.useState<Supplier | null>(null);
+    React.useEffect(() => {
+        setSupplierSettingsOverride(null);
+    }, [supplierProfile?.id]);
     const [activeOrderId, setActiveOrderId] = React.useState<string | null>(null);
     const [orderViewMode, setOrderViewMode] = React.useState<'list' | 'details' | 'logistics'>('list');
     const [isEditingLogistics, setIsEditingLogistics] = React.useState(false);
@@ -98,13 +118,14 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     const [loadingQuotations, setLoadingQuotations] = React.useState(false);
     const [searchQueryQuotations, setSearchQueryQuotations] = usePersistedState<string>('supplierDashboard:searchQuotations', '');
 
-    const effectiveSupplier = supplierProfile || selectedAdminSupplier;
+    const effectiveSupplier = supplierSettingsOverride || supplierProfile || selectedAdminSupplier;
 
     // Casca do portal público (link do fornecedor) — só aparece no acesso via token,
     // espelhando o header/dropdown de perfil do Portal do Parceiro/Corretor.
     const isStandalone = !!portalToken;
     const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
     const [showMyAccount, setShowMyAccount] = React.useState(false);
+    const [showTabConfig, setShowTabConfig] = React.useState(false);
     const accountMenuRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         if (!isAccountMenuOpen) return;
@@ -118,10 +139,10 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     }, [isAccountMenuOpen]);
 
     React.useEffect(() => {
-        if (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER) {
+        if (isAdmin) {
             loadSuppliers();
         }
-    }, [profile?.role]);
+    }, [isAdmin]);
 
     const loadSuppliers = async () => {
         try {
@@ -184,8 +205,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             }
         }
     }, [initialOrderId, initialOrderViewMode]);
-
-    const isAdmin = profile?.group === 'DESENVOLVEDOR' || profile?.role === UserProfile.ADMIN;
 
     const handleViewOrder = (id: string, mode: 'details' | 'logistics') => {
         setActiveOrderId(id);
@@ -1070,14 +1089,60 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         profile: { title: 'Perfil', subtitle: 'Dados cadastrais e configurações da conta.' },
     };
 
-    const TABS: { id: typeof activeTab; label: string; icon: React.ReactNode }[] = [
-        { id: 'overview', label: 'Estatísticas', icon: <LayoutDashboard className="w-4 h-4" /> },
-        { id: 'negotiations', label: 'Lances', icon: <ArrowUpRight className="w-4 h-4" /> },
-        { id: 'quotations', label: 'Cotações', icon: <History className="w-4 h-4" /> },
-        { id: 'orders', label: 'Pedidos', icon: <Package className="w-4 h-4" /> },
-        { id: 'documents', label: 'Docs', icon: <FileCheck className="w-4 h-4" /> },
-        { id: 'profile', label: 'Perfil', icon: <User className="w-4 h-4" /> },
+    const TABS: { id: typeof activeTab; label: string; icon: React.ElementType }[] = [
+        { id: 'overview', label: 'Estatísticas', icon: LayoutDashboard },
+        { id: 'negotiations', label: 'Lances', icon: ArrowUpRight },
+        { id: 'quotations', label: 'Cotações', icon: History },
+        { id: 'orders', label: 'Pedidos', icon: Package },
+        { id: 'documents', label: 'Docs', icon: FileCheck },
+        { id: 'profile', label: 'Perfil', icon: User },
     ];
+
+    // Abas visíveis por fornecedor (guia §3, mesmo padrão do Portal do Corretor) —
+    // config salva em suppliers.settings.supplierPortalTabs. Sem config (fornecedor
+    // recém-criado), todas as abas ficam visíveis por padrão.
+    const supplierSettings = effectiveSupplier?.settings ?? {};
+    const enabledTabIds: string[] = (supplierSettings.supplierPortalTabs ?? []).length > 0
+        ? supplierSettings.supplierPortalTabs!
+        : TABS.map(t => t.id);
+    const visibleTabs = TABS.filter(t => enabledTabIds.includes(t.id));
+    // admin vê todas (para poder configurar); fornecedor vê só as habilitadas
+    const navTabs = isAdmin ? TABS : visibleTabs;
+
+    // activeTab nasce 'overview' independente de essa aba estar habilitada para o
+    // fornecedor — no link público (isAdmin=false), se a aba atual tiver sido
+    // ocultada, corrige aqui em vez de deixar o conteúdo antigo preso na tela.
+    React.useEffect(() => {
+        if (navTabs.length > 0 && !navTabs.some(t => t.id === activeTab)) {
+            setActiveTab(navTabs[0].id);
+        }
+    }, [navTabs, activeTab]);
+
+    const toggleTabVisibility = async (tabId: string) => {
+        if (!effectiveSupplier) return;
+        const next = enabledTabIds.includes(tabId)
+            ? enabledTabIds.filter(id => id !== tabId)
+            : [...enabledTabIds, tabId];
+        try {
+            const updated = await supplierService.updateSupplierSettings(effectiveSupplier.id, {
+                ...supplierSettings,
+                supplierPortalTabs: next,
+            });
+            setAllSuppliers(prev => prev.map(s => s.id === updated.id ? updated : s));
+            if (selectedAdminSupplier?.id === updated.id) setSelectedAdminSupplier(updated);
+            if (supplierProfile?.id === updated.id) setSupplierSettingsOverride(updated);
+            // Se a aba que acabamos de ocultar é a que está aberta agora, sai dela —
+            // senão o conteúdo continua na tela mesmo depois de "ocultada".
+            if (activeTab === tabId && !next.includes(tabId)) {
+                const effectiveNext = next.length > 0 ? next : TABS.map(t => t.id);
+                const fallback = (effectiveNext.includes('overview') ? 'overview' : effectiveNext[0]) as typeof activeTab;
+                setActiveTab(fallback);
+            }
+        } catch (err) {
+            console.error('Erro ao salvar abas do fornecedor:', err);
+            showToast('Erro ao salvar configuração de abas.', 'error');
+        }
+    };
 
     const supplierDisplayName = effectiveSupplier ? getSupplierDisplayName(effectiveSupplier, appSettingsService.get().supplierNameDisplay) : 'Fornecedor';
 
@@ -1179,21 +1244,33 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">{TAB_META[activeTab].title}</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_META[activeTab].subtitle}</p>
                 </div>
-                {!supplierProfile && (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER) && (
-                    <select
-                        onChange={(e) => {
-                            const supplier = allSuppliers.find(s => s.id === e.target.value);
-                            if (supplier) setSelectedAdminSupplier(supplier);
-                        }}
-                        className="h-9 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-[6px] px-3 focus:ring-0 cursor-pointer hover:bg-amber-100 transition-colors"
-                        value={selectedAdminSupplier?.id || ''}
-                    >
-                        <option value="">Impersonar Fornecedor</option>
-                        {allSuppliers.map(s => (
-                            <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)} ({s.email})</option>
-                        ))}
-                    </select>
-                )}
+                <div className="flex items-center gap-2">
+                    {!supplierProfile && isAdmin && (
+                        <select
+                            onChange={(e) => {
+                                const supplier = allSuppliers.find(s => s.id === e.target.value);
+                                if (supplier) setSelectedAdminSupplier(supplier);
+                            }}
+                            className="h-9 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-[6px] px-3 focus:ring-0 cursor-pointer hover:bg-amber-100 transition-colors"
+                            value={selectedAdminSupplier?.id || ''}
+                        >
+                            <option value="">Impersonar Fornecedor</option>
+                            {allSuppliers.map(s => (
+                                <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)} ({s.email})</option>
+                            ))}
+                        </select>
+                    )}
+                    {/* Botão Configurar Abas — somente admin, quando um fornecedor estiver selecionado */}
+                    {isAdmin && effectiveSupplier && (
+                        <button
+                            onClick={() => setShowTabConfig(true)}
+                            title="Configurar abas visíveis do fornecedor"
+                            className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                        >
+                            <Settings2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* 2. KPI cards (guia §2) — só a aba Estatísticas tem; mb-3 = ritmo de cromo (§20.1) */}
@@ -1215,19 +1292,26 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 (não é o azul sólido de botão/toggle — aquilo é ação, isto é navegação) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {TABS.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            {tab.icon}
-                            {tab.label}
-                        </button>
-                    ))}
+                    {navTabs.map(tab => {
+                        const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                title={hidden ? 'Oculta para o fornecedor' : undefined}
+                                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id
+                                    ? 'bg-white text-blue-600 shadow-sm'
+                                    : hidden
+                                        ? 'text-gray-300 border border-dashed border-gray-200'
+                                        : 'text-gray-400 hover:text-gray-600'
+                                    }`}
+                            >
+                                <tab.icon className="w-4 h-4" />
+                                {tab.label}
+                                {hidden && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -1290,6 +1374,61 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             ))}
                             <p className="text-xs text-gray-400 pt-3 border-t border-gray-100">
                                 Para alterar seus dados cadastrais, entre em contato com a construtora.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: CONFIGURAR ABAS — somente admin, espelha o mesmo painel do Portal do Corretor */}
+            {showTabConfig && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowTabConfig(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div
+                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                                    <Settings2 className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Fornecedor</h2>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o fornecedor</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-3">
+                            {TABS.map(tab => {
+                                const isVisible = enabledTabIds.includes(tab.id);
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => toggleTabVisibility(tab.id)}
+                                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                                            isVisible
+                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                : 'bg-gray-50 border-gray-100 text-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <tab.icon className={`w-4 h-4 ${isVisible ? 'text-blue-500' : 'text-gray-300'}`} />
+                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
+                                        </div>
+                                        <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isVisible ? 'text-blue-500' : 'text-gray-300'}`}>
+                                            {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="px-8 pb-8">
+                            <p className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest">
+                                Clique em cada aba para alternar visibilidade do fornecedor
                             </p>
                         </div>
                     </div>

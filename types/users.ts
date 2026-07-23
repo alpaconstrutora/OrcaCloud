@@ -83,6 +83,10 @@ export interface SupplierStateRegistration {
     status?: string | null;
 }
 
+export interface SupplierPortalSettings {
+    supplierPortalTabs?: string[];
+}
+
 export interface Supplier {
     id: string;
     code?: string;
@@ -103,6 +107,7 @@ export interface Supplier {
     zip_code?: string;
     organization_id?: string | null;
     organization_name?: string;
+    settings?: SupplierPortalSettings;
     created_at?: string;
     // Dados oficiais trazidos pela consulta CNPJa (Receita Federal / Simples / Cadastro de Contribuintes)
     cnpj_status?: string | null;

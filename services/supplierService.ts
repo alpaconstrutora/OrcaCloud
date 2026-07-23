@@ -1,12 +1,12 @@
 import { supabase } from '../lib/supabase';
-import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistration } from '../types';
+import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistration, SupplierPortalSettings } from '../types';
 import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
 import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 import { organizationService } from './organizationService';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
-const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
-const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
+const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}`;
+const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;
@@ -482,6 +482,22 @@ export const supplierService = {
 
         if (error) throw error;
         await syncRealEstateBrokerProfile(data as Supplier);
+        return data as Supplier;
+    },
+
+    /** Update cirúrgico de settings (ex: abas visíveis do portal). Não usa
+     *  updateSupplier de propósito: ele dispara syncRealEstateBrokerProfile,
+     *  que reescreve broker_profiles com commission_rate=5 fixo — resetaria a
+     *  comissão de fornecedores da categoria Corretor de Imóveis. */
+    updateSupplierSettings: async (id: string, settings: SupplierPortalSettings): Promise<Supplier> => {
+        const { data, error } = await supabase
+            .from('suppliers')
+            .update({ settings })
+            .eq('id', id)
+            .select(SUPPLIER_SELECT)
+            .single();
+
+        if (error) throw error;
         return data as Supplier;
     },
 

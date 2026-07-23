@@ -243,41 +243,12 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
               <KpiCard shadow={false} size="sm" label="Globais" value={kpis.globais} icon={<Link2 className="w-4 h-4" />} color="violet" />
             </div>
 
-            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — já há KPI cards acima dando contexto */}
-            <div className="flex flex-col md:flex-row gap-2.5 items-center">
-              <div className="flex-1 relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por fornecedor ou e-mail..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                />
-              </div>
-
-              <button
-                onClick={refreshSuppliers}
-                className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-                title="Atualizar"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-
-              <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
-
-              <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                <ColumnConfigButton
-                  columns={SUPPLIER_PORTAL_COLUMNS}
-                  visibleColumns={tableColumns.visibleColumns}
-                  showColumnConfig={tableColumns.showColumnConfig}
-                  onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                  onToggleColumn={tableColumns.toggleColumn}
-                  onReset={tableColumns.resetColumns}
-                />
-              </div>
-
-              {/* Variante compacta do CTA primário (§17) */}
+            {/* Toolbar de botões (UI UX tabela.md §4) — escopo/contexto à esquerda, ação primária à direita;
+                barra própria, acima da toolbar de busca, porque não é filtro de linha, é ação da tela */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+              <span className="text-xs text-gray-400">
+                {organizationId ? 'Fornecedores desta organização e globais.' : 'Visualizando fornecedores de todas as organizações.'}
+              </span>
               <button
                 onClick={() => openEnableModal()}
                 className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white rounded-[6px] hover:bg-orange-600 font-medium text-[13px] transition-all active:scale-95 shrink-0"
@@ -287,31 +258,64 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
               </button>
             </div>
 
-            {!organizationId && (
-              <p className="text-xs text-gray-400 -mt-3">
-                Visualizando fornecedores de todas as organizações.
-              </p>
-            )}
+            {/* Tabela com toolbar de busca acoplada (UI UX tabela.md §5) — um único card,
+                border-b da toolbar é a única linha entre os dois blocos */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-gray-100 bg-white">
+                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                  <div className="flex-1 relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por fornecedor ou e-mail..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    />
+                  </div>
 
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
-                <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+                  <button
+                    onClick={refreshSuppliers}
+                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                    title="Atualizar"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+
+                  <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                  <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                    <ColumnConfigButton
+                      columns={SUPPLIER_PORTAL_COLUMNS}
+                      visibleColumns={tableColumns.visibleColumns}
+                      showColumnConfig={tableColumns.showColumnConfig}
+                      onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                      onToggleColumn={tableColumns.toggleColumn}
+                      onReset={tableColumns.resetColumns}
+                    />
+                  </div>
+                </div>
               </div>
-            ) : filteredSuppliers.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
-                <Truck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum fornecedor encontrado</h3>
-                <p className="text-sm text-gray-500">
-                  {searchTerm ? 'Tente ajustar sua busca.' : 'Clique em "Novo fornecedor" para habilitar o primeiro.'}
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
+
+              {/* Conteúdo — loading/empty/tabela, sem bg/border/rounded/shadow próprios (o card pai já supre) */}
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                  <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+                </div>
+              ) : filteredSuppliers.length === 0 ? (
+                <div className="text-center py-12">
+                  <Truck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum fornecedor encontrado</h3>
+                  <p className="text-sm text-gray-500">
+                    {searchTerm ? 'Tente ajustar sua busca.' : 'Clique em "Novo fornecedor" para habilitar o primeiro.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-auto max-h-[70vh]">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                      <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                         {tableColumns.visibleColumns.includes('supplier') && (
                           <SortableHeader colKey="supplier" label="Fornecedor" uppercase={false}
                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
@@ -426,8 +430,8 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
       </main>

@@ -281,9 +281,14 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
     // impersonar). Unidade avulsa (sem parent_id, não é BUILDING) não pertence a
     // nenhum empreendimento — segue sempre visível, espelha a regra da RPC.
     const visibleUnits = useMemo(() => {
-        if (!enabledPropertyIds) return units;
+        // visible_to_broker === false esconde a unidade do portal (Estoque e
+        // Empreendimentos, já que ambos derivam de visibleUnits) — mesmo corte
+        // que a RPC fn_broker_portal_get_units já aplica no modo por token; aqui
+        // cobre o modo autenticado (impersonação de admin via BrokerList).
+        const byVisibility = units.filter(u => u.visible_to_broker !== false);
+        if (!enabledPropertyIds) return byVisibility;
         const allowed = new Set(enabledPropertyIds);
-        return units.filter(u => {
+        return byVisibility.filter(u => {
             if (u.type !== 'BUILDING' && !u.parent_id) return true;
             const buildingId = u.type === 'BUILDING' ? u.id : u.parent_id;
             return buildingId ? allowed.has(buildingId) : true;

@@ -65,6 +65,7 @@ export interface Property {
     position_type?: 'FRONT' | 'LATERAL' | 'BACK';
     view_type?: 'NONE' | 'PARTIAL' | 'FULL';
     sun_orientation?: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST';
+    visible_to_broker?: boolean;
     created_at?: string;
 }
 

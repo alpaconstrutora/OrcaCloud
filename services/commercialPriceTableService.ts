@@ -32,6 +32,9 @@ export interface CommercialPriceTableItem {
     parking_spaces?: number | null;
     floor?: number | null;
     position_type?: string | null;
+    // Visibilidade no Portal do Corretor — flag da UNIDADE (commercial_properties),
+    // não da versão da tabela de preços. Ver updateItemVisibility.
+    visible_to_broker?: boolean;
 }
 
 const TABLE_COLS = 'id, organization_id, building_id, version_label, effective_date, status, notes, created_at, activated_at';
@@ -73,7 +76,7 @@ export const commercialPriceTableService = {
     async getTableItems(tableId: string): Promise<CommercialPriceTableItem[]> {
         const { data, error } = await supabase
             .from('commercial_price_table_items')
-            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs)`)
+            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker)`)
             .eq('price_table_id', tableId);
         if (error) throw error;
         return (data ?? []).map((row: any) => {
@@ -99,6 +102,7 @@ export const commercialPriceTableService = {
                 parking_spaces: num(p.parking_spaces, specs.parkingSpaces),
                 floor: p.floor != null ? Number(p.floor) : null,
                 position_type: p.position_type ?? null,
+                visible_to_broker: p.visible_to_broker ?? true,
             };
         });
     },
@@ -132,6 +136,15 @@ export const commercialPriceTableService = {
 
     async updateItemPrice(itemId: string, price: number): Promise<void> {
         const { error } = await supabase.from('commercial_price_table_items').update({ price }).eq('id', itemId);
+        if (error) throw error;
+    },
+
+    /** Visibilidade no Portal do Corretor é da UNIDADE, não da versão da tabela de
+     *  preços — grava em commercial_properties (por property_id), não em
+     *  commercial_price_table_items (por itemId), para cortar tanto a aba Estoque
+     *  quanto Empreendimentos do portal. */
+    async updateItemVisibility(propertyId: string, visible: boolean): Promise<void> {
+        const { error } = await supabase.from('commercial_properties').update({ visible_to_broker: visible }).eq('id', propertyId);
         if (error) throw error;
     },
 

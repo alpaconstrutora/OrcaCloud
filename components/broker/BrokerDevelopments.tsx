@@ -90,11 +90,13 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
             try {
                 if (portalToken) {
                     const res = await brokerPortalService.getPriceTableByToken(portalToken, selectedBuildingId);
-                    if (!cancelled) { setActiveTable(res.table); setItems(res.items); }
+                    if (!cancelled) { setActiveTable(res.table); setItems(res.items.filter(i => i.visible_to_broker !== false)); }
                 } else {
                     const table = await commercialPriceTableService.getActiveTable(selectedBuildingId);
                     const tableItems = table ? await commercialPriceTableService.getTableItems(table.id) : [];
-                    if (!cancelled) { setActiveTable(table); setItems(tableItems); }
+                    // Mesmo corte de visibilidade da RPC (modo token), aplicado aqui no
+                    // modo autenticado — visible_to_broker é da unidade, não da versão.
+                    if (!cancelled) { setActiveTable(table); setItems(tableItems.filter(i => i.visible_to_broker !== false)); }
                 }
             } catch (err) {
                 console.error('[BrokerDevelopments] Erro ao carregar tabela de preços:', err);

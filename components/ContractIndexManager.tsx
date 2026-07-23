@@ -4,7 +4,6 @@ import ActionIconButton from './ui/ActionIconButton';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
-import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'reference', label: 'Referência', sortable: true },
@@ -87,7 +86,7 @@ const ContractIndexManager: React.FC = () => {
     return (
         <div className="space-y-4">
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm shadow-lg font-medium ${
+                <div className={`fixed bottom-6 right-6 z-[300] px-5 py-4 rounded-2xl text-sm shadow-xl font-medium ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' :
                     notification.type === 'error'   ? 'bg-red-600 text-white' :
                                                       'bg-gray-900 text-white'
@@ -105,7 +104,7 @@ const ContractIndexManager: React.FC = () => {
             <div className="flex items-center gap-3 flex-wrap">
                 {INDEX_NAMES.map(n => (
                     <button key={n} onClick={() => setSelectedIndex(n)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        className={`h-9 px-3 rounded-[6px] text-sm font-medium transition-all ${
                             selectedIndex === n
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -130,30 +129,34 @@ const ContractIndexManager: React.FC = () => {
             </div>
 
             {/* Adicionar valor */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            <div className="bg-white rounded-[10px] border border-gray-100 p-4">
+                <p className="text-xs font-semibold text-gray-500 mb-3">
                     Cadastrar valor — {selectedIndex}
                 </p>
                 <div className="flex gap-3 items-end">
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Mês de referência</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mês de referência</label>
                         <input type="month" value={newMonth} onChange={e => setNewMonth(e.target.value)}
-                            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            className="h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
                     </div>
                     <div className="flex-1">
-                        <label className="block text-xs text-gray-400 mb-1">Valor do índice</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor do índice</label>
                         <input type="number" step="0.0001" min="0" value={newValue} onChange={e => setNewValue(e.target.value)}
                             placeholder="ex: 3326.33"
-                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            className="w-full h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
                     </div>
-                    <Button onClick={handleAdd} disabled={saving || !newValue || !newMonth}>
-                        <Plus size={14} /> {saving ? 'Salvando…' : 'Adicionar'}
-                    </Button>
+                    <button
+                        onClick={handleAdd}
+                        disabled={saving || !newValue || !newMonth}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                    >
+                        <Plus className="w-[15px] h-[15px]" /> {saving ? 'Salvando…' : 'Adicionar'}
+                    </button>
                 </div>
             </div>
 
             {/* Tabela de valores */}
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                 {loading ? (
                     <div className="space-y-px">
                         {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-gray-50 animate-pulse" />)}
@@ -163,54 +166,54 @@ const ContractIndexManager: React.FC = () => {
                         Nenhum valor cadastrado para {selectedIndex}.
                     </div>
                 ) : (
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-gray-50 border-b border-gray-100">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr>
                                 {tableColumns.visibleColumns.includes('reference') && (
-                                    <SortableHeader colKey="reference" label="Referência" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="reference" label="Referência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('value') && (
-                                    <SortableHeader colKey="value" label="Valor" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="value" label="Valor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
                                 )}
                                 {tableColumns.visibleColumns.includes('variation') && (
-                                    <SortableHeader colKey="variation" label="Variação" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="variation" label="Variação" uppercase={false} sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
                                 )}
                                 {tableColumns.visibleColumns.includes('source') && (
-                                    <SortableHeader colKey="source" label="Fonte" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
+                                    <SortableHeader colKey="source" label="Fonte" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
-                                {tableColumns.visibleColumns.includes('actions') && <th className="w-8" />}
+                                {tableColumns.visibleColumns.includes('actions') && <th className="w-10" />}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {sortedValues.map((v) => {
                                 const originalIndex = values.indexOf(v);
                                 const prev = values[originalIndex + 1];
                                 const varPct = prev ? ((v.value - prev.value) / prev.value) * 100 : null;
                                 return (
-                                    <tr key={v.id} className="hover:bg-gray-50">
+                                    <tr key={v.id} className="hover:bg-blue-50/50 transition-colors">
                                         {tableColumns.visibleColumns.includes('reference') && (
-                                            <td className="px-4 py-2.5 font-medium text-gray-900">{fmtDate(v.reference_month)}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{fmtDate(v.reference_month)}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('value') && (
-                                            <td className="px-4 py-2.5 text-right font-medium text-gray-700">{fmtVal(v.value)}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">{fmtVal(v.value)}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('variation') && (
-                                            <td className="px-4 py-2.5 text-right">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                                 {varPct !== null ? (
-                                                    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                        {varPct >= 0 ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                                    <span className={`inline-flex items-center gap-0.5 text-sm font-normal ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                        {varPct >= 0 ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                                                         {Math.abs(varPct).toFixed(2)}%
                                                     </span>
                                                 ) : '—'}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('source') && (
-                                            <td className="px-4 py-2.5 text-table-body text-gray-400">{v.source ?? '—'}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{v.source ?? '—'}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('actions') && (
-                                            <td className="px-3 py-2.5">
+                                            <td className="px-6 py-2.5 text-right">
                                                 {v.organization_id && (
-                                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleRemove(v.id)} />
+                                                    <ActionIconButton kind="delete" onClick={() => handleRemove(v.id)} />
                                                 )}
                                             </td>
                                         )}

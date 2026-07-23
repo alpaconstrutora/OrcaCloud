@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { proService } from '../services/proService';
 import { ProConfig, ProPixKeyType } from '../types';
-import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X } from 'lucide-react';
+import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
+import { useToast } from '../hooks/useToast';
 
 interface ProConfigFormProps {
   userId: string;
@@ -10,6 +12,8 @@ interface ProConfigFormProps {
 }
 
 export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) => {
+  const confirm = useConfirm();
+  const { localToast, showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -69,11 +73,11 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         templates_custom: templatesCustom,
         created_at: new Date().toISOString()
       });
-      alert('Configurações salvas com sucesso!');
-      onBack();
+      showToast('Configurações salvas com sucesso!', 'success');
+      setTimeout(onBack, 800);
     } catch (err: any) {
       console.error('Erro ao salvar configurações:', err);
-      alert('Erro ao salvar: ' + err.message);
+      showToast('Erro ao salvar: ' + err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -82,7 +86,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
   const handleAddOrUpdateTemplate = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!tempTitulo.trim() || !tempDescricao.trim()) {
-      alert('Por favor, preencha o título e a descrição do modelo.');
+      showToast('Preencha o título e a descrição do modelo.', 'error');
       return;
     }
 
@@ -134,18 +138,17 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
     setTempQuantidade(t.quantidade ? t.quantidade.toString() : '');
   };
 
-  const handleDeleteTemplate = (e: React.MouseEvent, id: string) => {
+  const handleDeleteTemplate = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
-    if (window.confirm('Tem certeza que deseja excluir este modelo?')) {
-      setTemplatesCustom(prev => prev.filter(t => t.id !== id));
-      if (tempId === id) {
-        setTempId(null);
-        setTempTitulo('');
-        setTempDescricao('');
-        setTempValor('');
-        setTempUnidade('');
-        setTempQuantidade('');
-      }
+    if (!await confirm({ title: 'Excluir modelo?', message: 'Tem certeza que deseja excluir este modelo?', variant: 'danger' })) return;
+    setTemplatesCustom(prev => prev.filter(t => t.id !== id));
+    if (tempId === id) {
+      setTempId(null);
+      setTempTitulo('');
+      setTempDescricao('');
+      setTempValor('');
+      setTempUnidade('');
+      setTempQuantidade('');
     }
   };
 
@@ -437,6 +440,15 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </button>
         </div>
       </form>
+
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
     </div>
   );
 };

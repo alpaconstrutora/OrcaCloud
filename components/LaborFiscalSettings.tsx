@@ -4,9 +4,13 @@ import {
     Plus, Save, History, TrendingUp, Info, Loader2
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
+import { useToast } from '../hooks/useToast';
 import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from '../services/fiscalService';
 
 const LaborFiscalSettings: React.FC = () => {
+    const confirm = useConfirm();
+    const { localToast, showToast } = useToast();
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [inssBrackets, setInssBrackets] = useState<INSSBracket[]>([]);
     const [irrfBrackets, setIrrfBrackets] = useState<IRRFBracket[]>([]);
@@ -50,9 +54,9 @@ const LaborFiscalSettings: React.FC = () => {
                 b.id ? fiscalService.updateINSSBracket(b.id, b) : Promise.resolve()
             ));
             setEditingINSS(false);
-            alert('Tabela INSS atualizada com sucesso!');
+            showToast('Tabela INSS atualizada com sucesso!', 'success');
         } catch (err) {
-            alert('Erro ao salvar INSS');
+            showToast('Erro ao salvar INSS', 'error');
         } finally {
             setSaving(false);
         }
@@ -70,9 +74,9 @@ const LaborFiscalSettings: React.FC = () => {
                 b.id ? fiscalService.updateIRRFBracket(b.id, b) : Promise.resolve()
             ));
             setEditingIRRF(false);
-            alert('Tabela IRRF atualizada com sucesso!');
+            showToast('Tabela IRRF atualizada com sucesso!', 'success');
         } catch (err) {
-            alert('Erro ao salvar IRRF');
+            showToast('Erro ao salvar IRRF', 'error');
         } finally {
             setSaving(false);
         }
@@ -89,9 +93,9 @@ const LaborFiscalSettings: React.FC = () => {
         try {
             await fiscalService.updateFGTSConfig(fgtsConfig.id, fgtsConfig);
             setEditingFGTS(false);
-            alert('FGTS atualizado com sucesso!');
+            showToast('FGTS atualizado com sucesso!', 'success');
         } catch (err) {
-            alert('Erro ao salvar FGTS');
+            showToast('Erro ao salvar FGTS', 'error');
         } finally {
             setSaving(false);
         }
@@ -105,11 +109,11 @@ const LaborFiscalSettings: React.FC = () => {
         setSaving(true);
         try {
             await fiscalService.duplicateYear(sourceYear, selectedYear);
-            alert(`Tabelas de ${sourceYear} clonadas para ${selectedYear} com sucesso!`);
+            showToast(`Tabelas de ${sourceYear} clonadas para ${selectedYear} com sucesso!`, 'success');
             loadData();
         } catch (err) {
             console.error(err);
-            alert('Erro ao clonar tabelas');
+            showToast('Erro ao clonar tabelas', 'error');
         } finally {
             setSaving(false);
         }
@@ -129,7 +133,7 @@ const LaborFiscalSettings: React.FC = () => {
             setInssBrackets([...inssBrackets, created]);
             setEditingINSS(true);
         } catch (err) {
-            alert('Erro ao adicionar faixa');
+            showToast('Erro ao adicionar faixa', 'error');
         }
     };
 
@@ -147,29 +151,29 @@ const LaborFiscalSettings: React.FC = () => {
             setIrrfBrackets([...irrfBrackets, created]);
             setEditingIRRF(true);
         } catch (err) {
-            alert('Erro ao adicionar faixa');
+            showToast('Erro ao adicionar faixa', 'error');
         }
     };
 
     const handleDeleteINSSBracket = async (id?: string) => {
         if (!id) return;
-        if (!window.confirm('Tem certeza que deseja excluir esta faixa de INSS?')) return;
+        if (!await confirm({ title: 'Excluir faixa de INSS?', message: 'Tem certeza que deseja excluir esta faixa?', variant: 'danger' })) return;
         try {
             await fiscalService.deleteINSSBracket(id);
             setInssBrackets(inssBrackets.filter(b => b.id !== id));
         } catch (err) {
-            alert('Erro ao excluir faixa');
+            showToast('Erro ao excluir faixa', 'error');
         }
     };
 
     const handleDeleteIRRFBracket = async (id?: string) => {
         if (!id) return;
-        if (!window.confirm('Tem certeza que deseja excluir esta faixa de IRRF?')) return;
+        if (!await confirm({ title: 'Excluir faixa de IRRF?', message: 'Tem certeza que deseja excluir esta faixa?', variant: 'danger' })) return;
         try {
             await fiscalService.deleteIRRFBracket(id);
             setIrrfBrackets(irrfBrackets.filter(b => b.id !== id));
         } catch (err) {
-            alert('Erro ao excluir faixa');
+            showToast('Erro ao excluir faixa', 'error');
         }
     };
 
@@ -180,26 +184,26 @@ const LaborFiscalSettings: React.FC = () => {
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header com Seletor de Data */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[10px] border border-slate-100 shadow-sm">
                 <div>
                     <h2 className="text-2xl font-black text-slate-900 tracking-tight">Configurações Fiscais</h2>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Consultar tabelas por competência</p>
+                    <p className="text-slate-500 text-xs mt-1.5 font-medium">Consultar tabelas por competência</p>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
-                    <button 
+                    <button
                         onClick={handleDuplicateYear}
                         disabled={saving || loading}
-                        className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 rounded-3xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-50 text-indigo-600 rounded-[6px] font-medium text-[13px] hover:bg-indigo-100 transition-all active:scale-95 border border-indigo-100"
                     >
-                        {saving ? <Loader2 size={16} className="animate-spin" /> : <TrendingUp size={16} />} 
-                        Clonar Tabelas
+                        {saving ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <TrendingUp className="w-[15px] h-[15px]" />}
+                        Clonar tabelas
                     </button>
-                    <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-3xl border border-slate-100">
+                    <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-[10px] border border-slate-100">
                         <div className="flex items-center gap-3 px-4 py-2">
                             <Calendar size={18} className="text-indigo-600" />
                             <div className="flex flex-col">
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ano de Referência</span>
+                                <span className="text-[10px] font-semibold text-slate-500">Ano de Referência</span>
                                 <select 
                                     value={selectedYear}
                                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
@@ -217,29 +221,29 @@ const LaborFiscalSettings: React.FC = () => {
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 {/* INSS */}
-                <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="bg-white rounded-[10px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-full">
                     <div className="p-8 bg-slate-900 text-white flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                            <div className="w-12 h-12 bg-indigo-500/20 rounded-[10px] flex items-center justify-center border border-indigo-500/30">
                                 <Shield className="text-indigo-400" size={24} />
                             </div>
                             <div>
                                 <h3 className="text-lg font-black tracking-tight">Tabela INSS</h3>
-                                <p className="text-indigo-400 text-xs font-bold uppercase tracking-widest">Cálculo Progressivo</p>
+                                <p className="text-indigo-400 text-xs font-medium">Cálculo Progressivo</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <button 
                                 onClick={handleSaveINSS}
                                 disabled={saving}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                className={`flex items-center gap-2 px-4 py-2 rounded-[6px] text-xs font-medium transition-all ${
                                     editingINSS ? 'bg-indigo-500 text-white animate-pulse' : 'bg-white/10 text-indigo-400 hover:bg-white/20'
                                 }`}
                             >
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : editingINSS ? <Save size={14} /> : 'Editar'}
                                 {editingINSS ? 'Salvar' : ''}
                             </button>
-                            <button className="p-2 hover:bg-white/10 rounded-xl transition-all" title="Ver Histórico">
+                            <button className="p-2 hover:bg-white/10 rounded-[6px] transition-all" title="Ver Histórico">
                                 <History size={20} />
                             </button>
                         </div>
@@ -249,23 +253,23 @@ const LaborFiscalSettings: React.FC = () => {
                         <div className="space-y-4">
                             {loading ? (
                                 <div className="space-y-3">
-                                    {[1, 2, 3, 4].map(i => <div key={i} className="h-16 bg-slate-50 rounded-2xl animate-pulse" />)}
+                                    {[1, 2, 3, 4].map(i => <div key={i} className="h-16 bg-slate-50 rounded-[10px] animate-pulse" />)}
                                 </div>
                             ) : inssBrackets.length > 0 ? (
                                 <div className="space-y-3">
                                     {inssBrackets.map((bracket, idx) => (
-                                        <div key={idx} className="group relative bg-slate-50 p-4 rounded-2xl border border-transparent hover:border-indigo-100 hover:bg-white hover:shadow-md transition-all">
+                                        <div key={idx} className="group relative bg-slate-50 p-4 rounded-[10px] border border-transparent hover:border-indigo-100 hover:bg-white hover:shadow-md transition-all">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-black">
+                                                    <div className="w-8 h-8 rounded-[6px] bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-black">
                                                         {idx + 1}º
                                                     </div>
                                                     <div>
-                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Faixa de Base</p>
+                                                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Faixa de Base</p>
                                                         {editingINSS ? (
                                                             <div className="flex flex-col gap-2">
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Ano Civil:</span>
+                                                                    <span className="text-[10px] font-semibold text-slate-500 w-12">Ano Civil:</span>
                                                                     <select 
                                                                         value={bracket.valid_from.split('-')[0]}
                                                                         onChange={(e) => {
@@ -275,13 +279,13 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].valid_to = `${year}-12-31`;
                                                                             setInssBrackets(newBrackets);
                                                                         }}
-                                                                        className="bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black text-indigo-600 outline-none"
+                                                                        className="bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-xs font-black text-indigo-600 outline-none"
                                                                     >
                                                                         {years.map(y => <option key={y} value={y.toString()}>{y}</option>)}
                                                                     </select>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Base:</span>
+                                                                    <span className="text-[10px] font-semibold text-slate-500 w-12">Base:</span>
                                                                     <input 
                                                                         type="number" 
                                                                         value={bracket.min_value}
@@ -290,7 +294,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].min_value = parseFloat(e.target.value);
                                                                             setInssBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                     <span className="text-slate-400 text-xs">até</span>
                                                                     <input 
@@ -301,7 +305,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].max_value = parseFloat(e.target.value);
                                                                             setInssBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -315,7 +319,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <div className="text-right">
-                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Alíquota</p>
+                                                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Alíquota</p>
                                                         {editingINSS ? (
                                                             <div className="flex items-center justify-end gap-1">
                                                                 <input 
@@ -327,7 +331,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                         newBrackets[idx].rate = parseFloat(e.target.value) / 100;
                                                                         setInssBrackets(newBrackets);
                                                                     }}
-                                                                    className="w-16 bg-white border border-slate-200 rounded px-1 py-0.5 text-right font-black text-indigo-600"
+                                                                    className="w-16 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-right font-black text-indigo-600"
                                                                 />
                                                                 <span className="text-indigo-600 font-black">%</span>
                                                             </div>
@@ -344,48 +348,48 @@ const LaborFiscalSettings: React.FC = () => {
                                     ))}
                                 </div>
                             ) : (
-                                <div className="py-20 text-center bg-slate-50 rounded-[32px] border border-dashed border-slate-200">
+                                <div className="py-20 text-center bg-slate-50 rounded-[10px] border border-dashed border-slate-200">
                                     <AlertCircle className="mx-auto text-slate-300 mb-4" size={40} />
-                                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhuma tabela cadastrada para {selectedYear}</p>
+                                    <p className="text-slate-400 font-medium text-xs">Nenhuma tabela cadastrada para {selectedYear}</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
                     <div className="px-8 pb-8">
-                        <button 
+                        <button
                             onClick={handleAddINSSBracket}
-                            className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                            className="w-full flex items-center justify-center gap-1.5 h-9 bg-indigo-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-indigo-700 transition-all active:scale-95"
                         >
-                            <Plus size={16} /> Nova Vigência INSS
+                            <Plus className="w-[15px] h-[15px]" /> Nova vigência INSS
                         </button>
                     </div>
                 </div>
 
                 {/* IRRF */}
-                <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="bg-white rounded-[10px] border border-slate-100 shadow-sm overflow-hidden flex flex-col h-full">
                     <div className="p-8 bg-slate-900 text-white flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-rose-500/20 rounded-2xl flex items-center justify-center border border-rose-500/30">
+                            <div className="w-12 h-12 bg-rose-500/20 rounded-[10px] flex items-center justify-center border border-rose-500/30">
                                 <TrendingUp className="text-rose-400" size={24} />
                             </div>
                             <div>
                                 <h3 className="text-lg font-black tracking-tight">Tabela IRRF</h3>
-                                <p className="text-rose-400 text-xs font-bold uppercase tracking-widest">Imposto de Renda</p>
+                                <p className="text-rose-400 text-xs font-medium">Imposto de Renda</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <button 
                                 onClick={handleSaveIRRF}
                                 disabled={saving}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                className={`flex items-center gap-2 px-4 py-2 rounded-[6px] text-xs font-medium transition-all ${
                                     editingIRRF ? 'bg-rose-500 text-white animate-pulse' : 'bg-white/10 text-rose-400 hover:bg-white/20'
                                 }`}
                             >
                                 {saving ? <Loader2 size={14} className="animate-spin" /> : editingIRRF ? <Save size={14} /> : 'Editar'}
                                 {editingIRRF ? 'Salvar' : ''}
                             </button>
-                            <button className="p-2 hover:bg-white/10 rounded-xl transition-all" title="Ver Histórico">
+                            <button className="p-2 hover:bg-white/10 rounded-[6px] transition-all" title="Ver Histórico">
                                 <History size={20} />
                             </button>
                         </div>
@@ -395,23 +399,23 @@ const LaborFiscalSettings: React.FC = () => {
                         <div className="space-y-4">
                             {loading ? (
                                 <div className="space-y-3">
-                                    {[1, 2, 3, 4].map(i => <div key={i} className="h-16 bg-slate-50 rounded-2xl animate-pulse" />)}
+                                    {[1, 2, 3, 4].map(i => <div key={i} className="h-16 bg-slate-50 rounded-[10px] animate-pulse" />)}
                                 </div>
                             ) : irrfBrackets.length > 0 ? (
                                 <div className="space-y-3">
                                     {irrfBrackets.map((bracket, idx) => (
-                                        <div key={idx} className="group relative bg-slate-50 p-4 rounded-2xl border border-transparent hover:border-rose-100 hover:bg-white hover:shadow-md transition-all">
+                                        <div key={idx} className="group relative bg-slate-50 p-4 rounded-[10px] border border-transparent hover:border-rose-100 hover:bg-white hover:shadow-md transition-all">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xs font-black">
+                                                    <div className="w-8 h-8 rounded-[6px] bg-rose-50 text-rose-600 flex items-center justify-center text-xs font-black">
                                                         {idx + 1}º
                                                     </div>
                                                     <div>
-                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Faixa de Base</p>
+                                                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Faixa de Base</p>
                                                         {editingIRRF ? (
                                                             <div className="flex flex-col gap-2">
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Ano Civil:</span>
+                                                                    <span className="text-[10px] font-semibold text-slate-500 w-12">Ano Civil:</span>
                                                                     <select 
                                                                         value={bracket.valid_from.split('-')[0]}
                                                                         onChange={(e) => {
@@ -421,13 +425,13 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].valid_to = `${year}-12-31`;
                                                                             setIrrfBrackets(newBrackets);
                                                                         }}
-                                                                        className="bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black text-rose-600 outline-none"
+                                                                        className="bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-xs font-black text-rose-600 outline-none"
                                                                     >
                                                                         {years.map(y => <option key={y} value={y.toString()}>{y}</option>)}
                                                                     </select>
                                                                 </div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest w-12">Base:</span>
+                                                                    <span className="text-[10px] font-semibold text-slate-500 w-12">Base:</span>
                                                                     <input 
                                                                         type="number" 
                                                                         value={bracket.min_value}
@@ -436,7 +440,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].min_value = parseFloat(e.target.value);
                                                                             setIrrfBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                     <span className="text-slate-400 text-xs">até</span>
                                                                     <input 
@@ -447,7 +451,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].max_value = parseFloat(e.target.value);
                                                                             setIrrfBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -461,7 +465,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                 </div>
                                                 <div className="flex gap-4 items-center">
                                                     <div className="text-right">
-                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Dedução</p>
+                                                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Dedução</p>
                                                         {editingIRRF ? (
                                                             <input 
                                                                 type="number" 
@@ -471,14 +475,14 @@ const LaborFiscalSettings: React.FC = () => {
                                                                     newBrackets[idx].deduction = parseFloat(e.target.value);
                                                                     setIrrfBrackets(newBrackets);
                                                                 }}
-                                                                className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-right font-black text-slate-400 text-form-input"
+                                                                className="w-20 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-right font-black text-slate-400 text-form-input"
                                                             />
                                                         ) : (
                                                             <p className="text-xs font-black text-slate-400">R$ {bracket.deduction.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                                         )}
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">Alíquota</p>
+                                                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Alíquota</p>
                                                         {editingIRRF ? (
                                                             <div className="flex items-center justify-end gap-1">
                                                                 <input 
@@ -490,7 +494,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                         newBrackets[idx].rate = parseFloat(e.target.value) / 100;
                                                                         setIrrfBrackets(newBrackets);
                                                                     }}
-                                                                    className="w-16 bg-white border border-slate-200 rounded px-1 py-0.5 text-right font-black text-rose-600"
+                                                                    className="w-16 bg-white border border-slate-200 rounded-[6px] px-1 py-0.5 text-right font-black text-rose-600"
                                                                 />
                                                                 <span className="text-rose-600 font-black">%</span>
                                                             </div>
@@ -507,40 +511,40 @@ const LaborFiscalSettings: React.FC = () => {
                                     ))}
                                 </div>
                             ) : (
-                                <div className="py-20 text-center bg-slate-50 rounded-[32px] border border-dashed border-slate-200">
+                                <div className="py-20 text-center bg-slate-50 rounded-[10px] border border-dashed border-slate-200">
                                     <AlertCircle className="mx-auto text-slate-300 mb-4" size={40} />
-                                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Nenhuma tabela cadastrada para {selectedYear}</p>
+                                    <p className="text-slate-400 font-medium text-xs">Nenhuma tabela cadastrada para {selectedYear}</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
                     <div className="px-8 pb-8">
-                        <button 
+                        <button
                             onClick={handleAddIRRFBracket}
-                            className="w-full flex items-center justify-center gap-2 py-4 bg-rose-600 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100"
+                            className="w-full flex items-center justify-center gap-1.5 h-9 bg-rose-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-rose-700 transition-all active:scale-95"
                         >
-                            <Plus size={16} /> Nova Vigência IRRF
+                            <Plus className="w-[15px] h-[15px]" /> Nova vigência IRRF
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* FGTS config row */}
-            <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="bg-white p-8 rounded-[10px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 bg-amber-50 rounded-[28px] flex items-center justify-center">
+                    <div className="w-16 h-16 bg-amber-50 rounded-[10px] flex items-center justify-center">
                         <Building2 className="text-amber-600" size={32} />
                     </div>
                     <div>
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Fundo de Garantia (FGTS)</h3>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Custo direto do empregador</p>
+                        <p className="text-slate-500 text-xs font-medium">Custo direto do empregador</p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-8 px-8 py-4 bg-slate-50 rounded-[32px] border border-slate-100 min-w-[300px]">
+                <div className="flex items-center gap-8 px-8 py-4 bg-slate-50 rounded-[10px] border border-slate-100 min-w-[300px]">
                     <div className="flex-1">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Alíquota Vigente</p>
+                        <p className="text-xs font-semibold text-slate-500 mb-1">Alíquota Vigente</p>
                         {editingFGTS ? (
                             <div className="flex items-center gap-1">
                                 <input 
@@ -552,7 +556,7 @@ const LaborFiscalSettings: React.FC = () => {
                                             setFgtsConfig({ ...fgtsConfig, rate: parseFloat(e.target.value) / 100 });
                                         }
                                     }}
-                                    className="w-20 bg-white border border-slate-200 rounded px-2 py-1 text-3xl font-black text-amber-600 focus:ring-0 outline-none"
+                                    className="w-20 bg-white border border-slate-200 rounded-[6px] px-2 py-1 text-3xl font-black text-amber-600 focus:ring-0 outline-none"
                                 />
                                 <span className="text-3xl font-black text-amber-600">%</span>
                             </div>
@@ -563,29 +567,38 @@ const LaborFiscalSettings: React.FC = () => {
                         )}
                     </div>
                     <div className="h-10 w-px bg-slate-200" />
-                    <button 
+                    <button
                         onClick={handleSaveFGTS}
                         disabled={saving}
-                        className={`flex items-center gap-2 px-6 py-3 border rounded-2xl font-black text-button uppercase tracking-widest transition-all shadow-sm ${
+                        className={`flex items-center gap-1.5 h-9 px-3.5 border rounded-[6px] font-medium text-[13px] transition-all active:scale-95 ${
                             editingFGTS ? 'bg-amber-100 border-amber-300 text-amber-700 animate-pulse' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                         }`}
                     >
-                        {saving ? <Loader2 size={16} className="animate-spin" /> : editingFGTS ? <Save size={16} /> : <Save size={16} className="text-indigo-600" />}
-                        {editingFGTS ? 'Confirmar' : 'Atualizar Taxa'}
+                        {saving ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : editingFGTS ? <Save className="w-[15px] h-[15px]" /> : <Save className="w-[15px] h-[15px] text-indigo-600" />}
+                        {editingFGTS ? 'Confirmar' : 'Atualizar taxa'}
                     </button>
                 </div>
             </div>
 
-            <div className="bg-indigo-50/50 p-6 rounded-[32px] border border-indigo-100 flex items-start gap-4">
+            <div className="bg-indigo-50/50 p-6 rounded-[10px] border border-indigo-100 flex items-start gap-4">
                 <Info className="text-indigo-600 shrink-0 mt-0.5" size={20} />
                 <div className="space-y-1">
-                    <p className="text-xs font-black text-indigo-900 uppercase tracking-widest">Dica de Versionamento</p>
+                    <p className="text-xs font-semibold text-indigo-900">Dica de Versionamento</p>
                     <p className="text-sm text-indigo-700 leading-relaxed font-medium">
                         Ao criar uma nova vigência, o sistema automaticamente encerra a vigência anterior um dia antes do início da nova. 
                         Isso garante que folhas de períodos passados permaneçam com o cálculo histórico correto.
                     </p>
                 </div>
             </div>
+
+            {localToast && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {localToast.message}
+                </div>
+            )}
         </div>
     );
 };

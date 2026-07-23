@@ -200,7 +200,7 @@ const Settings: React.FC = () => {
             {activeLeaf === 'database' && (
                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start gap-4">
-                    <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="p-3 bg-blue-50 rounded-[10px]">
                         <Database className="w-6 h-6 text-blue-600" />
                     </div>
                     <div>
@@ -243,7 +243,7 @@ const Settings: React.FC = () => {
                     <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-50 rounded-lg">
+                        <div className="p-3 bg-indigo-50 rounded-[10px]">
                             <Hash className="w-6 h-6 text-indigo-600" />
                         </div>
                         <div>
@@ -293,7 +293,7 @@ const Settings: React.FC = () => {
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
-                        <div className="p-3 bg-blue-50 rounded-lg">
+                        <div className="p-3 bg-blue-50 rounded-[10px]">
                             <Mail className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
@@ -344,7 +344,7 @@ const Settings: React.FC = () => {
                 <div className="space-y-6">
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start gap-4">
-                    <div className="p-3 bg-green-50 rounded-lg">
+                    <div className="p-3 bg-green-50 rounded-[10px]">
                         <MessageCircle className="w-6 h-6 text-green-600" />
                     </div>
                     <div className="flex-1">
@@ -417,7 +417,7 @@ const Settings: React.FC = () => {
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
-                        <div className="p-3 bg-green-50 rounded-lg">
+                        <div className="p-3 bg-green-50 rounded-[10px]">
                             <MessageCircle className="w-6 h-6 text-green-600" />
                         </div>
                         <div>
@@ -482,12 +482,7 @@ const Settings: React.FC = () => {
             {activeLeaf === 'cat-fornecedores' && <SupplierCategoriesSettings />}
             {activeLeaf === 'cat-contratos' && <ContractTypesSettings />}
             {activeLeaf === 'cat-empreendimentos' && <EmpreendimentoTypesSettings />}
-            {activeLeaf === 'cat-financeiro' && (
-                // Para separar visualmente sem destoar, envolvemos num container branco parecido
-                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-                    <FinancialCategoriesManager />
-                </div>
-            )}
+            {activeLeaf === 'cat-financeiro' && <FinancialCategoriesManager />}
 
             {activeLeaf === 'indices' && (
                 <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">

@@ -86,27 +86,29 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col border animate-in fade-in zoom-in duration-200 border-gray-200">
+            <div className="bg-white rounded-[10px] shadow-xl w-full max-w-lg overflow-hidden flex flex-col border animate-in fade-in zoom-in duration-200 border-gray-200">
                 <div className="flex items-center justify-between p-4 border-b">
-                    <h3 className="text-lg font-bold text-gray-800">Definições do Cronograma</h3>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400">
+                    <h3 className="font-black text-slate-800 text-lg">Definições do Cronograma</h3>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-[6px] text-gray-400">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <div className="flex px-4 pt-3 gap-1 border-b bg-gray-50/50">
-                    {([
-                        { id: 'geral' as const, label: 'Geral' },
-                        { id: 'exibicao' as const, label: 'Exibição' },
-                    ]).map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`px-3 py-2 text-sm font-bold rounded-t-lg border-b-2 transition-colors ${activeTab === tab.id ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
+                <div className="p-3 pb-0">
+                    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
+                        {([
+                            { id: 'geral' as const, label: 'Geral' },
+                            { id: 'exibicao' as const, label: 'Exibição' },
+                        ]).map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="p-6 space-y-6 overflow-y-auto">
@@ -115,7 +117,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                         <div className="space-y-4">
                             <div className="flex items-center gap-2">
                                 <Eye className="w-4 h-4 text-blue-500" />
-                                <span className="text-sm font-black text-gray-700 uppercase tracking-wide">Gantt</span>
+                                <span className="text-sm font-semibold text-gray-700">Gantt</span>
                             </div>
 
                             <div className="flex items-center justify-between">
@@ -142,7 +144,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                     <div className="space-y-4">
                         <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-blue-500" />
-                            <span className="text-sm font-black text-gray-700 uppercase tracking-wide">Jornada de Trabalho</span>
+                            <span className="text-sm font-semibold text-gray-700">Jornada de Trabalho</span>
                         </div>
 
                         {/* Presets rápidos */}
@@ -162,7 +164,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                         <button
                                             key={preset.label}
                                             onClick={() => onUpdate({ workSchedule: { hoursPerDay: preset.hours, workDays: preset.days, dayHours: {} } })}
-                                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                                            className={`flex-1 py-1.5 rounded-[6px] text-xs font-bold border transition-all ${
                                                 active ? 'bg-blue-50 border-blue-400 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
                                             }`}
                                         >
@@ -192,7 +194,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                             {/* Toggle do dia */}
                                             <button
                                                 onClick={() => toggleDay(value)}
-                                                className={`w-full py-1.5 rounded-lg text-xs font-black transition-all border-2 ${
+                                                className={`w-full py-1.5 rounded-[6px] text-xs font-black transition-all border-2 ${
                                                     active
                                                         ? isWeekend
                                                             ? 'bg-amber-500 border-amber-500 text-white'
@@ -212,7 +214,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                                         max={24}
                                                         value={h}
                                                         onChange={(e) => setDayHours(value, Number(e.target.value))}
-                                                        className={`w-full text-center text-xs font-bold border rounded-lg py-1 outline-none focus:ring-2 focus:ring-blue-400 transition-all ${
+                                                        className={`w-full text-center text-xs font-bold border rounded-[6px] py-1 outline-none focus:ring-2 focus:ring-blue-400 transition-all ${
                                                             isCustom
                                                                 ? 'border-blue-300 bg-blue-50 text-blue-700'
                                                                 : 'border-gray-200 text-gray-500'
@@ -249,7 +251,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <CalendarOff className="w-4 h-4 text-blue-500" />
-                                <span className="text-sm font-black text-gray-700 uppercase tracking-wide">Feriados</span>
+                                <span className="text-sm font-semibold text-gray-700">Feriados</span>
                             </div>
                             <span className="text-xs font-bold text-gray-400">{holidays.length} data{holidays.length !== 1 ? 's' : ''}</span>
                         </div>
@@ -260,12 +262,12 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                 type="date"
                                 value={newHoliday}
                                 onChange={(e) => setNewHoliday(e.target.value)}
-                                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+                                className="flex-1 text-sm border border-gray-200 rounded-[6px] px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
                             />
                             <button
                                 onClick={() => { addHoliday(newHoliday); setNewHoliday(''); }}
                                 disabled={!newHoliday}
-                                className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="p-2 rounded-[6px] bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed"
                                 title="Adicionar feriado"
                             >
                                 <Plus className="w-4 h-4" />
@@ -277,11 +279,11 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                 type="number"
                                 value={importYear}
                                 onChange={(e) => setImportYear(Number(e.target.value))}
-                                className="w-24 text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+                                className="w-24 text-sm border border-gray-200 rounded-[6px] px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
                             />
                             <button
                                 onClick={() => importBrazilianHolidays(importYear)}
-                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-[6px] text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
                             >
                                 <Download className="w-3.5 h-3.5" />
                                 Importar feriados nacionais BR do ano
@@ -289,9 +291,9 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                         </div>
 
                         {holidays.length > 0 && (
-                            <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-lg p-1.5">
+                            <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-[6px] p-1.5">
                                 {holidays.map(h => (
-                                    <div key={h} className="flex items-center justify-between px-2 py-1 rounded-md hover:bg-gray-50 text-xs">
+                                    <div key={h} className="flex items-center justify-between px-2 py-1 rounded-[6px] hover:bg-gray-50 text-xs">
                                         <span className="font-bold text-gray-600">{h.split('-').reverse().join('/')}</span>
                                         <ActionIconButton kind="delete" size="sm" onClick={() => removeHoliday(h)} />
                                     </div>
@@ -304,7 +306,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
 
                     {/* ── Cálculo ── */}
                     <div className="space-y-4">
-                        <span className="text-sm font-black text-gray-700 uppercase tracking-wide">Cálculo</span>
+                        <span className="text-sm font-semibold text-gray-700">Cálculo</span>
 
                         <div className="flex items-center justify-between">
                             <div>
@@ -348,7 +350,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                     <button
                                         key={mode.id}
                                         onClick={() => onUpdate({ replanMode: mode.id as ReplanMode })}
-                                        className={`p-3 rounded-xl border-2 text-left transition-all ${schedule.replanMode === mode.id || (!schedule.replanMode && mode.id === ReplanMode.AFFECTED_TASK) ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
+                                        className={`p-3 rounded-[6px] border-2 text-left transition-all ${schedule.replanMode === mode.id || (!schedule.replanMode && mode.id === ReplanMode.AFFECTED_TASK) ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
                                     >
                                         <div className="text-button font-bold text-gray-800">{mode.label}</div>
                                         <div className="text-xs text-gray-400">{mode.desc}</div>

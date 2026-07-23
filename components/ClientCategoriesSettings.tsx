@@ -2,9 +2,8 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { ClientCategory } from '../types';
-import { Users, Plus, Check, X, Search, AlertCircle, Copy, Download } from 'lucide-react';
+import { Users, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { useToast } from '../hooks/useToast';
@@ -161,7 +160,7 @@ const ClientCategoriesSettings: React.FC = () => {
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
             <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
-                    <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="p-3 bg-blue-50 rounded-[10px]">
                         <Users className="w-6 h-6 text-blue-600" />
                     </div>
                     <div>
@@ -171,9 +170,9 @@ const ClientCategoriesSettings: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     {!loading && categories.some(isDefaultCategory) && (
-                        <Button onClick={handleImportDefaults} variant="secondary" className="gap-2 text-sm hidden sm:flex">
+                        <button onClick={handleImportDefaults} className="hidden sm:flex items-center gap-1.5 h-9 px-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">
                             <Download className="w-4 h-4" /> Importar Padrões
-                        </Button>
+                        </button>
                     )}
                     {!isAdding && !editingId && (
                         <button
@@ -243,9 +242,9 @@ const ClientCategoriesSettings: React.FC = () => {
                             <p className="text-sm text-gray-500">Tente ajustar sua busca ou cadastre uma nova categoria.</p>
                             {!searchTerm && (
                                 <div className="mt-4 flex justify-center">
-                                    <Button onClick={handleImportDefaults} variant="secondary" className="gap-2 text-sm">
+                                    <button onClick={handleImportDefaults} className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all mx-auto">
                                         <Download className="w-4 h-4" /> Importar Padrões
-                                    </Button>
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -303,9 +302,7 @@ const ClientCategoriesSettings: React.FC = () => {
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                     {isDefaultCategory(cat) ? (
-                                                        <button onClick={() => handleDuplicate(cat)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-[6px] transition-colors" title="Duplicar">
-                                                            <Copy className="w-4 h-4" />
-                                                        </button>
+                                                        <ActionIconButton kind="duplicate" onClick={() => handleDuplicate(cat)} />
                                                     ) : (
                                                         <>
                                                             <ActionIconButton kind="edit" onClick={() => startEdit(cat)} />

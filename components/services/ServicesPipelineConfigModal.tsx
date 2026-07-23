@@ -6,7 +6,6 @@ import {
   PipelineStageConfig,
   OpportunityStage,
 } from '../../services/servicesCommercialService';
-import Button from '../ui/Button';
 
 // Estágios canônicos (motor) + rótulo/cor padrão. A engrenagem só personaliza
 // apresentação por organização — não cria nem remove estágios.
@@ -99,10 +98,10 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-[10px] shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">Configurar funil</h3>
+            <h3 className="font-black text-slate-800 dark:text-white text-lg">Configurar funil</h3>
             <p className="text-xs text-gray-400">Personalize rótulo, cor e etapas de cada estágio</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
@@ -111,25 +110,25 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
         </div>
 
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
-          {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
+          {error && <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-[6px] px-3 py-2">{error}</p>}
           {loading ? (
             <p className="text-sm text-gray-400 text-center py-8">Carregando…</p>
           ) : rows.map(r => (
-            <div key={r.stage} className="rounded-xl border border-gray-100 dark:border-gray-700 p-3 space-y-2.5">
+            <div key={r.stage} className="rounded-[10px] border border-gray-100 dark:border-gray-700 p-3 space-y-2.5">
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={r.color}
                   onChange={e => updateRow(r.stage, { color: e.target.value })}
-                  className="w-8 h-8 rounded-md border border-gray-200 dark:border-gray-600 cursor-pointer bg-transparent p-0.5"
+                  className="w-8 h-8 rounded-[6px] border border-gray-200 dark:border-gray-600 cursor-pointer bg-transparent p-0.5"
                   title="Cor do estágio"
                 />
                 <input
                   value={r.label}
                   onChange={e => updateRow(r.stage, { label: e.target.value })}
-                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 rounded-[6px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <span className="text-xs uppercase tracking-wider text-gray-300 font-bold w-16 text-right">{r.stage}</span>
+                <span className="text-xs font-normal text-gray-400 w-16 text-right">{r.stage}</span>
               </div>
 
               {/* Sub-status presets */}
@@ -141,7 +140,7 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
                       value={s}
                       onChange={e => setSubStatus(r.stage, idx, e.target.value)}
                       placeholder="Ex: 1º contato, Em análise…"
-                      className="flex-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1 text-form-input text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      className="flex-1 rounded-[6px] border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1 text-form-input text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
                     />
                     <ActionIconButton kind="delete" size="sm" onClick={() => removeSubStatus(r.stage, idx)} />
                   </div>
@@ -159,12 +158,13 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
 
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900">Cancelar</button>
-          <Button
+          <button
             onClick={handleSave}
             disabled={saving || loading}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Salvando…' : 'Salvar'}
-          </Button>
+          </button>
         </div>
       </div>
     </div>

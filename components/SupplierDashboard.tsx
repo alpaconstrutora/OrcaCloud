@@ -1093,7 +1093,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         { id: 'negotiations', label: 'Lances', icon: ArrowUpRight },
         { id: 'quotations', label: 'Cotações', icon: History },
         { id: 'orders', label: 'Pedidos', icon: Package },
-        { id: 'documents', label: 'Docs', icon: FileCheck },
+        { id: 'documents', label: 'Nota Fiscal', icon: FileCheck },
     ];
 
     // Abas visíveis por fornecedor (guia §3, mesmo padrão do Portal do Corretor) —

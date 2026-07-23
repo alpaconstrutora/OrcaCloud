@@ -2014,7 +2014,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
           {/* PAINEL LATERAL ESQUERDO: Árvore de Disciplinas/Pastas */}
           <div className="lg:col-span-1 bg-white rounded-[10px] border border-slate-100 shadow-sm p-5 space-y-4 min-h-[600px] flex flex-col">
             {/* Header com Atalho de Gestão de Disciplinas */}
@@ -2074,7 +2074,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
 
           {/* PAINEL CENTRAL DIREITO: Documentos */}
-          <div className="lg:col-span-3 bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="lg:col-span-4 bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
         {/* Barra de Busca e Toolbar (Variante desaninhada) */}
         <div className="p-4 border-b border-gray-100 bg-white space-y-3">
           <div className="flex flex-col md:flex-row gap-2.5 items-center">

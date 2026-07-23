@@ -38,6 +38,7 @@ import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState } from '../ui/TableUtils';
 import { DocumentsTable } from '../documents/DocumentsTable';
+import { DocumentQrLabelModal } from '../documents/DocumentQrLabelModal';
 import {
   PartnerWorkspace,
   PartnerUser,
@@ -235,6 +236,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [docStatusFilter, setDocStatusFilter] = usePersistedState<'all' | 'ativo' | 'alerta' | 'vencido'>('partnerPortalDocsFilters:status', 'all');
   const [showDocFilters, setShowDocFilters] = React.useState(false);
   const partnerDocColumns = useTableColumns(PARTNER_DOC_COLUMNS, 'partnerDocsColumns');
+  const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
 
   // Documentos GED por trás de cada vínculo — mesmo objeto que a Gestão de Documentos usa
   // (PartnerSharedDocument.document é o próprio OpuraDocument, ver partnerService.listSharedDocuments).
@@ -1108,12 +1110,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     tableColumns={partnerDocColumns}
                     resolveProjectName={() => '-'}
                     renderActions={(doc) => (
-                      doc.active_version?.storage_path ? (
-                        <ActionIconButton
-                          kind="download"
-                          onClick={() => handleDownloadSharedDocument(doc.active_version!.storage_path)}
-                        />
-                      ) : null
+                      <>
+                        {doc.active_version?.storage_path && (
+                          <ActionIconButton
+                            kind="download"
+                            onClick={() => handleDownloadSharedDocument(doc.active_version!.storage_path)}
+                          />
+                        )}
+                        <ActionIconButton kind="qrcode" onClick={() => setSelectedDocForQrCode(doc)} />
+                      </>
                     )}
                     emptyState={
                       sharedDocs.length === 0 ? (
@@ -1603,6 +1608,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             </form>
           </div>
         </div>
+      )}
+
+      {/* MODAL: ETIQUETA QR CODE (mesmo componente do GED — só leitura, sem escrita no banco) */}
+      {selectedDocForQrCode && (
+        <DocumentQrLabelModal doc={selectedDocForQrCode} onClose={() => setSelectedDocForQrCode(null)} />
       )}
 
       {/* MODAL: MINHA CONTA */}

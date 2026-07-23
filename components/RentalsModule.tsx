@@ -644,43 +644,25 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6 pb-20">
-            {/* Header — §20 (flat, sem hero) */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    {selectedBuildingId && (
-                        <button
-                            onClick={() => setSelectedBuildingId(null)}
-                            className="h-9 w-9 flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-[6px] transition-all"
-                            title="Voltar para Edifícios"
-                        >
-                            <ChevronDown className="w-4 h-4 rotate-90" />
-                        </button>
-                    )}
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                            {currentBuilding ? 'Gestão de Unidades' : 'Gestão de Locações'}
-                        </h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                            {currentBuilding ? `Administração de ativos para ${currentBuilding.name}` : 'Controle de inventário, ocupação e performance imobiliária.'}
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
-                        <Maximize2 className="w-4 h-4" />
-                        Relatórios
-                    </button>
+            {/* Header — §20 (flat, sem hero). "Relatórios"/"Novo edifício" saíram daqui
+                — moveram para a toolbar de botões (§4), abaixo das abas. */}
+            <div className="flex items-center gap-3">
+                {selectedBuildingId && (
                     <button
-                        onClick={() => {
-                            setEditingProperty(undefined);
-                            setIsPropertyModalOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                        onClick={() => setSelectedBuildingId(null)}
+                        className="h-9 w-9 flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-[6px] transition-all"
+                        title="Voltar para Edifícios"
                     >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Novo {selectedBuildingId ? 'imóvel' : 'edifício'}
+                        <ChevronDown className="w-4 h-4 rotate-90" />
                     </button>
+                )}
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                        {currentBuilding ? 'Gestão de Unidades' : 'Gestão de Locações'}
+                    </h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        {currentBuilding ? `Administração de ativos para ${currentBuilding.name}` : 'Controle de inventário, ocupação e performance imobiliária.'}
+                    </p>
                 </div>
             </div>
 
@@ -688,7 +670,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 das abas. Antes desta correção, a grade de KPI só existia dentro da
                 subaba "Unidades" e vinha depois da barra de abas — a mesma classe de
                 bug do FiscalModule (abas/botões do pai antes do KPI do filho, §3.2). */}
-            <div className={`grid grid-cols-2 md:grid-cols-5 gap-4 ${selectedBuildingId ? 'mb-3' : ''}`}>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
                 <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
                 <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
                 <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
@@ -701,7 +683,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 era bg-blue-600 text-white sem trilho — cor de toggle de ação, não
                 de navegação — corrigido ao adicionar a aba Corretores). */}
             {selectedBuildingId && (
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full mb-3">
                     <button
                         onClick={() => setActiveTab('inventory')}
                         className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
@@ -732,6 +714,26 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     </button>
                 </div>
             )}
+
+            {/* Toolbar de botões — UI UX tabela.md §4. Esta tela não tem controles de
+                escopo reais (não é conta/competência/período) — "Relatórios" fica à
+                esquerda como ação secundária, a ação primária (criar) à direita. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+                <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
+                    <Maximize2 className="w-4 h-4" />
+                    Relatórios
+                </button>
+                <button
+                    onClick={() => {
+                        setEditingProperty(undefined);
+                        setIsPropertyModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo {selectedBuildingId ? 'imóvel' : 'edifício'}
+                </button>
+            </div>
 
             {/* Content */}
             {(!selectedBuildingId || activeTab === 'inventory') && (

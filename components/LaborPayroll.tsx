@@ -20,9 +20,13 @@ interface OrganizationItem {
 
 interface LaborPayrollProps {
     orgId: string;
+    /** Organização ativa no nível do módulo (Mão de Obra) — distinta do filtro
+     * "Empresa" local desta tela, que só narrows dentro do modo consolidado. */
+    selectedOrgId?: string;
+    onSelectedOrgIdChange?: (orgId: string | undefined) => void;
 }
 
-const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
+const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, selectedOrgId, onSelectedOrgIdChange }) => {
     // ── Data ──────────────────────────────────────────────────────────────────
     const [runs, setRuns]               = useState<PayrollRun[]>([]);
     const [rubrics, setRubrics]         = useState<PayrollRubric[]>([]);
@@ -342,6 +346,8 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     runs={runs}
                     orgId={orgId}
                     organizations={organizations}
+                    selectedOrgId={selectedOrgId}
+                    onSelectedOrgIdChange={onSelectedOrgIdChange}
                     loading={loading}
                     typeFilter={typeFilter}
                     monthFilter={monthFilter}

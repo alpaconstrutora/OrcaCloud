@@ -278,7 +278,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
 
     return (
         <div className="flex flex-col h-full">
-            {/* Header */}
+            {/* Header — a aba Folha de Pagamento tem título e seletor de Organização
+                próprios (§20/§4), não duplica o cabeçalho do módulo (§18). */}
+            {activeTab !== 'payroll' && (
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 bg-white border-b border-slate-100 shrink-0">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
@@ -287,8 +289,8 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         </div>
                         Gestão de Mão de Obra
                         {isAllOrgsMode && (
-                            <span className="ml-2 px-3 py-1 bg-amber-100 text-amber-600 text-xs font-black rounded-full uppercase tracking-widest border border-amber-200 shadow-sm animate-pulse">
-                                Modo Consolidado
+                            <span className="ml-2 text-sm font-normal text-amber-600">
+                                Modo consolidado
                             </span>
                         )}
                     </h1>
@@ -339,6 +341,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     </button>
                 </div>
             </div>
+            )}
 
             {/* Banners */}
             <div className="px-6 space-y-3 shrink-0">
@@ -481,6 +484,8 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     {activeTab === 'payroll' && (
                         <LaborPayroll
                             orgId={selectedOrgId === undefined ? (activeOrganizationId || 'all') : (selectedOrgId || 'all')}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'incentivos' && (

@@ -14,6 +14,10 @@ interface PayrollRunListProps {
     runs: PayrollRun[];
     orgId: string;
     organizations: Array<{ id: string; name: string }>;
+    /** Organização ativa no módulo (distinta do filtro "Empresa" abaixo, que só
+     * narrows dentro do modo consolidado — ver LaborPayroll.tsx). */
+    selectedOrgId?: string;
+    onSelectedOrgIdChange?: (orgId: string | undefined) => void;
     loading: boolean;
     typeFilter: string;
     monthFilter: string;
@@ -65,7 +69,7 @@ const COLUMNS: ColumnConfig[] = [
 ];
 
 const PayrollRunList: React.FC<PayrollRunListProps> = ({
-    runs, orgId, organizations, loading,
+    runs, orgId, organizations, selectedOrgId, onSelectedOrgIdChange, loading,
     typeFilter, monthFilter, yearFilter, localOrgId, search, runTotals,
     onTypeFilter, onMonthFilter, onYearFilter, onLocalOrgId, onSearch,
     onSelectRun, onDeleteRun, onDuplicateRun, onNewRun, onRefresh,
@@ -130,9 +134,21 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                 </div>
             </div>
 
-            {/* 4. Toolbar de botões — escopo (mês/ano/empresa) + ação primária */}
+            {/* 4. Toolbar de botões — escopo (organização/mês/ano/empresa) + ação primária */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
+                    {onSelectedOrgIdChange && (
+                        <select
+                            value={selectedOrgId || ''}
+                            onChange={e => onSelectedOrgIdChange(e.target.value || undefined)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer min-w-[180px]"
+                        >
+                            <option value="">Todas as organizações</option>
+                            {organizations.map(org => (
+                                <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                        </select>
+                    )}
                     <select
                         value={monthFilter}
                         onChange={e => onMonthFilter(e.target.value)}

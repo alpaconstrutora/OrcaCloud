@@ -127,12 +127,12 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white space-y-3">
                     {/* Abas de tipo (Todas / Mensal / Adiantamento / Férias / 13º / Rescisão) */}
-                    <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-[10px] w-fit overflow-x-auto">
+                    <div className="flex flex-wrap items-center gap-1 bg-gray-50 p-1 rounded-[10px] border border-gray-100 max-w-full">
                         {['all', 'mensal', 'adiantamento', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
                             <button
                                 key={t}
                                 onClick={() => onTypeFilter(t)}
-                                className={`h-8 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 {t === 'all' ? 'Todas' : (TYPE_LABELS[t] ?? t)}
                             </button>
@@ -227,16 +227,16 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                         <SortableHeader label="Período" colKey="period" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('value') && (
-                                        <SortableHeader label="Valor total" colKey="value" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100 text-right" />
+                                        <SortableHeader label="Valor total" colKey="value" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
                                     )}
                                     {tableColumns.visibleColumns.includes('type') && (
-                                        <SortableHeader label="Tipo" colKey="type" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        <SortableHeader label="Tipo" colKey="type" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
@@ -266,12 +266,12 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('organization') && (
-                                                <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                     {orgName(run.org_id)}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('value') && (
-                                                <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                                     {runTotals[run.id] != null ? (
                                                         <span className="text-sm font-medium text-gray-800">{fmtBRL(runTotals[run.id])}</span>
                                                     ) : (
@@ -280,14 +280,14 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('type') && (
-                                                <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <span className={`text-sm font-normal ${TYPE_COLORS[run.type] ?? 'text-gray-600'}`}>
                                                         {TYPE_LABELS[run.type] ?? run.type}{run.subtype ? ` · ${run.subtype}` : ''}
                                                     </span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className={`text-sm font-normal ${STATUS_COLORS[run.status] ?? 'text-gray-600'}`}>
                                                             {isClosed ? 'Fechado' : 'Rascunho'}

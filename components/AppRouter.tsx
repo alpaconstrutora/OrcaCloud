@@ -107,6 +107,7 @@ const ProcurementModule     = React.lazy(() => import('./ProcurementModule').the
 const P2PFlowBoard          = React.lazy(() => import('./P2PFlowBoard').then(m => ({ default: m.P2PFlowBoard })));
 const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
+const SupplierPortalManager = React.lazy(() => import('./supplier/SupplierPortalManager').then(m => ({ default: m.SupplierPortalManager })));
 const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashboard'));
 const DataTablePrototype    = React.lazy(() => import('./DataTablePrototype'));
 
@@ -1003,10 +1004,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     case 'supplier-area':
-    case 'orders': {
-      const adminSupplierTab = activeView === 'supplier-area' ? 'negotiations' : (activeView === 'orders' ? 'orders' : 'overview');
-      return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={adminSupplierTab as 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'} />;
-    }
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <SupplierPortalManager organizationId={activeOrganizationId || ''} profile={currentProfile} onNavigate={handleNavigate} />
+        </React.Suspense>
+      );
+
+    case 'orders':
+      return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab="orders" />;
 
     case 'gestao-vendas':
     case 'sales':

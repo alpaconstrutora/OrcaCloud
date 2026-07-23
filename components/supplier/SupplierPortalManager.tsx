@@ -1,0 +1,505 @@
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import {
+  Truck,
+  CheckCircle,
+  Link2,
+  Mail,
+  Unlink,
+  Plus,
+  Search,
+  RefreshCw,
+  ArrowLeft,
+  Building2,
+  AlertCircle,
+} from 'lucide-react';
+import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
+import { supabase } from '../../lib/supabase';
+import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
+import { appSettingsService } from '../../services/appSettingsService';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
+import { KpiCard } from '../ui/KpiCard';
+import { Supplier } from '../../types';
+
+const SupplierDashboard = React.lazy(() => import('../SupplierDashboard'));
+
+interface SupplierPortalManagerProps {
+  organizationId: string;
+  profile?: { group: string; role: string; email?: string };
+  onNavigate?: (link: string) => void;
+}
+
+// ui_ux_standard_guide.md — COLUMNS fora do componente (§2)
+const SUPPLIER_PORTAL_COLUMNS: ColumnConfig[] = [
+  { key: 'supplier', label: 'Fornecedor', sortable: true },
+  { key: 'organization', label: 'Organização', sortable: true },
+  { key: 'orders', label: 'Pedidos', sortable: true },
+  { key: 'quotations', label: 'Cotações', sortable: true },
+  { key: 'documents', label: 'Documentos', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+];
+
+export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ organizationId, profile, onNavigate }) => {
+  const confirm = useConfirm();
+  const { localToast, showToast } = useToast();
+
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Tela de listagem (KPI + tabela, ui_ux_standard_guide.md) — filtros sobrevivem a navegação (§3)
+  const [searchTerm, setSearchTerm] = usePersistedState('supplierPortalList:search', '');
+  const tableColumns = useTableColumns(SUPPLIER_PORTAL_COLUMNS, 'supplierPortalListColumns');
+  const [supplierStats, setSupplierStats] = useState<Record<string, { orders: number; quotations: number; documents: number }>>({});
+
+  // Modal de habilitação de acesso (define/atualiza o e-mail de login do fornecedor)
+  const [isEnableModalOpen, setIsEnableModalOpen] = useState(false);
+  const [enableSupplierId, setEnableSupplierId] = useState('');
+  const [enableEmail, setEnableEmail] = useState('');
+  const [savingAccess, setSavingAccess] = useState(false);
+
+  const refreshSuppliers = async () => {
+    setLoading(true);
+    try {
+      const sups = await supplierService.listSuppliers(organizationId);
+      setSuppliers(sups);
+    } catch (err) {
+      console.error('Erro ao atualizar fornecedores:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshSuppliers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId]);
+
+  // Contagens por fornecedor (pedidos / cotações respondidas / documentos) para a tabela e os KPIs
+  useEffect(() => {
+    if (suppliers.length === 0) {
+      setSupplierStats({});
+      return;
+    }
+    const ids = suppliers.map((s) => s.id);
+    (async () => {
+      try {
+        const [{ data: orders }, { data: quotes }, { data: docs }] = await Promise.all([
+          supabase.from('purchase_orders').select('supplier_id').in('supplier_id', ids),
+          supabase.from('quotation_responses').select('supplier_id').in('supplier_id', ids),
+          supabase.from('invoices').select('supplier_id').in('supplier_id', ids),
+        ]);
+        const stats: Record<string, { orders: number; quotations: number; documents: number }> = {};
+        ids.forEach((id) => { stats[id] = { orders: 0, quotations: 0, documents: 0 }; });
+        (orders || []).forEach((o: any) => { if (stats[o.supplier_id]) stats[o.supplier_id].orders++; });
+        (quotes || []).forEach((q: any) => { if (stats[q.supplier_id]) stats[q.supplier_id].quotations++; });
+        (docs || []).forEach((d: any) => { if (stats[d.supplier_id]) stats[d.supplier_id].documents++; });
+        setSupplierStats(stats);
+      } catch (err) {
+        console.error('Erro ao carregar contagens dos fornecedores:', err);
+      }
+    })();
+  }, [suppliers]);
+
+  // KPIs da tela de listagem (§4.2 — "Total" em destaque + decomposição)
+  const kpis = useMemo(() => ({
+    total: suppliers.length,
+    habilitados: suppliers.filter((s) => !!s.email).length,
+    semAcesso: suppliers.filter((s) => !s.email).length,
+    globais: suppliers.filter((s) => !s.organization_id).length,
+  }), [suppliers]);
+
+  const filteredSuppliers = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const result = suppliers.filter((s) =>
+      !q ||
+      (s.name || '').toLowerCase().includes(q) ||
+      (s.nickname || '').toLowerCase().includes(q) ||
+      (s.email || '').toLowerCase().includes(q)
+    );
+
+    return result.sort((a, b) => {
+      if (tableColumns.sortColumn) {
+        let cmp = 0;
+        switch (tableColumns.sortColumn) {
+          case 'supplier':
+            cmp = (a.name || '').localeCompare(b.name || '');
+            break;
+          case 'organization': {
+            const orgA = a.organization_id ? (a.organization_name || '') : 'Todas as Organizações';
+            const orgB = b.organization_id ? (b.organization_name || '') : 'Todas as Organizações';
+            cmp = orgA.localeCompare(orgB);
+            break;
+          }
+          case 'orders':
+            cmp = (supplierStats[a.id]?.orders || 0) - (supplierStats[b.id]?.orders || 0);
+            break;
+          case 'quotations':
+            cmp = (supplierStats[a.id]?.quotations || 0) - (supplierStats[b.id]?.quotations || 0);
+            break;
+          case 'documents':
+            cmp = (supplierStats[a.id]?.documents || 0) - (supplierStats[b.id]?.documents || 0);
+            break;
+          case 'status':
+            cmp = Number(!!a.email) - Number(!!b.email);
+            break;
+        }
+        return tableColumns.sortDirection === 'asc' ? cmp : -cmp;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [suppliers, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, supplierStats]);
+
+  const openEnableModal = (supplier?: Supplier) => {
+    setEnableSupplierId(supplier?.id || '');
+    setEnableEmail(supplier?.email || '');
+    setIsEnableModalOpen(true);
+  };
+
+  // Habilitar/atualizar o acesso ao portal = gravar o e-mail de login no cadastro do
+  // fornecedor (é isso que profileService.validateAccess confere no login do grupo Fornecedor).
+  const handleSaveAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enableSupplierId || !enableEmail.trim()) return;
+
+    setSavingAccess(true);
+    try {
+      const updated = await supplierService.updateSupplier(enableSupplierId, { email: enableEmail.trim() });
+      if ((updated.email || '').toLowerCase() !== enableEmail.trim().toLowerCase()) {
+        showToast('Este e-mail já está em uso por outro fornecedor.', 'error');
+        return;
+      }
+      setSuppliers((prev) => prev.map((s) => (s.id === updated.id ? { ...s, email: updated.email } : s)));
+      setIsEnableModalOpen(false);
+      setEnableSupplierId('');
+      setEnableEmail('');
+      showToast('Acesso ao Portal do Fornecedor habilitado.');
+    } catch (err) {
+      console.error('Erro ao habilitar acesso do fornecedor:', err);
+      showToast('Erro ao habilitar o acesso do fornecedor.', 'error');
+    } finally {
+      setSavingAccess(false);
+    }
+  };
+
+  // Revogar acesso = limpar o e-mail de login (o fornecedor deixa de conseguir entrar no portal)
+  const handleRevokeAccess = async (supplier: Supplier) => {
+    const ok = await confirm({
+      title: 'Revogar acesso ao portal?',
+      message: `${getSupplierDisplayName(supplier, appSettingsService.get().supplierNameDisplay)} perderá o acesso de login ao Portal do Fornecedor imediatamente.`,
+      variant: 'warning',
+      confirmLabel: 'Revogar',
+    });
+    if (!ok) return;
+
+    try {
+      const updated = await supplierService.updateSupplier(supplier.id, { email: null as any });
+      setSuppliers((prev) => prev.map((s) => (s.id === supplier.id ? { ...s, email: updated.email } : s)));
+      if (selectedSupplier?.id === supplier.id) {
+        setSelectedSupplier((prev) => (prev ? { ...prev, email: updated.email } : null));
+      }
+      showToast('Acesso ao portal revogado.');
+    } catch (err) {
+      console.error('Erro ao revogar acesso do fornecedor:', err);
+      showToast('Erro ao revogar o acesso do fornecedor.', 'error');
+    }
+  };
+
+  return (
+    <div className="h-[calc(100vh-4rem)] overflow-y-auto bg-white text-gray-800 font-sans">
+      <main className="p-6 flex flex-col gap-6">
+        {selectedSupplier ? (
+          <>
+            <button
+              onClick={() => setSelectedSupplier(null)}
+              className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 transition-all w-fit"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Voltar para Fornecedores
+            </button>
+
+            <Suspense fallback={<div className="text-center py-12 text-sm text-gray-400">Carregando portal...</div>}>
+              <SupplierDashboard
+                profile={profile}
+                supplierProfile={selectedSupplier}
+                onNavigate={onNavigate}
+              />
+            </Suspense>
+          </>
+        ) : (
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Fornecedor</h1>
+              <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie os fornecedores habilitados a acessar o Portal do Fornecedor.</p>
+            </div>
+
+            {/* "Total" em destaque (2 colunas); os demais são a decomposição (§4.2) */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Fornecedores" value={kpis.total} icon={<Truck className="w-4 h-4" />} color="orange" />
+              <KpiCard shadow={false} size="sm" label="Portal habilitado" value={kpis.habilitados} icon={<CheckCircle className="w-4 h-4" />} color="emerald" />
+              <KpiCard shadow={false} size="sm" label="Sem acesso" value={kpis.semAcesso} icon={<Mail className="w-4 h-4" />} color="gray" />
+              <KpiCard shadow={false} size="sm" label="Globais" value={kpis.globais} icon={<Link2 className="w-4 h-4" />} color="violet" />
+            </div>
+
+            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — já há KPI cards acima dando contexto */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
+              <div className="flex-1 relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por fornecedor ou e-mail..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <button
+                onClick={refreshSuppliers}
+                className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                title="Atualizar"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+
+              <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+              <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                <ColumnConfigButton
+                  columns={SUPPLIER_PORTAL_COLUMNS}
+                  visibleColumns={tableColumns.visibleColumns}
+                  showColumnConfig={tableColumns.showColumnConfig}
+                  onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                  onToggleColumn={tableColumns.toggleColumn}
+                  onReset={tableColumns.resetColumns}
+                />
+              </div>
+
+              {/* Variante compacta do CTA primário (§17) */}
+              <button
+                onClick={() => openEnableModal()}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white rounded-[6px] hover:bg-orange-600 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+              >
+                <Plus className="w-[15px] h-[15px]" />
+                Novo fornecedor
+              </button>
+            </div>
+
+            {!organizationId && (
+              <p className="text-xs text-gray-400 -mt-3">
+                Visualizando fornecedores de todas as organizações.
+              </p>
+            )}
+
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+              </div>
+            ) : filteredSuppliers.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <Truck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum fornecedor encontrado</h3>
+                <p className="text-sm text-gray-500">
+                  {searchTerm ? 'Tente ajustar sua busca.' : 'Clique em "Novo fornecedor" para habilitar o primeiro.'}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        {tableColumns.visibleColumns.includes('supplier') && (
+                          <SortableHeader colKey="supplier" label="Fornecedor" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100" />
+                        )}
+                        {tableColumns.visibleColumns.includes('organization') && (
+                          <SortableHeader colKey="organization" label="Organização" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('orders') && (
+                          <SortableHeader colKey="orders" label="Pedidos" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('quotations') && (
+                          <SortableHeader colKey="quotations" label="Cotações" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('documents') && (
+                          <SortableHeader colKey="documents" label="Documentos" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('status') && (
+                          <SortableHeader colKey="status" label="Status" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredSuppliers.map((s) => {
+                        const stats = supplierStats[s.id] || { orders: 0, quotations: 0, documents: 0 };
+                        const hasAccess = !!s.email;
+                        return (
+                          <tr
+                            key={s.id}
+                            onClick={() => setSelectedSupplier(s)}
+                            className="hover:bg-orange-50/50 transition-colors cursor-pointer group"
+                          >
+                            {tableColumns.visibleColumns.includes('supplier') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
+                                    <Building2 className="w-4 h-4" />
+                                  </div>
+                                  <span className="text-sm font-normal text-gray-900">
+                                    {getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}
+                                  </span>
+                                </div>
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('organization') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                {s.organization_id ? (s.organization_name || '-') : 'Todas as Organizações'}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('orders') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {stats.orders}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('quotations') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {stats.quotations}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('documents') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {stats.documents}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('status') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                {/* StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
+                                <span className={`text-sm font-normal ${hasAccess ? 'text-emerald-700' : 'text-gray-500'}`}>
+                                  {hasAccess ? 'Habilitado' : 'Sem acesso'}
+                                </span>
+                              </td>
+                            )}
+                            <td className="px-6 py-2.5 text-right">
+                              {/* Gerenciar = clique na linha (ação dominante, §9.1). Ações aqui são só o que sobra. */}
+                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <ActionIconButton
+                                  kind="edit"
+                                  icon={<Mail className="w-4 h-4" />}
+                                  title={hasAccess ? 'Alterar e-mail de acesso' : 'Definir e-mail de acesso'}
+                                  onClick={() => openEnableModal(s)}
+                                />
+                                {hasAccess && (
+                                  <ActionIconButton
+                                    kind="delete"
+                                    icon={<Unlink className="w-4 h-4" />}
+                                    title="Revogar acesso ao portal"
+                                    onClick={() => handleRevokeAccess(s)}
+                                  />
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* MODAL: HABILITAR/ATUALIZAR ACESSO AO PORTAL */}
+      {isEnableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
+            <h3 className="text-md font-bold text-gray-900">Habilitar Portal do Fornecedor</h3>
+
+            <form onSubmit={handleSaveAccess} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Fornecedor / Prestador de Serviço</label>
+                <select
+                  required
+                  value={enableSupplierId}
+                  onChange={(e) => {
+                    setEnableSupplierId(e.target.value);
+                    const supplier = suppliers.find((s) => s.id === e.target.value);
+                    setEnableEmail(supplier?.email || '');
+                  }}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                >
+                  <option value="">Selecione um prestador...</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}{!organizationId ? ` — ${s.organization_name || 'Todas as Organizações'}` : ''}
+                      {s.email ? ' (portal habilitado)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">E-mail de Login</label>
+                <input
+                  required
+                  type="email"
+                  value={enableEmail}
+                  onChange={(e) => setEnableEmail(e.target.value)}
+                  placeholder="email@fornecedor.com"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
+                />
+                <p className="text-xs text-gray-400 pt-1">
+                  É este e-mail que o fornecedor usa para entrar no Portal do Fornecedor.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-2">
+                <Button variant="ghost" type="button" onClick={() => setIsEnableModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={savingAccess} className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50">
+                  {savingAccess ? 'Salvando...' : 'Habilitar Acesso'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de notificação (§13) */}
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SupplierPortalManager;

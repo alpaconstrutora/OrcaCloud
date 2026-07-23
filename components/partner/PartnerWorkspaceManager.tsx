@@ -84,6 +84,11 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [tokenModalOpen, setTokenModalOpen] = useState(false);
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
+  // Parceiro global + "Todas as organizações" no topo = nenhuma das duas fontes de
+  // organização existe; em vez de bloquear a ação, deixamos escolher aqui (mesmo
+  // ajuste feito no Portal do Fornecedor — "criar do zero sem entidade-pai" pede
+  // seletor, não beco sem saída).
+  const [tokenOrgOverride, setTokenOrgOverride] = useState('');
 
   // Conversas (contrapartida interna do chat que o parceiro vê no próprio portal)
   const [conversations, setConversations] = useState<PartnerConversation[]>([]);
@@ -217,6 +222,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
   // 2. Recarregar dados ao selecionar outro workspace
   useEffect(() => {
+    setTokenOrgOverride('');
     if (!selectedWorkspace) return;
 
     const loadWorkspaceDetails = async () => {
@@ -317,21 +323,18 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     return emitted.length > 0 ? emitted[emitted.length - 1].url : null;
   };
 
+  // Fonte da organização que vai administrar o link: seletor do topo → organização
+  // do próprio workspace → organização que já gerou o token (regenerar) → escolha
+  // manual no modal (só quando nenhuma das anteriores existe).
+  const derivedTokenOrgId = organizationId || selectedWorkspace?.organization_id || portalToken?.org_id || '';
+  const effectiveTokenOrgId = derivedTokenOrgId || tokenOrgOverride;
+
   // Gerar/regenerar o link de acesso público do workspace selecionado
   const handleGenerateToken = async () => {
-    if (!selectedWorkspace) return;
-    // Gerar/revogar o link é uma permissão de organização (quem administra o token),
-    // diferente da visibilidade dos dados do workspace em si — por isso, ao contrário
-    // da criação do parceiro, aqui é preciso mesmo saber qual organização está
-    // administrando o link, mesmo para um workspace global.
-    const tokenOrgId = organizationId || selectedWorkspace.organization_id;
-    if (!tokenOrgId) {
-      alert('Selecione uma organização específica no topo do sistema para gerar o link deste parceiro global.');
-      return;
-    }
+    if (!selectedWorkspace || !effectiveTokenOrgId) return;
     setTokenLoading(true);
     try {
-      await partnerPortalTokenService.generateToken(selectedWorkspace.id, tokenOrgId);
+      await partnerPortalTokenService.generateToken(selectedWorkspace.id, effectiveTokenOrgId);
       const tok = await partnerPortalTokenService.getTokenForWorkspace(selectedWorkspace.id);
       setPortalToken(tok);
     } catch (err) {
@@ -1471,6 +1474,29 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               acesso convidado (com login).
             </p>
 
+            {/* Parceiro global + "Todas as organizações" no topo: nenhuma organização dona
+                do link é derivável — escolha manual aqui em vez de bloquear a ação. */}
+            {!derivedTokenOrgId && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Organização responsável pelo link</label>
+                <select
+                  value={tokenOrgOverride}
+                  onChange={(e) => setTokenOrgOverride(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                >
+                  <option value="">Selecione a organização...</option>
+                  {Object.entries(orgNames).map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 pt-1">
+                  Este parceiro é global (sem organização própria) e nenhuma organização
+                  específica está selecionada no topo do sistema — escolha quem vai administrar
+                  este link (gerar, regenerar, revogar).
+                </p>
+              </div>
+            )}
+
             {tokenLoading ? (
               <div className="text-center py-6 text-xs text-gray-400">Carregando...</div>
             ) : portalToken && portalToken.is_active ? (
@@ -1488,7 +1514,12 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   <Button onClick={handleCopyPortalLink} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
                     {tokenCopied ? 'Copiado!' : 'Copiar Link'}
                   </Button>
-                  <Button variant="secondary" onClick={handleGenerateToken} title="Gerar um novo link (invalida o atual)">
+                  <Button
+                    variant="secondary"
+                    onClick={handleGenerateToken}
+                    disabled={!effectiveTokenOrgId}
+                    title={effectiveTokenOrgId ? 'Gerar um novo link (invalida o atual)' : 'Escolha a organização responsável acima'}
+                  >
                     Regenerar
                   </Button>
                   <Button variant="ghost" onClick={handleRevokeToken} className="text-red-500 hover:bg-red-50" title="Revogar acesso">
@@ -1497,7 +1528,12 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 </div>
               </>
             ) : (
-              <Button onClick={handleGenerateToken} className="bg-orange-500 hover:bg-orange-600 text-white">
+              <Button
+                onClick={handleGenerateToken}
+                disabled={!effectiveTokenOrgId}
+                title={effectiveTokenOrgId ? undefined : 'Escolha a organização responsável acima'}
+                className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
+              >
                 Gerar Link de Acesso
               </Button>
             )}

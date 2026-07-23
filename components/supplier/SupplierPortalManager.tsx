@@ -19,11 +19,12 @@ import { supabase } from '../../lib/supabase';
 import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
 import { appSettingsService } from '../../services/appSettingsService';
 import { supplierPortalTokenService, SupplierPortalToken } from '../../services/supplierPortalTokenService';
+import { organizationService } from '../../services/organizationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import { KpiCard } from '../ui/KpiCard';
-import { Supplier } from '../../types';
+import { Supplier, Organization } from '../../types';
 
 const SupplierDashboard = React.lazy(() => import('../SupplierDashboard'));
 
@@ -67,6 +68,11 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
   const [tokenModalOpen, setTokenModalOpen] = useState(false);
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
+  // Fornecedor global + "Todas as organizações" no topo = nenhuma das duas fontes
+  // de organização existe; em vez de bloquear a ação, deixamos escolher aqui (§5 do
+  // CLAUDE.md: "criar do zero sem entidade-pai" pede seletor, não beco sem saída).
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [tokenOrgOverride, setTokenOrgOverride] = useState('');
 
   const refreshSuppliers = async () => {
     setLoading(true);
@@ -85,8 +91,15 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
+  useEffect(() => {
+    organizationService.listOrganizations()
+      .then(setOrganizations)
+      .catch((err) => console.error('Erro ao carregar organizações:', err));
+  }, []);
+
   // Carrega o link de acesso já gerado (se houver) ao selecionar um fornecedor
   useEffect(() => {
+    setTokenOrgOverride('');
     if (!selectedSupplier) {
       setPortalToken(null);
       return;
@@ -231,21 +244,18 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
     }
   };
 
+  // Fonte da organização que vai administrar o link: seletor do topo → organização
+  // do próprio fornecedor → organização que já gerou o token (regenerar) → escolha
+  // manual no modal (só quando nenhuma das anteriores existe).
+  const derivedTokenOrgId = organizationId || selectedSupplier?.organization_id || portalToken?.org_id || '';
+  const effectiveTokenOrgId = derivedTokenOrgId || tokenOrgOverride;
+
   // Gerar/regenerar o link de acesso público do fornecedor selecionado
   const handleGenerateToken = async () => {
-    if (!selectedSupplier) return;
-    // Mesma lógica do Portal do Parceiro: gerar/revogar o link é permissão de
-    // organização (quem administra o link), diferente da visibilidade do
-    // fornecedor em si — por isso, mesmo para um fornecedor global, precisa
-    // de uma organização específica selecionada para administrar o token.
-    const tokenOrgId = organizationId || selectedSupplier.organization_id;
-    if (!tokenOrgId) {
-      showToast('Selecione uma organização específica no topo do sistema para gerar o link deste fornecedor global.', 'error');
-      return;
-    }
+    if (!selectedSupplier || !effectiveTokenOrgId) return;
     setTokenLoading(true);
     try {
-      await supplierPortalTokenService.generateToken(selectedSupplier.id, tokenOrgId);
+      await supplierPortalTokenService.generateToken(selectedSupplier.id, effectiveTokenOrgId);
       const tok = await supplierPortalTokenService.getTokenForSupplier(selectedSupplier.id);
       setPortalToken(tok);
     } catch (err) {
@@ -611,6 +621,29 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
               duplicar pedido ficam disponíveis só no acesso logado.
             </p>
 
+            {/* Fornecedor global + "Todas as organizações" no topo: nenhuma organização
+                dona do link é derivável — escolha manual aqui em vez de bloquear a ação. */}
+            {!derivedTokenOrgId && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Organização responsável pelo link</label>
+                <select
+                  value={tokenOrgOverride}
+                  onChange={(e) => setTokenOrgOverride(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                >
+                  <option value="">Selecione a organização...</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 pt-1">
+                  Este fornecedor é global (sem organização própria) e nenhuma organização
+                  específica está selecionada no topo do sistema — escolha quem vai administrar
+                  este link (gerar, regenerar, revogar).
+                </p>
+              </div>
+            )}
+
             {tokenLoading ? (
               <div className="text-center py-6 text-xs text-gray-400">Carregando...</div>
             ) : portalToken && portalToken.is_active ? (
@@ -628,7 +661,12 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                   <Button onClick={handleCopyPortalLink} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
                     {tokenCopied ? 'Copiado!' : 'Copiar Link'}
                   </Button>
-                  <Button variant="secondary" onClick={handleGenerateToken} title="Gerar um novo link (invalida o atual)">
+                  <Button
+                    variant="secondary"
+                    onClick={handleGenerateToken}
+                    disabled={!effectiveTokenOrgId}
+                    title={effectiveTokenOrgId ? 'Gerar um novo link (invalida o atual)' : 'Escolha a organização responsável acima'}
+                  >
                     Regenerar
                   </Button>
                   <Button variant="ghost" onClick={handleRevokeToken} className="text-red-500 hover:bg-red-50" title="Revogar acesso">
@@ -637,7 +675,12 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                 </div>
               </>
             ) : (
-              <Button onClick={handleGenerateToken} className="bg-orange-500 hover:bg-orange-600 text-white">
+              <Button
+                onClick={handleGenerateToken}
+                disabled={!effectiveTokenOrgId}
+                title={effectiveTokenOrgId ? undefined : 'Escolha a organização responsável acima'}
+                className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
+              >
                 Gerar Link de Acesso
               </Button>
             )}

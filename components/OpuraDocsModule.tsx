@@ -56,6 +56,7 @@ import {
 import { partnerService } from '../services/partnerService';
 import { clientService } from '../services/clientService';
 import { laborService } from '../services/laborService';
+import { supplierService } from '../services/supplierService';
 import { supabase } from '../lib/supabase';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
 import { validateFileNameAgainstMask, extractTokenFromFileName, generateFileNameFromMask, extractMaskTokens, getNextSequentialNumber, getInitialRevision } from '../utils/dmsUtils';
@@ -72,6 +73,7 @@ import {
   OpuraDocumentPortalShare,
   PartnerWorkspace,
   UserPermissions,
+  Supplier,
 } from '../types';
 import { useStore } from '../store/useStore';
 import { isObra } from '../utils/projectClassification';
@@ -141,6 +143,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocTokens, setEditDocTokens] = React.useState<Record<string, string>>({});
   const [editDocDesc, setEditDocDesc] = React.useState('');
   const [editDocAutor, setEditDocAutor] = React.useState('');
+  const [editDocSupplierId, setEditDocSupplierId] = React.useState('');
+  const [editDocAutorOutro, setEditDocAutorOutro] = React.useState(false);
   const [editDocEmissao, setEditDocEmissao] = React.useState('');
   const [editDocValidade, setEditDocValidade] = React.useState('');
   const [editDocAlertaDias, setEditDocAlertaDias] = React.useState(30);
@@ -160,6 +164,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [filterStatus, setFilterStatus] = React.useState<string>('all');
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [namingPatterns, setNamingPatterns] = React.useState<OpuraDmsNamingPattern[]>([]);
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
   // Organização escolhida no modal "Ajustes do GED" quando o seletor global está em
@@ -254,6 +259,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocName, setNewDocName] = React.useState('');
   const [newDocDesc, setNewDocDesc] = React.useState('');
   const [newDocAutor, setNewDocAutor] = React.useState('');
+  // true = usuário escolheu "Outro" no seletor de Autor/Fornecedor (digita o nome livremente).
+  const [newDocAutorOutro, setNewDocAutorOutro] = React.useState(false);
   const [newDocType, setNewDocType] = React.useState('');
   const [newDocDiscipline, setNewDocDiscipline] = React.useState('');
   // Organização escolhida no modal quando o seletor global está em "Todas as
@@ -688,14 +695,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   
     const fetchDmsSettings = async () => {
       try {
-        const [discs, pats, docTypes] = await Promise.all([
+        const [discs, pats, docTypes, sups] = await Promise.all([
           documentService.listDisciplines(activeOrganizationId),
           documentService.listNamingPatterns(activeOrganizationId),
-          documentService.listDocumentTypes(activeOrganizationId)
+          documentService.listDocumentTypes(activeOrganizationId),
+          supplierService.listSuppliers(activeOrganizationId || undefined),
         ]);
         setDisciplines(discs);
         setNamingPatterns(pats);
         setDocumentTypes(docTypes);
+        setSuppliers(sups);
       } catch (err) {
         console.error('[OpuraDocsModule] Erro ao carregar configurações do GED:', err);
       }
@@ -1382,6 +1391,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       // Reset form
       setNewDocName('');
       setNewDocDesc('');
+      setNewDocAutor('');
+      setNewDocAutorOutro(false);
       setNewDocType('');
       setNewDocDiscipline('');
       setNewDocEmissao('');
@@ -1641,6 +1652,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
     setEditDocDesc(doc.descricao || '');
     setEditDocAutor(doc.autor || '');
+    // supplier_id vinculado → seletor mostra o fornecedor. Sem supplier_id mas com texto
+    // livre em autor (documentos criados antes deste campo existir) → cai em "Outro",
+    // preservando o texto já digitado.
+    setEditDocSupplierId(doc.supplier_id || '');
+    setEditDocAutorOutro(!doc.supplier_id && !!doc.autor);
     setEditDocEmissao(doc.data_emissao ? doc.data_emissao.split('T')[0] : '');
     setEditDocValidade(doc.data_validade ? doc.data_validade.split('T')[0] : '');
     setEditDocAlertaDias(doc.alerta_dias_antecedencia || 30);
@@ -1697,6 +1713,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         nome: finalDocName,
         descricao: editDocDesc || null,
         autor: editDocAutor || null,
+        supplier_id: editDocSupplierId || null,
         data_emissao: editDocEmissao || null,
         data_validade: editDocValidade || null,
         alerta_dias_antecedencia: editDocAlertaDias,
@@ -2575,13 +2592,41 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 
                 <div className="space-y-1.5 mt-4">
                   <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
-                  <input
-                    type="text"
-                    placeholder="Nome do autor ou responsável..."
-                    value={newDocAutor}
-                    onChange={(e) => setNewDocAutor(e.target.value)}
+                  <select
+                    value={newDocSupplierId || (newDocAutorOutro ? '__outro__' : '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '__outro__') {
+                        setNewDocSupplierId('');
+                        setNewDocAutorOutro(true);
+                      } else if (val === '') {
+                        setNewDocSupplierId('');
+                        setNewDocAutorOutro(false);
+                        setNewDocAutor('');
+                      } else {
+                        setNewDocSupplierId(val);
+                        setNewDocAutorOutro(false);
+                        setNewDocAutor(suppliers.find((s) => s.id === val)?.name || '');
+                      }
+                    }}
                     className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                  />
+                  >
+                    <option value="">Nenhum</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                    <option value="__outro__">Outro (digitar nome)</option>
+                  </select>
+                  {newDocAutorOutro && (
+                    <input
+                      type="text"
+                      placeholder="Nome do autor ou responsável..."
+                      value={newDocAutor}
+                      onChange={(e) => setNewDocAutor(e.target.value)}
+                      autoFocus
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    />
+                  )}
                 </div>
 
               {/* Emissão, Validade e Dias Alerta */}
@@ -3615,13 +3660,41 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 
                 <div className="space-y-1.5 mt-4">
                   <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
-                  <input
-                    type="text"
-                    value={editDocAutor}
-                    onChange={(e) => setEditDocAutor(e.target.value)}
-                    placeholder="Nome do autor ou responsável..."
+                  <select
+                    value={editDocSupplierId || (editDocAutorOutro ? '__outro__' : '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '__outro__') {
+                        setEditDocSupplierId('');
+                        setEditDocAutorOutro(true);
+                      } else if (val === '') {
+                        setEditDocSupplierId('');
+                        setEditDocAutorOutro(false);
+                        setEditDocAutor('');
+                      } else {
+                        setEditDocSupplierId(val);
+                        setEditDocAutorOutro(false);
+                        setEditDocAutor(suppliers.find((s) => s.id === val)?.name || '');
+                      }
+                    }}
                     className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
-                  />
+                  >
+                    <option value="">Nenhum</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                    <option value="__outro__">Outro (digitar nome)</option>
+                  </select>
+                  {editDocAutorOutro && (
+                    <input
+                      type="text"
+                      value={editDocAutor}
+                      onChange={(e) => setEditDocAutor(e.target.value)}
+                      placeholder="Nome do autor ou responsável..."
+                      autoFocus
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    />
+                  )}
                 </div>
 
               {/* Datas e Alertas em Grid */}

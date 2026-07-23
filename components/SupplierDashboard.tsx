@@ -385,47 +385,50 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Negocie lances e acompanhe a concorrência em tempo real.</p>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                    <div className="flex-1 relative w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Buscar materiais..."
-                            value={searchNegotiations}
-                            onChange={(e) => setSearchNegotiations(e.target.value)}
-                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        />
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar materiais..."
+                                    value={searchNegotiations}
+                                    onChange={(e) => setSearchNegotiations(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <button
+                                    onClick={() => setViewMode('grid')}
+                                    className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'text-gray-400 hover:text-gray-600'
+                                        }`}
+                                >
+                                    <LayoutDashboard className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('list')}
+                                    className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'text-gray-400 hover:text-gray-600'
+                                        }`}
+                                >
+                                    <Table2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            <LayoutDashboard className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            <Table2 className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
 
                 {mockNegotiations.length === 0 ? (
-                    <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                    <div className="text-center py-12">
                         <Gavel className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma oportunidade encontrada</h3>
                         <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
                     </div>
                 ) : viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 gap-4 p-6">
                         {mockNegotiations.map((neg, i) => (
                             <div key={i} className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm hover:shadow-md transition-all group overflow-hidden relative">
                                 {bidAnalysis[neg.id] && (
@@ -499,10 +502,10 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                         ))}
                     </div>
                 ) : (
-                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                <tr>
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="px-6 py-2 border-r border-gray-100">Item</th>
                                     <th className="px-6 py-2 border-r border-gray-100">Projeto</th>
                                     <th className="px-6 py-2 border-r border-gray-100">Qtd.</th>
@@ -543,6 +546,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                         </table>
                     </div>
                 )}
+                </div>
             </div>
         );
     };
@@ -734,34 +738,35 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Pedidos</h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Acompanhe o ciclo de vida e logística dos suprimentos.</p>
-                    </div>
-                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            <LayoutDashboard className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
-                                ? 'bg-blue-600 text-white'
-                                : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                        >
-                            <Table2 className="w-4 h-4" />
-                        </button>
-                    </div>
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Pedidos</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Acompanhe o ciclo de vida e logística dos suprimentos.</p>
                 </div>
 
-                <div className="space-y-4">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-400 hover:text-gray-600'
+                                    }`}
+                            >
+                                <LayoutDashboard className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-400 hover:text-gray-600'
+                                    }`}
+                            >
+                                <Table2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+
                     {loadingOrders ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -769,7 +774,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                         </div>
                     ) : orders.length > 0 ? (
                         viewMode === 'grid' ? (
-                            <div className="space-y-4">
+                            <div className="space-y-4 p-6">
                                 {orders.map((order) => (
                                 <div key={order.id} className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden relative">
                                     <div className="absolute top-0 right-0 p-5">
@@ -837,10 +842,10 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 ))}
                             </div>
                         ) : (
-                            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                                <table className="w-full text-left">
-                                    <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <tr>
+                            <div className="overflow-auto max-h-[70vh]">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                             <th className="px-6 py-2 border-r border-gray-100">Nº pedido</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Data</th>
                                             <th className="px-6 py-2 border-r border-gray-100 text-center">Itens</th>
@@ -903,7 +908,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             </div>
                         )
                     ) : (
-                        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                        <div className="text-center py-12">
                             <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum pedido encontrado</h3>
                             <p className="text-sm text-gray-500">Você ainda não possui pedidos registrados no sistema.</p>
@@ -947,34 +952,36 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                    <div className="flex-1 relative w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Buscar cotação..."
-                            value={searchQueryQuotations}
-                            onChange={(e) => setSearchQueryQuotations(e.target.value)}
-                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                        />
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar cotação..."
+                                    value={searchQueryQuotations}
+                                    onChange={(e) => setSearchQueryQuotations(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <button className="h-9 flex items-center gap-1.5 px-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-500 hover:text-blue-600 transition-all active:scale-95 shrink-0">
+                                <Filter className="w-4 h-4" />
+                                Filtros
+                            </button>
+                        </div>
                     </div>
-                    <button className="h-9 flex items-center gap-1.5 px-3.5 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-500 hover:text-blue-600 transition-all active:scale-95 shrink-0">
-                        <Filter className="w-4 h-4" />
-                        Filtros
-                    </button>
-                </div>
 
-                <div>
                     {loadingQuotations ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                             <p className="mt-2 text-gray-500">Carregando...</p>
                         </div>
                     ) : filteredQuotations.length > 0 ? (
-                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <tr>
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                         <th className="px-6 py-2 border-r border-gray-100">Nº RFQ</th>
                                         <th className="px-6 py-2 border-r border-gray-100">Título</th>
                                         <th className="px-6 py-2 border-r border-gray-100">Projeto</th>
@@ -1009,7 +1016,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             </table>
                         </div>
                     ) : (
-                        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                        <div className="text-center py-12">
                             <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma cotação pendente</h3>
                             <p className="text-sm text-gray-500">Você não possui solicitações de cotação no momento.</p>

@@ -940,7 +940,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
 
                             return (
                                 <div
-                                    className="absolute top-[10px] h-4 z-20 overflow-visible flex items-center group/summary-bar"
+                                    className="absolute top-[8px] h-4 z-20 overflow-visible flex items-center group/summary-bar"
                                     style={{ left: `${left}px`, width: `${width}px` }}
                                 >
                                     {/* Barra do grupo: retângulo cinza sólido (sem os ganchos em losango) */}
@@ -970,11 +970,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         progresso (aquela tem overflow-hidden), senão seriam cortados. */}
                                     <div
                                         className="absolute left-0 top-full w-0 h-0 pointer-events-none"
-                                        style={{ borderTop: `5px solid ${baseColor}`, borderRight: '4px solid transparent' }}
+                                        style={{ borderTop: `8px solid ${baseColor}`, borderRight: '7px solid transparent' }}
                                     />
                                     <div
                                         className="absolute right-0 top-full w-0 h-0 pointer-events-none"
-                                        style={{ borderTop: `5px solid ${baseColor}`, borderLeft: '4px solid transparent' }}
+                                        style={{ borderTop: `8px solid ${baseColor}`, borderLeft: '7px solid transparent' }}
                                     />
 
                                     <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">

@@ -254,95 +254,97 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                 <KpiCard shadow={false} size="sm" label="Inativos" value={kpis.inactive} icon={<UserX className="w-4 h-4" />} color="gray" />
             </div>
 
-            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — já há KPI cards acima dando contexto. */}
-            <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                <div className="flex-1 relative w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Buscar por nome, e-mail ou CRECI..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                    />
-                </div>
-
-                <select
-                    value={statusFilter}
-                    onChange={e => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-                    className="h-9 text-sm font-normal text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
-                    <option value="all">Todos</option>
-                    <option value="active">Ativos</option>
-                    <option value="inactive">Inativos</option>
-                </select>
-
-                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (guide §6.4) */}
-                <div className="flex items-center h-9">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                </div>
-
-                <button
-                    onClick={loadData}
-                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-                    title="Atualizar"
-                >
-                    <RefreshCw className="w-4 h-4" />
-                </button>
-
-                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
-
-                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                    {viewMode === 'list' && (
-                        <>
-                            <ColumnConfigButton
-                                columns={BROKER_COLUMNS}
-                                visibleColumns={tableColumns.visibleColumns}
-                                showColumnConfig={tableColumns.showColumnConfig}
-                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                onToggleColumn={tableColumns.toggleColumn}
-                                onReset={tableColumns.resetColumns}
+            {/* Tabela com toolbar de busca acoplada (UI UX tabela.md §5) — busca dentro do mesmo card da tabela. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, e-mail ou CRECI..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
-                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
-                        </>
-                    )}
-                    <button
-                        onClick={() => setViewMode('grid')}
-                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                        title="Visualização em blocos"
-                    >
-                        <LayoutDashboard className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => setViewMode('list')}
-                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                        title="Visualização em linhas"
-                    >
-                        <Table2 className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
+                        </div>
 
-            {isLoading ? (
-                <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-2 text-gray-500">Carregando...</p>
+                        <select
+                            value={statusFilter}
+                            onChange={e => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+                            className="h-9 text-sm font-normal text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                        >
+                            <option value="all">Todos</option>
+                            <option value="active">Ativos</option>
+                            <option value="inactive">Inativos</option>
+                        </select>
+
+                        {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (guide §6.4) */}
+                        <div className="flex items-center h-9">
+                            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                        </div>
+
+                        <button
+                            onClick={loadData}
+                            className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                            title="Atualizar"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
+
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            {viewMode === 'list' && (
+                                <>
+                                    <ColumnConfigButton
+                                        columns={BROKER_COLUMNS}
+                                        visibleColumns={tableColumns.visibleColumns}
+                                        showColumnConfig={tableColumns.showColumnConfig}
+                                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                        onToggleColumn={tableColumns.toggleColumn}
+                                        onReset={tableColumns.resetColumns}
+                                    />
+                                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                </>
+                            )}
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                                title="Visualização em blocos"
+                            >
+                                <LayoutDashboard className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                                title="Visualização em linhas"
+                            >
+                                <Table2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            ) : filtered.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
-                    <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum corretor encontrado</h3>
-                    <p className="text-sm text-gray-500">
-                        {searchTerm ? 'Tente buscar por outro termo.' : 'Cadastre seu primeiro corretor no botão acima.'}
-                    </p>
-                </div>
-            ) : viewMode === 'list' ? (
-                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
+
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="text-center py-12">
+                        <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum corretor encontrado</h3>
+                        <p className="text-sm text-gray-500">
+                            {searchTerm ? 'Tente buscar por outro termo.' : 'Cadastre seu primeiro corretor no botão acima.'}
+                        </p>
+                    </div>
+                ) : viewMode === 'list' ? (
+                    <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-left border-collapse">
                         {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força uppercase internamente por padrão. */}
                         <thead>
-                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {tableColumns.visibleColumns.includes('name') && (
                                     <SortableHeader label="Corretor" colKey="name" uppercase={false} sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
@@ -416,10 +418,9 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                             ))}
                         </tbody>
                     </table>
-                    </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
                     {filtered.map(broker => (
                         <div key={broker.id} className="bg-white rounded-[10px] border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden">
                             <div className="p-6 flex-1">
@@ -474,6 +475,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     ))}
                 </div>
             )}
+            </div>
 
             {/* Modal de edição */}
             <BrokerModal

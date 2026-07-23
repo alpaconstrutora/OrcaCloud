@@ -2,6 +2,7 @@ import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineActionTray } from './ui/InlineActionTray';
 import { useConfirm } from './ui/confirm';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import {
   FolderOpen,
   Upload,
@@ -3536,22 +3537,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
       {/* Modal de Edição de Metadados do Documento */}
       {editingDoc && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-blue-600" />
-                <h3 className="font-black text-slate-800 text-lg">Editar Metadados</h3>
-              </div>
-              <button
-                onClick={() => setEditingDoc(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <Sheet open={!!editingDoc} onClose={() => setEditingDoc(null)} size="2xl">
+          <SheetHeader onClose={() => setEditingDoc(null)}>
+            <SheetTitle>Editar metadados</SheetTitle>
+            <SheetDescription>{editingDoc.nome}</SheetDescription>
+          </SheetHeader>
 
-            <form onSubmit={handleEditDocSubmit} className="p-6 space-y-5">
+          <form onSubmit={handleEditDocSubmit} className="flex flex-col flex-1 min-h-0">
+          <SheetPanel className="p-6 space-y-5">
                 {/* Nome ou Tokens */}
                 {(() => {
                   const docFolder = folders.find(f => f.id === editingDoc?.folder_id) || activeFolder;
@@ -3822,9 +3815,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <option value="alerta">🔔 Alerta (Forçar)</option>
                 </select>
               </div>
-
-              {/* Ações */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+          </SheetPanel>
+          <SheetFooter>
                 <button
                   type="button"
                   onClick={() => setEditingDoc(null)}
@@ -3838,10 +3830,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 >
                   Salvar Alterações
                 </button>
-              </div>
-            </form>
-          </div>
-        </div>
+          </SheetFooter>
+          </form>
+        </Sheet>
       )}
 
       {/* Modal de Configuração/Edição de Pasta Virtual */}

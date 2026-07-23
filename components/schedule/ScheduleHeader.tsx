@@ -23,7 +23,6 @@ import {
 import Button from '../ui/Button';
 import { isOrcamentoOuLegado } from '../../utils/projectClassification';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
-import ModernDateInput from '../ModernDateInput';
 
 interface ScheduleHeaderProps {
     onBack?: () => void;
@@ -141,8 +140,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     return (
         // space-y-3 (12px) entre as barras de cromo — UI UX tabela.md: "12px entre KPIs → abas → botões".
         <div className="space-y-3">
-        <div className="bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-3">
-            {/* ── Left: Title + Project selector ── */}
+        <div className="bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
+            {/* ── Title + Project selector ── */}
             <div className="flex flex-col gap-1 shrink-0">
                 <div className="flex items-center gap-3">
                     {onBack && (
@@ -185,99 +184,89 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     </div>
                 </div>
             </div>
+        </div>
 
-            {/* ── Right: Controls ── */}
-            <div className="flex items-center gap-2 flex-wrap justify-end">
-
-                {/* Group 2: Time Scale */}
+        {/* Toolbar de botões — UI UX tabela.md §4 (escopo à esquerda, ações à direita) */}
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+            {/* Escopo: escala de tempo (só Tabela/Gantt) + período do planejamento */}
+            <div className="flex flex-wrap items-center gap-2">
                 {(viewMode === 'table' || viewMode === 'gantt') && (
-                    <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60">
+                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
                         {(['day', 'week', 'month', 'year'] as const).map((scale) => (
-                            <button key={scale} onClick={() => setTimeScale(scale)} className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${timeScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                            <button key={scale} onClick={() => setTimeScale(scale)} className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${timeScale === scale ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}>
                                 {{ day: 'Dia', week: 'Sem', month: 'Mês', year: 'Ano' }[scale]}
                             </button>
                         ))}
                     </div>
                 )}
 
-                {/* Group 3: Primary Actions */}
-                {(viewMode === 'table' || viewMode === 'gantt') && <div className="h-5 w-px bg-gray-200" />}
-                <div className="flex items-center gap-1">
-                    <Button onClick={onAutoSchedule} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" title="Recalcula todas as datas com base em predecessores e duração">
-                        <Wand2 className="w-3.5 h-3.5" />
-                        Auto Programar
-                    </Button>
-
-                    <Button variant="secondary" size="sm" onClick={handleLevelResources} className="text-indigo-600 border-indigo-100 hover:bg-indigo-50" title="Nivelamento Automático de Recursos">
-                        <Users className="w-3.5 h-3.5" />
-                        Nivelar
-                    </Button>
-                </div>
-
-                {/* Group 4: Sync + Versions (with badges) */}
-                <div className="h-5 w-px bg-gray-200" />
-                <div className="flex items-center gap-1">
-                    <Button variant="secondary" size="sm" onClick={onSyncBudget} className={syncDiffCount > 0 ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 shadow-sm' : 'text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'} title={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'}>
-                        <RefreshCw className={`w-3.5 h-3.5 ${syncDiffCount > 0 ? 'text-amber-500' : ''}`} />
-                        Sincronizar
-                        {syncDiffCount > 0 && (
-                            <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
-                                {syncDiffCount}
-                            </span>
-                        )}
-                    </Button>
-
-                    <Button variant="secondary" size="sm" onClick={onOpenVersions} className={hasNewerBudgetVersion ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 shadow-sm' : 'text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'} title="Versões do planejamento">
-                        <History className={`w-3.5 h-3.5 ${hasNewerBudgetVersion ? 'text-indigo-500' : ''}`} />
-                        Versões
-                        {planningVersionsCount > 0 && (
-                            <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
-                                {planningVersionsCount}
-                            </span>
-                        )}
-                    </Button>
-                </div>
-
-                {/* Group 5: Dates */}
-                <div className="h-5 w-px bg-gray-200" />
-                <div className="flex items-center gap-2">
-                    <ModernDateInput
-                        label="Início"
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-gray-400 whitespace-nowrap">Início</span>
+                    <input
+                        type="date"
                         value={schedule.startDate ? schedule.startDate.split('T')[0] : ''}
-                        onChange={(val) => handleRecalculate(undefined, val)}
-                        className="w-36"
-                    />
-                    <ModernDateInput
-                        label="Término"
-                        value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
-                        onChange={(val) => {
-                            const next = { ...schedule, endDate: val };
-                            onUpdateSettings({ ...settings, schedule: next, endDate: val });
-                        }}
-                        className="w-36"
+                        onChange={(e) => handleRecalculate(undefined, e.target.value)}
+                        className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                 </div>
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-gray-400 whitespace-nowrap">Término</span>
+                    <input
+                        type="date"
+                        value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
+                        onChange={(e) => {
+                            const next = { ...schedule, endDate: e.target.value };
+                            onUpdateSettings({ ...settings, schedule: next, endDate: e.target.value });
+                        }}
+                        className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                </div>
+            </div>
 
-                {/* Group 6: Utility + Overflow */}
-                <div className="h-5 w-px bg-gray-200" />
-                <div className="flex items-center gap-1">
-                    <Button variant="secondary" size="sm" onClick={allExpanded ? handleCollapseAll : handleExpandAll} title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}>
-                        {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
-                        {allExpanded ? 'Recolher' : 'Expandir'}
-                    </Button>
+            {/* Ações — utilitárias à esquerda do grupo, ação primária no fim */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button onClick={allExpanded ? handleCollapseAll : handleExpandAll} title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'} className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium hover:bg-gray-100 transition-all">
+                    {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                    {allExpanded ? 'Recolher' : 'Expandir'}
+                </button>
 
-                    <Button variant="secondary" size="sm" onClick={() => setIsConfigModalOpen(true)} title="Configurações do cronograma">
-                        <Settings className="w-3.5 h-3.5" />
-                        Configurações
-                    </Button>
+                <button onClick={onSyncBudget} title={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'} className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium transition-all ${syncDiffCount > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100' : 'bg-gray-50 border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncDiffCount > 0 ? 'text-amber-500' : ''}`} />
+                    Sincronizar
+                    {syncDiffCount > 0 && (
+                        <span className="bg-amber-200 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
+                            {syncDiffCount}
+                        </span>
+                    )}
+                </button>
 
-                    {/* Overflow menu ··· */}
-                    <div className="relative" ref={overflowRef}>
-                        <Button variant="ghost" size="icon" onClick={() => setOverflowOpen(v => !v)} title="Mais opções" className={`p-1.5 border ${overflowOpen ? 'bg-gray-100 border-gray-300 text-gray-700' : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>
-                            <MoreHorizontal className="w-4 h-4" />
-                        </Button>
+                <button onClick={onOpenVersions} title="Versões do planejamento" className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium transition-all ${hasNewerBudgetVersion ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100' : 'bg-gray-50 border border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
+                    <History className={`w-3.5 h-3.5 ${hasNewerBudgetVersion ? 'text-indigo-500' : ''}`} />
+                    Versões
+                    {planningVersionsCount > 0 && (
+                        <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded-full font-bold leading-none">
+                            {planningVersionsCount}
+                        </span>
+                    )}
+                </button>
 
-                        {overflowOpen && (
+                <button onClick={handleLevelResources} title="Nivelamento Automático de Recursos" className="flex items-center gap-1.5 h-9 px-3 bg-indigo-50 border border-indigo-100 rounded-[6px] text-sm font-medium text-indigo-600 hover:bg-indigo-100 transition-all">
+                    <Users className="w-3.5 h-3.5" />
+                    Nivelar
+                </button>
+
+                <button onClick={() => setIsConfigModalOpen(true)} title="Configurações do cronograma" className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium hover:bg-gray-100 transition-all">
+                    <Settings className="w-3.5 h-3.5" />
+                    Configurações
+                </button>
+
+                {/* Overflow menu ··· */}
+                <div className="relative" ref={overflowRef}>
+                    <button onClick={() => setOverflowOpen(v => !v)} title="Mais opções" className={`flex items-center justify-center h-9 w-9 rounded-[6px] border transition-all ${overflowOpen ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+                        <MoreHorizontal className="w-4 h-4" />
+                    </button>
+
+                    {overflowOpen && (
                             <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                                 {/* Baseline */}
                                 <Button variant="ghost" onClick={() => { setIsBaselineModalOpen(true); closeOverflow(); }} className={`w-full justify-start rounded-none px-4 py-2 ${schedule.activeBaselineId ? 'text-blue-700 bg-blue-50/60' : 'text-gray-600 hover:bg-gray-50'}`}>
@@ -334,7 +323,11 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                             </div>
                         )}
                     </div>
-                </div>
+
+                <button onClick={onAutoSchedule} title="Recalcula todas as datas com base em predecessores e duração" className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+                    <Wand2 className="w-[15px] h-[15px]" />
+                    Auto Programar
+                </button>
             </div>
         </div>
 

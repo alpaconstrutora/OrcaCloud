@@ -208,7 +208,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] overflow-y-auto bg-white text-gray-800 font-sans">
+    <div className="h-[calc(100vh-4rem)] overflow-y-auto bg-[#F8FAFC] text-gray-800 font-sans">
       <main className="p-6 flex flex-col gap-6">
         {selectedSupplier ? (
           <>

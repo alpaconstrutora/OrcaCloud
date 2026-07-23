@@ -1036,7 +1036,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     ];
 
     return (
-        <div className="space-y-6 pb-12">
+        <div className="space-y-6 pb-12 bg-[#F8FAFC]">
             {/* 1. Título (guia §1) — muda por aba via TAB_META, nunca duplicado dentro do conteúdo */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>

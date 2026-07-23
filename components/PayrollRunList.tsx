@@ -101,12 +101,72 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* Cabeçalho de tela (§20) */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Folha de Pagamento</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de folha, cálculo de INSS, FGTS e IRRF por período.</p>
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Folha de Pagamento</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de folha, cálculo de INSS, FGTS e IRRF por período.</p>
+            </div>
+
+            {/* 2. KPI cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard label="Ciclos no Período" value={`${runs.length}`} icon={<FileText className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Valor Total" value={fmtBRL(totalValue)} icon={<Wallet className="w-5 h-5" />} color="blue" />
+                <KpiCard label="Fechadas" value={`${closedCount}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                <KpiCard label="Em Rascunho" value={`${draftCount}`} icon={<Clock3 className="w-5 h-5" />} color="amber" />
+            </div>
+
+            {/* 3. Toolbar de abas — tipo de folha */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {['all', 'mensal', 'adiantamento', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
+                        <button
+                            key={t}
+                            onClick={() => onTypeFilter(t)}
+                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            {t === 'all' ? 'Todas' : (TYPE_LABELS[t] ?? t)}
+                        </button>
+                    ))}
                 </div>
+            </div>
+
+            {/* 4. Toolbar de botões — escopo (mês/ano/empresa) + ação primária */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    <select
+                        value={monthFilter}
+                        onChange={e => onMonthFilter(e.target.value)}
+                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                    >
+                        <option value="all">Mês (todos)</option>
+                        {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, i) => (
+                            <option key={m} value={i}>{m}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={yearFilter}
+                        onChange={e => onYearFilter(e.target.value)}
+                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                    >
+                        <option value="all">Ano (todos)</option>
+                        <option value="2025">2025</option>
+                        <option value="2026">2026</option>
+                        <option value="2027">2027</option>
+                    </select>
+                    {orgId === 'all' && (
+                        <select
+                            value={localOrgId}
+                            onChange={e => onLocalOrgId(e.target.value)}
+                            className="h-9 pl-3 pr-8 bg-indigo-50 border border-transparent rounded-[6px] text-sm font-medium text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer min-w-[150px]"
+                        >
+                            <option value="">Empresa (todas)</option>
+                            {organizations.map(org => (
+                                <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+
                 <button
                     onClick={onNewRun}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
@@ -115,30 +175,9 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                 </button>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Ciclos no Período" value={`${runs.length}`} icon={<FileText className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Valor Total" value={fmtBRL(totalValue)} icon={<Wallet className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Fechadas" value={`${closedCount}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
-                <KpiCard label="Em Rascunho" value={`${draftCount}`} icon={<Clock3 className="w-5 h-5" />} color="amber" />
-            </div>
-
-            {/* Toolbar acoplada à tabela (§5.2) */}
+            {/* 5. Tabela com toolbar de busca acoplada */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white space-y-3">
-                    {/* Abas de tipo (Todas / Mensal / Adiantamento / Férias / 13º / Rescisão) */}
-                    <div className="flex flex-wrap items-center gap-1 bg-gray-50 p-1 rounded-[10px] border border-gray-100 max-w-full">
-                        {['all', 'mensal', 'adiantamento', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
-                            <button
-                                key={t}
-                                onClick={() => onTypeFilter(t)}
-                                className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                            >
-                                {t === 'all' ? 'Todas' : (TYPE_LABELS[t] ?? t)}
-                            </button>
-                        ))}
-                    </div>
-
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
                         <div className="flex-1 relative w-full">
                             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -150,39 +189,6 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                             />
                         </div>
-
-                        <select
-                            value={monthFilter}
-                            onChange={e => onMonthFilter(e.target.value)}
-                            className="h-9 px-3 rounded-[6px] text-sm font-medium bg-white border border-gray-200 text-gray-600 outline-none"
-                        >
-                            <option value="all">Mês (todos)</option>
-                            {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, i) => (
-                                <option key={m} value={i}>{m}</option>
-                            ))}
-                        </select>
-                        <select
-                            value={yearFilter}
-                            onChange={e => onYearFilter(e.target.value)}
-                            className="h-9 px-3 rounded-[6px] text-sm font-medium bg-white border border-gray-200 text-gray-600 outline-none"
-                        >
-                            <option value="all">Ano (todos)</option>
-                            <option value="2025">2025</option>
-                            <option value="2026">2026</option>
-                            <option value="2027">2027</option>
-                        </select>
-                        {orgId === 'all' && (
-                            <select
-                                value={localOrgId}
-                                onChange={e => onLocalOrgId(e.target.value)}
-                                className="h-9 px-3 rounded-[6px] text-sm font-medium bg-indigo-50 border border-transparent text-indigo-700 outline-none min-w-[150px]"
-                            >
-                                <option value="">Empresa (todas)</option>
-                                {organizations.map(org => (
-                                    <option key={org.id} value={org.id}>{org.name}</option>
-                                ))}
-                            </select>
-                        )}
 
                         <button
                             onClick={onRefresh}

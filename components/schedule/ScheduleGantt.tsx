@@ -965,6 +965,18 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         )}
                                     </div>
 
+                                    {/* Ganchos (end caps) das pontas, estilo MS Project: triângulos que descem
+                                        nas extremidades da barra de resumo. Ficam FORA da div que recorta o
+                                        progresso (aquela tem overflow-hidden), senão seriam cortados. */}
+                                    <div
+                                        className="absolute left-0 top-full w-0 h-0 pointer-events-none"
+                                        style={{ borderTop: `5px solid ${baseColor}`, borderRight: '4px solid transparent' }}
+                                    />
+                                    <div
+                                        className="absolute right-0 top-full w-0 h-0 pointer-events-none"
+                                        style={{ borderTop: `5px solid ${baseColor}`, borderLeft: '4px solid transparent' }}
+                                    />
+
                                     <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">
                                         {node.name}: {fmtLocalDate(node.earlyStart)} - {fmtLocalDate(node.earlyFinish)} ({durationDays.toFixed(0)}d)
                                     </div>

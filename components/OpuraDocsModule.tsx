@@ -40,11 +40,13 @@ import {
   Edit2,
   Check,
   AlertCircle,
-  Lock
+  Lock,
+  UploadCloud
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { DocumentsTable } from './documents/DocumentsTable';
 import { DocumentQrLabelModal } from './documents/DocumentQrLabelModal';
+import { BatchUploadSheet } from './documents/BatchUploadSheet';
 import {
   documentService,
   OpuraDmsDiscipline, OpuraDmsDocumentType,
@@ -124,6 +126,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('opuraDocs:viewMode', 'list');
   const tableColumns = useTableColumns(COLUMNS, 'opuraDocsColumns');
   const [uploadModalOpen, setUploadModalOpen] = React.useState(false);
+  const [batchUploadOpen, setBatchUploadOpen] = React.useState(false);
   const [selectedDocForVersions, setSelectedDocForVersions] = React.useState<OpuraDocument | null>(null);
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
   const [selectedDocForMarkup, setSelectedDocForMarkup] = React.useState<OpuraDocument | null>(null);
@@ -1772,6 +1775,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               <FolderPlus className="w-[15px] h-[15px] text-blue-600" />
               Nova pasta
             </button>
+            {/* Upload em lote — mesmo racional de "Nova pasta"/"Novo documento" abaixo:
+                em "Todas as Organizações" o próprio Sheet mostra o seletor de organização,
+                então o botão nunca fica desabilitado (REGRA #5). */}
+            <button
+              onClick={() => setBatchUploadOpen(true)}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+            >
+              <UploadCloud className="w-[15px] h-[15px] text-blue-600" />
+              Upload em lote
+            </button>
             {/* Em "Todas as Organizações" (activeOrganizationId nulo) o botão
                 continua ativo: o próprio modal mostra um seletor de organização
                 (igual ao "Nova pasta"), então dá pra criar sem trocar o seletor
@@ -2578,6 +2591,26 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
         </div>
       )}
+
+      {/* ─── PAINEL DE UPLOAD EM LOTE ─── */}
+      <BatchUploadSheet
+        open={batchUploadOpen}
+        onClose={() => setBatchUploadOpen(false)}
+        activeOrganizationId={activeOrganizationId}
+        organizations={organizations}
+        categoria={activeTab}
+        categoriaLabel={CATEGORIES.find(c => c.id === activeTab)?.label || ''}
+        currentFolderId={currentFolderId}
+        activeFolder={activeFolder}
+        docsInFolder={filteredDocuments.filter(d => d.folder_id === currentFolderId)}
+        obras={obras}
+        selectedProjectId={selectedProjectId}
+        companies={companies}
+        documentTypes={documentTypes}
+        currentProfile={currentProfile}
+        notify={notify}
+        onFinished={fetchDocs}
+      />
 
       {/* ─── MODAL DE HISTÓRICO DE VERSÕES / RENOVAÇÃO (Feature 4/5) ─── */}
       {selectedDocForVersions && (

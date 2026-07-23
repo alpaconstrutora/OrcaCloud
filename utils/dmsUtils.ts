@@ -154,3 +154,84 @@ export function getInitialRevision(mask: string): string {
   const padLength = sizeMatch && sizeMatch[1] ? parseInt(sizeMatch[1], 10) : 2;
   return '0'.padStart(padLength, '0');
 }
+
+/**
+ * Item do planejamento de nomes de um lote de upload (Upload em Lote, GED).
+ */
+export interface BatchNamePlanItem {
+  /** Nome físico original do arquivo (com extensão), como veio do input/drag. */
+  originalName: string;
+  /** Tokens conhecidos usados para montar `suggestedName` (para exibição/edição). */
+  tokens: Record<string, string>;
+  /** Nome físico sugerido (com extensão) — já validado contra a máscara. */
+  suggestedName: string;
+  /** true quando `originalName` já batia com a máscara sem qualquer ajuste. */
+  alreadyValid: boolean;
+}
+
+/**
+ * Planeja os nomes físicos de um lote de arquivos contra a máscara de
+ * nomenclatura de uma pasta (Upload em Lote, GED).
+ *
+ * Nomes que já atendem à máscara são mantidos como estão (só os tokens são
+ * extraídos, para exibição). Os demais recebem [OBRA]=seed.obraCode,
+ * [DISCIPLINA]=seed.defaultDiscipline, [REVISAO]=inicial (getInitialRevision)
+ * e [NUMERO]=sequencial contínuo, partindo do maior número já usado — tanto
+ * na pasta (existingDocsInFolder) quanto pelos itens do próprio lote que já
+ * batem com a máscara — e avançando 1 a 1 a cada item renomeado, para nunca
+ * colidir com um NUMERO já ocupado. (extractTokenFromFileName só extrai de
+ * nomes que já batem com a máscara inteira — por isso não há "extração
+ * parcial" de um nome inválido.)
+ */
+export function planBatchFileNames(
+  fileNames: string[],
+  mask: string,
+  seed: { obraCode?: string; defaultDiscipline?: string },
+  existingDocsInFolder: { nome: string }[]
+): BatchNamePlanItem[] {
+  if (!mask) {
+    return fileNames.map((originalName) => ({
+      originalName,
+      tokens: {},
+      suggestedName: originalName,
+      alreadyValid: true,
+    }));
+  }
+
+  const sizeMatch = /\[NUMERO(?:\{(\d+)\})?\]/i.exec(mask);
+  const padLength = sizeMatch && sizeMatch[1] ? parseInt(sizeMatch[1], 10) : 3;
+
+  // Itens do próprio lote que já batem com a máscara "ocupam" seu NUMERO tanto
+  // quanto um documento já existente na pasta — somamos os dois antes de achar
+  // o próximo livre, senão o sequencial dos itens renomeados colidiria com eles.
+  const alreadyValidNames = fileNames.filter((name) => validateFileNameAgainstMask(name, mask));
+  const augmentedExisting = existingDocsInFolder.concat(alreadyValidNames.map((nome) => ({ nome })));
+
+  let nextNum = parseInt(getNextSequentialNumber(augmentedExisting, mask) || '1', 10);
+  if (isNaN(nextNum)) nextNum = 1;
+
+  return fileNames.map((originalName) => {
+    if (validateFileNameAgainstMask(originalName, mask)) {
+      const tokens: Record<string, string> = {};
+      (['[OBRA]', '[DISCIPLINA]', '[NUMERO]', '[REVISAO]'] as const).forEach((t) => {
+        const val = extractTokenFromFileName(originalName, mask, t);
+        if (val) tokens[t] = val;
+      });
+      return { originalName, tokens, suggestedName: originalName, alreadyValid: true };
+    }
+
+    const fileExt = originalName.includes('.') ? originalName.split('.').pop() || '' : '';
+    const numero = nextNum.toString().padStart(padLength, '0');
+    nextNum += 1;
+
+    const tokens: Record<string, string> = {
+      '[OBRA]': seed.obraCode || '',
+      '[DISCIPLINA]': seed.defaultDiscipline || '',
+      '[NUMERO]': numero,
+      '[REVISAO]': getInitialRevision(mask),
+    };
+
+    const suggestedName = generateFileNameFromMask(mask, tokens, fileExt);
+    return { originalName, tokens, suggestedName, alreadyValid: false };
+  });
+}

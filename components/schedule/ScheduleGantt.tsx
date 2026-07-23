@@ -930,7 +930,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             const durationDays = Math.max(1, (finish - start) / (1000 * 60 * 60 * 24) + 1);
                             const width = durationDays * pxPerDay;
                             const left = startOffset * pxPerDay;
-                            const baseColor = node.color || '#374151';
+                            // Barra de resumo (grupo/etapa/subetapa) é SEMPRE cinza — não usa `node.color`.
+                            // `finalizeHierarchy` (FinancialSchedule.tsx) pinta todo nó com a GANTT_PALETTE,
+                            // inclusive os pais, então um fallback `node.color || cinza` nunca chegaria a
+                            // valer. A paleta continua identificando as tarefas-folha; o pai fica neutro.
+                            const baseColor = '#6b7280';
 
                             const progress = node.total > 0 ? (node.realizedTotal / node.total) * 100 : 0;
 
@@ -1275,11 +1279,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 const left = offsetDays * pxPerDay + getGanttSidebarTotal();
                                 return (
                                     <div
-                                        className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-400 z-30 pointer-events-none"
+                                        className="absolute top-0 bottom-0 border-l-2 border-dashed border-gray-500 z-[40] pointer-events-none"
                                         style={{ left: `${left}px` }}
+                                        title="Hoje"
                                     >
                                         {/* Marcador do dia atual: círculo vermelho no topo da linha pontilhada */}
-                                        <div className="absolute top-0 left-0 -translate-x-1/2 w-3 h-3 rounded-full border-2 border-red-500 bg-white shadow-sm" />
+                                        <div className="absolute top-0 left-[1px] -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-red-500 bg-white shadow-sm" />
                                     </div>
                                 );
                             }

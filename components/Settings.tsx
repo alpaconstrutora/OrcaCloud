@@ -12,12 +12,14 @@ import ContractTypesSettings from './ContractTypesSettings';
 import EmpreendimentoTypesSettings from './EmpreendimentoTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
 import TaxSettingsManager from './TaxSettingsManager';
+import InssBracketsSettings from './InssBracketsSettings';
 
 type SettingsLeafId =
     | 'geral'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-financeiro'
-    | 'indices' | 'tributos' | 'whatsapp' | 'email' | 'database';
+    | 'indices' | 'tributos-geral' | 'tributos-inss'
+    | 'whatsapp' | 'email' | 'database';
 
 interface SettingsNavLeaf { id: SettingsLeafId; label: string; }
 interface SettingsNavNode {
@@ -38,7 +40,10 @@ const SETTINGS_NAV: SettingsNavNode[] = [
         { id: 'cat-financeiro', label: 'Financeiro' },
     ]},
     { id: 'indices', label: 'Índices de Reajuste', icon: Percent, leafId: 'indices' },
-    { id: 'tributos', label: 'Tributos e Impostos', icon: Landmark, leafId: 'tributos' },
+    { id: 'tributos', label: 'Tributos e Impostos', icon: Landmark, children: [
+        { id: 'tributos-geral', label: 'Geral' },
+        { id: 'tributos-inss', label: 'INSS' },
+    ]},
     { id: 'whatsapp', label: 'WhatsApp & Integrações', icon: MessageCircle, leafId: 'whatsapp' },
     { id: 'email', label: 'Templates de E-mail', icon: Mail, leafId: 'email' },
     { id: 'database', label: 'Banco de Dados', icon: Database, leafId: 'database' },
@@ -47,7 +52,8 @@ const SETTINGS_NAV: SettingsNavNode[] = [
 const Settings: React.FC = () => {
     const confirm = useConfirm();
     const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('geral');
-    const [isCategoriasOpen, setIsCategoriasOpen] = React.useState(false);
+    const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({});
+    const toggleNavNode = (id: string) => setOpenNavNodes(o => ({ ...o, [id]: !o[id] }));
 
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
@@ -162,15 +168,15 @@ const Settings: React.FC = () => {
                     {SETTINGS_NAV.map(node => node.children ? (
                         <div key={node.id}>
                             <button
-                                onClick={() => setIsCategoriasOpen(v => !v)}
+                                onClick={() => toggleNavNode(node.id)}
                                 className={`flex items-center w-full px-3 h-9 rounded-[6px] text-sm font-medium justify-between transition-all ${
                                     node.children.some(c => c.id === activeLeaf) ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
                                 }`}
                             >
                                 <span className="flex items-center gap-2.5"><node.icon className="w-4 h-4" />{node.label}</span>
-                                <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isCategoriasOpen ? 'rotate-90' : ''}`} />
+                                <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${openNavNodes[node.id] ? 'rotate-90' : ''}`} />
                             </button>
-                            {isCategoriasOpen && (
+                            {openNavNodes[node.id] && (
                                 <div className="mt-0.5 ml-4 pl-4 border-l border-gray-200 flex flex-col gap-0.5">
                                     {node.children.map(leaf => (
                                         <button
@@ -492,7 +498,8 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
-            {activeLeaf === 'tributos' && <TaxSettingsManager />}
+            {activeLeaf === 'tributos-geral' && <TaxSettingsManager />}
+            {activeLeaf === 'tributos-inss' && <InssBracketsSettings />}
                 </div>
             </div>
         </div>

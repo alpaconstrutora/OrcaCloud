@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DollarSign, Users, Building2, Shield, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
 import { laborService, LaborCostSummary, Employee, LaborTeam } from '../services/laborService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+import LaborScopeBar from './LaborScopeBar';
 
 interface LaborCostsProps {
     employees: Employee[];
@@ -10,6 +11,10 @@ interface LaborCostsProps {
     orgId: string;
     legacyCount?: number;
     onMigrate?: () => Promise<void>;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#06b6d4', '#3b82f6'];
@@ -26,7 +31,7 @@ const getWorkingDays = (start: string, end: string): number => {
     return Math.max(count, 1);
 };
 
-const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, onMigrate }) => {
+const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, onMigrate, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const [summary, setSummary] = useState<LaborCostSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'employees' | 'projects' | 'teams'>('employees');
@@ -108,6 +113,19 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Custos de Mão de Obra</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Custo por colaborador, obra e equipe, com base nas horas apontadas.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             {/* Filters */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
@@ -274,27 +292,27 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                                     <tr key={est.employee_id} className="hover:bg-slate-50/50 transition-all">
                                         <td className="px-6 py-3">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-black"
+                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-normal"
                                                     style={{ background: COLORS[i % COLORS.length] }}>
                                                     {est.name.charAt(0)}
                                                 </div>
-                                                <span className="text-xs font-bold text-slate-800">{est.name}</span>
+                                                <span className="text-sm font-normal text-slate-700">{est.name}</span>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-right text-table-body font-bold text-slate-500">{formatCurrencyFull(est.estimatedCost)}</td>
-                                        <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">{real ? formatCurrencyFull(real.cost) : '—'}</td>
+                                        <td className="px-4 py-3 text-right text-sm font-medium text-slate-500">{formatCurrencyFull(est.estimatedCost)}</td>
+                                        <td className="px-4 py-3 text-right text-sm font-medium text-slate-900">{real ? formatCurrencyFull(real.cost) : '—'}</td>
                                         <td className="px-4 py-3 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                     <div className="h-full rounded-full transition-all"
                                                         style={{ width: `${Math.min(pct, 100)}%`, background: isOver ? '#f43f5e' : COLORS[i % COLORS.length] }} />
                                                 </div>
-                                                <span className={`text-xs font-black w-10 text-right ${isOver ? 'text-rose-600' : 'text-slate-500'}`}>
+                                                <span className={`text-sm font-normal w-10 text-right ${isOver ? 'text-rose-600' : 'text-slate-500'}`}>
                                                     {real ? `${pct.toFixed(0)}%` : '—'}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-right text-table-body font-bold text-slate-600">
+                                        <td className="px-4 py-3 text-right text-sm font-normal text-slate-600">
                                             {real ? `${real.hours.toFixed(1)}h` : '—'}
                                         </td>
                                     </tr>
@@ -303,13 +321,13 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                         </tbody>
                         <tfoot className="bg-slate-50/80 border-t border-slate-100">
                             <tr>
-                                <td className="px-6 py-3 text-table-body font-black text-slate-700">TOTAL</td>
-                                <td className="px-4 py-3 text-right text-table-body font-black text-slate-700">{formatCurrencyFull(totalEstimated)}</td>
-                                <td className="px-4 py-3 text-right text-table-body font-black text-indigo-700">{formatCurrencyFull(totalReal)}</td>
-                                <td className="px-4 py-3 text-right text-table-body font-black text-slate-700">
+                                <td className="px-6 py-3 text-sm font-normal text-slate-700">TOTAL</td>
+                                <td className="px-4 py-3 text-right text-sm font-medium text-slate-700">{formatCurrencyFull(totalEstimated)}</td>
+                                <td className="px-4 py-3 text-right text-sm font-medium text-indigo-700">{formatCurrencyFull(totalReal)}</td>
+                                <td className="px-4 py-3 text-right text-sm font-normal text-slate-700">
                                     {totalEstimated > 0 ? `${realizationPct.toFixed(1)}%` : '—'}
                                 </td>
-                                <td className="px-4 py-3 text-right text-table-body font-black text-slate-700">
+                                <td className="px-4 py-3 text-right text-sm font-normal text-slate-700">
                                     {(summary?.totalHours || 0).toFixed(0)}h
                                 </td>
                             </tr>

@@ -14,6 +14,8 @@ import {
     CycleTipo, CycleStatus, ResponseTipo, PdiStatus, Classificacao
 } from '../services/evaluationService';
 import { STALE } from '../lib/queryClient';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -483,6 +485,7 @@ interface CycleDetailProps {
 
 const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBack, onRefresh }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [evalForm, setEvalForm] = useState<EvaluationResponse | null>(null);
     const [consolidating, setConsolidating] = useState(false);
     const [view, setView] = useState<'avaliacoes' | 'resultados'>('avaliacoes');
@@ -512,7 +515,8 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
     };
 
     const handleConsolidate = async () => {
-        if (!confirm('Isso encerrará o ciclo e calculará as notas finais. Confirmar?')) return;
+        const ok = await confirm({ title: 'Encerrar ciclo?', message: 'Isso calculará as notas finais e não pode ser desfeito.', variant: 'warning', confirmLabel: 'Encerrar' });
+        if (!ok) return;
         setConsolidating(true);
         try {
             const res = await evaluationService.consolidateCycle(cycle.id);
@@ -621,29 +625,29 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                             <tbody>
                                 {responses.map(r => {
                                     const statusCfg = {
-                                        PENDENTE: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700' },
-                                        EM_ANDAMENTO: { label: 'Em andamento', cls: 'bg-blue-100 text-blue-700' },
-                                        CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
+                                        PENDENTE: { label: 'Pendente', cls: 'text-amber-700' },
+                                        EM_ANDAMENTO: { label: 'Em andamento', cls: 'text-blue-700' },
+                                        CONCLUIDA: { label: 'Concluída', cls: 'text-emerald-700' },
                                     }[r.status];
                                     return (
                                         <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3 font-bold text-slate-800">{r.evaluatee_nome || '–'}</td>
-                                            <td className="px-4 py-3 text-slate-500">{r.evaluator_nome || 'Auto'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-800">{r.evaluatee_nome || '–'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{r.evaluator_nome || 'Auto'}</td>
                                             <td className="px-4 py-3">
-                                                <span className="text-xs font-bold text-slate-500">{RESP_TIPO_LABELS[r.tipo]}</span>
+                                                <span className="text-sm font-normal text-slate-500">{RESP_TIPO_LABELS[r.tipo]}</span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 {r.nota_media ? (
-                                                    <span className="font-black text-violet-700">{r.nota_media.toFixed(2)}</span>
+                                                    <span className="text-sm font-normal text-violet-700">{r.nota_media.toFixed(2)}</span>
                                                 ) : <span className="text-slate-300">–</span>}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-1 rounded-lg text-xs font-black ${statusCfg.cls}`}>{statusCfg.label}</span>
+                                                <span className={`text-sm font-normal ${statusCfg.cls}`}>{statusCfg.label}</span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 {r.status !== 'CONCLUIDA' && cycle.status === 'ATIVO' && (
                                                     <button onClick={() => setEvalForm(r)}
-                                                        className="px-3 py-1.5 text-xs font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors">
+                                                        className="px-3 py-1.5 text-xs font-normal text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-lg transition-colors">
                                                         Avaliar
                                                     </button>
                                                 )}
@@ -689,18 +693,18 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                                     const cls = r.classificacao ? CLASS_CONFIG[r.classificacao] : null;
                                     return (
                                         <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3 text-slate-400 font-black text-table-body">#{i + 1}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-400">#{i + 1}</td>
                                             <td className="px-4 py-3">
-                                                <p className="font-bold text-slate-800">{r.employee_nome || '–'}</p>
+                                                <p className="text-sm font-normal text-slate-800">{r.employee_nome || '–'}</p>
                                                 {r.employee_cargo && <p className="text-xs text-slate-400">{r.employee_cargo}</p>}
                                             </td>
-                                            <td className="px-4 py-3 font-bold text-slate-600">{r.nota_self?.toFixed(2) ?? '–'}</td>
-                                            <td className="px-4 py-3 font-bold text-slate-600">{r.nota_gestor?.toFixed(2) ?? '–'}</td>
-                                            <td className="px-4 py-3 font-bold text-slate-600">{r.nota_pares?.toFixed(2) ?? '–'}</td>
-                                            <td className="px-4 py-3 text-xl font-black text-violet-700">{r.nota_final?.toFixed(2) ?? '–'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-600">{r.nota_self?.toFixed(2) ?? '–'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-600">{r.nota_gestor?.toFixed(2) ?? '–'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-600">{r.nota_pares?.toFixed(2) ?? '–'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-violet-700">{r.nota_final?.toFixed(2) ?? '–'}</td>
                                             <td className="px-4 py-3">
                                                 {cls && (
-                                                    <span className={`px-2 py-1 rounded-lg text-xs font-black ${cls.color} ${cls.bg}`}>
+                                                    <span className={`text-sm font-normal ${cls.color}`}>
                                                         {cls.label}
                                                     </span>
                                                 )}
@@ -734,12 +738,17 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
 interface LaborEvaluationProps {
     orgId: string;
     employees: { id: string; name: string; status?: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type MainTab = 'ciclos' | 'pdi';
 
-const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) => {
+const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [mainTab, setMainTab] = useState<MainTab>('ciclos');
     const [selectedCycle, setSelectedCycle] = useState<EvaluationCycle | null>(null);
     const [showCycleForm, setShowCycleForm] = useState(false);
@@ -792,9 +801,21 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
 
     if (!orgId) {
         return (
-            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                <Award className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir avaliações de desempenho.</p>
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Avaliação 360°</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de avaliação, competências, PDI e ranking de equipes.</p>
+                </div>
+                <LaborScopeBar
+                    organizations={organizations}
+                    selectedOrgId={selectedOrgId}
+                    onSelectedOrgIdChange={onSelectedOrgIdChange}
+                    onRefresh={onRefresh}
+                />
+                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                    <Award className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir avaliações de desempenho.</p>
+                </div>
             </div>
         );
     }
@@ -812,15 +833,12 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
     }
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
+        <div className="space-y-6">
+            {/* 1. Título */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <Award className="w-5 h-5 text-violet-600" />
-                        Avaliação de Desempenho 360°
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Ciclos de avaliação, PDI e desenvolvimento de equipe</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Avaliação 360°</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de avaliação, PDI e desenvolvimento de equipe.</p>
                 </div>
                 <button
                     onClick={() => mainTab === 'ciclos' ? setShowCycleForm(true) : setShowPdiForm(true)}
@@ -829,6 +847,13 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                     {mainTab === 'ciclos' ? 'Novo Ciclo' : 'Novo PDI'}
                 </button>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* KPIs */}
             <div className="grid grid-cols-4 gap-4">
@@ -901,7 +926,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                         <ActionIconButton kind="edit" onClick={() => { setEditingCycle(cycle); setShowCycleForm(true); }} />
                                     )}
                                     {cycle.status === 'RASCUNHO' && (
-                                        <ActionIconButton kind="delete" onClick={() => { if (confirm('Excluir este ciclo?')) deleteCycleMut.mutate(cycle.id); }} />
+                                        <ActionIconButton kind="delete" onClick={async () => { const ok = await confirm({ title: 'Excluir ciclo?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteCycleMut.mutate(cycle.id); }} />
                                     )}
                                     <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
                                 </div>
@@ -945,10 +970,10 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                         const sc = PDI_STATUS_CONFIG[p.status];
                                         return (
                                             <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3 font-bold text-slate-800">{p.employee_nome || '–'}</td>
-                                                <td className="px-4 py-3 text-slate-600">{p.competencia}</td>
-                                                <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{p.acao}</td>
-                                                <td className="px-4 py-3 text-slate-400 text-table-body">
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-800">{p.employee_nome || '–'}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-600">{p.competencia}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-500 max-w-[200px] truncate">{p.acao}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-400">
                                                     {p.prazo ? new Date(p.prazo).toLocaleDateString('pt-BR') : '–'}
                                                 </td>
                                                 <td className="px-4 py-3">
@@ -957,16 +982,16 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                                             <div className="h-full bg-violet-500 rounded-full transition-all"
                                                                 style={{ width: `${p.progresso_pct}%` }} />
                                                         </div>
-                                                        <span className="text-xs font-bold text-slate-500">{p.progresso_pct}%</span>
+                                                        <span className="text-sm font-normal text-slate-500">{p.progresso_pct}%</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2 py-1 rounded-lg text-xs font-black ${sc.color} ${sc.bg}`}>{sc.label}</span>
+                                                    <span className={`text-sm font-normal ${sc.color}`}>{sc.label}</span>
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-1">
                                                         <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingPdi(p); setShowPdiForm(true); }} />
-                                                        <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir?')) deletePdiMut.mutate(p.id); }} />
+                                                        <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir PDI?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deletePdiMut.mutate(p.id); }} />
                                                     </div>
                                                 </td>
                                             </tr>

@@ -10,11 +10,17 @@ import {
 } from '../services/laborService';
 import { supabase } from '../lib/supabase';
 import LaborDocumentModal from './LaborDocumentModal';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 interface LaborDocumentsProps {
     employees: Employee[];
     orgId: string;
     onRefresh?: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
@@ -26,10 +32,11 @@ const CATEGORY_LABELS: Record<DocumentCategory, string> = {
     OUTROS: 'Outros'
 };
 
-const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRefresh }) => {
+const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+    const confirm = useConfirm();
     const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborDocuments:search', '');
     const [filterCategory, setFilterCategory] = useState<DocumentCategory | 'ALL'>('ALL');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingDoc, setEditingDoc] = useState<EmployeeDocument | null>(null);
@@ -50,7 +57,8 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
     useEffect(() => { fetchDocuments(); }, [orgId]);
 
     const handleDelete = async (id: string, filePath: string) => {
-        if (!window.confirm('Excluir este documento permanentemente?')) return;
+        const ok = await confirm({ title: 'Excluir documento?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
         try {
             await laborService.deleteDocument(id, filePath);
             fetchDocuments();
@@ -108,27 +116,40 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
         if (!doc.expiry_date) return null;
         if (isExpired(doc.expiry_date)) {
             return (
-                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100 animate-pulse">
-                    <AlertTriangle className="w-2.5 h-2.5" /> Vencido
+                <span className="flex items-center gap-1 text-sm font-normal text-red-600">
+                    <AlertTriangle className="w-3 h-3" /> Vencido
                 </span>
             );
         }
         if (isNearExpiry(doc.expiry_date)) {
             return (
-                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                    <Clock className="w-2.5 h-2.5" /> Expira em breve
+                <span className="flex items-center gap-1 text-sm font-normal text-amber-600">
+                    <Clock className="w-3 h-3" /> Expira em breve
                 </span>
             );
         }
         return (
-            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                <Clock className="w-2.5 h-2.5" /> Vigente
+            <span className="flex items-center gap-1 text-sm font-normal text-emerald-600">
+                <Clock className="w-3 h-3" /> Vigente
             </span>
         );
     };
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Documentos</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">ASO, treinamentos, contratos e demais documentos dos colaboradores.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
+
             {/* Filters & Actions */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                 <div className="flex flex-1 items-center gap-3">
@@ -263,18 +284,18 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                 const near = isNearExpiry(doc.expiry_date);
                                 return (
                                     <tr key={doc.id} className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/40'}`}>
-                                        <td className="px-4 py-3 font-bold text-slate-700 whitespace-nowrap">
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-700 whitespace-nowrap">
                                             <div className="flex items-center gap-2">
                                                 <User className="w-3.5 h-3.5 text-slate-400" />
                                                 {doc.employee_name || '—'}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 font-black text-slate-900 uppercase tracking-tight max-w-[200px] truncate">{doc.title}</td>
-                                        <td className="px-4 py-3 text-slate-500 font-bold whitespace-nowrap">{CATEGORY_LABELS[doc.category]}</td>
-                                        <td className="px-4 py-3 text-slate-400 font-medium whitespace-nowrap">
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-900 max-w-[200px] truncate">{doc.title}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">{CATEGORY_LABELS[doc.category]}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-400 whitespace-nowrap">
                                             {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '—'}
                                         </td>
-                                        <td className={`px-4 py-3 font-black whitespace-nowrap ${expired ? 'text-red-600' : near ? 'text-amber-600' : 'text-slate-500'}`}>
+                                        <td className={`px-4 py-3 text-sm font-normal whitespace-nowrap ${expired ? 'text-red-600' : near ? 'text-amber-600' : 'text-slate-500'}`}>
                                             {doc.expiry_date ? new Date(doc.expiry_date + 'T00:00:00').toLocaleDateString('pt-BR') : <span className="text-slate-300 font-medium">Sem vencimento</span>}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap">{getExpiryBadge(doc)}</td>

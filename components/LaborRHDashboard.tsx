@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { laborService, RhKpis, Employee, LaborCostSummary } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import LaborScopeBar from './LaborScopeBar';
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 
@@ -126,9 +127,12 @@ interface LaborRHDashboardProps {
     employees: Employee[];
     costSummary: LaborCostSummary | null;
     onNavigate?: (tab: string) => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, costSummary, onNavigate }) => {
+const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, costSummary, onNavigate, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
     const today = new Date().toISOString().split('T')[0];
     const [refDate] = useState(today);
 
@@ -187,16 +191,23 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
 
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* 1. Título */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Dashboard Executivo RH</h2>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5 capitalize">{mesAtual}</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard RH</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium capitalize">KPIs executivos — {mesAtual}</p>
                 </div>
                 <button onClick={() => refetch()} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 transition-all text-button font-bold">
                     <RefreshCw className="w-3.5 h-3.5" /> Atualizar
                 </button>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={() => refetch()}
+            />
 
             {/* Headcount KPIs */}
             <div>

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Plus, Users, UserPlus, X, Loader2, Shield, ChevronDown } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
 import { laborService, LaborTeam, Employee } from '../services/laborService';
 
 interface LaborTeamsProps {
@@ -9,9 +11,13 @@ interface LaborTeamsProps {
     projects: any[];
     orgId: string;
     onRefresh: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, orgId, onRefresh }) => {
+const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, orgId, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+    const confirm = useConfirm();
     const [showForm, setShowForm] = useState(false);
     const [editingTeam, setEditingTeam] = useState<LaborTeam | null>(null);
     const [saving, setSaving] = useState(false);
@@ -58,7 +64,8 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Excluir esta equipe?')) return;
+        const ok = await confirm({ title: 'Excluir equipe?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
         await laborService.deleteTeam(id);
         onRefresh();
     };
@@ -79,13 +86,23 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
     const inputCls = "w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-100 transition-all";
 
     return (
-        <div className="space-y-4">
-            {/* Header */}
-            <div className="flex justify-end">
-                <button onClick={() => openForm()} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-900/20">
-                    <Plus className="w-4 h-4" /> Nova Equipe
-                </button>
+        <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Equipes</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Composição de equipes, encarregados e vínculo com obras.</p>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            >
+                <button onClick={() => openForm()} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+                    <Plus className="w-[15px] h-[15px]" /> Nova equipe
+                </button>
+            </LaborScopeBar>
 
             {/* Form */}
             {showForm && (

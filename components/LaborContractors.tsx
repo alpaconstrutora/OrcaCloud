@@ -13,6 +13,9 @@ import {
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -337,14 +340,19 @@ const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, p
 interface LaborContractorsProps {
     orgId: string;
     projects?: { id: string; name: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type CView = 'contractors' | 'measurements' | 'documents';
 
-const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [] }) => {
+const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [view, setView] = useState<CView>('contractors');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborContractors:search', '');
     const [showContractorForm, setShowContractorForm] = useState(false);
     const [editingContractor, setEditingContractor] = useState<Contractor | null>(null);
     const [showMeasForm, setShowMeasForm] = useState(false);
@@ -393,6 +401,19 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Empreiteiros</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Cadastro de empreiteiros, medições com retenções e documentos.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             {docAlerts.length > 0 && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -470,7 +491,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingContractor(c); setShowContractorForm(true); }} />
-                                        <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={() => { if (confirm('Inativar?')) deleteContractor.mutate(c.id); }} />
+                                        <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={async () => { const ok = await confirm({ title: 'Inativar empreiteiro?', message: 'Ele deixará de aparecer para novos contratos.', variant: 'warning', confirmLabel: 'Inativar' }); if (ok) deleteContractor.mutate(c.id); }} />
                                     </div>
                                 </div>
                             ))}
@@ -502,26 +523,26 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                                     const st = STATUS_MEAS[m.status];
                                     return (
                                         <tr key={m.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 text-sm font-bold text-slate-900">{m.contractor_name}</td>
-                                            <td className="px-4 py-3 text-table-body text-slate-500">{m.project_name || '—'}</td>
-                                            <td className="px-4 py-3 text-table-body font-black text-slate-700">#{m.numero_medicao}</td>
-                                            <td className="px-4 py-3 text-table-body text-slate-500">{m.periodo_inicio} → {m.periodo_fim}</td>
-                                            <td className="px-4 py-3 text-table-body font-bold text-slate-700">R$ {m.valor_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-3 text-sm font-black text-emerald-700">R$ {(m.valor_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-3 text-table-body text-slate-500">{m.nota_fiscal || '—'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-700">{m.contractor_name}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{m.project_name || '—'}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-700">#{m.numero_medicao}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{m.periodo_inicio} → {m.periodo_fim}</td>
+                                            <td className="px-4 py-3 text-sm font-medium text-slate-700">R$ {m.valor_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                            <td className="px-4 py-3 text-sm font-medium text-emerald-700">R$ {(m.valor_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{m.nota_fiscal || '—'}</td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${st.bg} ${st.text}`}>{m.status}</span>
+                                                <span className={`text-sm font-normal ${st.text}`}>{m.status}</span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 {m.status === 'PENDENTE' && (
                                                     <button onClick={() => updateMeas.mutate({ id: m.id, status: 'APROVADO' })}
-                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-black transition-all">
+                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-normal transition-all">
                                                         <CheckCircle2 className="w-3 h-3" /> Aprovar
                                                     </button>
                                                 )}
                                                 {m.status === 'APROVADO' && (
                                                     <button onClick={() => updateMeas.mutate({ id: m.id, status: 'PAGO' })}
-                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-black transition-all">
+                                                        className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-normal transition-all">
                                                         <DollarSign className="w-3 h-3" /> Pago
                                                     </button>
                                                 )}

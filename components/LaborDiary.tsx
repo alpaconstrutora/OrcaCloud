@@ -13,6 +13,9 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -266,11 +269,15 @@ interface LaborDiaryProps {
     teams: LaborTeam[];
     projects?: { id: string; name: string }[];
     onRefresh?: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projects = [] }) => {
+const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projects = [], onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
     const qc = useQueryClient();
-    const [search, setSearch] = useState('');
+    const confirm = useConfirm();
+    const [search, setSearch] = usePersistedState<string>('laborDiary:search', '');
     const [filterProject, setFilterProject] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [editingDiary, setEditingDiary] = useState<LaborDiaryEntry | null>(null);
@@ -289,7 +296,8 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
     const deleteDiary = useMutation({ mutationFn: (id: string) => laborService.deleteLaborDiaryEntry(id), onSuccess: invalidate });
 
     const handleClose = async (id: string) => {
-        if (!confirm('Fechar este diário e gerar os registros de ponto automaticamente?')) return;
+        const ok = await confirm({ title: 'Fechar diário?', message: 'Os registros de ponto serão gerados automaticamente.', variant: 'warning', confirmLabel: 'Fechar' });
+        if (!ok) return;
         setClosingId(id);
         try {
             const result = await laborService.closeLaborDiary(id);
@@ -309,6 +317,19 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Diário de Obra</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Apontamento de HH em lote — fecha o diário e gera o ponto automaticamente.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
+
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -403,7 +424,7 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                                                     Fechar + Gerar Ponto
                                                 </button>
                                             )}
-                                            <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este diário?')) deleteDiary.mutate(d.id); }} />
+                                            <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir diário?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteDiary.mutate(d.id); }} />
                                         </div>
                                     </div>
                                 </div>

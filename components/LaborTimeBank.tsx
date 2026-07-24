@@ -10,6 +10,9 @@ import { laborService, Employee, TimeBankBalance, TimeBankEntry, QrCodeObra } fr
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -172,14 +175,19 @@ interface LaborTimeBankProps {
     orgId: string;
     employees: Employee[];
     projects?: { id: string; name: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type TBView = 'balances' | 'entries' | 'qrcodes';
 
-const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, projects = [] }) => {
+const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [view, setView] = useState<TBView>('balances');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborTimeBank:search', '');
     const [filterEmployee, setFilterEmployee] = useState('');
     const [showEntryForm, setShowEntryForm] = useState(false);
     const [showQrForm, setShowQrForm] = useState(false);
@@ -230,6 +238,19 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Banco de Horas</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Saldos de horas, lançamentos manuais e check-in por QR Code.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -304,18 +325,18 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                                     const isHigh = b.saldo_horas >= b.limite_maximo * 0.8;
                                     return (
                                         <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                            <td className="px-4 py-3 text-sm font-bold text-slate-900">{b.employee_name}</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-700">{b.employee_name}</td>
                                             <td className="px-4 py-3">
-                                                <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${isNeg ? 'bg-rose-100 text-rose-700' : isHigh ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                <span className={`text-sm font-normal ${isNeg ? 'text-rose-700' : isHigh ? 'text-amber-700' : 'text-emerald-700'}`}>
                                                     {b.saldo_horas > 0 ? '+' : ''}{b.saldo_horas.toFixed(1)}h
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-table-body text-slate-500 font-medium">{b.limite_maximo}h</td>
-                                            <td className="px-4 py-3 text-table-body text-slate-500 font-medium">{b.limite_negativo}h</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{b.limite_maximo}h</td>
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{b.limite_negativo}h</td>
                                             <td className="px-4 py-3">
-                                                {isNeg ? <span className="flex items-center gap-1 text-xs font-black text-rose-600"><AlertTriangle className="w-3 h-3" /> Negativo</span>
-                                                : isHigh ? <span className="flex items-center gap-1 text-xs font-black text-amber-600"><AlertTriangle className="w-3 h-3" /> Próximo do limite</span>
-                                                : <span className="flex items-center gap-1 text-xs font-black text-emerald-600"><CheckCircle2 className="w-3 h-3" /> Normal</span>}
+                                                {isNeg ? <span className="flex items-center gap-1 text-sm font-normal text-rose-600"><AlertTriangle className="w-3 h-3" /> Negativo</span>
+                                                : isHigh ? <span className="flex items-center gap-1 text-sm font-normal text-amber-600"><AlertTriangle className="w-3 h-3" /> Próximo do limite</span>
+                                                : <span className="flex items-center gap-1 text-sm font-normal text-emerald-600"><CheckCircle2 className="w-3 h-3" /> Normal</span>}
                                             </td>
                                         </tr>
                                     );
@@ -387,7 +408,7 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                                             className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${qr.is_active ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
                                             {qr.is_active ? 'Desativar' : 'Ativar'}
                                         </button>
-                                        <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este QR Code?')) deleteQr.mutate(qr.id); }} />
+                                        <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir QR Code?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteQr.mutate(qr.id); }} />
                                     </div>
                                 </div>
                             ))}

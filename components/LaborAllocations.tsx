@@ -9,6 +9,8 @@ import { Employee } from '../services/laborService';
 import { getCodeLevelStyle, sortByCode } from '../utils/codeHierarchy';
 import PaystubModal from './PaystubModal';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { usePersistedState } from './ui/TableUtils';
 
 // ── Local types ────────────────────────────────────────────────────────────────
 interface CostCenter {
@@ -37,9 +39,13 @@ interface ClosedPayrollResult {
 interface LaborAllocationsProps {
     orgId: string;
     employees: Employee[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
-const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees }) => {
+const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const [worksites, setWorksites] = useState<Worksite[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
@@ -59,9 +65,9 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
     const [loadingData, setLoadingData] = useState(false);
 
     // Estados para busca nos dropdowns — Salários
-    const [costCenterSearch, setCostCenterSearch] = useState('');
+    const [costCenterSearch, setCostCenterSearch] = usePersistedState<string>('laborAllocations:costCenterSearch', '');
     const [costCenterOpen, setCostCenterOpen] = useState(false);
-    const [chartSearch, setChartSearch] = useState('');
+    const [chartSearch, setChartSearch] = usePersistedState<string>('laborAllocations:chartSearch', '');
     const [chartOpen, setChartOpen] = useState(false);
     const costCenterRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<HTMLDivElement>(null);
@@ -69,9 +75,9 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
     // Estados para Encargos Patronais
     const [selectedEncargoCostCenter, setSelectedEncargoCostCenter] = useState('');
     const [selectedEncargoChartOfAccount, setSelectedEncargoChartOfAccount] = useState('');
-    const [encargoCostCenterSearch, setEncargoCostCenterSearch] = useState('');
+    const [encargoCostCenterSearch, setEncargoCostCenterSearch] = usePersistedState<string>('laborAllocations:encargoCostCenterSearch', '');
     const [encargoCostCenterOpen, setEncargoCostCenterOpen] = useState(false);
-    const [encargoChartSearch, setEncargoChartSearch] = useState('');
+    const [encargoChartSearch, setEncargoChartSearch] = usePersistedState<string>('laborAllocations:encargoChartSearch', '');
     const [encargoChartOpen, setEncargoChartOpen] = useState(false);
     const encargoCostCenterRef = useRef<HTMLDivElement>(null);
     const encargoChartRef = useRef<HTMLDivElement>(null);
@@ -79,9 +85,9 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
     // Estados para Contribuições de Terceiros
     const [selectedTerceiroCostCenter, setSelectedTerceiroCostCenter] = useState('');
     const [selectedTerceiroChartOfAccount, setSelectedTerceiroChartOfAccount] = useState('');
-    const [terceiroCostCenterSearch, setTerceiroCostCenterSearch] = useState('');
+    const [terceiroCostCenterSearch, setTerceiroCostCenterSearch] = usePersistedState<string>('laborAllocations:terceiroCostCenterSearch', '');
     const [terceiroCostCenterOpen, setTerceiroCostCenterOpen] = useState(false);
-    const [terceiroChartSearch, setTerceiroChartSearch] = useState('');
+    const [terceiroChartSearch, setTerceiroChartSearch] = usePersistedState<string>('laborAllocations:terceiroChartSearch', '');
     const [terceiroChartOpen, setTerceiroChartOpen] = useState(false);
     const terceiroCostCenterRef = useRef<HTMLDivElement>(null);
     const terceiroChartRef = useRef<HTMLDivElement>(null);
@@ -356,6 +362,20 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
 
     return (
         <>
+        <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Alocações</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Alocação de colaboradores em obras e lançamento financeiro por centro de custo.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Lista de Colaboradores */}
             <div className="lg:col-span-4 space-y-4">

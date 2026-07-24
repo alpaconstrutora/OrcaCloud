@@ -15,11 +15,16 @@ import { supabase } from '../lib/supabase';
 import LaborEncargosINSS from './LaborEncargosINSS';
 import LaborFolhaEmpregado from './LaborFolhaEmpregado';
 import LaborEncargosProlabore from './LaborEncargosProlabore';
+import LaborScopeBar from './LaborScopeBar';
 
 type EncargosTab = 'contribuicoes' | 'inss' | 'folha' | 'prolabore';
 
 interface LaborEncargosProps {
     orgId: string;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 // Encargos patronais — referência legal (BR), não editáveis aqui (gerenciados via Rubricas)
@@ -44,7 +49,7 @@ interface PayrollSummary {
     headcount: number;
 }
 
-const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
+const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const [activeTab, setActiveTab] = useState<EncargosTab>('contribuicoes');
 
     // ── Competência compartilhada entre sub-abas ──
@@ -167,6 +172,18 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Encargos Sociais</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Contribuições de terceiros, INSS e encargos patronais por competência.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Seletor de Competência + Sub-abas */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm">
@@ -333,14 +350,14 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                     return (
                                         <tr key={tax.code} className="hover:bg-slate-50/60 transition-colors group">
                                             <td className="px-6 py-4">
-                                                <span className="text-xs font-black text-slate-500 bg-slate-100 rounded-lg px-2 py-1 font-mono">
+                                                <span className="text-sm font-normal text-slate-500 bg-slate-100 rounded-lg px-2 py-1">
                                                     {tax.code}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4">
-                                                <span className="text-sm font-bold text-slate-800">{tax.name}</span>
+                                                <span className="text-sm font-normal text-slate-800">{tax.name}</span>
                                                 {isModified && (
-                                                    <span className="ml-2 text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                                    <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                                                         Personalizado
                                                     </span>
                                                 )}
@@ -357,9 +374,9 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                                             value={editValue}
                                                             onChange={e => setEditValue(e.target.value)}
                                                             onKeyDown={e => { if (e.key === 'Enter') handleConfirmEdit(tax.code); if (e.key === 'Escape') setEditing(null); }}
-                                                            className="w-20 text-right text-sm font-black text-slate-900 border border-indigo-400 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-400"
+                                                            className="w-20 text-right text-sm font-normal text-slate-900 border border-indigo-400 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-400"
                                                         />
-                                                        <span className="text-xs font-bold text-slate-500">%</span>
+                                                        <span className="text-sm font-normal text-slate-500">%</span>
                                                         <button onClick={() => handleConfirmEdit(tax.code)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg">
                                                             <Check className="w-4 h-4" />
                                                         </button>
@@ -368,7 +385,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <span className={`text-sm font-black font-mono ${isModified ? 'text-amber-600' : 'text-slate-900'}`}>
+                                                    <span className={`text-sm font-normal ${isModified ? 'text-amber-600' : 'text-slate-900'}`}>
                                                         {fmt(tax.rate)}
                                                     </span>
                                                 )}
@@ -388,7 +405,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                         <span className="text-xs font-black text-purple-800 uppercase tracking-widest">Total</span>
                                     </td>
                                     <td className="px-4 py-3 text-right">
-                                        <span className="text-sm font-black text-purple-800 font-mono">{fmt(totalTerceiroRate)}</span>
+                                        <span className="text-sm font-normal text-purple-800">{fmt(totalTerceiroRate)}</span>
                                     </td>
                                     <td className="px-6 py-3"></td>
                                 </tr>
@@ -429,19 +446,19 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                 {ENCARGOS_PATRONAIS_REF.map((enc) => (
                                     <tr key={enc.code} className="hover:bg-slate-50/60 transition-colors">
                                         <td className="px-6 py-3.5">
-                                            <span className="text-xs font-black text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-2 py-1 font-mono">
+                                            <span className="text-sm font-normal text-orange-700 bg-orange-50 border border-orange-100 rounded-lg px-2 py-1">
                                                 {enc.code}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3.5">
-                                            <p className="text-sm font-bold text-slate-800">{enc.name}</p>
-                                            <p className="text-xs text-slate-400 font-medium">{enc.obs}</p>
+                                            <p className="text-sm font-normal text-slate-800">{enc.name}</p>
+                                            <p className="text-xs text-slate-400 font-normal">{enc.obs}</p>
                                         </td>
                                         <td className="px-4 py-3.5">
-                                            <span className="text-xs text-slate-500 font-medium">{enc.base}</span>
+                                            <span className="text-xs text-slate-500 font-normal">{enc.base}</span>
                                         </td>
                                         <td className="px-6 py-3.5 text-right">
-                                            <span className="text-sm font-black text-orange-700 font-mono">{fmt(enc.rate)}</span>
+                                            <span className="text-sm font-normal text-orange-700">{fmt(enc.rate)}</span>
                                         </td>
                                     </tr>
                                 ))}
@@ -452,7 +469,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                         <span className="text-xs font-black text-orange-800 uppercase tracking-widest">Total referência</span>
                                     </td>
                                     <td className="px-6 py-3 text-right">
-                                        <span className="text-sm font-black text-orange-800 font-mono">{fmt(totalPatronalRate)}</span>
+                                        <span className="text-sm font-normal text-orange-800">{fmt(totalPatronalRate)}</span>
                                     </td>
                                 </tr>
                             </tfoot>

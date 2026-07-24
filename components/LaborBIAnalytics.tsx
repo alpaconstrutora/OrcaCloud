@@ -15,6 +15,8 @@ import {
 } from '../services/hrAnalyticsService';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -335,12 +337,17 @@ const TargetForm: React.FC<TargetFormProps> = ({ orgId, ano, existing, onClose, 
 interface LaborBIAnalyticsProps {
     orgId: string;
     employees: { id: string; name: string; status?: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type MainTab = 'turnover' | 'retencao' | 'produtividade' | 'movimentacoes';
 
-const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees }) => {
+const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
 
@@ -443,23 +450,32 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
 
     if (!orgId) {
         return (
-            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                <BarChart3 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para visualizar os analytics de RH.</p>
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">BI Analytics RH</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Turnover, retenção, produtividade e movimentações.</p>
+                </div>
+                <LaborScopeBar
+                    organizations={organizations}
+                    selectedOrgId={selectedOrgId}
+                    onSelectedOrgIdChange={onSelectedOrgIdChange}
+                    onRefresh={onRefresh}
+                />
+                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                    <BarChart3 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para visualizar os analytics de RH.</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
+        <div className="space-y-6">
+            {/* 1. Título */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5 text-sky-600" />
-                        BI Avançado — Analytics RH
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Turnover, retenção, produtividade e movimentações</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">BI Analytics RH</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Turnover, retenção, produtividade e movimentações.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={() => setShowTargetForm(true)}
@@ -473,6 +489,13 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                     </button>
                 </div>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* KPIs executivos */}
             <div className="grid grid-cols-4 gap-4">
@@ -569,18 +592,18 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                                 const overMeta = target?.turnover_max_pct && s.turnover_rate > target.turnover_max_pct;
                                                 return (
                                                     <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                        <td className="px-4 py-3 font-bold text-slate-700">{fmt.mes(s.ano_mes)}</td>
-                                                        <td className="px-4 py-3 text-slate-500">{s.headcount_inicio}</td>
-                                                        <td className="px-4 py-3 font-bold text-slate-800">{s.headcount_fim}</td>
-                                                        <td className="px-4 py-3 text-emerald-600 font-bold">+{s.admissoes}</td>
-                                                        <td className="px-4 py-3 text-red-500 font-bold">-{s.demissoes}</td>
+                                                        <td className="px-4 py-3 text-sm font-normal text-slate-700">{fmt.mes(s.ano_mes)}</td>
+                                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">{s.headcount_inicio}</td>
+                                                        <td className="px-4 py-3 text-sm font-normal text-slate-800">{s.headcount_fim}</td>
+                                                        <td className="px-4 py-3 text-sm font-normal text-emerald-600">+{s.admissoes}</td>
+                                                        <td className="px-4 py-3 text-sm font-normal text-red-500">-{s.demissoes}</td>
                                                         <td className="px-4 py-3">
-                                                            <span className={`font-black text-sm ${overMeta ? 'text-red-600' : 'text-amber-600'}`}>
+                                                            <span className={`text-sm font-normal ${overMeta ? 'text-red-600' : 'text-amber-600'}`}>
                                                                 {fmt.pct(s.turnover_rate)}
                                                             </span>
                                                             {overMeta && <AlertTriangle className="w-3 h-3 text-red-500 inline ml-1" />}
                                                         </td>
-                                                        <td className="px-4 py-3 text-slate-400 text-table-body">{fmt.pct(s.turnover_media_3m)}</td>
+                                                        <td className="px-4 py-3 text-sm font-normal text-slate-400">{fmt.pct(s.turnover_media_3m)}</td>
                                                         <td className="px-4 py-3 text-slate-500">{fmt.pct(s.absenteismo_rate)}</td>
                                                         <td className="px-4 py-3 text-slate-600">{fmt.brl(s.custo_folha_total)}</td>
                                                     </tr>
@@ -659,15 +682,15 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                     <tbody>
                                         {cohorts.map(c => (
                                             <tr key={c.coorte_mes} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3 font-bold text-slate-700">{fmt.mes(c.coorte_mes)}</td>
-                                                <td className="px-4 py-3 text-slate-500">{c.admitidos}</td>
-                                                <td className="px-4 py-3 font-bold text-emerald-700">{c.ainda_ativos}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-700">{fmt.mes(c.coorte_mes)}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{c.admitidos}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-emerald-700">{c.ainda_ativos}</td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`font-black ${c.taxa_retencao_pct >= 80 ? 'text-emerald-700' : c.taxa_retencao_pct >= 50 ? 'text-amber-700' : 'text-red-600'}`}>
+                                                    <span className={`text-sm font-normal ${c.taxa_retencao_pct >= 80 ? 'text-emerald-700' : c.taxa_retencao_pct >= 50 ? 'text-amber-700' : 'text-red-600'}`}>
                                                         {fmt.pct(c.taxa_retencao_pct)}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-500">{c.permanencia_media_dias} dias</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{c.permanencia_media_dias} dias</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -724,19 +747,19 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                             const desvio = p.desvio_custo_pct ?? 0;
                                             return (
                                                 <tr key={p.project_id || 'x'} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                    <td className="px-4 py-3 font-bold text-slate-800">{p.projeto_nome || 'Sem obra'}</td>
-                                                    <td className="px-4 py-3 text-slate-500">{fmt.num(p.hh_total)}h</td>
-                                                    <td className="px-4 py-3 text-slate-600">{fmt.brl(p.custo_total_mdo)}</td>
-                                                    <td className="px-4 py-3 text-slate-500">{fmt.brl(p.custo_previsto_total)}</td>
-                                                    <td className="px-4 py-3 text-slate-600 font-bold">{fmt.brl(p.custo_realizado_total)}</td>
+                                                    <td className="px-4 py-3 text-sm font-normal text-slate-800">{p.projeto_nome || 'Sem obra'}</td>
+                                                    <td className="px-4 py-3 text-sm font-normal text-slate-500">{fmt.num(p.hh_total)}h</td>
+                                                    <td className="px-4 py-3 text-sm font-medium text-slate-600">{fmt.brl(p.custo_total_mdo)}</td>
+                                                    <td className="px-4 py-3 text-sm font-medium text-slate-500">{fmt.brl(p.custo_previsto_total)}</td>
+                                                    <td className="px-4 py-3 text-sm font-medium text-slate-600">{fmt.brl(p.custo_realizado_total)}</td>
                                                     <td className="px-4 py-3">
-                                                        <span className={`font-black text-sm flex items-center gap-1 ${desvio > 0 ? 'text-red-600' : desvio < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                                        <span className={`text-sm font-normal flex items-center gap-1 ${desvio > 0 ? 'text-red-600' : desvio < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                                                             {desvio > 0 ? <ArrowUpRight className="w-3 h-3" /> : desvio < 0 ? <ArrowDownRight className="w-3 h-3" /> : null}
                                                             {desvio > 0 ? '+' : ''}{fmt.pct(desvio)}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <span className={`font-black ${(p.idc_medio ?? 1) >= 1 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                        <span className={`text-sm font-normal ${(p.idc_medio ?? 1) >= 1 ? 'text-emerald-700' : 'text-red-600'}`}>
                                                             {p.idc_medio?.toFixed(3) ?? '–'}
                                                         </span>
                                                     </td>
@@ -785,22 +808,22 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                         const Icon = cfg.icon;
                                         return (
                                             <tr key={ev.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3 text-slate-500 text-table-body whitespace-nowrap">{fmt.date(ev.data_evento)}</td>
-                                                <td className="px-4 py-3 font-bold text-slate-800">{ev.employee_nome || '–'}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">{fmt.date(ev.data_evento)}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-800">{ev.employee_nome || '–'}</td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black ${cfg.color} ${cfg.bg}`}>
+                                                    <span className={`inline-flex items-center gap-1.5 text-sm font-normal ${cfg.color}`}>
                                                         <Icon className="w-3 h-3" />
                                                         {cfg.label}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-500 text-table-body">
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">
                                                     {ev.cargo_saida && `De: ${ev.cargo_saida}`}
                                                     {ev.cargo_entrada && `Para: ${ev.cargo_entrada}`}
                                                     {ev.origem_ref && `${ev.origem_ref} → ${ev.destino_ref}`}
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-400 text-table-body max-w-[160px] truncate">{ev.motivo || '–'}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-400 max-w-[160px] truncate">{ev.motivo || '–'}</td>
                                                 <td className="px-4 py-3">
-                                                    <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir movimentação?')) deleteEventMut.mutate(ev.id); }} />
+                                                    <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir movimentação?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteEventMut.mutate(ev.id); }} />
                                                 </td>
                                             </tr>
                                         );

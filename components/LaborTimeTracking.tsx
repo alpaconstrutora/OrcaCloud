@@ -3,15 +3,21 @@ import { Plus, Clock, CheckCircle2, XCircle, Loader2, ChevronDown, Calendar, Fil
 import { laborService, TimeEntry, Employee } from '../services/laborService';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
 
 interface LaborTimeTrackingProps {
     employees: Employee[];
     projects: any[];
     orgId: string;
     onRefresh: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projects, orgId, onRefresh }) => {
+const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projects, orgId, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+    const confirm = useConfirm();
     const [entries, setEntries] = useState<TimeEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -67,7 +73,8 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Remover este registro?')) return;
+        const ok = await confirm({ title: 'Remover registro de ponto?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Remover' });
+        if (!ok) return;
         await laborService.deleteTimeEntry(id);
         fetchEntries();
     };
@@ -112,7 +119,20 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
     const inputCls = "w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-100 transition-all";
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Registro de Ponto</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Apontamento de horas trabalhadas, aprovação e controle de horas extras.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
@@ -239,25 +259,25 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                                         )}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <div className="text-xs font-bold text-slate-900">{entry.employee_name || '—'}</div>
+                                        <div className="text-sm font-normal text-slate-700">{entry.employee_name || '—'}</div>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-bold">
+                                        <span className="text-sm text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-normal">
                                             {entry.project_name || 'Sem obra'}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-xs font-bold text-slate-500">
+                                    <td className="px-4 py-3 text-sm font-normal text-slate-500">
                                         {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                     </td>
-                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">{entry.hours_worked}h</td>
-                                    <td className="px-4 py-3 text-right text-table-body font-bold text-amber-600">{entry.overtime_hours > 0 ? `+${entry.overtime_hours}h` : '—'}</td>
-                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">
+                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-700">{entry.hours_worked}h</td>
+                                    <td className="px-4 py-3 text-right text-sm font-normal text-amber-600">{entry.overtime_hours > 0 ? `+${entry.overtime_hours}h` : '—'}</td>
+                                    <td className="px-4 py-3 text-right text-sm font-medium text-slate-900">
                                         {entry.total_cost ? `R$ ${entry.total_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black
-                                            ${entry.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' :
-                                              entry.status === 'REJEITADO' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <span className={`text-sm font-normal
+                                            ${entry.status === 'APROVADO' ? 'text-emerald-700' :
+                                              entry.status === 'REJEITADO' ? 'text-red-700' : 'text-amber-700'}`}>
                                             {entry.status}
                                         </span>
                                     </td>
@@ -282,16 +302,16 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                         {filtered.length > 0 && (
                             <tfoot>
                                 <tr className="bg-slate-50/80 border-t border-slate-100">
-                                    <td colSpan={4} className="px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">
+                                    <td colSpan={4} className="px-4 py-3 text-sm font-normal text-slate-400">
                                         {filtered.length} registros
                                     </td>
-                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">
+                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-900">
                                         {filtered.reduce((s, e) => s + e.hours_worked, 0).toFixed(0)}h
                                     </td>
-                                    <td className="px-4 py-3 text-right text-table-body font-bold text-amber-600">
+                                    <td className="px-4 py-3 text-right text-sm font-normal text-amber-600">
                                         {filtered.reduce((s, e) => s + e.overtime_hours, 0).toFixed(0)}h
                                     </td>
-                                    <td className="px-4 py-3 text-right text-table-body font-black text-emerald-700">
+                                    <td className="px-4 py-3 text-right text-sm font-medium text-emerald-700">
                                         R$ {filtered.reduce((s, e) => s + (e.total_cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td colSpan={2} />

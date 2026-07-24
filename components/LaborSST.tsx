@@ -15,6 +15,9 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -353,14 +356,19 @@ interface LaborSSTProps {
     orgId: string;
     employees: Employee[];
     projects?: { id: string; name: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type SSTView = 'accidents' | 'checklists' | 'indicators' | 'regulatory';
 
-const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) => {
+const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [view, setView] = useState<SSTView>('accidents');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborSst:search', '');
     const [showForm, setShowForm] = useState(false);
     const [editingAccident, setEditingAccident] = useState<Accident | null>(null);
     const [showRegForm, setShowRegForm] = useState(false);
@@ -428,6 +436,19 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">SST</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Acidentes de trabalho, checklists e indicadores de segurança.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             {/* Alerta docs regulatórios vencendo */}
             {regAlerts.length > 0 && (
                 <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start gap-3">
@@ -544,7 +565,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingAccident(a); setShowForm(true); }} />
-                                                <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir?')) deleteAcc.mutate(a.id); }} />
+                                                <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir acidente?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteAcc.mutate(a.id); }} />
                                             </div>
                                         </div>
                                     </div>
@@ -576,19 +597,19 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                             <tbody>
                                 {checklists.map(ck => (
                                     <tr key={ck.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                        <td className="px-4 py-3 text-sm font-bold text-slate-900">{ck.nome_checklist}</td>
-                                        <td className="px-4 py-3 text-table-body font-black text-rose-600">{ck.nr_referencia || '—'}</td>
-                                        <td className="px-4 py-3 text-table-body text-slate-500">{ck.project_name || '—'}</td>
-                                        <td className="px-4 py-3 text-table-body text-slate-500">{ck.data_aplicacao}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-700">{ck.nome_checklist}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-rose-600">{ck.nr_referencia || '—'}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">{ck.project_name || '—'}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">{ck.data_aplicacao}</td>
                                         <td className="px-4 py-3">
                                             {ck.conformidade_pct != null ? (
-                                                <span className={`text-button font-black px-2 py-0.5 rounded-lg ${ck.conformidade_pct >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                <span className={`text-sm font-normal ${ck.conformidade_pct >= 80 ? 'text-emerald-700' : 'text-rose-700'}`}>
                                                     {ck.conformidade_pct.toFixed(0)}%
                                                 </span>
                                             ) : '—'}
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-black ${ck.status === 'CONCLUIDO' ? 'bg-emerald-100 text-emerald-700' : ck.status === 'REPROVADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            <span className={`text-sm font-normal ${ck.status === 'CONCLUIDO' ? 'text-emerald-700' : ck.status === 'REPROVADO' ? 'text-rose-700' : 'text-amber-700'}`}>
                                                 {ck.status}
                                             </span>
                                         </td>
@@ -716,7 +737,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingRegDoc(doc); setShowRegForm(true); }} />
-                                                    <ActionIconButton kind="delete" size="sm" title="Excluir documento regulatório" onClick={() => { if (confirm('Excluir documento regulatório?')) deleteReg.mutate(doc.id); }} />
+                                                    <ActionIconButton kind="delete" size="sm" title="Excluir documento regulatório" onClick={async () => { const ok = await confirm({ title: 'Excluir documento regulatório?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteReg.mutate(doc.id); }} />
                                                 </div>
                                             </div>
                                         </div>

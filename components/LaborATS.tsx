@@ -20,6 +20,9 @@ import {
     InterviewRecord, InterviewTipo
 } from '../services/atsService';
 import { STALE } from '../lib/queryClient';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -278,6 +281,7 @@ const KanbanColumn: React.FC<{
     isOver: boolean;
     isDragging: boolean;
 }> = ({ stage, candidates, onSelect, onStageChange, onDiscard, isOver, isDragging }) => {
+    const confirm = useConfirm();
     const blocked = stage.id === 'CONTRATADO';
     const { setNodeRef } = useDroppable({ id: stage.id, disabled: blocked });
     return (
@@ -298,7 +302,7 @@ const KanbanColumn: React.FC<{
                         candidate={c}
                         onSelect={() => onSelect(c)}
                         onStageChange={(s) => onStageChange(c.id, s)}
-                        onDiscard={(s) => { if (confirm('Reprovar candidato?')) onDiscard(c.id, s); }}
+                        onDiscard={async (s) => { const ok = await confirm({ title: 'Reprovar candidato?', variant: 'warning', confirmLabel: 'Reprovar' }); if (ok) onDiscard(c.id, s); }}
                     />
                 ))}
                 {candidates.length === 0 && !isOver && (
@@ -322,6 +326,7 @@ interface CandidatePanelProps {
 
 const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClose, onSaved }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [newNote, setNewNote] = useState('');
     const [newNota, setNewNota] = useState<number | undefined>(undefined);
     const [savingNote, setSavingNote] = useState(false);
@@ -393,7 +398,8 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
     };
 
     const handleHire = async () => {
-        if (!confirm(`Contratar ${candidate.nome} em ${hireDate}? Isso criará um colaborador automaticamente.`)) return;
+        const ok = await confirm({ title: 'Confirmar contratação?', message: `Contratar ${candidate.nome} em ${hireDate}? Isso criará um colaborador automaticamente.`, confirmLabel: 'Contratar' });
+        if (!ok) return;
         setHiring(true);
         try {
             await atsService.hireCandidate(candidate.id, hireDate);
@@ -573,15 +579,20 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
 interface LaborATSProps {
     orgId: string;
     projects?: { id: string; name: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type ATSView = 'kanban' | 'jobs' | 'talent_bank';
 
-const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
+const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [view, setView] = useState<ATSView>('kanban');
     const [selectedJobId, setSelectedJobId] = useState<string>('');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborAts:search', '');
     const [showJobForm, setShowJobForm] = useState(false);
     const [editingJob, setEditingJob] = useState<JobOpening | null>(null);
     const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -687,6 +698,19 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Recrutamento</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Pipeline Kanban de vagas, candidatos e banco de talentos.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -823,7 +847,7 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                                                 Pipeline <ChevronRight className="w-3 h-3" />
                                             </button>
                                             <ActionIconButton kind="edit" size="sm" title="Editar vaga" onClick={() => { setEditingJob(j); setShowJobForm(true); }} />
-                                            <ActionIconButton kind="delete" size="sm" title="Cancelar vaga" onClick={() => { if (confirm('Cancelar esta vaga?')) deleteJobMutation.mutate(j.id); }} />
+                                            <ActionIconButton kind="delete" size="sm" title="Cancelar vaga" onClick={async () => { const ok = await confirm({ title: 'Cancelar vaga?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Cancelar vaga' }); if (ok) deleteJobMutation.mutate(j.id); }} />
                                         </div>
                                     </div>
                                 );

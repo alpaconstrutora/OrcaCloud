@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Target, TrendingUp, TrendingDown, Minus, ChevronDown, Loader2, AlertTriangle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
 import { laborService, ProductivityLog, Employee, LaborTeam } from '../services/laborService';
 
 interface LaborProductivityProps {
@@ -9,11 +11,15 @@ interface LaborProductivityProps {
     projects: any[];
     orgId: string;
     onRefresh: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 const UNITS = ['m²', 'm³', 'm', 'un', 'kg', 'h', 'pc', 'vb', 'lata', 'saco'];
 
-const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams, projects, orgId, onRefresh }) => {
+const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams, projects, orgId, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+    const confirm = useConfirm();
     const [logs, setLogs] = useState<ProductivityLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -60,7 +66,8 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Excluir este registro de produtividade?')) return;
+        const ok = await confirm({ title: 'Excluir registro de produtividade?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
         await laborService.deleteProductivityLog(id);
         fetchLogs();
     };
@@ -88,13 +95,23 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
     const inputCls = "w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-100 transition-all";
 
     return (
-        <div className="space-y-4">
-            {/* Controls */}
-            <div className="flex justify-end">
-                <button onClick={() => setShowForm(s => !s)} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-900/20">
-                    <Plus className="w-4 h-4" /> Registrar Produção
-                </button>
+        <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Produtividade</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Registro de produção real por atividade, comparado ao planejado.</p>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            >
+                <button onClick={() => setShowForm(s => !s)} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+                    <Plus className="w-[15px] h-[15px]" /> Registrar produção
+                </button>
+            </LaborScopeBar>
 
             {/* Form */}
             {showForm && (
@@ -249,22 +266,22 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                             )}
                             {logs.map(log => (
                                 <tr key={log.id} className="group hover:bg-slate-50/50 transition-all">
-                                    <td className="px-5 py-3 text-xs font-bold text-slate-500">
+                                    <td className="px-5 py-3 text-sm font-normal text-slate-500">
                                         {new Date(log.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <p className="text-xs font-bold text-slate-900">{log.activity_description}</p>
+                                        <p className="text-sm font-normal text-slate-700">{log.activity_description}</p>
                                         {log.phase && <p className="text-xs text-slate-400">{log.phase}</p>}
-                                        {log.project_name && <span className="text-[9px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-bold">{log.project_name}</span>}
+                                        {log.project_name && <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-normal">{log.project_name}</span>}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <p className="text-xs font-bold text-slate-700">{log.team_name || log.employee_name || '—'}</p>
+                                        <p className="text-sm font-normal text-slate-700">{log.team_name || log.employee_name || '—'}</p>
                                     </td>
-                                    <td className="px-4 py-3 text-right text-table-body font-bold text-slate-500">
-                                        {log.planned_qty.toLocaleString('pt-BR')}<span className="text-[9px] text-slate-400 ml-0.5">{log.unit}</span>
+                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-500">
+                                        {log.planned_qty.toLocaleString('pt-BR')}<span className="text-xs text-slate-400 ml-0.5">{log.unit}</span>
                                     </td>
-                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">
-                                        {log.actual_qty.toLocaleString('pt-BR')}<span className="text-[9px] text-slate-400 ml-0.5">{log.unit}</span>
+                                    <td className="px-4 py-3 text-right text-sm font-normal text-slate-900">
+                                        {log.actual_qty.toLocaleString('pt-BR')}<span className="text-xs text-slate-400 ml-0.5">{log.unit}</span>
                                     </td>
                                     <td className="px-4 py-3 text-table-body text-slate-500">
                                         {log.man_hour_per_unit ? `${log.man_hour_per_unit.toFixed(3)} h/${log.unit}` : '—'}

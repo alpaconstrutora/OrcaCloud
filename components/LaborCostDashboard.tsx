@@ -5,14 +5,19 @@ import {
     ArrowUpRight, UserCheck, Users
 } from 'lucide-react';
 import { payrollService, PayrollRun } from '../services/payrollService';
+import LaborScopeBar from './LaborScopeBar';
 
 interface LaborCostDashboardProps {
     orgId: string;
     legacyCount?: number;
     onMigrate?: () => Promise<void>;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
-const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCount, onMigrate }) => {
+const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCount, onMigrate, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const [runs, setRuns] = useState<PayrollRun[]>([]);
     const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
     const [summary, setSummary] = useState<any>(null);
@@ -91,6 +96,19 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Custo por Obra</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Análise de custos consolidados por obra, baseada na folha fechada.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             {/* Header / Filter */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
                 <div>
@@ -222,14 +240,14 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                                                         <div className="p-2 bg-indigo-50 rounded-lg group-hover:scale-110 transition-transform">
                                                             <Building2 className="w-3.5 h-3.5 text-indigo-600" />
                                                         </div>
-                                                        <span className="text-xs font-bold text-slate-700">{w.name}</span>
+                                                        <span className="text-sm font-normal text-slate-700">{w.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 text-right text-table-body font-black text-slate-900">
+                                                <td className="py-4 text-right text-sm font-medium text-slate-900">
                                                     R$ {w.cost.toLocaleString()}
                                                 </td>
                                                 <td className="py-4 text-right">
-                                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-[9px] font-black">
+                                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-normal">
                                                         {((w.cost / summary.total) * 100).toFixed(1)}%
                                                     </span>
                                                 </td>

@@ -8,6 +8,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import LaborScopeBar from './LaborScopeBar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -459,6 +460,9 @@ interface LaborAbsencesProps {
     orgId: string;
     employees: Employee[];
     onRefresh?: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 type AbsView = 'requests' | 'balances';
@@ -474,7 +478,7 @@ const BALANCE_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
 ];
 
-const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
+const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
@@ -608,6 +612,13 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Férias e ausências</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Solicitações, saldos e alertas de vencimento de férias.</p>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
 
             {/* Alerta: férias disponíveis para agendar */}
             {vacationReady.length > 0 && (

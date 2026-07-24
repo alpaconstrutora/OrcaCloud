@@ -13,6 +13,9 @@ import {
 } from '../services/communicationService';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -393,22 +396,22 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                             <tbody>
                                 {receipts.map(r => (
                                     <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-4 py-3 font-bold text-slate-800">{r.employee_nome || '–'}</td>
-                                        <td className="px-4 py-3 text-slate-500 text-table-body">
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-800">{r.employee_nome || '–'}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">
                                             {r.lido_em ? new Date(r.lido_em).toLocaleString('pt-BR') : (
-                                                <span className="text-amber-500 font-bold">Pendente</span>
+                                                <span className="text-amber-600 font-normal">Pendente</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-slate-500 text-table-body">
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">
                                             {r.assinado_em ? new Date(r.assinado_em).toLocaleString('pt-BR') : '–'}
                                         </td>
                                         <td className="px-4 py-3">
                                             {r.whatsapp_status ? (
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
-                                                    r.whatsapp_status === 'LIDO' ? 'bg-emerald-100 text-emerald-700' :
-                                                    r.whatsapp_status === 'ENTREGUE' ? 'bg-blue-100 text-blue-700' :
-                                                    r.whatsapp_status === 'FALHOU' ? 'bg-red-100 text-red-700' :
-                                                    'bg-slate-100 text-slate-600'
+                                                <span className={`text-sm font-normal ${
+                                                    r.whatsapp_status === 'LIDO' ? 'text-emerald-700' :
+                                                    r.whatsapp_status === 'ENTREGUE' ? 'text-blue-700' :
+                                                    r.whatsapp_status === 'FALHOU' ? 'text-red-700' :
+                                                    'text-slate-600'
                                                 }`}>{r.whatsapp_status}</span>
                                             ) : '–'}
                                         </td>
@@ -537,18 +540,23 @@ interface LaborComunicacaoProps {
     orgId: string;
     employees: { id: string; name: string; status?: string }[];
     projects: { id: string; name: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type MainTab = 'comunicados' | 'config';
 
-const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, projects }) => {
+const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, projects, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const qc = useQueryClient();
     const [mainTab, setMainTab] = useState<MainTab>('comunicados');
     const [selectedComm, setSelectedComm] = useState<Communication | null>(null);
+    const confirm = useConfirm();
     const [showForm, setShowForm] = useState(false);
     const [editingComm, setEditingComm] = useState<Communication | null>(null);
     const [dispatching, setDispatching] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborComunicacao:search', '');
     const [filterTipo, setFilterTipo] = useState<CommTipo | ''>('');
 
     const activeEmployees = useMemo(() => employees.filter(e => (e.status || 'ATIVO') === 'ATIVO'), [employees]);
@@ -600,9 +608,21 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
 
     if (!orgId) {
         return (
-            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                <Megaphone className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir comunicação interna.</p>
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Comunicação</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Avisos, DDS digitais, treinamentos e disparos via WhatsApp.</p>
+                </div>
+                <LaborScopeBar
+                    organizations={organizations}
+                    selectedOrgId={selectedOrgId}
+                    onSelectedOrgIdChange={onSelectedOrgIdChange}
+                    onRefresh={onRefresh}
+                />
+                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                    <Megaphone className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir comunicação interna.</p>
+                </div>
             </div>
         );
     }
@@ -619,15 +639,12 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
     }
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
+        <div className="space-y-6">
+            {/* 1. Título */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <Megaphone className="w-5 h-5 text-teal-600" />
-                        Comunicação Interna
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Avisos, DDS digitais, treinamentos e WhatsApp</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Comunicação</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Avisos, DDS digitais, treinamentos e disparos via WhatsApp.</p>
                 </div>
                 {mainTab === 'comunicados' && (
                     <button onClick={() => { setEditingComm(null); setShowForm(true); }}
@@ -636,6 +653,13 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                     </button>
                 )}
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* KPIs */}
             <div className="grid grid-cols-4 gap-4">
@@ -741,7 +765,7 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                                                             ? <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
                                                             : <Send className="w-4 h-4 text-teal-500" />}
                                                     </button>
-                                                    <button onClick={() => { if (confirm('Excluir este comunicado?')) deleteMut.mutate(comm.id); }}
+                                                    <button onClick={async () => { const ok = await confirm({ title: 'Excluir comunicado?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteMut.mutate(comm.id); }}
                                                         className="p-2 hover:bg-red-100 rounded-xl transition-colors" title="Excluir">
                                                         <Trash2 className="w-4 h-4 text-red-400" />
                                                     </button>

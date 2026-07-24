@@ -9,6 +9,9 @@ import { laborService, EpiCatalogItem, EpiDelivery, EpiCategoria, Employee } fro
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 const EPI_CATEGORIA_LABELS: Record<EpiCategoria, string> = {
     PROTECAO_CABECA: 'Proteção da Cabeça',
@@ -267,14 +270,18 @@ interface LaborEPIsProps {
     orgId: string;
     employees: Employee[];
     onRefresh?: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 type EpiView = 'catalog' | 'deliveries';
 
-const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
+const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [view, setView] = useState<EpiView>('catalog');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborEpis:search', '');
     const [showForm, setShowForm] = useState(false);
     const [editingItem, setEditingItem] = useState<EpiCatalogItem | null>(null);
     const [showDeliveryForm, setShowDeliveryForm] = useState(false);
@@ -325,6 +332,16 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
         onSuccess: invalidate,
     });
 
+    const handleInactivate = async (id: string) => {
+        const ok = await confirm({ title: 'Inativar EPI?', message: 'O item deixará de aparecer para novas entregas.', variant: 'warning', confirmLabel: 'Inativar' });
+        if (ok) deleteMutation.mutate(id);
+    };
+
+    const handleReturn = async (id: string) => {
+        const ok = await confirm({ title: 'Confirmar devolução?', message: 'O EPI voltará ao estoque disponível.', confirmLabel: 'Confirmar' });
+        if (ok) returnMutation.mutate(id);
+    };
+
     const filteredCatalog = catalog.filter(item =>
         item.nome.toLowerCase().includes(search.toLowerCase()) ||
         (item.ca || '').toLowerCase().includes(search.toLowerCase())
@@ -350,6 +367,19 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de EPIs</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Catálogo, entregas e controle de estoque de equipamentos de proteção.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
+
             {/* Alertas */}
             {(alerts && (alerts.lowStock.length > 0 || alerts.expiredCa.length > 0)) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -479,40 +509,40 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                                     return (
                                         <tr key={item.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 py-3">
-                                                <p className="text-sm font-bold text-slate-900">{item.nome}</p>
+                                                <p className="text-sm font-normal text-slate-900">{item.nome}</p>
                                                 {item.descricao && <p className="text-xs text-slate-400 truncate max-w-[160px]">{item.descricao}</p>}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${categoriaColors[item.categoria]}`}>
+                                                <span className={`text-sm font-normal ${categoriaColors[item.categoria]}`}>
                                                     {EPI_CATEGORIA_LABELS[item.categoria].split(' ').slice(0,2).join(' ')}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <p className="text-xs font-bold text-slate-700">{item.ca || '—'}</p>
+                                                <p className="text-sm font-normal text-slate-700">{item.ca || '—'}</p>
                                                 {item.ca_validade && (
-                                                    <p className={`text-xs font-bold ${caExpiring ? 'text-rose-600' : 'text-slate-400'}`}>
+                                                    <p className={`text-xs font-normal ${caExpiring ? 'text-rose-600' : 'text-slate-400'}`}>
                                                         {caExpiring ? '⚠ ' : ''}{item.ca_validade}
                                                     </p>
                                                 )}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${isLow ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                <span className={`text-sm font-normal ${isLow ? 'text-red-700' : 'text-emerald-700'}`}>
                                                     {item.estoque_atual} {item.unidade}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-table-body text-slate-500 font-medium">{item.estoque_minimo} {item.unidade}</td>
-                                            <td className="px-4 py-3 text-table-body font-bold text-slate-700">
+                                            <td className="px-4 py-3 text-sm font-normal text-slate-500">{item.estoque_minimo} {item.unidade}</td>
+                                            <td className="px-4 py-3 text-sm font-medium text-slate-700">
                                                 {item.custo_unitario > 0 ? `R$ ${item.custo_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${item.status === 'ATIVO' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                <span className={`text-sm font-normal ${item.status === 'ATIVO' ? 'text-emerald-700' : 'text-slate-500'}`}>
                                                     {item.status}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-2">
                                                     <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingItem(item); setShowForm(true); }} />
-                                                    <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={() => { if (confirm('Inativar este EPI?')) deleteMutation.mutate(item.id); }} />
+                                                    <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={() => handleInactivate(item.id)} />
                                                 </div>
                                             </td>
                                         </tr>
@@ -548,28 +578,28 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees }) => {
                                     <tr key={d.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${d.is_returned ? 'opacity-60' : ''}`}>
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-black text-indigo-600">
+                                                <div className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-normal text-indigo-600">
                                                     {(d.employee_name || 'U').charAt(0)}
                                                 </div>
-                                                <span className="text-sm font-bold text-slate-800">{d.employee_name || '—'}</span>
+                                                <span className="text-sm font-normal text-slate-700">{d.employee_name || '—'}</span>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-sm font-bold text-slate-700">{d.epi_nome || '—'}</td>
-                                        <td className="px-4 py-3 text-sm font-black text-slate-900">{d.quantidade}</td>
-                                        <td className="px-4 py-3 text-table-body text-slate-500 font-medium">{d.delivered_at}</td>
-                                        <td className="px-4 py-3 text-table-body text-slate-500 max-w-[160px] truncate">{d.motivo || '—'}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-700">{d.epi_nome || '—'}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-900">{d.quantidade}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500">{d.delivered_at}</td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500 max-w-[160px] truncate">{d.motivo || '—'}</td>
                                         <td className="px-4 py-3">
                                             {d.is_returned ? (
-                                                <span className="px-2 py-0.5 rounded-full text-xs font-black bg-slate-100 text-slate-500">Devolvido</span>
+                                                <span className="text-sm font-normal text-slate-500">Devolvido</span>
                                             ) : (
-                                                <span className="px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-700">Em uso</span>
+                                                <span className="text-sm font-normal text-emerald-700">Em uso</span>
                                             )}
                                         </td>
                                         <td className="px-4 py-3">
                                             {!d.is_returned && (
                                                 <button
-                                                    onClick={() => { if (confirm('Confirmar devolução?')) returnMutation.mutate(d.id); }}
-                                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 rounded-lg text-xs font-black transition-all"
+                                                    onClick={() => handleReturn(d.id)}
+                                                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-700 rounded-lg text-xs font-normal transition-all"
                                                 >
                                                     <CheckCircle2 className="w-3 h-3" /> Devolver
                                                 </button>

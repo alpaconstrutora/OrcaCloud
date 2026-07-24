@@ -8,6 +8,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import LaborScopeBar from './LaborScopeBar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vrService, VrRegra, VrFeriado, VrCalculo } from '../services/vrService';
 import { laborService, Employee } from '../services/laborService';
@@ -1159,6 +1160,9 @@ interface LaborValeRefeicaoProps {
     organizations: { id: string; name: string }[];
     employees: Employee[];
     projects: { id: string; name: string }[];
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 const TABS: { id: VrTab; label: string; icon: React.ElementType }[] = [
@@ -1169,7 +1173,7 @@ const TABS: { id: VrTab; label: string; icon: React.ElementType }[] = [
     { id: 'historico',  label: 'Histórico',       icon: FileText },
 ];
 
-const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizations, employees, projects }) => {
+const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizations, employees, projects, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const [tab, setTab] = usePersistedState<VrTab>('laborValeRefeicao:tab', 'calculo');
 
     return (
@@ -1179,6 +1183,13 @@ const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizati
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Vale Refeição / Alimentação</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Cálculo automático mensal por dias elegíveis trabalhados.</p>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Abas */}
             <div className="flex gap-1 bg-slate-100 p-1 rounded-[10px] w-fit overflow-x-auto">

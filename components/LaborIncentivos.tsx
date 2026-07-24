@@ -11,6 +11,8 @@ import {
 } from '../services/incentiveService';
 import { PayrollRubric } from '../services/payrollService';
 import { isObra } from '../utils/projectClassification';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
 
 // ─── Tipos de props ─────────────────────────────────────────
 interface EmployeeLite { id: string; name: string; status?: string }
@@ -22,6 +24,10 @@ interface Props {
     employees: EmployeeLite[];
     teams: TeamLite[];
     projects: ProjectLite[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
 }
 
 type SubTab = 'launch' | 'approvals' | 'habituality' | 'rules' | 'performance' | 'simulator';
@@ -62,7 +68,8 @@ const abrirComprovante = async (path: string) => {
 };
 
 // ════════════════════════════════════════════════════════════
-const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects }) => {
+const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+    const confirm = useConfirm();
     const [tab, setTab] = useState<SubTab>('launch');
     const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
 
@@ -79,25 +86,39 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects })
 
     if (!orgId) {
         return (
-            <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
-                <Building2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir incentivos.</p>
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Incentivos &amp; Produtividade</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gratificações, metas e guarda de habitualidade.</p>
+                </div>
+                <LaborScopeBar
+                    organizations={organizations}
+                    selectedOrgId={selectedOrgId}
+                    onSelectedOrgIdChange={onSelectedOrgIdChange}
+                    onRefresh={onRefresh}
+                />
+                <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
+                    <Building2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Selecione uma organização específica para gerir incentivos.</p>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200">
-                    <Gift className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Incentivos &amp; Produtividade</h2>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Gratificações, metas e proteção contra habitualidade</p>
-                </div>
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Incentivos &amp; Produtividade</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gratificações, metas e guarda de habitualidade.</p>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Sub-tabs */}
             <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
@@ -502,15 +523,15 @@ const HabitualityTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                                 {flags.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-slate-300 text-table-body font-bold uppercase">Sem incentivos no período</td></tr>}
                                 {flags.map((f, i) => (
                                     <tr key={i} className={f.is_habitual ? 'bg-rose-50/40' : ''}>
-                                        <td className="py-3 px-2 text-sm font-bold text-slate-700">{f.employee_name}</td>
-                                        <td className="py-3 px-2 text-table-body font-bold text-slate-500">{f.rubric_name}</td>
-                                        <td className="py-3 px-2 text-center text-sm font-black text-slate-800">{f.months_paid}/{f.window_months}</td>
-                                        <td className="py-3 px-2 text-right text-table-body font-bold text-slate-600">{brl(f.avg_monthly_amount)}</td>
-                                        <td className="py-3 px-2 text-right text-table-body font-black text-rose-600">{f.is_habitual ? brl(f.estimated_annual_reflexo) : '—'}</td>
+                                        <td className="py-3 px-2 text-sm font-normal text-slate-700">{f.employee_name}</td>
+                                        <td className="py-3 px-2 text-sm font-normal text-slate-500">{f.rubric_name}</td>
+                                        <td className="py-3 px-2 text-center text-sm font-normal text-slate-800">{f.months_paid}/{f.window_months}</td>
+                                        <td className="py-3 px-2 text-right text-sm font-medium text-slate-600">{brl(f.avg_monthly_amount)}</td>
+                                        <td className="py-3 px-2 text-right text-sm font-medium text-rose-600">{f.is_habitual ? brl(f.estimated_annual_reflexo) : '—'}</td>
                                         <td className="py-3 px-2 text-center">
                                             {f.is_habitual
-                                                ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-rose-100 text-rose-700"><AlertTriangle size={10} /> Habitual</span>
-                                                : <span className="px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-emerald-50 text-emerald-600">Eventual</span>}
+                                                ? <span className="inline-flex items-center gap-1 text-sm font-normal text-rose-700"><AlertTriangle size={10} /> Habitual</span>
+                                                : <span className="text-sm font-normal text-emerald-600">Eventual</span>}
                                         </td>
                                     </tr>
                                 ))}
@@ -532,6 +553,7 @@ const emptyRule = (orgId: string): IncentiveRule => ({
 });
 
 const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: PayrollRubric[] }> = ({ orgId, projects, rubrics }) => {
+    const confirm = useConfirm();
     const [rules, setRules] = useState<IncentiveRule[]>([]);
     const [editing, setEditing] = useState<IncentiveRule | null>(null);
     const [loading, setLoading] = useState(true);
@@ -614,7 +636,7 @@ const RulesTab: React.FC<{ orgId: string; projects: ProjectLite[]; rubrics: Payr
                             <div className="flex items-center gap-1 shrink-0">
                                 <button onClick={() => incentiveService.toggleRule(r.id!, !r.active).then(load)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" title={r.active ? 'Desativar' : 'Ativar'}><Power size={15} /></button>
                                 <button onClick={() => setEditing(r)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" title="Editar"><Search size={15} /></button>
-                                <button onClick={() => { if (confirm('Excluir regra?')) incentiveService.deleteRule(r.id!).then(load); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg" title="Excluir"><Trash2 size={15} /></button>
+                                <button onClick={async () => { const ok = await confirm({ title: 'Excluir regra?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) incentiveService.deleteRule(r.id!).then(load); }} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg" title="Excluir"><Trash2 size={15} /></button>
                             </div>
                         </Card>
                     ))}

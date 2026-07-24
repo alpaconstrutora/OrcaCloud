@@ -8,6 +8,7 @@ import { formatMoney } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import LaborScopeBar from './LaborScopeBar';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Colaborador', sortable: true },
@@ -26,7 +27,11 @@ interface LaborEmployeeListProps {
     organizations?: any[];
     currentUserEmail?: string;
     onEdit: (emp: Employee) => void;
+    onNew: () => void;
     onRefresh: () => void;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    isAllOrgsMode: boolean;
 }
 
 const CONTRACT_LABELS: Record<ContractType, string> = {
@@ -76,7 +81,7 @@ function getAdvancedFilterValue(e: Employee, key: string): unknown {
     }
 }
 
-const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], currentUserEmail, onEdit, onRefresh }) => {
+const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], currentUserEmail, onEdit, onNew, onRefresh, selectedOrgId, onSelectedOrgIdChange, isAllOrgsMode }) => {
     // F2: filtros sobrevivem a navegação/reload.
     const [search, setSearch] = usePersistedState('laborEmployeeListFilters:search', '');
     const [filterStatus, setFilterStatus] = usePersistedState<EmployeeStatus | 'ALL'>('laborEmployeeListFilters:status', 'ATIVO');
@@ -164,6 +169,35 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Colaboradores</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Cadastro, vínculos e custos da equipe própria.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            >
+                <button
+                    onClick={() => {
+                        if (isAllOrgsMode) {
+                            alert('Para cadastrar um novo colaborador, selecione uma organização específica no filtro acima.');
+                            return;
+                        }
+                        onNew();
+                    }}
+                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0
+                        ${isAllOrgsMode ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                    title={isAllOrgsMode ? 'Selecione uma organização para cadastrar' : ''}
+                >
+                    <Users className="w-[15px] h-[15px]" />
+                    Novo colaborador
+                </button>
+            </LaborScopeBar>
+
             {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KpiCard label="Colaboradores" value={`${employees.length}`} sub={`${activeCount} ativos`} icon={<Users className="w-5 h-5" />} color="indigo" />

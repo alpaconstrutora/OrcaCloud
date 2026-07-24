@@ -14,6 +14,9 @@ import { supabase } from '../lib/supabase';
 import PaystubModal from './PaystubModal';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 // Helper: chama RPC SECURITY DEFINER e retorna array (funciona sem sessão Supabase)
 async function portalRpc<T>(fn: string, employeeId: string): Promise<T[]> {
@@ -383,10 +386,11 @@ interface PortalManagementProps {
 
 const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
     const [generatingId, setGeneratingId] = useState<string | null>(null);
     const [previewEmployee, setPreviewEmployee] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = usePersistedState<string>('laborPortal:search', '');
 
     const tokensKey = ['portal', 'tokens', orgId];
 
@@ -512,7 +516,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                                             <button onClick={() => handleGenerate(emp)} disabled={generating} className="p-1.5 hover:bg-amber-50 rounded-lg text-slate-300 hover:text-amber-500 transition-colors" title="Regenerar token">
                                                 {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                                             </button>
-                                            <ActionIconButton kind="delete" size="sm" title="Revogar acesso ao portal" onClick={() => { if (confirm('Revogar acesso ao portal?')) revokeMutation.mutate(tok.id); }} />
+                                            <ActionIconButton kind="delete" size="sm" title="Revogar acesso ao portal" onClick={async () => { const ok = await confirm({ title: 'Revogar acesso ao portal?', message: 'O colaborador perderá o acesso até que um novo link seja gerado.', variant: 'danger', confirmLabel: 'Revogar' }); if (ok) revokeMutation.mutate(tok.id); }} />
                                         </div>
                                     ) : (
                                         <button
@@ -539,10 +543,15 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
 interface LaborPortalProps {
     orgId: string;
     employees: Employee[];
+    organizations?: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange?: (orgId: string | undefined) => void;
+    onRefresh?: () => void;
 }
 
-const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees }) => {
-    const [tokenParam] = useState(() => new URLSearchParams(window.location.search).get('portal_token'));
+const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizations = [], selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+    const initialTokenParam = new URLSearchParams(window.location.search).get('portal_token');
+    const [tokenParam] = useState(initialTokenParam);
     const [portalSession, setPortalSession] = useState<{ employeeId: string; orgId: string } | null>(null);
     const [view, setView] = useState<'management' | 'portal'>('management');
 
@@ -555,7 +564,22 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees }) => {
                     onLogout={() => setPortalSession(null)}
                 />
             ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
+                    {/* 1. Título */}
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal Colaborador</h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Link self-service: ponto, férias, documentos e holerite pelo celular.</p>
+                    </div>
+
+                    {onSelectedOrgIdChange && (
+                        <LaborScopeBar
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={onSelectedOrgIdChange}
+                            onRefresh={onRefresh || (() => {})}
+                        />
+                    )}
+
                     <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 w-fit">
                         <button onClick={() => setView('management')}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === 'management' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>

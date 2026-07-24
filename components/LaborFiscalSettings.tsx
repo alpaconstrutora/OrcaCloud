@@ -182,14 +182,15 @@ const LaborFiscalSettings: React.FC = () => {
     }, [selectedYear]);
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Header com Seletor de Data */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[10px] border border-slate-100 shadow-sm">
-                <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Configurações Fiscais</h2>
-                    <p className="text-slate-500 text-xs mt-1.5 font-medium">Consultar tabelas por competência</p>
-                </div>
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Configurações Fiscais</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Tabelas de INSS, FGTS e IRRF por competência.</p>
+            </div>
 
+            {/* Seletor de Data */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[10px] border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleDuplicateYear}

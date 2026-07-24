@@ -17,8 +17,15 @@ import {
     PROFIT_BATCH_STATUS_LABELS, DIVIDEND_MONTHLY_THRESHOLD_PF,
 } from '../types';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
 
-interface Props { orgId: string; }
+interface Props {
+    orgId: string;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
+}
 
 type SubTab = 'socios' | 'prolabore' | 'dividendos';
 
@@ -34,7 +41,7 @@ function parseYearMonth(dateStr: string): { year: number; month: number } {
     return { year: y, month: m };
 }
 
-const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
+const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const confirm = useConfirm();
     const [companies, setCompanies] = useState<Company[]>([]);
     const [companyId, setCompanyId] = useState<string>('');
@@ -430,17 +437,21 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     const BRL = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Remuneração Societária</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Pró-labore, distribuição de lucros e dividendos de sócios-administradores.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
             <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-900/20">
-                        <Banknote className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-black text-slate-900">Remuneração Societária</h2>
-                        <p className="text-xs text-slate-400">Pró-labore de sócios-administradores</p>
-                    </div>
-                </div>
                 <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
                     <Building2 className="w-4 h-4 text-slate-400" />
                     <select value={companyId} onChange={e => setCompanyId(e.target.value)}
@@ -510,7 +521,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="font-black text-gray-900 text-sm">{p.nome}</span>
                                             {p.is_administrador && (
-                                                <span className="flex items-center gap-1 text-xs font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                                <span className="flex items-center gap-1 text-sm font-normal text-amber-700">
                                                     <Crown className="w-3 h-3" /> Admin
                                                 </span>
                                             )}
@@ -577,7 +588,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                 onChange={e => setCompetenceMonth(`${e.target.value}-01`)} />
                         </div>
                         {payroll && (
-                            <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                            <span className="text-sm font-normal text-gray-600">
                                 {PROLABORE_STATUS_LABELS[payroll.status]}
                             </span>
                         )}
@@ -648,11 +659,11 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                 <tbody>
                                     {payrollItems.map(i => (
                                         <tr key={i.id} className="border-b border-gray-50">
-                                            <td className="py-2 font-bold text-gray-900">{i.partner_nome}</td>
+                                            <td className="py-2 font-normal text-gray-900">{i.partner_nome}</td>
                                             <td className="py-2 text-right">{BRL(i.gross_amount)}</td>
                                             <td className="py-2 text-right text-red-500">-{BRL(i.inss_amount)}</td>
                                             <td className="py-2 text-right text-red-500">-{BRL(i.irrf_amount)}</td>
-                                            <td className="py-2 text-right font-black text-emerald-600">{BRL(i.net_amount)}</td>
+                                            <td className="py-2 text-right font-medium text-emerald-600">{BRL(i.net_amount)}</td>
                                             <td className="py-2 text-right text-gray-400">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</td>
                                             <td className="py-2 text-right text-gray-400">{i.terceiros_amount > 0 ? BRL(i.terceiros_amount) : '—'}</td>
                                             <td className="py-2 text-right text-xs text-gray-400">{i.status}</td>
@@ -669,7 +680,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                             <td className="py-2 text-right text-emerald-600">{BRL(payroll.net_total)}</td>
                                             <td className="py-2 text-right text-gray-500">{payroll.patronal_total > 0 ? BRL(payroll.patronal_total) : '—'}</td>
                                             <td className="py-2 text-right text-gray-500">{payroll.terceiros_total > 0 ? BRL(payroll.terceiros_total) : '—'}</td>
-                                            <td />
+                                            <td></td>
                                         </tr>
                                     </tfoot>
                                 )}
@@ -748,7 +759,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                     {b.profit_period_start.slice(0, 7)} a {b.profit_period_end.slice(0, 7)}
                                 </p>
                                 <p className="text-xs text-gray-400">{BRL(b.proposed_amount)}</p>
-                                <span className="inline-block mt-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                <span className="inline-block mt-1 text-sm font-normal text-gray-600">
                                     {PROFIT_BATCH_STATUS_LABELS[b.status]}
                                 </span>
                             </button>
@@ -769,7 +780,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                         <p className="text-sm font-black text-gray-900">
                                             Lucro disponível: {BRL(selectedBatch.available_profit_amount)} • Proposto: {BRL(selectedBatch.proposed_amount)}
                                         </p>
-                                        <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 inline-block mt-1">
+                                        <span className="text-sm font-normal text-gray-600 inline-block mt-1">
                                             {PROFIT_BATCH_STATUS_LABELS[selectedBatch.status]}
                                         </span>
                                     </div>
@@ -825,13 +836,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                         <tbody>
                                             {batchItems.map(i => (
                                                 <tr key={i.id} className="border-b border-gray-50">
-                                                    <td className="py-2 font-bold text-gray-900">{i.partner_nome}</td>
+                                                    <td className="py-2 font-normal text-gray-900">{i.partner_nome}</td>
                                                     <td className="py-2 text-right text-gray-400">{i.ownership_percentage.toFixed(2)}%</td>
                                                     <td className="py-2 text-right">{BRL(i.gross_amount)}</td>
                                                     <td className="py-2 text-right text-red-500">
                                                         {i.withholding_tax_amount > 0 ? `-${BRL(i.withholding_tax_amount)}` : '—'}
                                                     </td>
-                                                    <td className="py-2 text-right font-black text-emerald-600">{BRL(i.net_amount)}</td>
+                                                    <td className="py-2 text-right font-medium text-emerald-600">{BRL(i.net_amount)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

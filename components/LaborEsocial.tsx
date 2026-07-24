@@ -15,6 +15,8 @@ import {
     ESOCIAL_EVENTOS_CATALOG
 } from '../services/esocialService';
 import { STALE } from '../lib/queryClient';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -432,12 +434,16 @@ const CreateBatchModal: React.FC<CreateBatchModalProps> = ({ orgId, onClose, onS
 interface LaborEsocialProps {
     orgId: string;
     employees: { id: string; name: string; status?: string }[];
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 type MainTab = 'painel' | 'eventos' | 'lotes' | 'configuracao';
 
-const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
+const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
     const [mainTab, setMainTab] = useState<MainTab>('painel');
     const [showCreateEvent, setShowCreateEvent] = useState(false);
     const [showCreateBatch, setShowCreateBatch] = useState(false);
@@ -527,20 +533,14 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
     };
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
+        <div className="space-y-6">
+            {/* 1. Título */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-orange-600" />
-                        eSocial
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Gerador de eventos S-1xxx/S-2xxx • Lotes • Transmissão</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">eSocial</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Eventos S-1xxx/S-2xxx, lotes e transmissão.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={refetchAll} title="Atualizar">
-                        <RefreshCw className="w-4 h-4" />
-                    </Button>
                     {mainTab === 'eventos' && (
                         <button onClick={() => setShowCreateEvent(true)}
                             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-bold rounded-xl hover:bg-orange-700 transition-colors shadow-lg shadow-orange-900/20">
@@ -555,6 +555,13 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                     )}
                 </div>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={refetchAll}
+            />
 
             {/* KPIs */}
             <div className="grid grid-cols-5 gap-3">
@@ -678,16 +685,16 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                         const g = grupo ? GRUPO_CFG[grupo] : null;
                                         return (
                                             <tr key={tipo} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                                <td className="px-4 py-3 font-black text-orange-700">{tipo}</td>
-                                                <td className="px-4 py-3 text-slate-500 text-table-body">{catalog?.desc ?? '–'}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-orange-700">{tipo}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{catalog?.desc ?? '–'}</td>
                                                 <td className="px-4 py-3">
-                                                    {g && <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${g.color} ${g.bg}`}>{g.label}</span>}
+                                                    {g && <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>}
                                                 </td>
-                                                <td className="px-4 py-3 font-bold text-slate-700">{total}</td>
-                                                <td className="px-4 py-3 font-bold text-emerald-600">{ok}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-700">{total}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-emerald-600">{ok}</td>
                                                 <td className="px-4 py-3">
                                                     {erros > 0
-                                                        ? <span className="font-black text-red-600">{erros}</span>
+                                                        ? <span className="text-sm font-normal text-red-600">{erros}</span>
                                                         : <span className="text-slate-300">0</span>}
                                                 </td>
                                             </tr>
@@ -758,17 +765,17 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                             <React.Fragment key={ev.id}>
                                                 <tr className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                                     <td className="px-4 py-3">
-                                                        <p className="font-black text-orange-700">{ev.tipo_evento}</p>
+                                                        <p className="text-sm font-normal text-orange-700">{ev.tipo_evento}</p>
                                                         <p className="text-xs text-slate-400">{catalog?.desc ?? ''}</p>
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${g.color} ${g.bg}`}>{g.label}</span>
+                                                        <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>
                                                     </td>
-                                                    <td className="px-4 py-3 text-slate-400 text-table-body font-mono">
+                                                    <td className="px-4 py-3 text-sm font-normal text-slate-400">
                                                         {ev.per_apur || ev.entidade || '–'}
                                                     </td>
                                                     <td className="px-4 py-3"><StatusBadge status={ev.status} /></td>
-                                                    <td className="px-4 py-3 text-slate-400 text-table-body">{fmt.date(ev.gerado_em)}</td>
+                                                    <td className="px-4 py-3 text-sm font-normal text-slate-400">{fmt.date(ev.gerado_em)}</td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center gap-1">
                                                             <button onClick={() => setExpandedEvent(isExpanded ? null : ev.id)}
@@ -779,13 +786,13 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                                 <button
                                                                     onClick={() => advanceStatusMut.mutate({ id: ev.id, status: nextStatus })}
                                                                     disabled={advanceStatusMut.isPending}
-                                                                    className="px-2 py-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                                                                    className="px-2 py-1 text-xs font-normal text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                                                                     title={`Avançar para ${STATUS_CFG[nextStatus].label}`}>
                                                                     → {STATUS_CFG[nextStatus].label}
                                                                 </button>
                                                             )}
                                                             {(ev.status === 'GERADO' || ev.status === 'ERRO') && (
-                                                                <button onClick={() => { if (confirm('Cancelar evento?')) cancelEventMut.mutate(ev.id); }}
+                                                                <button onClick={async () => { const ok = await confirm({ title: 'Cancelar evento?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Cancelar evento' }); if (ok) cancelEventMut.mutate(ev.id); }}
                                                                     className="p-1.5 hover:bg-red-100 rounded-lg transition-colors">
                                                                     <XCircle className="w-3.5 h-3.5 text-red-400" />
                                                                 </button>
@@ -861,21 +868,21 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                         return (
                                             <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${g.color} ${g.bg}`}>{g.label}</span>
+                                                    <span className={`text-sm font-normal ${g.color}`}>{g.label}</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-500 text-table-body">{b.per_apur || '–'}</td>
-                                                <td className="px-4 py-3 font-bold text-slate-700">{b.total_eventos}</td>
-                                                <td className="px-4 py-3 font-bold text-emerald-600">{b.eventos_ok}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-500">{b.per_apur || '–'}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-700">{b.total_eventos}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-emerald-600">{b.eventos_ok}</td>
                                                 <td className="px-4 py-3">
                                                     {b.eventos_erro > 0
-                                                        ? <span className="font-black text-red-600">{b.eventos_erro}</span>
+                                                        ? <span className="text-sm font-normal text-red-600">{b.eventos_erro}</span>
                                                         : <span className="text-slate-300">0</span>}
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black ${sc.color} ${sc.bg}`}>{sc.label}</span>
+                                                    <span className={`text-sm font-normal ${sc.color}`}>{sc.label}</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-400 text-table-body font-mono">{b.protocolo_envio || '–'}</td>
-                                                <td className="px-4 py-3 text-slate-400 text-table-body">{fmt.date(b.created_at)}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-400">{b.protocolo_envio || '–'}</td>
+                                                <td className="px-4 py-3 text-sm font-normal text-slate-400">{fmt.date(b.created_at)}</td>
                                             </tr>
                                         );
                                     })}

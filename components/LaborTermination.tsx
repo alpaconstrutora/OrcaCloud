@@ -14,6 +14,9 @@ import {
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
+import LaborScopeBar from './LaborScopeBar';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,6 +78,7 @@ interface TerminationWizardProps {
 }
 
 const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees, existing, onClose, onSaved }) => {
+    const confirm = useConfirm();
     const isEditing = !!existing;
     const [step, setStep] = useState(0);
     const [saving, setSaving] = useState(false);
@@ -458,7 +462,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                             </button>
                         ) : (
                             <button
-                                onClick={() => { if (confirm('Confirmar o desligamento? Esta ação é irreversível.')) handleSave(true); }}
+                                onClick={async () => { const ok = await confirm({ title: 'Confirmar desligamento?', message: 'Esta ação é irreversível.', variant: 'danger', confirmLabel: 'Confirmar' }); if (ok) handleSave(true); }}
                                 disabled={saving}
                                 className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 text-white rounded-xl hover:bg-rose-700 font-bold text-sm transition-all shadow-lg disabled:opacity-50"
                             >
@@ -479,11 +483,15 @@ interface LaborTerminationProps {
     orgId: string;
     employees: Employee[];
     onRefresh?: () => void;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, onRefresh }) => {
+const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
     const qc = useQueryClient();
-    const [search, setSearch] = useState('');
+    const confirm = useConfirm();
+    const [search, setSearch] = usePersistedState<string>('laborTermination:search', '');
     const [showWizard, setShowWizard] = useState(false);
     const [editingRecord, setEditingRecord] = useState<TerminationRecord | null>(null);
 
@@ -522,6 +530,19 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Desligamentos</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Checklist, entrevista de desligamento e encerramento de acessos.</p>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
+
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -612,7 +633,7 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
                                                     <Eye className="w-3 h-3" /> Continuar
                                                 </button>
                                             )}
-                                            <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este processo?')) deleteMutation.mutate(t.id); }} />
+                                            <ActionIconButton kind="delete" size="sm" onClick={async () => { const ok = await confirm({ title: 'Excluir processo?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' }); if (ok) deleteMutation.mutate(t.id); }} />
                                         </div>
                                     </div>
                                 </div>

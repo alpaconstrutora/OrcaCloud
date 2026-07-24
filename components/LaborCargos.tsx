@@ -10,8 +10,15 @@ import { companyService } from '../services/companyService';
 import { laborService, Employee } from '../services/laborService';
 import { useConfirm } from './ui/confirm';
 import { CompanyDepartment, OrgRole, OrgFuncao } from '../types';
+import LaborScopeBar from './LaborScopeBar';
 
-interface LaborCargosProps { orgId: string; }
+interface LaborCargosProps {
+    orgId: string;
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
+}
 interface CompanyOption { id: string; razao_social: string; tipo: string; }
 
 interface RoleForm {
@@ -323,7 +330,7 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
 };
 
 // ── Main Component ──────────────────────────────────────────────────────────
-const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
+const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const confirm = useConfirm();
     const [activeTab, setActiveTab] = useState<'cargos' | 'funcoes'>('cargos');
     const [cargosView, setCargosView] = useState<'organograma' | 'lista'>('organograma');
@@ -463,9 +470,21 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
     // ── Categoria ───────────────────────────────────────────
 
     if (!orgId) return (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center text-amber-800 max-w-lg mx-auto mt-10">
-            <Building2 className="w-10 h-10 mx-auto mb-3 text-amber-500" />
-            <h3 className="font-black text-sm uppercase tracking-wider">Selecione uma organização</h3>
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cargos &amp; Funções</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Estrutura de cargos, níveis e responsabilidades.</p>
+            </div>
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center text-amber-800 max-w-lg mx-auto mt-10">
+                <Building2 className="w-10 h-10 mx-auto mb-3 text-amber-500" />
+                <h3 className="font-black text-sm uppercase tracking-wider">Selecione uma organização</h3>
+            </div>
         </div>
     );
 
@@ -475,13 +494,11 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* 1. Título */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                        <Briefcase className="w-5 h-5 text-indigo-600" /> Cargos &amp; Funções
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">Estrutura de cargos e funções da empresa.</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cargos &amp; Funções</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Estrutura de cargos, níveis e responsabilidades.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {companies.length > 1 && (
@@ -500,6 +517,13 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                     </button>
                 </div>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Tabs */}
             <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">

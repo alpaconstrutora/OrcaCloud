@@ -8,11 +8,14 @@ import {
 import ActionIconButton from './ui/ActionIconButton';
 import { payrollService, PayrollRubric } from '../services/payrollService';
 import { rubricValidationService, ValidationResult } from '../services/rubricValidationService';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 
 const LaborRubrics: React.FC = () => {
+    const confirm = useConfirm();
     const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = usePersistedState<string>('laborRubrics:search', '');
     const [filterType, setFilterType] = useState<string>('all');
     const [showInactive, setShowInactive] = useState(false);
     
@@ -143,7 +146,8 @@ const LaborRubrics: React.FC = () => {
     };
 
     const handleDelete = async (code: string) => {
-        if (!confirm('Deseja realmente excluir esta rubrica?')) return;
+        const ok = await confirm({ title: 'Excluir rubrica?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
         try {
             await payrollService.deleteRubric(code);
             loadRubrics();
@@ -163,13 +167,13 @@ const LaborRubrics: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* 1. Título */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Gestão de Rubricas</h2>
-                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Configuração do motor de cálculo</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Rubricas</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Configuração do motor de cálculo da folha (proventos, descontos e incidências).</p>
                 </div>
-                <button 
+                <button
                     onClick={() => handleOpenModal(null)}
                     className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-button uppercase tracking-widest"
                 >
@@ -233,7 +237,7 @@ const LaborRubrics: React.FC = () => {
                             <tr key={r.code} className="hover:bg-slate-50/50 transition-colors group">
                                 <td className="px-8 py-5">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-table-header ${
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-normal text-sm ${
                                             r.type === 'provento' ? 'bg-emerald-50 text-emerald-600' : 
                                             r.type === 'desconto' ? 'bg-rose-50 text-rose-600' : 
                                             r.type === 'informativa' ? 'bg-slate-100 text-slate-500' :
@@ -242,13 +246,13 @@ const LaborRubrics: React.FC = () => {
                                             {r.code.substring(0, 3)}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-black text-slate-900">{r.name}</p>
-                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{r.code}</p>
+                                            <p className="text-sm font-normal text-slate-900">{r.name}</p>
+                                            <p className="text-xs font-normal text-slate-400 uppercase tracking-tighter">{r.code}</p>
                                         </div>
                                     </div>
                                 </td>
                                 <td className="px-6 py-5">
-                                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border ${
+                                    <span className={`px-3 py-1 rounded-lg text-xs font-normal border ${
                                             r.type === 'provento' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                                             r.type === 'desconto' ? 'bg-rose-50 text-rose-600 border-rose-100' : 
                                             r.type === 'informativa' ? 'bg-slate-50 text-slate-500 border-slate-200' :
@@ -265,7 +269,7 @@ const LaborRubrics: React.FC = () => {
                                                 <div 
                                                     key={tax}
                                                     title={tax.toUpperCase()}
-                                                    className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase transition-colors ${
+                                                    className={`px-2 py-0.5 rounded-md text-[10px] font-normal uppercase transition-colors ${
                                                         active ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-300'
                                                     }`}
                                                 >
@@ -280,12 +284,12 @@ const LaborRubrics: React.FC = () => {
                                         {r.active ? (
                                             <div className="flex items-center gap-1.5 text-emerald-600">
                                                 <CheckCircle2 size={14} />
-                                                <span className="text-xs font-black uppercase tracking-widest">Ativo</span>
+                                                <span className="text-sm font-normal">Ativo</span>
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-1.5 text-slate-400">
                                                 <XCircle size={14} />
-                                                <span className="text-xs font-black uppercase tracking-widest">Inativo</span>
+                                                <span className="text-sm font-normal">Inativo</span>
                                             </div>
                                         )}
                                     </div>
@@ -708,10 +712,10 @@ const LaborRubrics: React.FC = () => {
                                                     </div>
                                                     <p className="text-xs font-bold text-slate-700">{log.description}</p>
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-black text-slate-500 uppercase">
-                                                            {log.user_email.substring(0, 1)}
+                                                        <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-normal text-slate-500">
+                                                            {log.user_email.substring(0, 1).toUpperCase()}
                                                         </div>
-                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{log.user_email}</span>
+                                                        <span className="text-[9px] font-normal text-slate-500 uppercase tracking-widest">{log.user_email}</span>
                                                     </div>
                                                 </div>
                                             ))}

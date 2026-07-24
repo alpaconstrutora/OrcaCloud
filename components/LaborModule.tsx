@@ -13,6 +13,7 @@ import LaborTeams from './LaborTeams';
 import LaborCosts from './LaborCosts';
 import LaborDocuments from './LaborDocuments';
 import LaborPayroll from './LaborPayroll';
+import LaborScopeBar from './LaborScopeBar';
 import LaborAllocations from './LaborAllocations';
 import LaborCostDashboard from './LaborCostDashboard';
 import LaborRubrics from './LaborRubrics';
@@ -122,7 +123,11 @@ const LaborDashboardTab: React.FC<{
     productivity: ProductivityLog[];
     costSummary: LaborCostSummary | null;
     onOpenTab: (tab: LaborTab) => void;
-}> = ({ employees, teams, pendingEntries, productivity, costSummary, onOpenTab }) => {
+    organizations: Array<{ id: string; name: string }>;
+    selectedOrgId?: string;
+    onSelectedOrgIdChange: (orgId: string | undefined) => void;
+    onRefresh: () => void;
+}> = ({ employees, teams, pendingEntries, productivity, costSummary, onOpenTab, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
     const activeCount = employees.filter(e => e.status === 'ATIVO').length;
     const avgProductivity = productivity.length > 0
         ? productivity.reduce((s, p) => s + (p.productivity_pct || 0), 0) / productivity.length
@@ -130,13 +135,26 @@ const LaborDashboardTab: React.FC<{
 
     return (
         <div className="space-y-6">
+            {/* 1. Título */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Mão de Obra</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle total de pessoal, produtividade e custos em obra.</p>
+            </div>
+
             {/* KPI Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard label="Colaboradores Ativos" value={`${activeCount}`} sub={`${employees.length} cadastrados`} icon={Users} color="text-indigo-600" bgColor="bg-indigo-50" />
                 <KpiCard label="Equipes" value={`${teams.length}`} sub="ATIVAS" icon={Shield} color="text-emerald-600" bgColor="bg-emerald-50" />
                 <KpiCard label="Pontos Pendentes" value={`${pendingEntries.length}`} sub="AGUARDAM APROVAÇÃO" icon={Clock} color="text-amber-600" bgColor="bg-amber-50" />
                 <KpiCard label="Custo Aprovado" value={`R$ ${(costSummary?.totalCost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`} sub={`${(costSummary?.totalHours || 0).toFixed(0)}h registradas`} icon={DollarSign} color="text-rose-600" bgColor="bg-rose-50" />
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Quick Action Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -278,71 +296,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
 
     return (
         <div className="flex flex-col h-full">
-            {/* Header — a aba Folha de Pagamento tem título e seletor de Organização
-                próprios (§20/§4), não duplica o cabeçalho do módulo (§18). */}
-            {activeTab !== 'payroll' && (
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 bg-white border-b border-slate-100 shrink-0">
-                <div>
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-900/20">
-                            <Users className="w-5 h-5 text-white" />
-                        </div>
-                        Gestão de Mão de Obra
-                        {isAllOrgsMode && (
-                            <span className="ml-2 text-sm font-normal text-amber-600">
-                                Modo consolidado
-                            </span>
-                        )}
-                    </h1>
-                    <p className="text-slate-400 text-xs mt-1 font-medium ml-1">
-                        Controle total de pessoal • Produtividade • Custos em obra
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="hidden md:flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
-                        <Building2 className="w-4 h-4 text-slate-400" />
-                        <select
-                            value={selectedOrgId || ''}
-                            onChange={(e) => setSelectedOrgId(e.target.value)}
-                            className="text-form-input font-bold text-slate-600 outline-none bg-transparent min-w-[180px]"
-                        >
-                            <option value="">Todas as Organizações</option>
-                            {organizations.map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {activeTab === 'employees' && (
-                        <button
-                            onClick={() => {
-                                if (isAllOrgsMode) {
-                                    alert('Para cadastrar um novo colaborador, selecione uma organização específica no filtro acima ou no menu lateral.');
-                                    return;
-                                }
-                                setEditingEmployee(null);
-                                setIsEmployeeFormOpen(true);
-                            }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-sm shadow-lg active:scale-95
-                                ${isAllOrgsMode ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-900/20'}`}
-                            title={isAllOrgsMode ? 'Selecione uma organização para cadastrar' : ''}
-                        >
-                            <UserPlus className="w-4 h-4" />
-                            Novo Colaborador
-                        </button>
-                    )}
-                    <button
-                        onClick={refetchAll}
-                        className="flex items-center gap-2 px-3 py-2 bg-slate-50 text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all font-bold text-sm"
-                        title="Recarregar dados"
-                    >
-                        <Calendar className="w-4 h-4" />
-                        Atualizar
-                    </button>
-                </div>
-            </div>
-            )}
-
             {/* Banners */}
             <div className="px-6 space-y-3 shrink-0">
             {/* Banner de falhas parciais de carregamento */}
@@ -421,6 +374,10 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             productivity={productivityLogs}
                             costSummary={costSummary}
                             onOpenTab={handleOpenTab}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'cost_dashboard' && (
@@ -428,6 +385,10 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             legacyCount={legacyCount}
                             onMigrate={handleMigrate}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'employees' && (
@@ -436,7 +397,11 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             projects={projects}
                             organizations={organizations}
                             onEdit={(emp) => { setEditingEmployee(emp); setIsEmployeeFormOpen(true); }}
+                            onNew={() => { setEditingEmployee(null); setIsEmployeeFormOpen(true); }}
                             onRefresh={refetchAll}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            isAllOrgsMode={isAllOrgsMode}
                         />
                     )}
                     {activeTab === 'teams' && (
@@ -446,12 +411,19 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             projects={projects}
                             orgId={currentOrgId || activeOrganizationId || ''}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'allocations' && (
                         <LaborAllocations
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'timetracking' && (
@@ -460,6 +432,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             projects={projects}
                             orgId={currentOrgId || activeOrganizationId || ''}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'productivity' && (
@@ -469,6 +444,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             projects={projects}
                             orgId={currentOrgId || activeOrganizationId || ''}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'costs' && (
@@ -479,6 +457,10 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             projects={projects}
                             legacyCount={legacyCount}
                             onMigrate={handleMigrate}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'payroll' && (
@@ -494,24 +476,49 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                             teams={teams.map(t => ({ id: t.id, name: t.name }))}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'cargos' && (
-                        <LaborCargos orgId={currentOrgId || activeOrganizationId || ''} />
+                        <LaborCargos
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
+                        />
                     )}
                     {activeTab === 'remuneracao_societaria' && (
-                        <LaborRemuneracaoSocietaria orgId={currentOrgId || activeOrganizationId || ''} />
+                        <LaborRemuneracaoSocietaria
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
+                        />
                     )}
                     {activeTab === 'rubrics' && <LaborRubrics />}
                     {activeTab === 'fiscal' && <LaborFiscalSettings />}
                     {activeTab === 'encargos' && (
-                        <LaborEncargos orgId={currentOrgId || activeOrganizationId || ''} />
+                        <LaborEncargos
+                            orgId={currentOrgId || activeOrganizationId || ''}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
+                        />
                     )}
                     {activeTab === 'documents' && (
                         <LaborDocuments
                             employees={employees}
                             orgId={currentOrgId || activeOrganizationId || ''}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'epis' && (
@@ -519,6 +526,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'absences' && (
@@ -526,6 +536,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'trainings' && (
@@ -533,6 +546,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'rh_dashboard' && (
@@ -541,6 +557,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             employees={employees}
                             costSummary={costSummary}
                             onNavigate={onChangeView}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'termination' && (
@@ -548,6 +567,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'timebank' && (
@@ -555,6 +577,10 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'sst' && (
@@ -562,12 +588,20 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'contractors' && (
                         <LaborContractors
                             orgId={currentOrgId || activeOrganizationId || ''}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'diary' && (
@@ -577,24 +611,39 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             teams={teams}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                             onRefresh={refetchAll}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'ats' && (
                         <LaborATS
                             orgId={currentOrgId || activeOrganizationId || ''}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'portal' && (
                         <LaborPortal
                             orgId={activeOrganizationId || currentOrgId || ''}
                             employees={employees}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'evaluation' && (
                         <LaborEvaluation
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'comunicacao' && (
@@ -602,18 +651,29 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
                             projects={projects.map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'bi_analytics' && (
                         <LaborBIAnalytics
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
                     {activeTab === 'esocial' && (
                         <LaborEsocial
                             orgId={currentOrgId || activeOrganizationId || ''}
                             employees={employees.map(e => ({ id: e.id, name: e.name, status: e.status }))}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
                         />
                     )}
                     {activeTab === 'vale_refeicao' && (
@@ -624,6 +684,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             projects={projects
 
                                 .map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
+                            selectedOrgId={selectedOrgId}
+                            onSelectedOrgIdChange={setSelectedOrgId}
+                            onRefresh={refetchAll}
                         />
                     )}
             </div>

@@ -33,6 +33,7 @@ export interface Property {
     price: number;
     initial_price?: number;
     table_price?: number;
+    rental_price?: number;
     current_price?: number;
     price_index?: 'INCC' | 'IPCA' | 'CUB';
     price_base_date?: string;
@@ -71,6 +72,36 @@ export interface Property {
 
 export interface HedonicPricingConfig {
     target_vgv: number;
+    floor_coefficient: number;
+    include_exchanged?: boolean;
+    position_weights: {
+        FRONT: number;
+        LATERAL: number;
+        BACK: number;
+        };
+    view_weights: {
+        NONE: number;
+        PARTIAL: number;
+        FULL: number;
+        };
+    orientation_weights: {
+        NORTH: number;
+        SOUTH: number;
+        EAST: number;
+        WEST: number;
+        };
+}
+
+// Precificação de LOCAÇÃO — reusa a mesma casca hedônica de HedonicPricingConfig,
+// mas o eixo de valor é o aluguel (rental_price), não o VGV. Dois modos:
+//  - PER_SQM: aluguel = base_per_sqm × score (score embute área × fatores). Cada
+//    unidade é precificada independentemente das outras.
+//  - TARGET_TOTAL: distribui target_total_rent (aluguel mensal total do prédio)
+//    entre as unidades por score, igual ao modelo de Venda.
+export interface RentalPricingConfig {
+    mode: 'PER_SQM' | 'TARGET_TOTAL';
+    base_per_sqm: number;      // usado no modo PER_SQM
+    target_total_rent: number; // usado no modo TARGET_TOTAL
     floor_coefficient: number;
     include_exchanged?: boolean;
     position_weights: {

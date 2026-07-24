@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { brokerService } from '../services/brokerService';
@@ -29,6 +29,9 @@ import DealModal from './DealModal';
 import { RentalsDashboard } from './RentalsDashboard';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import { PriceTableManager } from './PriceTableManager';
+import RentalPricingIntelligenceModal from './RentalPricingIntelligenceModal';
+import { rentalPricingService } from '../services/rentalPricingService';
+import { RentalPricingConfig } from '../types';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -48,6 +51,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [searchTerm, setSearchTerm] = usePersistedState('rentalsModuleFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list' | 'tower'>('rentalsModuleFilters:viewMode', 'list');
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
+    const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(() => {
         const saved = localStorage.getItem('rentals_selected_building_id');
         return (saved && saved !== 'undefined') ? saved : null;
@@ -482,6 +486,30 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         }
     };
 
+    // Inteligência de Aluguéis — precifica rental_price das unidades do prédio
+    // selecionado pelo modelo hedônico (R$/m² ou aluguel-alvo total). Espelha
+    // handleApplyPricing do SalesModule, mas grava SOMENTE rental_price.
+    const handleApplyRentalPricing = async (config: RentalPricingConfig) => {
+        if (!selectedBuildingId) return;
+        try {
+            setLoading(true);
+            const units = properties.filter(p => p.parent_id === selectedBuildingId);
+            const updated = rentalPricingService.calculateRents(units, config);
+            if (updated.length === 0) {
+                notify('Nenhuma unidade elegível para precificação neste edifício.', 'error');
+                return;
+            }
+            await commercialService.savePropertiesBatch(updated);
+            setIsPricingModalOpen(false);
+            notify(`${updated.length} unidades precificadas com sucesso usando Inteligência Hedônica!`);
+            loadData();
+        } catch (err: any) {
+            notify('Erro ao aplicar inteligência de aluguéis: ' + (err.message || 'Erro desconhecido'), 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSelectProperty = (id: string) => {
         setSelectedProperties(prev =>
             prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
@@ -734,16 +762,27 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     <Maximize2 className="w-4 h-4" />
                     Relatórios
                 </button>
-                <button
-                    onClick={() => {
-                        setEditingProperty(undefined);
-                        setIsPropertyModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo {selectedBuildingId ? 'imóvel' : 'edifício'}
-                </button>
+                <div className="flex items-center gap-2">
+                    {selectedBuildingId && (
+                        <button
+                            onClick={() => setIsPricingModalOpen(true)}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-600 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
+                        >
+                            <BrainCircuit className="w-4 h-4" />
+                            Inteligência de aluguéis
+                        </button>
+                    )}
+                    <button
+                        onClick={() => {
+                            setEditingProperty(undefined);
+                            setIsPropertyModalOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo {selectedBuildingId ? 'imóvel' : 'edifício'}
+                    </button>
+                </div>
             </div>
 
             {/* Content */}
@@ -1335,6 +1374,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 onSave={() => loadData()}
                 initialData={editingDeal}
                 organizationId={organizationId}
+            />
+
+            <RentalPricingIntelligenceModal
+                isOpen={isPricingModalOpen}
+                onClose={() => setIsPricingModalOpen(false)}
+                onApply={handleApplyRentalPricing}
+                buildingName={currentBuilding?.name || ''}
             />
 
             {notificationToast}

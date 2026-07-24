@@ -396,7 +396,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-50 bg-white flex flex-col">
-            <div className="flex-1 w-full max-w-5xl mx-auto overflow-y-auto">
+            <div className="flex-1 w-full overflow-y-auto">
                 {/* Header */}
                 <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10">
                     <div className="flex items-center gap-3">

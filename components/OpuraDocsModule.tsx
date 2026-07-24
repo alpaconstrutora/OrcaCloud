@@ -1301,6 +1301,49 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return col;
   };
 
+  // As colunas dinâmicas (token bruto da máscara, ex: "[OBRA{3}]") não existiam quando
+  // `useTableColumns(COLUMNS, ...)` foi inicializado (COLUMNS é fixo) e mudam por pasta —
+  // por isso ficam num estado próprio, não persistido, em vez de dentro de
+  // `tableColumns.visibleColumns`. Mesclado com `tableColumns` abaixo para o botão
+  // "Configurar Colunas" (§ColumnConfigButton) listar e controlar todas as colunas juntas.
+  const [hiddenDynamicColumns, setHiddenDynamicColumns] = React.useState<Set<string>>(new Set());
+
+  const visibleDynamicColumns = React.useMemo(
+    () => dynamicColumns.filter(col => !hiddenDynamicColumns.has(col)),
+    [dynamicColumns, hiddenDynamicColumns]
+  );
+
+  const allColumnConfigsForConfig: ColumnConfig[] = React.useMemo(
+    () => [
+      ...COLUMNS.filter(c => c.key !== 'actions'),
+      ...dynamicColumns.map(col => ({ key: col, label: getDynamicColumnLabel(col), sortable: false })),
+    ],
+    [dynamicColumns]
+  );
+
+  const mergedVisibleColumnsForConfig = React.useMemo(
+    () => [...tableColumns.visibleColumns, ...visibleDynamicColumns],
+    [tableColumns.visibleColumns, visibleDynamicColumns]
+  );
+
+  const handleToggleAnyColumn = (colKey: string) => {
+    if (dynamicColumns.includes(colKey)) {
+      setHiddenDynamicColumns(prev => {
+        const next = new Set(prev);
+        if (next.has(colKey)) next.delete(colKey);
+        else next.add(colKey);
+        return next;
+      });
+    } else {
+      tableColumns.toggleColumn(colKey);
+    }
+  };
+
+  const handleResetAnyColumn = () => {
+    tableColumns.resetColumns();
+    setHiddenDynamicColumns(new Set());
+  };
+
   // Coletar tags únicas dos documentos carregados para filtragem rápida
   const allUniqueTags = React.useMemo(() => {
     if (!documents || !Array.isArray(documents)) return [];
@@ -2136,12 +2179,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
               <ColumnConfigButton
-                columns={COLUMNS.filter(c => c.key !== 'actions')}
-                visibleColumns={tableColumns.visibleColumns}
+                columns={allColumnConfigsForConfig}
+                visibleColumns={mergedVisibleColumnsForConfig}
                 showColumnConfig={tableColumns.showColumnConfig}
                 onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                onToggleColumn={tableColumns.toggleColumn}
-                onReset={tableColumns.resetColumns}
+                onToggleColumn={handleToggleAnyColumn}
+                onReset={handleResetAnyColumn}
               />
             </div>
           </div>
@@ -2375,7 +2418,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               onToggleAll={handleToggleAllDocs}
               showValidade={activeTab !== 'engenharia'}
               resolveProjectName={(doc) => doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
-              dynamicColumns={dynamicColumns}
+              dynamicColumns={visibleDynamicColumns}
               getDynamicColumnLabel={getDynamicColumnLabel}
               getDynamicCellValue={(doc, col) => {
                 // Usa o código exibido (doc.nome), não o nome físico no Storage: eles podem

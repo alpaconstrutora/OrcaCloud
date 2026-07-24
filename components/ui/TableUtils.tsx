@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Settings, ChevronUp, ChevronDown } from 'lucide-react';
 
 export type ColumnConfig = {
@@ -171,41 +172,66 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
   onToggleColumn,
   onReset,
 }) => {
-  const menuRef = React.useRef<HTMLDivElement>(null);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const [position, setPosition] = React.useState<{ top: number; right: number } | null>(null);
+
+  // Painel renderizado via portal em document.body (ver abaixo) — não é mais um
+  // `absolute` filho do botão, então precisa da própria posição em `fixed`,
+  // recalculada toda vez que abre e enquanto a página rola/redimensiona com o
+  // painel aberto. Isso existe porque telas com a toolbar dentro de um card
+  // `overflow-hidden` (§5.2 do guia — ex: OpuraDocsModule) cortavam o painel na
+  // borda do card quando ele era um `absolute` comum preso a essa hierarquia.
+  const updatePosition = React.useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+  }, []);
 
   React.useEffect(() => {
+    if (!showColumnConfig) return;
+    updatePosition();
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showColumnConfig) {
-        onToggleShow();
-      }
+      if (e.key === 'Escape') onToggleShow();
     };
-    
     const handleClickOutside = (e: MouseEvent) => {
-      if (showColumnConfig && menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onToggleShow();
-      }
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      onToggleShow();
     };
+    const handleReposition = () => updatePosition();
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
     };
-  }, [showColumnConfig, onToggleShow]);
+  }, [showColumnConfig, onToggleShow, updatePosition]);
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={onToggleShow}
         className="p-2.5 rounded-xl transition-all text-gray-400 hover:text-gray-600 relative"
         title="Configurar Colunas"
       >
         <Settings className="w-5 h-5" />
       </button>
-      {showColumnConfig && (
-        <div className="absolute right-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-50 min-w-[250px]">
+      {showColumnConfig && position && createPortal(
+        <div
+          ref={panelRef}
+          style={{ position: 'fixed', top: position.top, right: position.right }}
+          className="bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-[10000] min-w-[250px]"
+        >
           <div className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wider">Colunas Visíveis</div>
           {/* max-h em vh (não px fixo): telas com mais colunas (ex: GED, que soma colunas
               dinâmicas de máscara às fixas) passam de 300px facilmente — os últimos itens
@@ -229,7 +255,8 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
           >
             Restaurar Padrão
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

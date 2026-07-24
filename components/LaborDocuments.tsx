@@ -247,6 +247,12 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                             <Calendar className="w-3.5 h-3.5" />
                                             Criado em: {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '—'}
                                         </div>
+                                        {doc.exam_date && (
+                                            <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                                                <Calendar className="w-3.5 h-3.5" />
+                                                Exame: {new Date(doc.exam_date + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                            </div>
+                                        )}
                                         {doc.expiry_date && (
                                             <div className={`flex items-center gap-2 text-button font-black ${expired ? 'text-red-600' : near ? 'text-amber-600' : 'text-slate-500'}`}>
                                                 <AlertTriangle className="w-3.5 h-3.5" />
@@ -273,6 +279,7 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                 <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Título</th>
                                 <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Categoria</th>
                                 <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Criação</th>
+                                <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Exame</th>
                                 <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Vencimento</th>
                                 <th className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-400">Status</th>
                                 <th className="px-4 py-3"></th>
@@ -294,6 +301,9 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                         <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">{CATEGORY_LABELS[doc.category]}</td>
                                         <td className="px-4 py-3 text-sm font-normal text-slate-400 whitespace-nowrap">
                                             {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '—'}
+                                        </td>
+                                        <td className="px-4 py-3 text-sm font-normal text-slate-500 whitespace-nowrap">
+                                            {doc.exam_date ? new Date(doc.exam_date + 'T00:00:00').toLocaleDateString('pt-BR') : <span className="text-slate-300 font-medium">—</span>}
                                         </td>
                                         <td className={`px-4 py-3 text-sm font-normal whitespace-nowrap ${expired ? 'text-red-600' : near ? 'text-amber-600' : 'text-slate-500'}`}>
                                             {doc.expiry_date ? new Date(doc.expiry_date + 'T00:00:00').toLocaleDateString('pt-BR') : <span className="text-slate-300 font-medium">Sem vencimento</span>}

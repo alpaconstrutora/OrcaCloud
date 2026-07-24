@@ -628,6 +628,7 @@ export interface EmployeeDocument {
     title: string;
     file_url: string;
     expiry_date?: string;
+    exam_date?: string;
     notes?: string;
     status: DocumentStatus;
     created_at?: string;
@@ -1150,7 +1151,7 @@ export const laborService = {
 
     async updateDocument(
         id: string,
-        updates: Pick<EmployeeDocument, 'category' | 'title' | 'expiry_date' | 'notes'>
+        updates: Pick<EmployeeDocument, 'category' | 'title' | 'expiry_date' | 'exam_date' | 'notes'>
     ): Promise<EmployeeDocument> {
         const { data, error } = await supabase
             .from('employee_documents')
@@ -1158,12 +1159,65 @@ export const laborService = {
                 category: updates.category,
                 title: updates.title,
                 expiry_date: updates.expiry_date || null,
+                exam_date: updates.exam_date || null,
                 notes: updates.notes
             })
             .eq('id', id)
             .select()
             .single();
         if (error) throw error;
+        return data;
+    },
+
+    // Substitui o arquivo de um documento existente: faz upload do novo, atualiza
+    // file_url e só então remove o arquivo antigo do Storage (rollback do novo se o
+    // update falhar). Espelha o padrão de uploadDocument.
+    async replaceDocumentFile(
+        id: string,
+        oldFilePath: string,
+        employee_id: string,
+        file: File
+    ): Promise<EmployeeDocument> {
+        const validation = validateDocumentFile(file);
+        if (!validation.valid) {
+            throw new Error(validation.error);
+        }
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${employee_id}/${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `labor-documents/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from('organization-assets')
+            .upload(filePath, file);
+
+        if (uploadError) {
+            console.error('[LaborService] Storage Upload Error:', uploadError);
+            if (uploadError.message.includes('bucket_not_found')) {
+                throw new Error('O bucket "organization-assets" não foi encontrado. Por favor, crie-o no painel do Supabase Storage.');
+            }
+            throw uploadError;
+        }
+
+        const { data, error } = await supabase
+            .from('employee_documents')
+            .update({ file_url: filePath })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('[LaborService] Database Update Error:', error);
+            // Rollback do novo arquivo se o update falhar
+            await supabase.storage.from('organization-assets').remove([filePath]);
+            throw error;
+        }
+
+        // Remove o arquivo antigo só depois do update ok
+        if (oldFilePath && oldFilePath !== filePath) {
+            await supabase.storage.from('organization-assets').remove([oldFilePath]);
+        }
+
         return data;
     },
 

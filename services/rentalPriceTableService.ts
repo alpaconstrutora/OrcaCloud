@@ -176,6 +176,39 @@ export const rentalPriceTableService = {
         return { itemsUpdated: items.length, factor };
     },
 
+    /** Sincroniza os itens da tabela ATIVA do prédio com os aluguéis informados
+     *  (property_id → aluguel). Usado pela Inteligência de Aluguéis: como ela grava
+     *  rental_price direto nas unidades (sem passar pela tabela), a versão ativa
+     *  ficaria defasada e o Portal do Corretor (que lê o item da versão ativa)
+     *  mostraria o valor antigo/zerado. Mantém "aluguel vigente" == "aluguel nesta
+     *  versão". Sem tabela ativa é no-op (o Portal cai no current_price/rental_price). */
+    async syncActiveTableItems(
+        buildingId: string,
+        rentByPropertyId: Record<string, number>,
+    ): Promise<{ hadActiveTable: boolean; itemsUpdated: number }> {
+        const table = await this.getActiveTable(buildingId);
+        if (!table) return { hadActiveTable: false, itemsUpdated: 0 };
+
+        const { data: items, error } = await supabase
+            .from('rental_price_table_items')
+            .select('id, property_id')
+            .eq('price_table_id', table.id);
+        if (error) throw error;
+
+        let itemsUpdated = 0;
+        for (const item of items ?? []) {
+            const rent = rentByPropertyId[(item as any).property_id];
+            if (rent == null) continue;
+            const { error: upErr } = await supabase
+                .from('rental_price_table_items')
+                .update({ price: rent })
+                .eq('id', (item as any).id);
+            if (upErr) throw upErr;
+            itemsUpdated++;
+        }
+        return { hadActiveTable: true, itemsUpdated };
+    },
+
     /** Ativa a tabela (RPC atômica): grava rental_price em cada property, supersede a anterior. */
     async activateTable(tableId: string): Promise<{ propertiesUpdated: number }> {
         const { data, error } = await supabase.rpc('fn_activate_rental_price_table', { p_table_id: tableId });

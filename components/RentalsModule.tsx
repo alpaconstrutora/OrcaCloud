@@ -31,6 +31,7 @@ import PropertyUnitMap from './common/PropertyUnitMap';
 import { PriceTableManager } from './PriceTableManager';
 import RentalPricingIntelligenceModal from './RentalPricingIntelligenceModal';
 import { rentalPricingService } from '../services/rentalPricingService';
+import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 
 interface RentalsModuleProps {
@@ -507,8 +508,20 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 return;
             }
             await commercialService.savePropertiesBatch(updated);
+            // Mantém a tabela de aluguéis ATIVA coerente com o novo vigente: sem isso
+            // o Portal do Corretor (lê o item da versão ativa) mostraria valor defasado
+            // e reativar a versão sobrescreveria o vigente de volta. No-op se não há
+            // tabela ativa. Ver rentalPriceTableService.syncActiveTableItems.
+            const rentByPropertyId = Object.fromEntries(
+                updated.filter(u => u.id != null).map(u => [u.id as string, Number(u.rental_price ?? 0)]),
+            );
+            const sync = await rentalPriceTableService.syncActiveTableItems(selectedBuildingId, rentByPropertyId);
             setIsPricingModalOpen(false);
-            notify(`${updated.length} unidades precificadas com sucesso usando Inteligência Hedônica!`);
+            notify(
+                sync.hadActiveTable
+                    ? `${updated.length} unidades precificadas — tabela de aluguéis ativa também atualizada.`
+                    : `${updated.length} unidades precificadas com sucesso usando Inteligência Hedônica!`,
+            );
             loadData();
         } catch (err: any) {
             notify('Erro ao aplicar inteligência de aluguéis: ' + (err.message || 'Erro desconhecido'), 'error');

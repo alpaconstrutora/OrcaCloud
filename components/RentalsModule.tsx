@@ -37,6 +37,13 @@ interface RentalsModuleProps {
     organizationId?: string;
 }
 
+// Valor de locação canônico da unidade: rental_price (gravado pela Inteligência
+// de Aluguéis e pela Tabela de aluguéis); fallback para price ("Aluguel base"
+// legado) enquanto rental_price não foi definido. Mesmo padrão de
+// rentalPriceTableService.getTableItems.
+const rentalValueOf = (p: Partial<Property>): number =>
+    (p.rental_price != null ? Number(p.rental_price) : (p.price != null ? Number(p.price) : 0));
+
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'brokers' | 'price-tables'>(
         (localStorage.getItem('rentals_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'brokers' | 'price-tables') || 'inventory'
@@ -600,9 +607,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             <div className="p-8">
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Preço Sugerido</span>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Aluguel Sugerido</span>
                         <span className="text-2xl font-black text-gray-900 font-mono tracking-tighter">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(rentalValueOf(property))}
                         </span>
                     </div>
                 </div>
@@ -611,7 +618,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     <div className="flex-1 bg-gray-50 p-3 rounded-2xl flex flex-col items-center justify-center border border-gray-100">
                         <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Valor m²</span>
                         <span className="text-xs font-black text-gray-700">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(rentalValueOf(property) / (property.private_area || property.area || 1))}
                         </span>
                     </div>
                     {property.position_type && (
@@ -837,7 +844,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             onEdit={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }}
                                             onDelete={() => handleDeleteProperty(property.id)}
                                             onRegisterDeal={() => {
-                                                setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'RENTAL', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'RENTAL', value: rentalValueOf(property), date: new Date().toISOString().split('T')[0], status: 'PENDING' });
                                                 setIsDealModalOpen(true);
                                             }}
                                             getStatusColor={getStatusColor}
@@ -937,7 +944,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                                 {property.private_area ? `${property.private_area}m²` : '-'}
                                                             </td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-indigo-600 text-right">
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rentalValueOf(property))}
                                                             </td>
                                                         </>
                                                     )}
@@ -951,7 +958,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <button
                                                                 onClick={() => {
-                                                                    setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'RENTAL', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                                    setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'RENTAL', value: rentalValueOf(property), date: new Date().toISOString().split('T')[0], status: 'PENDING' });
                                                                     setIsDealModalOpen(true);
                                                                 }}
                                                                 className="text-emerald-600 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-lg transition-all"
@@ -986,8 +993,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             id: '', 
                                             property_id: unit.id, 
                                             client_id: '', 
-                                            type: 'RENTAL', 
-                                            value: unit.price, 
+                                            type: 'RENTAL',
+                                            value: rentalValueOf(unit as Partial<Property>),
                                             date: new Date().toISOString().split('T')[0], 
                                             status: 'PENDING' 
                                         });

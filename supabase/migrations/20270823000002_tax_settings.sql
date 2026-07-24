@@ -6,9 +6,13 @@
 -- demais catálogos de "Categorias Gerais".
 -- =============================================================================
 
+-- organization_id SEM FK proposital: REFERENCES organizations(id) pega
+-- ShareRowExclusiveLock e deadlocka (40P01) contra o app em produção —
+-- mesmo problema já visto em broker_proposals e na Inbox de Curadoria.
+-- Integridade é garantida por is_org_member() nas policies abaixo.
 CREATE TABLE IF NOT EXISTS public.tax_settings (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id  UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_id  UUID NOT NULL,
     nome             TEXT NOT NULL,
     aliquota         NUMERIC(6, 3),
     base_calculo     TEXT,

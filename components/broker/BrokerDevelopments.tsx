@@ -165,7 +165,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 case 'area': return (n(a.private_area) - n(b.private_area)) * dir;
                 case 'bedrooms': return (n(a.bedrooms) - n(b.bedrooms)) * dir;
                 case 'parking': return (n(a.parking_spaces) - n(b.parking_spaces)) * dir;
-                case 'price': return (n(a.price) - n(b.price)) * dir;
+                case 'price': return (n(a.current_price ?? a.price) - n(b.current_price ?? b.price)) * dir;
                 default: return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
             }
         });
@@ -352,7 +352,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                                 {num(item.parking_spaces)}
                                             </td>
                                             <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">
-                                                {formatMoney(item.price)}
+                                                {formatMoney(item.current_price ?? item.price)}
                                             </td>
                                         </tr>
                                     );

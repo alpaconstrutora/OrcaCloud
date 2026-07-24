@@ -113,6 +113,9 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
               {visibleColumns.includes('nome') && (
                 <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
               )}
+              {visibleColumns.includes('descricao') && (
+                <SortableHeader colKey="descricao" label="Descrição" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+              )}
 
               {dynamicColumns.map((col, idx) => (
                 <th key={`dyn-head-${idx}`} className="px-6 py-2 border-r border-gray-100 text-left text-table-header font-semibold text-gray-500 whitespace-nowrap">
@@ -180,7 +183,6 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                           </div>
                           <div className="min-w-0">
                             <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
-                            {doc.descricao && <span className="text-xs text-gray-400 block truncate mt-0.5">{doc.descricao}</span>}
                             {doc.locked_by && (
                               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-orange-600 mt-0.5">
                                 <Lock className="w-3 h-3" />
@@ -189,6 +191,11 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                             )}
                           </div>
                         </div>
+                      </td>
+                    )}
+                    {visibleColumns.includes('descricao') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[260px] truncate" title={doc.descricao || undefined}>
+                        {doc.descricao || '-'}
                       </td>
                     )}
 

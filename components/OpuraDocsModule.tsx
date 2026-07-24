@@ -81,6 +81,7 @@ import { isObra } from '../utils/projectClassification';
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'descricao', label: 'Descrição', sortable: true },
   { key: 'autor', label: 'Autor', sortable: true },
   { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
   { key: 'project_id', label: 'Obra Vinculada', sortable: true },

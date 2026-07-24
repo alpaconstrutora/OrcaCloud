@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Settings, ChevronUp, ChevronDown } from 'lucide-react';
+import { Settings, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 
 export type ColumnConfig = {
   key: string;
@@ -123,6 +123,12 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
     handleColumnSort,
     toggleColumn,
     resetColumns,
+    // Setters "crus" — aditivo: existiam só internamente. Permitem a uma tela aplicar
+    // de uma vez uma preferência carregada de fora (ex: banco), sem precisar de um
+    // toggle por coluna. Não muda nada para quem já usa só o resto da API.
+    setVisibleColumns,
+    setSortColumn,
+    setSortDirection,
   };
 };
 
@@ -162,6 +168,10 @@ interface ColumnConfigButtonProps {
   onToggleShow: () => void;
   onToggleColumn: (colKey: string) => void;
   onReset: () => void;
+  /** Opcional — quando presente, mostra "Salvar como padrão" (preferência persistida
+   * por usuário, não só no localStorage deste navegador). Omitir mantém a tela idêntica. */
+  onSaveDefault?: () => void | Promise<void>;
+  savingDefault?: boolean;
 }
 
 export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
@@ -171,6 +181,8 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
   onToggleShow,
   onToggleColumn,
   onReset,
+  onSaveDefault,
+  savingDefault = false,
 }) => {
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
@@ -249,9 +261,19 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
               </label>
             ))}
           </div>
+          {onSaveDefault && (
+            <button
+              onClick={onSaveDefault}
+              disabled={savingDefault}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 text-button font-bold text-white bg-blue-600 hover:bg-blue-700 py-2 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {savingDefault && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Salvar como padrão
+            </button>
+          )}
           <button
             onClick={onReset}
-            className="mt-3 w-full text-button font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+            className={`w-full text-button font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors ${onSaveDefault ? 'mt-1.5' : 'mt-3'}`}
           >
             Restaurar Padrão
           </button>

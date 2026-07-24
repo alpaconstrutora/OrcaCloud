@@ -58,6 +58,7 @@ import { partnerService } from '../services/partnerService';
 import { clientService } from '../services/clientService';
 import { laborService } from '../services/laborService';
 import { supplierService } from '../services/supplierService';
+import { tableColumnPreferencesService, TableColumnPreference } from '../services/tableColumnPreferencesService';
 import { supabase } from '../lib/supabase';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
 import { validateFileNameAgainstMask, extractTokenFromFileName, generateFileNameFromMask, extractMaskTokens, getNextSequentialNumber, getInitialRevision } from '../utils/dmsUtils';
@@ -1344,6 +1345,62 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setHiddenDynamicColumns(new Set());
   };
 
+  // ─── Preferência de colunas por usuário (banco, entre dispositivos) ─────────
+  const [savedColumnPref, setSavedColumnPref] = React.useState<TableColumnPreference | null>(null);
+  const [savingColumnPrefs, setSavingColumnPrefs] = React.useState(false);
+
+  // Busca uma vez por usuário logado — se existir, sobrepõe o default/localStorage
+  // nas colunas estáticas. Não bloqueia a tela: roda em paralelo, sem gate em fetchDocs.
+  React.useEffect(() => {
+    if (!currentProfile?.email) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pref = await tableColumnPreferencesService.get(currentProfile.email!, 'opuraDocsColumns');
+        if (cancelled || !pref) return;
+        const staticKeys = new Set(COLUMNS.map(c => c.key));
+        tableColumns.setVisibleColumns(pref.visibleColumns.filter(k => staticKeys.has(k)));
+        if (pref.sortColumn) tableColumns.setSortColumn(pref.sortColumn);
+        tableColumns.setSortDirection(pref.sortDirection);
+        setSavedColumnPref(pref);
+      } catch (err) {
+        console.error('[OpuraDocsModule] Erro ao carregar preferência de colunas:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProfile?.email]);
+
+  // Recalcula as colunas dinâmicas ocultas a partir da preferência salva toda vez que
+  // a pasta muda (mask diferente) — uma coluna dinâmica escondida na preferência
+  // continua escondida em qualquer pasta que tenha um token com o mesmo nome.
+  React.useEffect(() => {
+    if (!savedColumnPref) return;
+    setHiddenDynamicColumns(new Set(dynamicColumns.filter(col => !savedColumnPref.visibleColumns.includes(col))));
+  }, [savedColumnPref, dynamicColumns]);
+
+  const handleSaveColumnPreference = async () => {
+    if (!currentProfile?.email) {
+      notify('Não foi possível identificar o usuário para salvar a preferência.', 'error');
+      return;
+    }
+    setSavingColumnPrefs(true);
+    try {
+      const pref: TableColumnPreference = {
+        visibleColumns: mergedVisibleColumnsForConfig,
+        sortColumn: tableColumns.sortColumn,
+        sortDirection: tableColumns.sortDirection,
+      };
+      await tableColumnPreferencesService.save(currentProfile.email, 'opuraDocsColumns', pref);
+      setSavedColumnPref(pref);
+      notify('Preferência de colunas salva.');
+    } catch (err: any) {
+      notify('Erro ao salvar preferência de colunas: ' + err.message, 'error');
+    } finally {
+      setSavingColumnPrefs(false);
+    }
+  };
+
   // Coletar tags únicas dos documentos carregados para filtragem rápida
   const allUniqueTags = React.useMemo(() => {
     if (!documents || !Array.isArray(documents)) return [];
@@ -2185,6 +2242,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
                 onToggleColumn={handleToggleAnyColumn}
                 onReset={handleResetAnyColumn}
+                onSaveDefault={handleSaveColumnPreference}
+                savingDefault={savingColumnPrefs}
               />
             </div>
           </div>

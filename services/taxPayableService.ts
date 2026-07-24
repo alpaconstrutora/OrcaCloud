@@ -239,7 +239,9 @@ export const taxPayableService = {
         if (validParcels.length === 0) return;
 
         const taxes = (await taxSettingsService.list(organizationId))
-            .filter(t => t.ativo && t.aliquota != null && t.aliquota > 0);
+            .filter(t => t.ativo && t.aliquota != null && t.aliquota > 0)
+            // Aplicabilidade por origem: só gera o tributo marcado para o tipo do negócio.
+            .filter(t => deal.type === 'SALE' ? t.aplica_venda_ativo : t.aplica_locacao);
         if (taxes.length === 0) return;
 
         const rows: Record<string, unknown>[] = [];

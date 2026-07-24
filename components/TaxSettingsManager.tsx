@@ -14,11 +14,12 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'aliquota',       label: 'Alíquota (%)',      sortable: true },
     { key: 'base_calculo',   label: 'Base de Cálculo',   sortable: false },
     { key: 'regra_retencao', label: 'Regra de Retenção', sortable: false },
+    { key: 'aplica',         label: 'Aplica a',          sortable: false },
     { key: 'ativo',          label: 'Ativo',             sortable: true },
     { key: 'actions',        label: 'Ações',             sortable: false },
 ];
 
-const emptyForm: TaxSettingInput = { nome: '', aliquota: null, base_calculo: '', regra_retencao: '', ativo: true };
+const emptyForm: TaxSettingInput = { nome: '', aliquota: null, base_calculo: '', regra_retencao: '', ativo: true, aplica_venda_ativo: true, aplica_locacao: true };
 
 const inputCls = 'w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all';
 
@@ -75,7 +76,7 @@ const TaxSettingsManager: React.FC = () => {
     const startEdit = (item: TaxSetting) => {
         setEditingId(item.id);
         setIsAdding(false);
-        setForm({ nome: item.nome, aliquota: item.aliquota, base_calculo: item.base_calculo, regra_retencao: item.regra_retencao, ativo: item.ativo });
+        setForm({ nome: item.nome, aliquota: item.aliquota, base_calculo: item.base_calculo, regra_retencao: item.regra_retencao, ativo: item.ativo, aplica_venda_ativo: item.aplica_venda_ativo, aplica_locacao: item.aplica_locacao });
     };
     const cancelEdit = () => { setIsAdding(false); setEditingId(null); setForm(emptyForm); };
 
@@ -195,6 +196,14 @@ const TaxSettingsManager: React.FC = () => {
                             placeholder="Regra de retenção"
                             className={`${inputCls} flex-1 min-w-[10rem]`}
                         />
+                        <label className="flex items-center gap-1.5 h-8 px-1 text-sm text-gray-600 shrink-0" title="Incide sobre Vendas de Ativos">
+                            <input type="checkbox" checked={form.aplica_venda_ativo} onChange={e => setForm(f => ({ ...f, aplica_venda_ativo: e.target.checked }))} />
+                            Venda de Ativo
+                        </label>
+                        <label className="flex items-center gap-1.5 h-8 px-1 text-sm text-gray-600 shrink-0" title="Incide sobre Locações">
+                            <input type="checkbox" checked={form.aplica_locacao} onChange={e => setForm(f => ({ ...f, aplica_locacao: e.target.checked }))} />
+                            Locação
+                        </label>
                         <label className="flex items-center gap-1.5 h-8 px-1 text-sm text-gray-600 shrink-0">
                             <input type="checkbox" checked={form.ativo} onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} />
                             Ativo
@@ -267,6 +276,9 @@ const TaxSettingsManager: React.FC = () => {
                                     {tableColumns.visibleColumns.includes('regra_retencao') && (
                                         <th className="px-6 py-2 border-r border-gray-100 text-sm font-semibold text-gray-500">Regra de Retenção</th>
                                     )}
+                                    {tableColumns.visibleColumns.includes('aplica') && (
+                                        <th className="px-6 py-2 border-r border-gray-100 text-sm font-semibold text-gray-500">Aplica a</th>
+                                    )}
                                     {tableColumns.visibleColumns.includes('ativo') && (
                                         <SortableHeader colKey="ativo" label="Ativo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                     )}
@@ -291,6 +303,16 @@ const TaxSettingsManager: React.FC = () => {
                                         )}
                                         {tableColumns.visibleColumns.includes('regra_retencao') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.regra_retencao || '—'}</td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('aplica') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                {(() => {
+                                                    const parts: string[] = [];
+                                                    if (item.aplica_venda_ativo) parts.push('Venda de Ativo');
+                                                    if (item.aplica_locacao) parts.push('Locação');
+                                                    return parts.length ? parts.join(' · ') : <span className="text-gray-400">—</span>;
+                                                })()}
+                                            </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('ativo') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm">

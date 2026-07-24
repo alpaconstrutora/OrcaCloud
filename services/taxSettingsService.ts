@@ -8,6 +8,10 @@ export interface TaxSetting {
     base_calculo: string | null;
     regra_retencao: string | null;
     ativo: boolean;
+    /** Incide sobre Vendas de Ativos (deal.type='SALE'). */
+    aplica_venda_ativo: boolean;
+    /** Incide sobre Locações (deal.type='RENTAL'). */
+    aplica_locacao: boolean;
 }
 
 export interface TaxSettingInput {
@@ -16,6 +20,8 @@ export interface TaxSettingInput {
     base_calculo: string | null;
     regra_retencao: string | null;
     ativo: boolean;
+    aplica_venda_ativo: boolean;
+    aplica_locacao: boolean;
 }
 
 // Módulos padrão do grupo "Tributos e Impostos" — usados só para o
@@ -27,7 +33,7 @@ export const taxSettingsService = {
     async list(organizationId: string): Promise<TaxSetting[]> {
         const { data, error } = await supabase
             .from('tax_settings')
-            .select('id, organization_id, nome, aliquota, base_calculo, regra_retencao, ativo')
+            .select('id, organization_id, nome, aliquota, base_calculo, regra_retencao, ativo, aplica_venda_ativo, aplica_locacao')
             .eq('organization_id', organizationId)
             .order('nome');
         if (error) throw error;

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Upload, Loader2, X, FileText, AlertCircle, CheckCircle2,
+    Upload, Loader2, ArrowLeft, FileText, AlertCircle, CheckCircle2,
     Building2, Calendar, DollarSign, Hash, Eye, Save,
     ThumbsUp, Ban, Trash2, UserPlus,
 } from 'lucide-react';
@@ -395,11 +395,19 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     }
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-white flex flex-col">
+            <div className="flex-1 w-full max-w-5xl mx-auto overflow-y-auto">
                 {/* Header */}
                 <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between z-10">
-                    <div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                            title="Voltar"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <div>
                         <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
                             {isCreating ? 'Capturar Boleto' : `Boleto · ${boleto?.banco_nome ?? 'Documento'}`}
                             {!isCreating && boleto?.numero != null && (
@@ -415,13 +423,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 Confiança: {boleto.confidence_score ?? 0}%
                             </p>
                         )}
+                        </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
                 </div>
 
                 <div className="p-6 space-y-6">

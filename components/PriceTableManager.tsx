@@ -5,16 +5,51 @@ import {
     CommercialPriceTable,
     CommercialPriceTableItem,
 } from '../services/commercialPriceTableService';
+import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { IndexName } from '../services/contractIndexService';
 import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
+type PriceMode = 'sale' | 'rental';
+
 interface Props {
     organizationId: string;
     buildingId: string;
     buildingName: string;
+    /** 'sale' (Venda de Ativos, padrão) grava price/table_price; 'rental'
+     *  (Locações) usa o service espelho e grava rental_price. */
+    mode?: PriceMode;
 }
+
+// Labels que mudam entre Venda e Locação. As duas telas compartilham a mesma
+// mecânica (versões, reajuste, KPIs) — só o vocabulário de "preço" vs "aluguel"
+// difere. Colunas de atributos da unidade e moeda (R$) são idênticas.
+const MODE_CONFIG: Record<PriceMode, {
+    service: typeof commercialPriceTableService;
+    title: string;
+    currentLabel: string;
+    versionLabel: string;
+    totalCurrentLabel: string;
+    totalVersionLabel: string;
+}> = {
+    sale: {
+        service: commercialPriceTableService,
+        title: 'Tabela de Preços',
+        currentLabel: 'Preço vigente',
+        versionLabel: 'Preço nesta versão',
+        totalCurrentLabel: 'Total Vigente',
+        totalVersionLabel: 'Total Nesta Versão',
+    },
+    rental: {
+        service: rentalPriceTableService,
+        title: 'Tabela de Aluguéis',
+        currentLabel: 'Aluguel vigente',
+        versionLabel: 'Aluguel nesta versão',
+        totalCurrentLabel: 'Aluguel Total Vigente',
+        totalVersionLabel: 'Aluguel Total Nesta Versão',
+    },
+};
 
 const STATUS_LABEL: Record<string, string> = { draft: 'Rascunho', active: 'Ativa', superseded: 'Substituída' };
 const STATUS_STYLE: Record<string, string> = {
@@ -104,7 +139,15 @@ const fmtBRL = formatMoney;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
-export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId, buildingName }) => {
+export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId, buildingName, mode = 'sale' }) => {
+    const cfg = MODE_CONFIG[mode];
+    const svc = cfg.service;
+    // Colunas com labels do modo (o dropdown de configurar colunas mostra estes).
+    const columnsForConfig = React.useMemo<ColumnConfig[]>(() => COLUMNS.map(c =>
+        c.key === 'current' ? { ...c, label: cfg.currentLabel }
+        : c.key === 'price' ? { ...c, label: cfg.versionLabel }
+        : c
+    ), [cfg.currentLabel, cfg.versionLabel]);
     const confirm = useConfirm();
     const [tables, setTables] = React.useState<CommercialPriceTable[]>([]);
     const [selectedTableId, setSelectedTableId] = React.useState<string | null>(null);
@@ -117,8 +160,8 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const [activating, setActivating] = React.useState(false);
     const [applyingAdjustment, setApplyingAdjustment] = React.useState(false);
 
-    const [searchTerm, setSearchTerm] = usePersistedState<string>('priceTable:search', '');
-    const tableColumns = useTableColumns(COLUMNS, 'priceTableColumns');
+    const [searchTerm, setSearchTerm] = usePersistedState<string>(`priceTable:${mode}:search`, '');
+    const tableColumns = useTableColumns(COLUMNS, `priceTableColumns:${mode}`);
 
     // Reajuste em massa
     const [adjustMode, setAdjustMode] = React.useState<'percent' | 'index'>('percent');
@@ -131,7 +174,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         setLoading(true);
         setError(null);
         try {
-            const rows = await commercialPriceTableService.listTables(buildingId);
+            const rows = await svc.listTables(buildingId);
             setTables(rows);
             setSelectedTableId(prev => rows.some(t => t.id === prev) ? prev : (rows[0]?.id ?? null));
         } catch (err: any) {
@@ -144,7 +187,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     React.useEffect(() => { loadTables(); }, [loadTables]);
 
     React.useEffect(() => {
-        commercialPriceTableService.listBuildingUnits(buildingId)
+        svc.listBuildingUnits(buildingId)
             .then(setBuildingUnits)
             .catch(err => console.error('[PriceTableManager] erro ao listar unidades do edifício:', err));
     }, [buildingId]);
@@ -152,7 +195,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const loadItems = React.useCallback(async (tableId: string) => {
         setLoadingItems(true);
         try {
-            const rows = await commercialPriceTableService.getTableItems(tableId);
+            const rows = await svc.getTableItems(tableId);
             setItems(rows);
         } catch (err: any) {
             setError(err.message);
@@ -177,7 +220,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         setCreating(true);
         setError(null);
         try {
-            const table = await commercialPriceTableService.createDraftFromActive(organizationId, buildingId, `v${nextVersion}`);
+            const table = await svc.createDraftFromActive(organizationId, buildingId, `v${nextVersion}`);
             await loadTables();
             setSelectedTableId(table.id);
         } catch (err: any) {
@@ -190,7 +233,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const handleUpdateItemPrice = async (itemId: string, price: number) => {
         setItems(prev => prev.map(i => i.id === itemId ? { ...i, price } : i));
         try {
-            await commercialPriceTableService.updateItemPrice(itemId, price);
+            await svc.updateItemPrice(itemId, price);
         } catch (err: any) {
             setError(err.message);
         }
@@ -200,7 +243,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         const next = !(item.visible_to_broker ?? true);
         setItems(prev => prev.map(i => i.id === item.id ? { ...i, visible_to_broker: next } : i));
         try {
-            await commercialPriceTableService.updateItemVisibility(item.property_id, next);
+            await svc.updateItemVisibility(item.property_id, next);
         } catch (err: any) {
             setError(err.message);
             setItems(prev => prev.map(i => i.id === item.id ? { ...i, visible_to_broker: !next } : i));
@@ -215,9 +258,9 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
             if (adjustMode === 'percent') {
                 const pct = Number(percent);
                 if (!pct) { setError('Informe um percentual diferente de zero.'); return; }
-                await commercialPriceTableService.applyBulkAdjustment(selectedTableId, { percent: pct });
+                await svc.applyBulkAdjustment(selectedTableId, { percent: pct });
             } else {
-                await commercialPriceTableService.applyBulkAdjustment(selectedTableId, {
+                await svc.applyBulkAdjustment(selectedTableId, {
                     indexName, baseMonth: `${baseMonth}-01`, targetMonth: `${targetMonth}-01`, organizationId,
                 });
             }
@@ -241,7 +284,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         setActivating(true);
         setError(null);
         try {
-            await commercialPriceTableService.activateTable(selectedTableId);
+            await svc.activateTable(selectedTableId);
             await loadTables();
         } catch (err: any) {
             setError(err.message);
@@ -310,7 +353,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h3 className="font-black text-gray-900 text-sm uppercase tracking-wider">Tabela de Preços — {buildingName}</h3>
+                        <h3 className="font-black text-gray-900 text-sm uppercase tracking-wider">{cfg.title} — {buildingName}</h3>
                         <p className="text-xs text-gray-400 font-medium mt-0.5">Versões com histórico; ativar grava o preço em todas as unidades de uma vez.</p>
                     </div>
                     <button
@@ -445,11 +488,11 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                     {items.length > 0 && (
                         <div className="grid grid-cols-3 gap-3">
                             <div className="bg-gray-50 rounded-xl p-3">
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Vigente</p>
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{cfg.totalCurrentLabel}</p>
                                 <p className="text-sm font-black text-gray-700">{fmtBRL(totalCurrent)}</p>
                             </div>
                             <div className="bg-blue-50 rounded-xl p-3">
-                                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Total Nesta Versão</p>
+                                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">{cfg.totalVersionLabel}</p>
                                 <p className="text-sm font-black text-blue-700">{fmtBRL(totalDraft)}</p>
                             </div>
                             <div className={`rounded-xl p-3 ${deltaPct >= 0 ? 'bg-emerald-50' : 'bg-rose-50'}`}>
@@ -473,7 +516,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                         </div>
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
-                                columns={COLUMNS}
+                                columns={columnsForConfig}
                                 visibleColumns={tableColumns.visibleColumns}
                                 showColumnConfig={tableColumns.showColumnConfig}
                                 onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
@@ -545,13 +588,13 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                     className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                             )}
                                             {tableColumns.visibleColumns.includes('current') && (
-                                                <SortableHeader colKey="current" label="Preço vigente" uppercase={false}
+                                                <SortableHeader colKey="current" label={cfg.currentLabel} uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
                                                     className="px-6 py-2 border-r border-gray-100 text-right" />
                                             )}
                                             {tableColumns.visibleColumns.includes('price') && (
-                                                <SortableHeader colKey="price" label="Preço nesta versão" uppercase={false}
+                                                <SortableHeader colKey="price" label={cfg.versionLabel} uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
                                                     className="px-6 py-2 border-r border-gray-100 text-right" />

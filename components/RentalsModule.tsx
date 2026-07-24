@@ -28,14 +28,15 @@ import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
 import { RentalsDashboard } from './RentalsDashboard';
 import PropertyUnitMap from './common/PropertyUnitMap';
+import { PriceTableManager } from './PriceTableManager';
 
 interface RentalsModuleProps {
     organizationId?: string;
 }
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'brokers'>(
-        (localStorage.getItem('rentals_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'brokers') || 'inventory'
+    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'brokers' | 'price-tables'>(
+        (localStorage.getItem('rentals_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'brokers' | 'price-tables') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
@@ -714,6 +715,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             <User className="w-3.5 h-3.5" />
                             Corretores
                         </button>
+                        <button
+                            onClick={() => setActiveTab('price-tables')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'price-tables' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <DollarSign className="w-3.5 h-3.5" />
+                            Tabela de aluguéis
+                        </button>
                     </div>
                 </div>
             )}
@@ -1307,6 +1315,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             <p className="text-xs text-amber-600 text-center mt-1 px-4">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'price-tables' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
+                <div className="animate-in slide-in-from-bottom-5 duration-500">
+                    <PriceTableManager
+                        mode="rental"
+                        organizationId={effectiveOrganizationId}
+                        buildingId={selectedBuildingId}
+                        buildingName={currentBuilding.name}
+                    />
                 </div>
             )}
 

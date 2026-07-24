@@ -106,6 +106,28 @@ export const brokerPortalService = {
     },
 
     /**
+     * Tabela de ALUGUÉIS ativa de um empreendimento, para o modo público do
+     * Portal do Corretor. Espelho de getPriceTableByToken, mas via RPC
+     * fn_broker_portal_get_rental_price_table — lê rental_price em vez de price.
+     */
+    async getRentalPriceTableByToken(token: string, buildingId: string): Promise<{
+        table: Pick<CommercialPriceTable, 'id' | 'version_label' | 'effective_date' | 'status' | 'activated_at'> | null;
+        items: CommercialPriceTableItem[];
+    }> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_get_rental_price_table', {
+            p_token: token,
+            p_building_id: buildingId,
+        });
+        if (error) throw error;
+        const res = data as {
+            valid: boolean;
+            table?: Pick<CommercialPriceTable, 'id' | 'version_label' | 'effective_date' | 'status' | 'activated_at'> | null;
+            items?: CommercialPriceTableItem[];
+        };
+        return { table: res?.table ?? null, items: res?.items ?? [] };
+    },
+
+    /**
      * Planos de vendas ATIVOS de um empreendimento, para o Simulador de Proposta
      * no modo público (sem sessão Supabase). Espelha salesPlanService.listActive,
      * mas via RPC anon — sales_plans só tem RLS `TO authenticated` (20270717000000).

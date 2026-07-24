@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Building2, ChevronLeft, ChevronRight, Loader2, MapPin, Info } from 'lucide-react';
 import { commercialPriceTableService } from '../../services/commercialPriceTableService';
 import type { CommercialPriceTable, CommercialPriceTableItem } from '../../services/commercialPriceTableService';
+import { rentalPriceTableService } from '../../services/rentalPriceTableService';
 import { brokerPortalService } from '../../services/brokerPortalService';
 import { formatMoney } from '../ui/Format';
 import { SortableHeader } from '../ui/TableUtils';
@@ -59,6 +60,9 @@ type BuildingSortKey = 'name' | 'units';
 
 const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, onMakeProposal }) => {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+    // Eixo de preço exibido: venda (price) ou locação (rental_price). Toggle no
+    // detalhe do empreendimento — o mesmo prédio pode ter as duas tabelas.
+    const [priceMode, setPriceMode] = useState<'sale' | 'rental'>('sale');
     const [loading, setLoading] = useState(false);
     const [activeTable, setActiveTable] = useState<Pick<CommercialPriceTable, 'id' | 'version_label' | 'effective_date' | 'status' | 'activated_at'> | null>(null);
     const [items, setItems] = useState<CommercialPriceTableItem[]>([]);
@@ -89,11 +93,14 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
             setItems([]);
             try {
                 if (portalToken) {
-                    const res = await brokerPortalService.getPriceTableByToken(portalToken, selectedBuildingId);
+                    const res = priceMode === 'rental'
+                        ? await brokerPortalService.getRentalPriceTableByToken(portalToken, selectedBuildingId)
+                        : await brokerPortalService.getPriceTableByToken(portalToken, selectedBuildingId);
                     if (!cancelled) { setActiveTable(res.table); setItems(res.items.filter(i => i.visible_to_broker !== false)); }
                 } else {
-                    const table = await commercialPriceTableService.getActiveTable(selectedBuildingId);
-                    const tableItems = table ? await commercialPriceTableService.getTableItems(table.id) : [];
+                    const svc = priceMode === 'rental' ? rentalPriceTableService : commercialPriceTableService;
+                    const table = await svc.getActiveTable(selectedBuildingId);
+                    const tableItems = table ? await svc.getTableItems(table.id) : [];
                     // Mesmo corte de visibilidade da RPC (modo token), aplicado aqui no
                     // modo autenticado — visible_to_broker é da unidade, não da versão.
                     if (!cancelled) { setActiveTable(table); setItems(tableItems.filter(i => i.visible_to_broker !== false)); }
@@ -106,22 +113,27 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
         };
         load();
         return () => { cancelled = true; };
-    }, [selectedBuildingId, portalToken]);
+    }, [selectedBuildingId, portalToken, priceMode]);
 
     // Sem tabela ativa: cai nas unidades filhas com o preço vigente (nunca fica vazio
     // só porque o admin ainda não publicou uma versão da tabela de preços).
     const fallbackRows: CommercialPriceTableItem[] = useMemo(() => {
         if (activeTable || loading || !selectedBuildingId) return [];
+        // Locação usa rental_price (fallback ao price/"aluguel base" antigo enquanto
+        // não preenchido); venda usa price.
+        const unitValue = (u: BrokerUnit) => priceMode === 'rental'
+            ? ((u as any).rental_price ?? u.price ?? 0)
+            : (u.price ?? 0);
         return units
             .filter(u => u.parent_id === selectedBuildingId)
             .map(u => ({
                 id: u.id,
                 price_table_id: '',
                 property_id: u.id,
-                price: u.price ?? 0,
+                price: unitValue(u),
                 created_at: '',
                 property_name: u.name || u.number,
-                current_price: u.price,
+                current_price: unitValue(u),
                 property_status: u.status,
                 private_area: u.private_area ?? null,
                 bedrooms: u.specs?.bedrooms ?? null,
@@ -130,7 +142,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 floor: u.specs?.floor ?? null,
                 position_type: null,
             }));
-    }, [activeTable, loading, units, selectedBuildingId]);
+    }, [activeTable, loading, units, selectedBuildingId, priceMode]);
 
     const rows = activeTable ? items : fallbackRows;
 
@@ -243,11 +255,28 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                     <h2 className="text-lg font-bold text-gray-900">{selectedBuilding.name}</h2>
                     {selectedBuilding.address && <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{selectedBuilding.address}</p>}
                 </div>
-                {activeTable && (
-                    <span className="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-[6px] px-3 py-1.5">
-                        Tabela vigente: {activeTable.version_label}
-                    </span>
-                )}
+                <div className="flex items-center gap-3">
+                    {/* Toggle Venda/Locação — o mesmo prédio pode ter as duas tabelas. */}
+                    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
+                        <button
+                            onClick={() => setPriceMode('sale')}
+                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'sale' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Venda
+                        </button>
+                        <button
+                            onClick={() => setPriceMode('rental')}
+                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'rental' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Locação
+                        </button>
+                    </div>
+                    {activeTable && (
+                        <span className="text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 rounded-[6px] px-3 py-1.5">
+                            Tabela vigente: {activeTable.version_label}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {!loading && !activeTable && (
@@ -289,7 +318,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                     <SortableHeader colKey="parking" label="Vagas" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
                                         className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
-                                    <SortableHeader colKey="price" label="Preço" uppercase={false}
+                                    <SortableHeader colKey="price" label={priceMode === 'rental' ? 'Aluguel' : 'Preço'} uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
                                         className="px-6 py-2 text-right" />
                                 </tr>

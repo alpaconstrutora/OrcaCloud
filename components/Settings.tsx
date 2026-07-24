@@ -13,12 +13,13 @@ import EmpreendimentoTypesSettings from './EmpreendimentoTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
 import TaxSettingsManager from './TaxSettingsManager';
 import InssBracketsSettings from './InssBracketsSettings';
+import PisRatesSettings from './PisRatesSettings';
 
 type SettingsLeafId =
     | 'geral'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-financeiro'
-    | 'indices' | 'tributos-geral' | 'tributos-inss'
+    | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis'
     | 'whatsapp' | 'email' | 'database';
 
 interface SettingsNavLeaf { id: SettingsLeafId; label: string; }
@@ -43,6 +44,7 @@ const SETTINGS_NAV: SettingsNavNode[] = [
     { id: 'tributos', label: 'Tributos e Impostos', icon: Landmark, children: [
         { id: 'tributos-geral', label: 'Geral' },
         { id: 'tributos-inss', label: 'INSS' },
+        { id: 'tributos-pis', label: 'PIS' },
     ]},
     { id: 'whatsapp', label: 'WhatsApp & Integrações', icon: MessageCircle, leafId: 'whatsapp' },
     { id: 'email', label: 'Templates de E-mail', icon: Mail, leafId: 'email' },
@@ -500,6 +502,7 @@ const Settings: React.FC = () => {
 
             {activeLeaf === 'tributos-geral' && <TaxSettingsManager />}
             {activeLeaf === 'tributos-inss' && <InssBracketsSettings />}
+            {activeLeaf === 'tributos-pis' && <PisRatesSettings />}
                 </div>
             </div>
         </div>

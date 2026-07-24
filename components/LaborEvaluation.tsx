@@ -848,13 +848,6 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                 </button>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh}
-            />
-
             {/* KPIs */}
             <div className="grid grid-cols-4 gap-4">
                 {[
@@ -874,6 +867,13 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                     </div>
                 ))}
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">

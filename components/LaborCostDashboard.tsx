@@ -102,13 +102,6 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Análise de custos consolidados por obra, baseada na folha fechada.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh}
-            />
-
             {/* Header / Filter */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
                 <div>
@@ -119,7 +112,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                 </div>
                 <div className="flex items-center gap-3">
                     <Calendar className="w-4 h-4 text-slate-400" />
-                    <select 
+                    <select
                         value={selectedRun?.id || ''}
                         onChange={(e) => setSelectedRun(runs.find(r => r.id === e.target.value) || null)}
                         className="text-form-input font-black text-slate-700 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl outline-none"
@@ -133,6 +126,13 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                     </select>
                 </div>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {loadingSummary ? (
                 <div className="py-20 flex justify-center"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>

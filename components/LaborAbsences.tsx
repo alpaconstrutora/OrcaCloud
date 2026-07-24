@@ -613,13 +613,6 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Solicitações, saldos e alertas de vencimento de férias.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh || (() => {})}
-            />
-
             {/* Alerta: férias disponíveis para agendar */}
             {vacationReady.length > 0 && (
                 <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-[10px] flex items-start gap-3">
@@ -666,6 +659,13 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
                 <KpiCard label="Disponíveis p/ Agendar" value={`${vacationReady.length}`} icon={<Umbrella className="w-5 h-5" />} color="emerald" />
                 <KpiCard label="Alertas de Vencimento" value={`${vacationAlerts.length}`} icon={<AlertTriangle className="w-5 h-5" />} color="rose" />
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
 
             {/* Abas + Toolbar acoplada (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

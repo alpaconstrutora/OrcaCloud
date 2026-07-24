@@ -373,13 +373,6 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Catálogo, entregas e controle de estoque de equipamentos de proteção.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh || (() => {})}
-            />
-
             {/* Alertas */}
             {(alerts && (alerts.lowStock.length > 0 || alerts.expiredCa.length > 0)) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -418,6 +411,13 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
                     </div>
                 ))}
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
 
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">

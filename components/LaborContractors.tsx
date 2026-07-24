@@ -407,13 +407,6 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Cadastro de empreiteiros, medições com retenções e documentos.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh}
-            />
-
             {docAlerts.length > 0 && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -437,6 +430,13 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                     </div>
                 ))}
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
                 <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">

@@ -556,13 +556,6 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                 </div>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={refetchAll}
-            />
-
             {/* KPIs */}
             <div className="grid grid-cols-5 gap-3">
                 {[
@@ -606,6 +599,13 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                     })}
                 </div>
             )}
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={refetchAll}
+            />
 
             {/* Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">

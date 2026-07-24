@@ -119,37 +119,6 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Custo por colaborador, obra e equipe, com base nas horas apontadas.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh}
-            />
-
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                    <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
-                        className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
-                    <span className="text-slate-300 font-bold text-xs">até</span>
-                    <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
-                        className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
-                </div>
-                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{workingDays} dias úteis</span>
-                <div className="flex items-center gap-1.5 ml-auto">
-                    {([
-                        { id: 'employees', label: 'Por Colaborador', icon: Users },
-                        { id: 'projects', label: 'Por Obra', icon: Building2 },
-                        { id: 'teams', label: 'Por Equipe', icon: Shield },
-                    ] as const).map(({ id, label, icon: Icon }) => (
-                        <button key={id} onClick={() => setView(id as any)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${view === id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                            <Icon className="w-3.5 h-3.5" /> {label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
             {/* Summary KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
@@ -187,6 +156,37 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                     <p className="text-xs text-slate-400 mt-1">
                         {summary && summary.totalHours > 0 ? `Custo médio: ${formatCurrency(totalReal / summary.totalHours)}/h` : 'sem registros aprovados'}
                     </p>
+                </div>
+            </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
+
+            {/* Filters */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                    <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
+                        className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
+                    <span className="text-slate-300 font-bold text-xs">até</span>
+                    <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
+                        className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
+                </div>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{workingDays} dias úteis</span>
+                <div className="flex items-center gap-1.5 ml-auto">
+                    {([
+                        { id: 'employees', label: 'Por Colaborador', icon: Users },
+                        { id: 'projects', label: 'Por Obra', icon: Building2 },
+                        { id: 'teams', label: 'Por Equipe', icon: Shield },
+                    ] as const).map(({ id, label, icon: Icon }) => (
+                        <button key={id} onClick={() => setView(id as any)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${view === id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                            <Icon className="w-3.5 h-3.5" /> {label}
+                        </button>
+                    ))}
                 </div>
             </div>
 

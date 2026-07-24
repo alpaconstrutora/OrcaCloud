@@ -490,13 +490,6 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                 </div>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh}
-            />
-
             {/* KPIs executivos */}
             <div className="grid grid-cols-4 gap-4">
                 <KpiCard label="Headcount atual" value={fmt.num(latest?.headcount_fim)} icon={Users} color="sky"
@@ -519,6 +512,13 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                     Turnover ({fmt.pct(latest.turnover_rate)}) acima da meta ({fmt.pct(target.turnover_max_pct)}) — atenção necessária.
                 </div>
             )}
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Tabs */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">

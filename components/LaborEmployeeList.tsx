@@ -175,6 +175,14 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Cadastro, vínculos e custos da equipe própria.</p>
             </div>
 
+            {/* KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiCard label="Colaboradores" value={`${employees.length}`} sub={`${activeCount} ativos`} icon={<Users className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Ativos" value={`${activeCount}`} icon={<UserCheck className="w-5 h-5" />} color="emerald" />
+                <KpiCard label="Custo Diário (Ativos)" value={formatMoney(totalDailyCost)} icon={<Wallet className="w-5 h-5" />} color="rose" />
+                <KpiCard label="Vínculo Predominante" value={topContract ? CONTRACT_LABELS[topContract[0] as ContractType] : '—'} sub={topContract ? `${topContract[1]} colaboradores` : undefined} icon={<Briefcase className="w-5 h-5" />} color="blue" />
+            </div>
+
             <LaborScopeBar
                 organizations={organizations}
                 selectedOrgId={selectedOrgId}
@@ -197,14 +205,6 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                     Novo colaborador
                 </button>
             </LaborScopeBar>
-
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Colaboradores" value={`${employees.length}`} sub={`${activeCount} ativos`} icon={<Users className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Ativos" value={`${activeCount}`} icon={<UserCheck className="w-5 h-5" />} color="emerald" />
-                <KpiCard label="Custo Diário (Ativos)" value={formatMoney(totalDailyCost)} icon={<Wallet className="w-5 h-5" />} color="rose" />
-                <KpiCard label="Vínculo Predominante" value={topContract ? CONTRACT_LABELS[topContract[0] as ContractType] : '—'} sub={topContract ? `${topContract[1]} colaboradores` : undefined} icon={<Briefcase className="w-5 h-5" />} color="blue" />
-            </div>
 
             {/* Toolbar acoplada à tabela (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

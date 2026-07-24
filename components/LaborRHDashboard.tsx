@@ -202,13 +202,6 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                 </button>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={() => refetch()}
-            />
-
             {/* Headcount KPIs */}
             <div>
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Headcount</p>
@@ -224,6 +217,13 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                         sub="INSS / licença" />
                 </div>
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={() => refetch()}
+            />
 
             {/* Movimentação + Custos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

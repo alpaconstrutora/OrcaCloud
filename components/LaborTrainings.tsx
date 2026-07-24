@@ -527,13 +527,6 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees, onRef
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">NRs, certificados e controle de vencimento por colaborador.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh || (() => {})}
-            />
-
             {/* Alertas */}
             {alerts.length > 0 && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-[10px] flex items-start gap-3">
@@ -557,6 +550,13 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees, onRef
                 <KpiCard label="Treinamentos Vencidos" value={`${expiredRecords}`} icon={<XCircle className="w-5 h-5" />} color="rose" />
                 <KpiCard label="Alertas 30 Dias" value={`${alerts.length}`} icon={<AlertTriangle className="w-5 h-5" />} color="amber" />
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh || (() => {})}
+            />
 
             {/* Abas + Toolbar acoplada (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

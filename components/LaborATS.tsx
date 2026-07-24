@@ -704,13 +704,6 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Pipeline Kanban de vagas, candidatos e banco de talentos.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh}
-            />
-
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -725,6 +718,13 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations
                     </div>
                 ))}
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">

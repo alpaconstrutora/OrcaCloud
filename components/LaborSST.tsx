@@ -442,13 +442,6 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Acidentes de trabalho, checklists e indicadores de segurança.</p>
             </div>
 
-            <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
-                onRefresh={onRefresh}
-            />
-
             {/* Alerta docs regulatórios vencendo */}
             {regAlerts.length > 0 && (
                 <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl flex items-start gap-3">
@@ -482,6 +475,13 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
                     </div>
                 ))}
             </div>
+
+            <LaborScopeBar
+                organizations={organizations}
+                selectedOrgId={selectedOrgId}
+                onSelectedOrgIdChange={onSelectedOrgIdChange}
+                onRefresh={onRefresh}
+            />
 
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">

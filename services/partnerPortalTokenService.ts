@@ -58,6 +58,24 @@ export const partnerPortalTokenService = {
     return (data as any)?.data || [];
   },
 
+  // Igual ao getSharedDocuments, mas devolve também a árvore de pastas (fecho recursivo
+  // com pastas-pai) e as disciplinas (code -> name), para a aba Documentos montar a
+  // hierarquia Pasta -> Disciplina -> Documentos. Ver migration 20270823000005.
+  async getSharedDocumentsBundle(token: string): Promise<{
+    documents: any[];
+    folders: { id: string; name: string; parent_id: string | null; naming_mask: string | null }[];
+    disciplines: { code: string; name: string }[];
+  }> {
+    const { data, error } = await supabase.rpc('partner_portal_get_shared_documents', { p_token: token });
+    if (error) throw error;
+    const payload = (data as any) || {};
+    return {
+      documents: payload.data || [],
+      folders: payload.folders || [],
+      disciplines: payload.disciplines || [],
+    };
+  },
+
   async getContracts(token: string): Promise<any[]> {
     const { data, error } = await supabase.rpc('partner_portal_get_contracts', { p_token: token });
     if (error) throw error;

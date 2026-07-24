@@ -337,6 +337,51 @@ export const partnerService = {
     return (data || []) as PartnerSharedDocument[];
   },
 
+  // Documentos compartilhados + pastas + disciplinas, para a aba Documentos do portal
+  // montar a árvore Pasta -> Disciplina (modo autenticado: preview de admin / login de
+  // parceiro). Pastas/disciplinas são best-effort: se a RLS bloquear (parceiro não é
+  // membro da org), retornam [] e a sidebar degrada para lista simples.
+  async listSharedDocumentTree(workspaceId: string): Promise<{
+    documents: PartnerSharedDocument[];
+    folders: { id: string; name: string; parent_id: string | null; naming_mask: string | null }[];
+    disciplines: { code: string; name: string }[];
+  }> {
+    const documents = await this.listSharedDocuments(workspaceId);
+
+    const orgIds = Array.from(new Set(
+      documents.map((sd) => (sd.document as any)?.organization_id).filter(Boolean)
+    )) as string[];
+
+    if (orgIds.length === 0) {
+      return { documents, folders: [], disciplines: [] };
+    }
+
+    let folders: { id: string; name: string; parent_id: string | null; naming_mask: string | null }[] = [];
+    let disciplines: { code: string; name: string }[] = [];
+
+    try {
+      const { data: foldersData } = await supabase
+        .from('opura_folders')
+        .select('id, name, parent_id, naming_mask')
+        .in('organization_id', orgIds);
+      folders = (foldersData || []) as any[];
+    } catch (err) {
+      console.error('[PARTNER SERVICE] Pastas indisponíveis para a árvore do portal (best-effort):', err);
+    }
+
+    try {
+      const { data: discData } = await supabase
+        .from('opura_dms_disciplines')
+        .select('code, name')
+        .in('organization_id', orgIds);
+      disciplines = (discData || []) as any[];
+    } catch (err) {
+      console.error('[PARTNER SERVICE] Disciplinas indisponíveis para a árvore do portal (best-effort):', err);
+    }
+
+    return { documents, folders, disciplines };
+  },
+
   // Com quais workspaces de parceiro um documento já está compartilhado (evita reshare duplicado sem perceber)
   async listSharingsForDocument(documentId: string): Promise<{ partner_workspace_id: string; supplier_name: string }[]> {
     const { data, error } = await supabase

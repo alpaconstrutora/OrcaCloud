@@ -879,6 +879,9 @@ const APROVADOS_COLUMNS: ColumnConfig[] = [
 ];
 
 const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
+    const qc = useQueryClient();
+    const confirm = useConfirm();
+    const { notify, Toast } = useToast();
     const hoje = new Date();
     const [ano, setAno] = useState(hoje.getFullYear());
     const [mes, setMes] = useState(hoje.getMonth());
@@ -890,6 +893,25 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
         queryKey: ['vr_calculos', orgId, mesIso],
         queryFn: () => vrService.listCalculos(orgId, mesIso),
     });
+
+    const enviarFolha = useMutation({
+        mutationFn: () => vrService.enviarLoteParaFolha(orgId, mesIso),
+        onSuccess: (r) => {
+            qc.invalidateQueries({ queryKey: ['vr_calculos', orgId, mesIso] });
+            if (r.colaboradores === 0) notify('Nenhum benefício aprovado para enviar neste mês.', 'error');
+            else notify(`Enviado à folha: ${r.colaboradores} colaborador(es), ${r.descontos} desconto(s) e ${r.informativos} informativo(s).`);
+        },
+        onError: (e: any) => notify('Erro ao enviar para a folha: ' + (e.message ?? e), 'error'),
+    });
+
+    const handleEnviarFolha = async () => {
+        const ok = await confirm({
+            title: 'Enviar lote para a folha?',
+            message: `Os benefícios aprovados de ${MESES[mes]}/${ano} serão lançados na folha (desconto da coparticipação + valor informativo) e marcados como "Pago". A ação pode ser repetida sem duplicar.`,
+            confirmLabel: 'Enviar para folha',
+        });
+        if (ok) enviarFolha.mutate();
+    };
 
     const aprovados = useMemo(
         () => calculos.filter(c => c.status === 'aprovado' || c.status === 'pago'),
@@ -927,10 +949,21 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
                     <h3 className="text-sm font-black text-slate-900">Aprovados</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Relação de colaboradores com benefício aprovado e valor total do lote</p>
                 </div>
+                <div className="flex items-center gap-3">
+                <button
+                    onClick={handleEnviarFolha}
+                    disabled={enviarFolha.isPending || aprovados.length === 0}
+                    title={aprovados.length === 0 ? 'Aprove cálculos na aba "Cálculo Mensal" para habilitar o envio' : 'Lança desconto e informativo na folha do mês'}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white text-[13px] font-medium rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-40"
+                >
+                    {enviarFolha.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-[15px] h-[15px]" />}
+                    Enviar p/ folha
+                </button>
                 <div className="flex items-center gap-1 bg-slate-100 rounded-[10px] p-1">
                     <button onClick={() => { if (mes === 0) { setMes(11); setAno(a => a - 1); } else setMes(m => m - 1); }} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">‹</button>
                     <span className="px-3 text-sm font-black text-slate-900 min-w-[120px] text-center">{MESES[mes]}/{ano}</span>
                     <button onClick={() => { if (mes === 11) { setMes(0); setAno(a => a + 1); } else setMes(m => m + 1); }} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">›</button>
+                </div>
                 </div>
             </div>
 
@@ -1060,6 +1093,7 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
                     </div>
                 )}
             </div>
+            <Toast />
         </div>
     );
 };

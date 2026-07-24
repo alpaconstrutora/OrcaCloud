@@ -210,6 +210,14 @@ export function calcularVrMensal(
     };
 }
 
+// ─── Ponte com a Folha de Pagamento ───────────────────────────────────────────
+// Rubricas globais semeadas em migration 20270824000004. Ver services/payrollEngine.ts
+// passo 4 (EVENTOS MANUAIS): eventos com approval_status='APROVADO' e payroll_run_id
+// NULL entram na folha do período de referência.
+export const VR_RUBRIC_DESCONTO = 'VR_DESCONTO';    // desconto (coparticipação) → bate no líquido
+export const VR_RUBRIC_BENEFICIO = 'VR_BENEFICIO';  // informativa → aparece no contracheque sem afetar líquido
+const VR_EVENT_ORIGIN = 'vale_refeicao';
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const vrService = {
@@ -377,6 +385,87 @@ export const vrService = {
             valor_depois: valorDepois,
             motivo,
         });
+    },
+
+    // ── Ponte com a Folha ─────────────────────────────────────────────────────
+
+    /**
+     * Lança o lote de VR aprovado do mês na folha de pagamento (payroll_events).
+     * Para cada cálculo aprovado do mês gera:
+     *   • VR_BENEFICIO (informativa) = valor_bruto — sempre que houver benefício
+     *   • VR_DESCONTO  (desconto)    = desconto_folha — apenas quando > 0
+     * Idempotente: remove eventos anteriores da mesma origem/mês/colaborador antes
+     * de reinserir, então reenviar o lote não duplica. Marca os cálculos como 'pago'.
+     */
+    async enviarLoteParaFolha(orgId: string, mesIso: string): Promise<{ colaboradores: number; descontos: number; informativos: number }> {
+        if (!orgId || orgId === 'all') throw new Error('Selecione uma organização específica antes de enviar para a folha.');
+
+        // 1. Cálculos aprovados (ou já pagos — permite reenvio idempotente) do mês
+        const { data: calculos, error: errCalc } = await supabase
+            .from('vr_calculos')
+            .select('id, org_id, employee_id, project_id, mes_referencia, valor_bruto, desconto_folha, status')
+            .eq('org_id', orgId)
+            .eq('mes_referencia', mesIso)
+            .in('status', ['aprovado', 'pago']);
+        if (errCalc) throw errCalc;
+
+        const lote = (calculos ?? []).filter(c => c.valor_bruto > 0 || c.desconto_folha > 0);
+        if (lote.length === 0) return { colaboradores: 0, descontos: 0, informativos: 0 };
+
+        const employeeIds = [...new Set(lote.map(c => c.employee_id))];
+
+        // 2. Idempotência: apaga eventos VR anteriores deste mês/org/colaboradores
+        const { error: errDel } = await supabase
+            .from('payroll_events')
+            .delete()
+            .eq('org_id', orgId)
+            .eq('origin', VR_EVENT_ORIGIN)
+            .eq('reference_date', mesIso)
+            .in('employee_id', employeeIds);
+        if (errDel) throw errDel;
+
+        // 3. Monta e insere os eventos frescos
+        const [y, m] = mesIso.split('-');
+        const label = `Vale Refeição ${m}/${y}`;
+        const rows: Record<string, unknown>[] = [];
+        let descontos = 0;
+        let informativos = 0;
+
+        for (const c of lote) {
+            const base = {
+                org_id: orgId,
+                employee_id: c.employee_id,
+                payroll_run_id: null,
+                reference_date: mesIso,
+                origin: VR_EVENT_ORIGIN,
+                unit: 'fixed',
+                quantity: 0,
+                approval_status: 'APROVADO',
+                project_id: c.project_id ?? null,
+            };
+            if (c.valor_bruto > 0) {
+                rows.push({ ...base, code: VR_RUBRIC_BENEFICIO, rubric_code: VR_RUBRIC_BENEFICIO, type: 'informativa', amount: c.valor_bruto, description: label });
+                informativos++;
+            }
+            if (c.desconto_folha > 0) {
+                rows.push({ ...base, code: VR_RUBRIC_DESCONTO, rubric_code: VR_RUBRIC_DESCONTO, type: 'desconto', amount: c.desconto_folha, description: `${label} — coparticipação` });
+                descontos++;
+            }
+        }
+
+        if (rows.length > 0) {
+            const { error: errIns } = await supabase.from('payroll_events').insert(rows);
+            if (errIns) throw errIns;
+        }
+
+        // 4. Marca os cálculos como pagos (efetivados na folha)
+        const { error: errUpd } = await supabase
+            .from('vr_calculos')
+            .update({ status: 'pago' })
+            .in('id', lote.map(c => c.id));
+        if (errUpd) throw errUpd;
+
+        return { colaboradores: employeeIds.length, descontos, informativos };
     },
 
     async listAjustes(calculoId: string): Promise<VrAjuste[]> {

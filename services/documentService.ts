@@ -41,6 +41,15 @@ export interface OpuraDmsDocumentType {
   created_at: string;
 }
 
+// Destinatário de portal agregado (usado por listPortalSharingsForDocuments) — um
+// cliente/colaborador com quantos dos documentos consultados estão compartilhados com ele.
+export interface OpuraPortalShareRecipient {
+  audience: OpuraDocumentPortalAudience;
+  recipient_id: string;
+  name: string;
+  doc_count: number;
+}
+
 function generateUUID(): string {
   if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -914,6 +923,62 @@ export const documentService = {
     }
 
     return (data || []) as OpuraDocumentPortalShare[];
+  },
+
+  // Compartilhamentos de portal de UM CONJUNTO de documentos, agregados por destinatário
+  // (cliente/colaborador). Espelha partnerService.listSharingsForDocuments — usado pela
+  // visualização "compartilhado com" do GED nos 3 modos (documento/disciplina/pasta).
+  // `doc_count` < documentIds.length indica compartilhamento parcial.
+  async listPortalSharingsForDocuments(documentIds: string[]): Promise<OpuraPortalShareRecipient[]> {
+    if (documentIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from('opura_document_portal_shares')
+      .select('audience, client_id, employee_id, client:clients(name), employee:employees(name)')
+      .in('document_id', documentIds);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar compartilhamentos de portal (lote):', error);
+      throw error;
+    }
+
+    const map = new Map<string, OpuraPortalShareRecipient>();
+    for (const row of (data || []) as any[]) {
+      const audience = row.audience as OpuraDocumentPortalAudience;
+      const recipientId = audience === 'cliente' ? row.client_id : row.employee_id;
+      if (!recipientId) continue;
+      const key = `${audience}:${recipientId}`;
+      const existing = map.get(key);
+      if (existing) existing.doc_count += 1;
+      else map.set(key, {
+        audience,
+        recipient_id: recipientId,
+        name: (audience === 'cliente' ? row.client?.name : row.employee?.name) || '—',
+        doc_count: 1,
+      });
+    }
+    return Array.from(map.values());
+  },
+
+  // Revoga o acesso de um destinatário (cliente/colaborador) a um conjunto de documentos.
+  async unsharePortalDocumentsBatch(
+    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string },
+    documentIds: string[]
+  ): Promise<void> {
+    if (documentIds.length === 0) return;
+    let query = supabase
+      .from('opura_document_portal_shares')
+      .delete()
+      .eq('audience', target.audience)
+      .in('document_id', documentIds);
+    query = target.audience === 'cliente'
+      ? query.eq('client_id', target.clientId!)
+      : query.eq('employee_id', target.employeeId!);
+
+    const { error } = await query;
+    if (error) {
+      console.error('[DocumentService] Erro ao revogar compartilhamento de portal (lote):', error);
+      throw error;
+    }
   },
 
   async sharePortalDocumentsBatch(

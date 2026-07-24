@@ -52,7 +52,8 @@ import { DocumentBatchEditModal } from './documents/DocumentBatchEditModal';
 import {
   documentService,
   OpuraDmsDiscipline, OpuraDmsDocumentType,
-  OpuraDmsNamingPattern
+  OpuraDmsNamingPattern,
+  OpuraPortalShareRecipient
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
 import { clientService } from '../services/clientService';
@@ -72,7 +73,6 @@ import {
   OpuraDocumentApproval,
   OpuraDocumentApprovalStatus,
   OpuraDocumentAuditLog,
-  OpuraDocumentPortalShare,
   PartnerWorkspace,
   UserPermissions,
   Supplier,
@@ -233,7 +233,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [shareDocIds, setShareDocIds] = React.useState<string[]>([]);
   const [selectedShareWorkspaceId, setSelectedShareWorkspaceId] = React.useState('');
   const [sharingSubmitting, setSharingSubmitting] = React.useState(false);
-  const [docAlreadySharedWith, setDocAlreadySharedWith] = React.useState<{ partner_workspace_id: string; supplier_name: string }[]>([]);
+  const [docAlreadySharedWith, setDocAlreadySharedWith] = React.useState<{ partner_workspace_id: string; supplier_name: string; doc_count: number }[]>([]);
+  const [unsharingId, setUnsharingId] = React.useState<string | null>(null);
 
   // Estados locais — Compartilhamento com Portal do Cliente / Portal do Colaborador
   // (GED vira a fonte única desses portais — ver migration 20270821000008)
@@ -242,7 +243,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [portalShareEmployees, setPortalShareEmployees] = React.useState<{ id: string; name: string }[]>([]);
   const [selectedShareClientId, setSelectedShareClientId] = React.useState('');
   const [selectedShareEmployeeId, setSelectedShareEmployeeId] = React.useState('');
-  const [docAlreadySharedWithPortal, setDocAlreadySharedWithPortal] = React.useState<OpuraDocumentPortalShare[]>([]);
+  const [docAlreadySharedWithPortal, setDocAlreadySharedWithPortal] = React.useState<OpuraPortalShareRecipient[]>([]);
 
   // Estados locais — Bloqueio para edição (trava)
   const [lockModalDoc, setLockModalDoc] = React.useState<OpuraDocument | null>(null);
@@ -1139,15 +1140,80 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         .then((emps: any[]) => setPortalShareEmployees(emps.map((e) => ({ id: e.id, name: e.name }))))
         .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar colaboradores:', err));
     }
+    // Carrega para TODOS os documentos do escopo (1 documento, ou N de uma disciplina/pasta),
+    // agregando por destinatário — é o que a seção "compartilhado com" exibe nos 3 modos.
     try {
-      if (docIds.length === 1) {
-        const sharings = await partnerService.listSharingsForDocument(docIds[0]);
-        setDocAlreadySharedWith(sharings);
-        const portalSharings = await documentService.listPortalSharingsForDocument(docIds[0]);
-        setDocAlreadySharedWithPortal(portalSharings);
-      }
+      const [sharings, portalSharings] = await Promise.all([
+        partnerService.listSharingsForDocuments(docIds),
+        documentService.listPortalSharingsForDocuments(docIds),
+      ]);
+      setDocAlreadySharedWith(sharings);
+      setDocAlreadySharedWithPortal(portalSharings);
     } catch (err) {
       console.error('[OpuraDocsModule] Erro ao carregar compartilhamentos existentes do documento:', err);
+    }
+  };
+
+  // Recarrega a lista "compartilhado com" após uma revogação — mantém o modal aberto.
+  const reloadShareRecipients = async () => {
+    try {
+      const [sharings, portalSharings] = await Promise.all([
+        partnerService.listSharingsForDocuments(shareDocIds),
+        documentService.listPortalSharingsForDocuments(shareDocIds),
+      ]);
+      setDocAlreadySharedWith(sharings);
+      setDocAlreadySharedWithPortal(portalSharings);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao recarregar compartilhamentos:', err);
+    }
+  };
+
+  // Revogar acesso de um parceiro a todos os documentos do escopo atual.
+  const handleUnshareFromPartner = async (workspaceId: string, supplierName: string) => {
+    const ok = await confirm({
+      title: 'Revogar compartilhamento?',
+      message: `${supplierName} deixará de ter acesso a ${shareDocIds.length > 1 ? `estes ${shareDocIds.length} documentos` : 'este documento'} no Portal do Parceiro.`,
+      variant: 'danger',
+      confirmLabel: 'Revogar',
+    });
+    if (!ok) return;
+    setUnsharingId(workspaceId);
+    try {
+      await partnerService.unshareDocumentsBatch(workspaceId, shareDocIds);
+      await reloadShareRecipients();
+      notify('Acesso revogado.');
+    } catch (err: any) {
+      notify(err.message || 'Erro ao revogar compartilhamento.', 'error');
+    } finally {
+      setUnsharingId(null);
+    }
+  };
+
+  // Revogar acesso de um cliente/colaborador (portal) a todos os documentos do escopo atual.
+  const handleUnshareFromPortal = async (recipient: OpuraPortalShareRecipient) => {
+    const ok = await confirm({
+      title: 'Revogar compartilhamento?',
+      message: `${recipient.name} deixará de ver ${shareDocIds.length > 1 ? `estes ${shareDocIds.length} documentos` : 'este documento'} no Portal do ${recipient.audience === 'cliente' ? 'Cliente' : 'Colaborador'}.`,
+      variant: 'danger',
+      confirmLabel: 'Revogar',
+    });
+    if (!ok) return;
+    setUnsharingId(`${recipient.audience}:${recipient.recipient_id}`);
+    try {
+      await documentService.unsharePortalDocumentsBatch(
+        {
+          audience: recipient.audience,
+          clientId: recipient.audience === 'cliente' ? recipient.recipient_id : undefined,
+          employeeId: recipient.audience === 'colaborador' ? recipient.recipient_id : undefined,
+        },
+        shareDocIds
+      );
+      await reloadShareRecipients();
+      notify('Acesso revogado.');
+    } catch (err: any) {
+      notify(err.message || 'Erro ao revogar compartilhamento.', 'error');
+    } finally {
+      setUnsharingId(null);
     }
   };
 
@@ -3496,11 +3562,29 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             {shareAudience === 'parceiro' && (
               <form onSubmit={handleShareWithPartner} className="p-6 space-y-4">
                 {docAlreadySharedWith.length > 0 && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-[6px] px-3.5 py-2.5">
-                    <p className="text-xs font-semibold text-blue-700 mb-1">Já compartilhado com:</p>
-                    <p className="text-xs text-blue-600">
-                      {docAlreadySharedWith.map((s) => s.supplier_name).join(', ')}
-                    </p>
+                  <div className="bg-slate-50 border border-slate-100 rounded-[8px] p-2.5">
+                    <p className="text-xs font-semibold text-slate-500 mb-1.5 px-1">Compartilhado com</p>
+                    <div className="space-y-1">
+                      {docAlreadySharedWith.map((s) => {
+                        const partial = s.doc_count < shareDocIds.length;
+                        return (
+                          <div key={s.partner_workspace_id} className="flex items-center justify-between gap-2 bg-white border border-slate-100 rounded-[6px] px-2.5 py-1.5">
+                            <div className="min-w-0">
+                              <span className="text-sm font-medium text-slate-700 block truncate">{s.supplier_name}</span>
+                              {partial && (
+                                <span className="text-[11px] text-amber-600">{s.doc_count} de {shareDocIds.length} arquivos</span>
+                              )}
+                            </div>
+                            <ActionIconButton
+                              kind="delete"
+                              title="Revogar acesso"
+                              disabled={unsharingId === s.partner_workspace_id}
+                              onClick={() => handleUnshareFromPartner(s.partner_workspace_id, s.supplier_name)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 <div className="space-y-1.5">
@@ -3513,7 +3597,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   >
                     <option value="">Selecione um parceiro...</option>
                     {sortedShareWorkspaces.map((ws) => {
-                      const alreadyShared = docAlreadySharedWith.some((s) => s.partner_workspace_id === ws.id);
+                      // Desabilita só quando cobre TODOS os documentos do escopo — se for parcial,
+                      // deixa reselecionar para completar o compartilhamento no restante.
+                      const alreadyShared = docAlreadySharedWith.some((s) => s.partner_workspace_id === ws.id && s.doc_count >= shareDocIds.length);
                       return (
                         <option key={ws.id} value={ws.id} disabled={alreadyShared}>
                           {ws.supplier_id === shareTargetSupplierId ? '★ ' : ''}{ws.supplier_name}{alreadyShared ? ' (já compartilhado)' : ''}
@@ -3556,14 +3642,30 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             {(shareAudience === 'cliente' || shareAudience === 'colaborador') && (
               <form onSubmit={handleShareWithPortal} className="p-6 space-y-4">
                 {docAlreadySharedWithPortal.filter((s) => s.audience === shareAudience).length > 0 && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-[6px] px-3.5 py-2.5">
-                    <p className="text-xs font-semibold text-blue-700 mb-1">Já compartilhado com:</p>
-                    <p className="text-xs text-blue-600">
-                      {docAlreadySharedWithPortal
-                        .filter((s) => s.audience === shareAudience)
-                        .map((s) => (s.audience === 'cliente' ? s.client?.name : s.employee?.name) || '—')
-                        .join(', ')}
-                    </p>
+                  <div className="bg-slate-50 border border-slate-100 rounded-[8px] p-2.5">
+                    <p className="text-xs font-semibold text-slate-500 mb-1.5 px-1">Compartilhado com</p>
+                    <div className="space-y-1">
+                      {docAlreadySharedWithPortal.filter((s) => s.audience === shareAudience).map((s) => {
+                        const partial = s.doc_count < shareDocIds.length;
+                        const key = `${s.audience}:${s.recipient_id}`;
+                        return (
+                          <div key={key} className="flex items-center justify-between gap-2 bg-white border border-slate-100 rounded-[6px] px-2.5 py-1.5">
+                            <div className="min-w-0">
+                              <span className="text-sm font-medium text-slate-700 block truncate">{s.name}</span>
+                              {partial && (
+                                <span className="text-[11px] text-amber-600">{s.doc_count} de {shareDocIds.length} arquivos</span>
+                              )}
+                            </div>
+                            <ActionIconButton
+                              kind="delete"
+                              title="Revogar acesso"
+                              disabled={unsharingId === key}
+                              onClick={() => handleUnshareFromPortal(s)}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
                 {shareAudience === 'cliente' ? (
@@ -3577,7 +3679,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     >
                       <option value="">Selecione um cliente...</option>
                       {portalShareClients.map((c) => {
-                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'cliente' && s.client_id === c.id);
+                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'cliente' && s.recipient_id === c.id && s.doc_count >= shareDocIds.length);
                         return (
                           <option key={c.id} value={c.id} disabled={alreadyShared}>
                             {c.name}{alreadyShared ? ' (já compartilhado)' : ''}
@@ -3600,7 +3702,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     >
                       <option value="">Selecione um colaborador...</option>
                       {portalShareEmployees.map((emp) => {
-                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'colaborador' && s.employee_id === emp.id);
+                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'colaborador' && s.recipient_id === emp.id && s.doc_count >= shareDocIds.length);
                         return (
                           <option key={emp.id} value={emp.id} disabled={alreadyShared}>
                             {emp.name}{alreadyShared ? ' (já compartilhado)' : ''}

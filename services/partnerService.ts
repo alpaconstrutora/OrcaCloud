@@ -429,7 +429,7 @@ export const partnerService = {
 
   async shareDocumentsBatch(workspaceId: string, documentIds: string[], sharedBy: string): Promise<void> {
     if (documentIds.length === 0) return;
-    
+
     const payloads = documentIds.map(docId => ({
       partner_workspace_id: workspaceId,
       document_id: docId,
@@ -448,6 +448,48 @@ export const partnerService = {
     this.notifyPartnersOfSharedDocument(workspaceId, `Lote de ${documentIds.length} documentos`, sharedBy).catch((err) => {
       console.error('[PARTNER SERVICE] Erro ao notificar parceiros sobre lote de documentos:', err);
     });
+  },
+
+  // Compartilhamentos de UM CONJUNTO de documentos, agregados por parceiro. Usado pela
+  // visualização "compartilhado com" do GED nos 3 modos (documento/disciplina/pasta):
+  // `doc_count` diz com quantos dos documentos passados aquele parceiro está compartilhado
+  // (quando < documentIds.length, o compartilhamento é parcial — nem todos os arquivos).
+  async listSharingsForDocuments(documentIds: string[]): Promise<{ partner_workspace_id: string; supplier_name: string; doc_count: number }[]> {
+    if (documentIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from('partner_shared_documents')
+      .select('partner_workspace_id, workspace:partner_workspaces(supplier:suppliers(name))')
+      .in('document_id', documentIds);
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error listing sharings for documents:', error);
+      throw error;
+    }
+
+    const map = new Map<string, { supplier_name: string; doc_count: number }>();
+    for (const row of (data || []) as any[]) {
+      const existing = map.get(row.partner_workspace_id);
+      if (existing) existing.doc_count += 1;
+      else map.set(row.partner_workspace_id, {
+        supplier_name: row.workspace?.supplier?.name || 'Fornecedor sem nome',
+        doc_count: 1,
+      });
+    }
+    return Array.from(map.entries()).map(([partner_workspace_id, v]) => ({ partner_workspace_id, ...v }));
+  },
+
+  async unshareDocumentsBatch(workspaceId: string, documentIds: string[]): Promise<void> {
+    if (documentIds.length === 0) return;
+    const { error } = await supabase
+      .from('partner_shared_documents')
+      .delete()
+      .eq('partner_workspace_id', workspaceId)
+      .in('document_id', documentIds);
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error unsharing documents batch:', error);
+      throw error;
+    }
   },
 
   // Link assinado para abrir/baixar um documento compartilhado — o bucket 'opura-docs' é privado,

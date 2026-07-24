@@ -48,13 +48,28 @@ export const rentalPriceTableService = {
     },
 
     async getTableItems(tableId: string): Promise<CommercialPriceTableItem[]> {
-        const { data, error } = await supabase
+        const { data: rows, error } = await supabase
             .from('rental_price_table_items')
-            .select(`${ITEM_COLS}, property:commercial_properties(name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker)`)
+            .select(ITEM_COLS)
             .eq('price_table_id', tableId);
         if (error) throw error;
-        return (data ?? []).map((row: any) => {
-            const p = row.property ?? {};
+        const items = rows ?? [];
+        if (items.length === 0) return [];
+
+        // Join manual: rental_price_table_items NÃO tem FK para commercial_properties
+        // (tabela quente — evita deadlock de DDL), então o PostgREST não resolve o
+        // embed `property:commercial_properties(...)`. Buscamos as unidades à parte
+        // e cruzamos por property_id.
+        const propIds = [...new Set(items.map((i: any) => i.property_id))];
+        const { data: props, error: propsErr } = await supabase
+            .from('commercial_properties')
+            .select('id, name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker')
+            .in('id', propIds);
+        if (propsErr) throw propsErr;
+        const byId = new Map((props ?? []).map((p: any) => [p.id, p]));
+
+        return items.map((row: any) => {
+            const p = byId.get(row.property_id) ?? {};
             const specs = p.specs ?? {};
             // Padrão canônico de PropertyUnitMap.tsx: `coluna || specs || 0` (falsy).
             const num = (a: any, b: any) => (Number(a) || Number(b)) || null;

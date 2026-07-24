@@ -3,6 +3,7 @@ import { Property, PropertyDeal, PropertyStatus } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
 import { projectService } from './projectService';
 import { financialSyncService } from './financialSyncService';
+import { taxPayableService } from './taxPayableService';
 
 /**
  * Traduz a violação de FK (23503) ao excluir um imóvel para uma frase acionável.
@@ -421,6 +422,14 @@ export const commercialService = {
                         console.error('[COMMERCIAL SERVICE] Falha ao materializar parcelas em Contas a Receber:', e);
                     }
                 }
+
+                // Tributos a Pagar: gera/atualiza os tributos (IRRF/PIS/COFINS/CSLL…)
+                // deste negócio de Venda de Ativo/Locação a partir de tax_settings.
+                try {
+                    await taxPayableService.generateForDeal(finalDealToSync, orgId);
+                } catch (e) {
+                    console.error('[COMMERCIAL SERVICE] Falha ao gerar tributos a pagar:', e);
+                }
             } catch (err) {
                 console.error('[COMMERCIAL SERVICE] Sync or Property update failed:', err);
             }
@@ -446,6 +455,10 @@ export const commercialService = {
                     ? commercialFinanceService.deleteDealInstallments(result.id, cancelOrgId)
                         .then(() => console.log(`[COMMERCIAL SERVICE] Installments reversed for deal ${result.id} (distrato)`))
                     : Promise.resolve(),
+                // (c) Estorna tributos a pagar pendentes deste negócio
+                cancelOrgId
+                    ? taxPayableService.removeForDeal(result.id, cancelOrgId)
+                    : Promise.resolve(),
             ]);
         }
 
@@ -463,6 +476,9 @@ export const commercialService = {
         if (deal) {
             // 2. Cleanup installments (this will throw if any are PAID)
             await commercialFinanceService.deleteDealInstallments(id, deal.organization_id);
+
+            // 2b. Remove tributos a pagar pendentes deste negócio
+            await taxPayableService.removeForDeal(id, deal.organization_id);
 
             // Revert property status to AVAILABLE
             if (deal.property_id) {

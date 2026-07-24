@@ -82,6 +82,7 @@ const ClientChargesModule      = React.lazy(() => import('./ClientChargesModule'
 const BoletoManager            = React.lazy(() => import('./BoletoManager'));
 const BankReconciliation       = React.lazy(() => import('./BankReconciliation'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
+const TributosAPagarManager  = React.lazy(() => import('./TributosAPagarManager'));
 const FinancialApprovalModule = React.lazy(() => import('./FinancialApprovalModule'));
 const ProcessosModule        = React.lazy(() => import('./ProcessosModule'));
 const FinancialCalendar       = React.lazy(() => import('./FinancialCalendar'));
@@ -1379,6 +1380,18 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <ContasReceberManager
+            organizationId={activeOrganizationId || ''}
+            organizations={organizations}
+            onOrgChange={(id) => setActiveOrganizationId(id)}
+          />
+        </React.Suspense>
+      );
+
+    // ── Tributos a Pagar (Comercial: Vendas de Ativos / Locações) ──────────────
+    case 'tributos-a-pagar':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <TributosAPagarManager
             organizationId={activeOrganizationId || ''}
             organizations={organizations}
             onOrgChange={(id) => setActiveOrganizationId(id)}

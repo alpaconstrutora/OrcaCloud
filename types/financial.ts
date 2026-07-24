@@ -689,6 +689,44 @@ export interface InadimplenciaFaixa {
 }
 
 // ────────────────────────────────────────────────────────────
+// Tributos a Pagar (Comercial — Vendas de Ativos / Locações)
+// ────────────────────────────────────────────────────────────
+
+export type TaxPayableBusinessStatus =
+    | 'PREVISTO'
+    | 'PAGO'
+    | 'CANCELADO';
+
+// effective_status inclui 'VENCIDO' (computado na view)
+export type TaxPayableEffectiveStatus = TaxPayableBusinessStatus | 'VENCIDO';
+
+export interface TaxPayable {
+    id: string;
+    organization_id: string;
+    source_system: string;
+    reference_id?: string;
+    transaction_date: string;
+    due_date?: string;
+    amount: number;
+    direction: 'DEBIT';
+    description?: string;
+    /** Origem do tributo: 'Venda de Ativo' | 'Locação' | 'Manual' */
+    category?: string;
+    status: InternalTransactionStatus;
+    business_status: TaxPayableBusinessStatus;
+    effective_status: TaxPayableEffectiveStatus;
+    party_id?: string;
+    /** Nome do tributo (PIS/COFINS/IRRF/CSLL/…) */
+    party_name?: string;
+    party_type?: string;
+    project_id?: string;
+    project_name?: string;
+    cost_center_id?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+// ────────────────────────────────────────────────────────────
 // Aprovação Financeira por Faixas
 // ────────────────────────────────────────────────────────────
 

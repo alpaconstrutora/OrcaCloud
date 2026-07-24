@@ -207,7 +207,10 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
       {showColumnConfig && (
         <div className="absolute right-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-50 min-w-[250px]">
           <div className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wider">Colunas Visíveis</div>
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          {/* max-h em vh (não px fixo): telas com mais colunas (ex: GED, que soma colunas
+              dinâmicas de máscara às fixas) passam de 300px facilmente — os últimos itens
+              ficavam fora da área visível sem indício de que a lista rolava. */}
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
             {columns.map(col => (
               <label key={col.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded-lg">
                 <input

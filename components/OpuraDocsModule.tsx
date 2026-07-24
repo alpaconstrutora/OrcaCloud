@@ -1340,14 +1340,32 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // "Restaurar Padrão" restaura a preferência SALVA pelo usuário (se existir) — não o
+  // default de fábrica. Uma vez que existe "Salvar como padrão", "padrão" passa a
+  // significar o que o usuário salvou; só cai no default de fábrica (todas as colunas)
+  // quando não há nada salvo ainda.
   const handleResetAnyColumn = () => {
-    tableColumns.resetColumns();
-    setHiddenDynamicColumns(new Set());
+    if (savedColumnPref) {
+      applyColumnPreference(savedColumnPref);
+    } else {
+      tableColumns.resetColumns();
+      setHiddenDynamicColumns(new Set());
+    }
   };
 
   // ─── Preferência de colunas por usuário (banco, entre dispositivos) ─────────
   const [savedColumnPref, setSavedColumnPref] = React.useState<TableColumnPreference | null>(null);
   const [savingColumnPrefs, setSavingColumnPrefs] = React.useState(false);
+
+  // Aplica uma preferência (salva ou recém-carregada) ao estado de colunas estáticas +
+  // dinâmicas — usado tanto no carregamento inicial quanto em "Restaurar Padrão".
+  const applyColumnPreference = (pref: TableColumnPreference) => {
+    const staticKeys = new Set(COLUMNS.map(c => c.key));
+    tableColumns.setVisibleColumns(pref.visibleColumns.filter(k => staticKeys.has(k)));
+    if (pref.sortColumn) tableColumns.setSortColumn(pref.sortColumn);
+    tableColumns.setSortDirection(pref.sortDirection);
+    setHiddenDynamicColumns(new Set(dynamicColumns.filter(col => !pref.visibleColumns.includes(col))));
+  };
 
   // Busca uma vez por usuário logado — se existir, sobrepõe o default/localStorage
   // nas colunas estáticas. Não bloqueia a tela: roda em paralelo, sem gate em fetchDocs.
@@ -1358,10 +1376,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       try {
         const pref = await tableColumnPreferencesService.get(currentProfile.email!, 'opuraDocsColumns');
         if (cancelled || !pref) return;
-        const staticKeys = new Set(COLUMNS.map(c => c.key));
-        tableColumns.setVisibleColumns(pref.visibleColumns.filter(k => staticKeys.has(k)));
-        if (pref.sortColumn) tableColumns.setSortColumn(pref.sortColumn);
-        tableColumns.setSortDirection(pref.sortDirection);
+        applyColumnPreference(pref);
         setSavedColumnPref(pref);
       } catch (err) {
         console.error('[OpuraDocsModule] Erro ao carregar preferência de colunas:', err);

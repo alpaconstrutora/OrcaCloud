@@ -603,6 +603,23 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         }
     }
 
+    // Formulário de captura ocupa a área do módulo (página dentro do app),
+    // no lugar da lista — mantendo menu lateral/topo visíveis. Não é overlay.
+    if (isModalOpen) {
+        return (
+            <BoletoFormModal
+                organizationId={editing?.organization_id ?? effectiveOrgId ?? ''}
+                organizations={organizations}
+                onOrgChange={(id) => { handleOrgChange(id); }}
+                userEmail={userEmail}
+                projectId={projectId}
+                boleto={editing}
+                onClose={() => { setIsModalOpen(false); setEditing(undefined); }}
+                onSaved={handleSaved}
+            />
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* 1. Título — h1 solto (§1). Escopo e ações moram na barra da §4, abaixo
@@ -1135,19 +1152,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
             </div>
-
-            {isModalOpen && (
-                <BoletoFormModal
-                    organizationId={editing?.organization_id ?? effectiveOrgId ?? ''}
-                    organizations={organizations}
-                    onOrgChange={(id) => { handleOrgChange(id); }}
-                    userEmail={userEmail}
-                    projectId={projectId}
-                    boleto={editing}
-                    onClose={() => { setIsModalOpen(false); setEditing(undefined); }}
-                    onSaved={handleSaved}
-                />
-            )}
 
             {isLoteOpen && (
                 <BoletoLoteModal

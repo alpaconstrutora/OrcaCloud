@@ -87,7 +87,7 @@ function getAdvancedFilterValue(c: Client, key: string): unknown {
 }
 
 const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient, organizationId }) => {
-    const { activeOrganizationId } = useStore();
+    const { activeOrganizationId, organizations } = useStore();
     const [clients, setClients] = React.useState<Client[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
@@ -209,10 +209,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     };
 
     const handleGenerateToken = async () => {
-        const orgId = organizationId || activeOrganizationId || tokenModal?.client.organization_id;
-        if (!tokenModal || !orgId) {
-            console.error('[ClientPortal] organizationId ausente', { organizationId, activeOrganizationId, clientOrgId: tokenModal?.client.organization_id });
-            showToast('Erro: organização não identificada.', 'error');
+        // Deriva a org: prop > seletor ativo > org do próprio cliente > única org do usuário.
+        // Cliente global (organization_id null) + seletor em "Todas as organizações" não tem org
+        // para derivar; nesse caso, se o usuário só pertence a uma org, usamos ela.
+        const singleOrgId = organizations.length === 1 ? organizations[0].id : null;
+        const orgId = organizationId || activeOrganizationId || tokenModal?.client.organization_id || singleOrgId;
+        if (!tokenModal) return;
+        if (!orgId) {
+            console.error('[ClientPortal] organizationId ausente', { organizationId, activeOrganizationId, clientOrgId: tokenModal?.client.organization_id, orgCount: organizations.length });
+            showToast('Selecione uma organização específica no seletor do topo para gerar o link de acesso.', 'error');
             return;
         }
         setTokenLoading(true);

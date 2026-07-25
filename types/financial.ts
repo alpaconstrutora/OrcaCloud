@@ -722,6 +722,9 @@ export interface TaxPayable {
     project_id?: string;
     project_name?: string;
     cost_center_id?: string;
+    /** Empreendimento (Incorporação) de origem — derivado do negócio comercial, não é coluna da view. */
+    empreendimento_id?: string | null;
+    empreendimento_name?: string | null;
     created_at?: string;
     updated_at?: string;
 }

@@ -63,7 +63,7 @@ export const rentalPriceTableService = {
         const propIds = [...new Set(items.map((i: any) => i.property_id))];
         const { data: props, error: propsErr } = await supabase
             .from('commercial_properties')
-            .select('id, name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker')
+            .select('id, name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker')
             .in('id', propIds);
         if (propsErr) throw propsErr;
         const byId = new Map((props ?? []).map((p: any) => [p.id, p]));
@@ -93,6 +93,7 @@ export const rentalPriceTableService = {
                 floor: p.floor != null ? Number(p.floor) : null,
                 position_type: p.position_type ?? null,
                 visible_to_broker: p.visible_to_broker ?? true,
+                show_price_to_broker: p.show_price_to_broker ?? true,
             };
         });
     },
@@ -139,6 +140,12 @@ export const rentalPriceTableService = {
      *  não da versão da tabela — mesma flag compartilhada com Venda de Ativos. */
     async updateItemVisibility(propertyId: string, visible: boolean): Promise<void> {
         const { error } = await supabase.from('commercial_properties').update({ visible_to_broker: visible }).eq('id', propertyId);
+        if (error) throw error;
+    },
+
+    /** "Exibir Preço" — mesma flag de unidade compartilhada com Venda de Ativos. */
+    async updateItemShowPrice(propertyId: string, show: boolean): Promise<void> {
+        const { error } = await supabase.from('commercial_properties').update({ show_price_to_broker: show }).eq('id', propertyId);
         if (error) throw error;
     },
 

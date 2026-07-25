@@ -77,18 +77,23 @@ const buildColumns = (priceMode: 'sale' | 'rental'): ColumnConfig[] => [
     { key: 'price',           label: priceMode === 'rental' ? 'Aluguel nesta versão' : 'Preço nesta versão', sortable: true },
     { key: 'delta',           label: 'Δ',                  sortable: true },
     { key: 'visibleToBroker', label: 'Visível p/ Corretor', sortable: true },
+    { key: 'showPrice',       label: 'Exibir Preço',        sortable: true },
 ];
 const COLUMN_KEYS = buildColumns('sale').map(c => c.key);
 
 // Δ da unidade: variação % entre o preço desta versão e o vigente. Mesma
 // fórmula de itemDelta() em PriceTableManager.tsx.
+// "Exibir Preço" (commercial_properties.show_price_to_broker): unidade continua
+// listada, mas sem o valor. Default true — unidade antiga/sem o flag mostra preço.
+const showPrice = (i: CommercialPriceTableItem) => (i.show_price_to_broker ?? true);
+
 const itemDelta = (i: CommercialPriceTableItem) => {
     const cur = i.current_price ?? i.price;
     return cur > 0 ? ((i.price - cur) / cur) * 100 : 0;
 };
 
 type SortKey = 'unit' | 'status' | 'privArea' | 'bedrooms' | 'parking' | 'bathrooms' | 'floor'
-    | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker';
+    | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker' | 'showPrice';
 type BuildingSortKey = 'name' | 'units';
 
 const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal }) => {
@@ -235,6 +240,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 floor: u.floor ?? u.specs?.floor ?? null,
                 position_type: u.position_type ?? null,
                 visible_to_broker: (u as any).visible_to_broker ?? true,
+                show_price_to_broker: (u as any).show_price_to_broker ?? true,
             }));
     }, [activeTable, loading, units, selectedBuildingId, priceMode]);
 
@@ -266,6 +272,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 case 'price': return (n(a.price) - n(b.price)) * dir;
                 case 'delta': return (itemDelta(a) - itemDelta(b)) * dir;
                 case 'visibleToBroker': return (Number(a.visible_to_broker ?? true) - Number(b.visible_to_broker ?? true)) * dir;
+                case 'showPrice': return (Number(a.show_price_to_broker ?? true) - Number(b.show_price_to_broker ?? true)) * dir;
                 default: return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
             }
         });
@@ -456,6 +463,9 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                         className="px-6 py-2 border-r border-gray-100 text-right" />}
                                     {isCol('visibleToBroker') && <SortableHeader colKey="visibleToBroker" label="Visível p/ Corretor" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                        className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap" />}
+                                    {isCol('showPrice') && <SortableHeader colKey="showPrice" label="Exibir Preço" uppercase={false}
+                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
                                         className="px-6 py-2 text-center whitespace-nowrap" />}
                                 </tr>
                             </thead>
@@ -496,11 +506,14 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                             {isCol('position') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                 {item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : '—'}
                                             </td>}
+                                            {/* Switch "Exibir Preço" desligado na unidade: valor não aparece para o
+                                                corretor (o corte principal é no servidor — RPCs do portal devolvem
+                                                price/current_price NULL; aqui é a segunda barreira). */}
                                             {isCol('current') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
-                                                {formatMoney(item.current_price ?? item.price)}
+                                                {showPrice(item) ? formatMoney(item.current_price ?? item.price) : '—'}
                                             </td>}
                                             {isCol('price') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
-                                                {formatMoney(item.price)}
+                                                {showPrice(item) ? formatMoney(item.price) : '—'}
                                             </td>}
                                             {isCol('delta') && (() => {
                                                 const diff = itemDelta(item);
@@ -509,8 +522,11 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                                 </td>;
                                             })()}
                                             {/* Leitura: o switch que edita este flag vive em PriceTableManager.tsx. */}
-                                            {isCol('visibleToBroker') && <td className="px-6 py-2.5 text-center text-sm font-normal text-gray-600">
+                                            {isCol('visibleToBroker') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal text-gray-600">
                                                 {(item.visible_to_broker ?? true) ? 'Sim' : 'Não'}
+                                            </td>}
+                                            {isCol('showPrice') && <td className="px-6 py-2.5 text-center text-sm font-normal text-gray-600">
+                                                {showPrice(item) ? 'Sim' : 'Não'}
                                             </td>}
                                         </tr>
                                     );

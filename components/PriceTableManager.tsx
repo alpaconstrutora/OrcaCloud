@@ -133,6 +133,7 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'price',    label: 'Preço nesta versão', sortable: true },
     { key: 'delta',    label: 'Δ',                  sortable: true },
     { key: 'visibleToBroker', label: 'Visível p/ Corretor', sortable: true },
+    { key: 'showPrice',       label: 'Exibir Preço',        sortable: true },
 ];
 
 const fmtBRL = formatMoney;
@@ -250,6 +251,19 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         }
     };
 
+    /** "Exibir Preço": independente de "Visível p/ Corretor" — a unidade continua
+     *  listada no portal, mas sem o valor. */
+    const handleToggleShowPrice = async (item: CommercialPriceTableItem) => {
+        const next = !(item.show_price_to_broker ?? true);
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, show_price_to_broker: next } : i));
+        try {
+            await svc.updateItemShowPrice(item.property_id, next);
+        } catch (err: any) {
+            setError(err.message);
+            setItems(prev => prev.map(i => i.id === item.id ? { ...i, show_price_to_broker: !next } : i));
+        }
+    };
+
     const handleApplyAdjustment = async () => {
         if (!selectedTableId) return;
         setApplyingAdjustment(true);
@@ -333,6 +347,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                 case 'price':     return (a.price - b.price) * dir;
                 case 'delta':     return (itemDelta(a) - itemDelta(b)) * dir;
                 case 'visibleToBroker': return (Number(a.visible_to_broker ?? true) - Number(b.visible_to_broker ?? true)) * dir;
+                case 'showPrice': return (Number(a.show_price_to_broker ?? true) - Number(b.show_price_to_broker ?? true)) * dir;
                 default:          return 0;
             }
         });
@@ -609,6 +624,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                 <SortableHeader colKey="visibleToBroker" label="Visível p/ Corretor" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('showPrice') && (
+                                                <SortableHeader colKey="showPrice" label="Exibir Preço" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
                                                     className="px-6 py-2 text-center whitespace-nowrap" />
                                             )}
                                         </tr>
@@ -686,6 +707,19 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                                     className="sr-only peer"
                                                                     checked={item.visible_to_broker ?? true}
                                                                     onChange={() => handleToggleVisibility(item)}
+                                                                />
+                                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                            </label>
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('showPrice') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
+                                                            <label className="relative inline-flex items-center cursor-pointer" title="Ligado: o corretor vê o preço desta unidade. Desligado: a unidade continua listada, sem o valor.">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="sr-only peer"
+                                                                    checked={item.show_price_to_broker ?? true}
+                                                                    onChange={() => handleToggleShowPrice(item)}
                                                                 />
                                                                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                                             </label>

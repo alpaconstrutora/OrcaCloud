@@ -319,7 +319,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     }, [settings.schedule, budget]);
 
     // Group costs by phase for the donut chart
-    const costDistribution = settings.wbs.flatMap(group =>
+    const costDistribution = (settings.wbs ?? []).flatMap(group =>
         group.phases.map(phase => {
             const phaseTotal = budget
                 .filter(item => item.group === group.name && item.phase === phase.name)

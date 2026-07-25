@@ -77,6 +77,17 @@ function today() { return new Date().toISOString().slice(0, 10); }
 // ─── types ──────────────────────────────────────────────────
 
 type StatusFilter = 'all' | TaxPayableEffectiveStatus;
+type ViewId = 'tributos' | 'fechamento';
+
+// Título/subtítulo mudam com a aba ativa (§19.1/§20)
+const VIEW_HEADERS: Record<ViewId, { title: string; subtitle: string }> = {
+    tributos:   { title: 'Tributos a Pagar', subtitle: 'Tributos (IRRF, PIS, COFINS, CSLL…) sobre Vendas de Ativos e Locações.' },
+    fechamento: { title: 'Fechamento',       subtitle: 'Conferência e fechamento dos tributos apurados sobre Vendas de Ativos e Locações.' },
+};
+const VIEWS: { id: ViewId; label: string }[] = [
+    { id: 'tributos',   label: 'Tributos a Pagar' },
+    { id: 'fechamento', label: 'Fechamento' },
+];
 
 // ─── NovoLancamentoModal ─────────────────────────────────────
 
@@ -247,6 +258,7 @@ export default function TributosAPagarManager({ organizationId, organizations, o
     const [dueFrom, setDueFrom]         = usePersistedState('tributosPagarManagerFilters:dueFrom', '');
     const [dueTo, setDueTo]             = usePersistedState('tributosPagarManagerFilters:dueTo', '');
     const [showFilters, setShowFilters]  = useState(false);
+    const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
     const tableColumns = useTableColumns(TRIBUTO_COLUMNS, 'tributosPagarManagerColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tributosPagarManagerFilters:advanced');
 
@@ -499,14 +511,15 @@ export default function TributosAPagarManager({ organizationId, organizations, o
 
     return (
         <div className="space-y-6">
-            {/* Cabeçalho de tela — §20 */}
+            {/* Cabeçalho de tela — §20 (título muda com a aba ativa) */}
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Tributos a Pagar</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Tributos (IRRF, PIS, COFINS, CSLL…) sobre Vendas de Ativos e Locações.</p>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[activeView].title}</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle}</p>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* KPI Cards — só na aba Tributos a Pagar (§20.1: mb-3) */}
+            {activeView === 'tributos' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                 <KpiCard
                     label="A Pagar"
                     value={fmt(summary.aPagar)}
@@ -532,6 +545,72 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                     onClick={() => setStatusFilter('PAGO')}
                 />
             </div>
+            )}
+
+            {/* Toolbar de abas — §19.1 */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {VIEWS.map(v => (
+                        <button
+                            key={v.id}
+                            onClick={() => setActiveView(v.id)}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                activeView === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                        >
+                            {v.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Toolbar de botões — §5.3 (escopo à esquerda, ações à direita) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Escopo — seletor de organização */}
+                    {organizations && organizations.length > 1 && (
+                        <div className="relative flex items-center h-9">
+                            <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                            <select
+                                value={selectedOrgId}
+                                onChange={e => handleOrgChange(e.target.value)}
+                                className="h-9 pl-9 pr-7 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
+                            >
+                                <option value="ALL">Todas as Organizações</option>
+                                {organizations.map(o => (
+                                    <option key={o.id} value={o.id}>{o.name}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                    {/* Gerar — backfill dos negócios existentes (ação secundária) */}
+                    <button
+                        onClick={handleBackfill}
+                        disabled={generating}
+                        title="Gerar tributos das Vendas de Ativos e Locações já existentes"
+                        className="h-9 flex items-center gap-1.5 px-3 rounded-[6px] text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-all whitespace-nowrap"
+                    >
+                        {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Landmark className="w-3.5 h-3.5" />} Gerar
+                    </button>
+
+                    {/* Novo — ação primária §17 */}
+                    <button
+                        onClick={() => setShowNovo(true)}
+                        className="h-9 flex items-center gap-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Plus className="w-[15px] h-[15px]" /> Novo
+                    </button>
+                </div>
+            </div>
+
+            {/* Banner de erro — FORA do card acoplado (§5.2), senão quebra a costura do border-b */}
+            {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
+            )}
 
             {/* Toolbar acoplada à tabela (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
@@ -581,24 +660,6 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                             <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                         </div>
 
-                        {/* Org selector — só quando há mais de uma organização */}
-                        {organizations && organizations.length > 1 && (
-                            <div className="relative flex items-center h-9">
-                                <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                <select
-                                    value={selectedOrgId}
-                                    onChange={e => handleOrgChange(e.target.value)}
-                                    className="h-9 pl-9 pr-7 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
-                                >
-                                    <option value="ALL">Todas as Organizações</option>
-                                    {organizations.map(o => (
-                                        <option key={o.id} value={o.id}>{o.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
-                            </div>
-                        )}
-
                         <button
                             onClick={load}
                             className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
@@ -619,24 +680,6 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                 onReset={tableColumns.resetColumns}
                             />
                         </div>
-
-                        {/* Backfill — gera tributos dos negócios existentes */}
-                        <button
-                            onClick={handleBackfill}
-                            disabled={generating}
-                            title="Gerar tributos das Vendas de Ativos e Locações já existentes"
-                            className="h-9 flex items-center gap-1.5 px-3 rounded-[6px] text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-all whitespace-nowrap shrink-0"
-                        >
-                            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Landmark className="w-3.5 h-3.5" />} Gerar
-                        </button>
-
-                        {/* Novo — CTA compacto §17 */}
-                        <button
-                            onClick={() => setShowNovo(true)}
-                            className="h-9 flex items-center gap-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                        >
-                            <Plus className="w-[15px] h-[15px]" /> Novo
-                        </button>
                     </div>
 
                     {showFilters && (
@@ -663,9 +706,6 @@ export default function TributosAPagarManager({ organizationId, organizations, o
 
                 {/* Conteúdo */}
                 <div>
-                    {error && (
-                        <div className="m-4 p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
-                    )}
                     {loading ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -682,7 +722,7 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                         <table className="w-full text-sm text-left border-collapse">
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="w-10 px-4 py-2 text-center">
+                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                         <input
                                             type="checkbox"
                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
@@ -695,35 +735,35 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                     {tableColumns.visibleColumns.includes('party_name') && (
                                         <SortableHeader label="Tributo" colKey="party_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('category') && (
                                         <SortableHeader label="Origem" colKey="category" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('description') && (
                                         <SortableHeader label="Descrição" colKey="description" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('due_date') && (
                                         <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('amount') && (
                                         <SortableHeader label="Valor" colKey="amount" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
                                         <SortableHeader label="Status" colKey="status" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-4 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        <th className="px-6 py-2 text-left text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
                                 </tr>
                             </thead>
@@ -736,7 +776,7 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                     const isManual = !r.reference_id;
                                     return (
                                         <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
-                                            <td className="w-10 px-4 py-2.5 text-center">
+                                            <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
                                                 {isSelectable(r) ? (
                                                     <input
                                                         type="checkbox"
@@ -748,37 +788,37 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                                 ) : null}
                                             </td>
                                             {tableColumns.visibleColumns.includes('party_name') && (
-                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-900 max-w-[160px] truncate">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 max-w-[160px] truncate">
                                                     {r.party_name ?? <span className="text-gray-400 italic">—</span>}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('category') && (
-                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-600 max-w-[140px] truncate">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[140px] truncate">
                                                     {r.category ?? '—'}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('description') && (
-                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-700 max-w-[200px] truncate">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 max-w-[200px] truncate">
                                                     {r.description ?? '—'}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('due_date') && (
-                                                <td className={`px-4 py-2.5 text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
+                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
                                                     {fmtDate(r.due_date)}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('amount') && (
-                                                <td className="px-4 py-2.5 text-sm font-medium text-gray-900 whitespace-nowrap">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-900 whitespace-nowrap">
                                                     {fmt(r.amount)}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-4 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <StatusBadge status={r.effective_status} />
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('actions') && (
-                                            <td className="px-4 py-2.5">
+                                            <td className="px-6 py-2.5 last:border-r-0">
                                                 <div className="flex items-center gap-1.5">
                                                     {!isPago && !isCancelado && (
                                                         <button

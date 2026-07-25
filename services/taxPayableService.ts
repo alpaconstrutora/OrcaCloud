@@ -112,10 +112,100 @@ function taxDueDate(taxName: string, fatoGeradorIso: string): string {
     return fmtLocal(prevBusinessDay(due));
 }
 
+/** Competência (1º dia do mês) a partir do vencimento, recuando `offsetMonths`
+ *  meses. Aluguel postecipado (vence N meses após a competência) → offset N;
+ *  offset 0 = competência no próprio mês do vencimento; negativo = antecipado. */
+function competenceFromDue(dueIso: string, offsetMonths: number): string {
+    const d = parseLocal(dueIso);
+    d.setMonth(d.getMonth() - (offsetMonths || 0));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
 interface DealParcel {
     reference_id: string;
     amount: number;
     fato_gerador: string; // data-base do tributo (venc./pagamento da parcela)
+}
+
+/**
+ * Deal de origem do tributo automático. reference_id = `tax-{dealId}-{parcela}-{tributo}`
+ * e o dealId é um UUID (36 chars), então o recorte por posição é seguro.
+ */
+function dealIdFromReference(referenceId?: string | null): string | null {
+    if (!referenceId || !referenceId.startsWith('tax-')) return null;
+    const id = referenceId.slice(4, 40);
+    return /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+}
+
+/**
+ * Resolve o Empreendimento (Incorporação) de cada tributo automático.
+ * Caminho: tributo → deal → imóvel → empreendimento_units (rental_property_id
+ * OU commercial_property_id) → torre → empreendimento.
+ * Lançamento manual e negócio sem unidade vinculada ficam sem empreendimento.
+ */
+async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: string): Promise<TaxPayable[]> {
+    const dealIds = [...new Set(rows.map(r => dealIdFromReference(r.reference_id)).filter((v): v is string => !!v))];
+    if (dealIds.length === 0) return rows;
+
+    try {
+        const { data: deals } = await supabase
+            .from('commercial_deals')
+            .select('id, property_id')
+            .eq('organization_id', organizationId)
+            .in('id', dealIds);
+
+        const propertyByDeal = new Map<string, string>();
+        (deals || []).forEach((d: { id: string; property_id?: string | null }) => {
+            if (d.property_id) propertyByDeal.set(d.id, d.property_id);
+        });
+        const propertyIds = [...new Set(propertyByDeal.values())];
+        if (propertyIds.length === 0) return rows;
+
+        const inList = propertyIds.map(id => `"${id}"`).join(',');
+        const { data: units } = await supabase
+            .from('empreendimento_units')
+            .select('tower_id, commercial_property_id, rental_property_id')
+            .or(`commercial_property_id.in.(${inList}),rental_property_id.in.(${inList})`);
+
+        const towerByProperty = new Map<string, string>();
+        (units || []).forEach((u: { tower_id?: string | null; commercial_property_id?: string | null; rental_property_id?: string | null }) => {
+            if (!u.tower_id) return;
+            if (u.commercial_property_id) towerByProperty.set(u.commercial_property_id, u.tower_id);
+            if (u.rental_property_id)     towerByProperty.set(u.rental_property_id, u.tower_id);
+        });
+        const towerIds = [...new Set(towerByProperty.values())];
+        if (towerIds.length === 0) return rows;
+
+        const { data: towers } = await supabase
+            .from('empreendimento_towers')
+            .select('id, empreendimento_id')
+            .in('id', towerIds);
+        const empByTower = new Map<string, string>();
+        (towers || []).forEach((t: { id: string; empreendimento_id?: string | null }) => {
+            if (t.empreendimento_id) empByTower.set(t.id, t.empreendimento_id);
+        });
+        const empIds = [...new Set(empByTower.values())];
+        if (empIds.length === 0) return rows;
+
+        const { data: emps } = await supabase
+            .from('empreendimentos')
+            .select('id, name')
+            .in('id', empIds);
+        const nameByEmp = new Map<string, string>();
+        (emps || []).forEach((e: { id: string; name?: string | null }) => nameByEmp.set(e.id, e.name ?? ''));
+
+        return rows.map(r => {
+            const dealId = dealIdFromReference(r.reference_id);
+            const propertyId = dealId ? propertyByDeal.get(dealId) : undefined;
+            const towerId = propertyId ? towerByProperty.get(propertyId) : undefined;
+            const empId = towerId ? empByTower.get(towerId) : undefined;
+            if (!empId) return r;
+            return { ...r, empreendimento_id: empId, empreendimento_name: nameByEmp.get(empId) ?? null };
+        });
+    } catch (e) {
+        console.warn('[TAX-PAYABLE] Falha ao resolver empreendimento dos tributos:', e);
+        return rows;
+    }
 }
 
 export const taxPayableService = {
@@ -139,12 +229,17 @@ export const taxPayableService = {
             rows = rows.filter(r => r.effective_status === filters.status);
         }
 
+        // Empreendimento é derivado (não é coluna da view) — resolve antes da busca
+        // para que o texto digitado também case com o nome do empreendimento.
+        rows = await enrichWithEmpreendimento(rows, organizationId);
+
         if (filters?.search) {
             const s = filters.search.toLowerCase();
             rows = rows.filter(r =>
                 (r.party_name ?? '').toLowerCase().includes(s) ||
                 (r.description ?? '').toLowerCase().includes(s) ||
                 (r.category ?? '').toLowerCase().includes(s) ||
+                (r.empreendimento_name ?? '').toLowerCase().includes(s) ||
                 (r.reference_id ?? '').toLowerCase().includes(s),
             );
         }
@@ -352,6 +447,7 @@ export const taxPayableService = {
         // tributos da venda caem nesse mês. Locação segue por parcela (competência
         // mensal do aluguel) e o regime de CAIXA sempre segue o recebimento.
         let saleAccrualDate: string | null = null;
+        let rentalOffsetMonths = 0;
         if (recognitionRegime === 'COMPETENCIA' && deal.type === 'SALE') {
             const { data: d } = await supabase
                 .from('commercial_deals')
@@ -359,6 +455,17 @@ export const taxPayableService = {
                 .eq('id', deal.id)
                 .maybeSingle();
             saleAccrualDate = (d?.date as string | undefined)?.slice(0, 10) || null;
+        } else if (recognitionRegime === 'COMPETENCIA' && deal.type === 'RENTAL') {
+            // Defasagem por contrato entre competência e vencimento do aluguel.
+            // A coluna pode não existir ainda (migration pendente) → fallback offset 0.
+            const { data: d, error } = await supabase
+                .from('commercial_deals')
+                .select('rental_competencia_offset_months')
+                .eq('id', deal.id)
+                .maybeSingle();
+            if (!error) {
+                rentalOffsetMonths = Number((d as { rental_competencia_offset_months?: number } | null)?.rental_competencia_offset_months) || 0;
+            }
         }
 
         // Sempre limpa os automáticos PENDENTES deste negócio antes de regerar
@@ -381,9 +488,14 @@ export const taxPayableService = {
             .map((p: { reference_id: string; amount: number; due_date?: string; transaction_date?: string }) => ({
                 reference_id: p.reference_id,
                 amount: Number(p.amount) || 0,
-                // Venda+Competência: mês do contrato (saleAccrualDate). Demais casos
-                // (Caixa, ou Locação em qualquer regime): data de recebimento da parcela.
-                fato_gerador: (saleAccrualDate || p.due_date || p.transaction_date || today()).slice(0, 10),
+                // Venda+Competência: mês do contrato (saleAccrualDate).
+                // Locação+Competência: mês do vencimento recuado pela defasagem do contrato.
+                // Demais casos (Caixa): data de recebimento da parcela.
+                fato_gerador: saleAccrualDate
+                    ? saleAccrualDate
+                    : (recognitionRegime === 'COMPETENCIA' && deal.type === 'RENTAL')
+                        ? competenceFromDue(p.due_date || p.transaction_date || today(), rentalOffsetMonths)
+                        : (p.due_date || p.transaction_date || today()).slice(0, 10),
             }))
             .filter(p => p.amount > 0);
         if (validParcels.length === 0) return;

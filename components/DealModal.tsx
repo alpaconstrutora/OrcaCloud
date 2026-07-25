@@ -1230,6 +1230,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </select>
                             </div>
 
+                            {/* Competência do aluguel — só locação. Define o mês de auferimento
+                                em relação ao vencimento, usado na apuração por competência. */}
+                            {formData.type === 'RENTAL' && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Competência do aluguel</label>
+                                    <select
+                                        value={String(formData.rental_competencia_offset_months ?? 0)}
+                                        onChange={(e) => setFormData({ ...formData, rental_competencia_offset_months: parseInt(e.target.value, 10) })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
+                                    >
+                                        <option value="0">Mesmo mês do vencimento</option>
+                                        <option value="1">Vence 1 mês após a competência (postecipado)</option>
+                                        <option value="2">Vence 2 meses após a competência</option>
+                                        <option value="-1">Vence no mês anterior (antecipado)</option>
+                                    </select>
+                                    <p className="text-[11px] font-medium text-gray-400 px-1">
+                                        Mês em que o aluguel é auferido, em relação ao vencimento. Usado no regime de competência para datar os tributos.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Checklist de documentos do cliente/comprador — muda conforme
                                 Pessoa Física / Jurídica do cadastro. Persistido em
                                 commercial_deals.doc_checklist. */}

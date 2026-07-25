@@ -152,6 +152,10 @@ export interface TowerMatrixConfig {
 export interface PropertyDeal {
     id: string;
     organization_id?: string;
+    /** Código sequencial de 3 dígitos (001, 002, ...) gerado automaticamente por
+     *  organização entre as negociações de Venda de Ativos (type='SALE'). Estável:
+     *  atribuído na criação e nunca reaproveitado. */
+    code?: string;
     property_id: string;
     client_id: string;
     linked_project_id?: string;
@@ -172,6 +176,13 @@ export interface PropertyDeal {
     payment_due_date?: string;
     /** Origem/canal do negócio (ex.: Direto, Portal, Imobiliária) — alimenta "Fontes de Locação"/Vendas */
     origin_channel?: string;
+    /**
+     * Só locação. Defasagem em meses entre a competência (auferimento do aluguel)
+     * e o vencimento da parcela. Postecipado (aluguel do mês vence no mês seguinte) = 1;
+     * 0 = competência no próprio mês do vencimento; negativo = antecipado. Usado só no
+     * regime de competência para datar os tributos gerados (taxPayableService).
+     */
+    rental_competencia_offset_months?: number;
     /** Checklist de documentos do cliente/comprador (mapa chave→marcado). As chaves
      *  variam conforme o tipo de pessoa (PF/PJ) — ver DEAL_DOC_CHECKLIST em DealModal. */
     doc_checklist?: Record<string, boolean>;

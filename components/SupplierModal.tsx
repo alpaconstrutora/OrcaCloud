@@ -49,7 +49,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
 
     const emptyForm = (): Omit<Supplier, 'id' | 'created_at'> => ({
         name: '', nickname: '', contact_name: '', email: '', phone: '', document: '',
-        type: 'PJ', category: DEFAULT_CATEGORIES[0],
+        type: 'PJ', category: DEFAULT_CATEGORIES[0], portal: 'Nenhum',
         street: '', number: '', neighborhood: '', address: '', city: '', state: '', zip_code: '',
         organization_id: activeOrganizationId || null,
         cnpj_status: null, cnpj_status_date: null, cnpj_updated_at: null, cnpj_founded_at: null,
@@ -99,6 +99,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 document: initialData.document || '',
                 type: initialData.type,
                 category: initialData.category || DEFAULT_CATEGORIES[0],
+                portal: initialData.portal || 'Nenhum',
                 street: initialData.street || initialData.address || '',
                 number: initialData.number || '',
                 neighborhood: initialData.neighborhood || '',
@@ -128,7 +129,8 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         }
     }, [initialData, isOpen, activeOrganizationId]);
 
-    const isBroker = isRealEstateBrokerCategory(formData.category);
+    // Fonte única da verdade: o dropdown "Portais" decide, não a categoria.
+    const isBroker = formData.portal === 'Portal do Corretor';
     const handleLookupCnpj = async () => {
         const digits = (formData.document || '').replace(/\D/g, '');
         if (formData.type !== 'PJ') {
@@ -454,6 +456,27 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                                 </select>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Portais — fonte única que decide em qual portal externo o fornecedor aparece */}
+                    <div>
+                        <label className={labelCls}>Portais</label>
+                        <div className="relative">
+                            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                            <select
+                                className={inputWithIconCls + ' cursor-pointer'}
+                                value={formData.portal ?? 'Nenhum'}
+                                onChange={e => set({ portal: e.target.value as typeof formData.portal })}
+                            >
+                                <option value="Nenhum">Nenhum — não exibir em portais</option>
+                                <option value="Portal do Corretor">Portal do Corretor</option>
+                                <option value="Portal do Fornecedor">Portal do Fornecedor</option>
+                                <option value="Portal do Parceiro">Portal do Parceiro</option>
+                            </select>
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1 leading-snug">
+                            Define em qual portal externo este fornecedor aparece. "Nenhum" não o exibe em portal algum.
+                        </p>
                     </div>
 
                     {/* Aviso: conexão com o Portal do Corretor */}

@@ -1,12 +1,11 @@
 import { supabase } from '../lib/supabase';
 import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistration, SupplierPortalSettings } from '../types';
-import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
 import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 import { organizationService } from './organizationService';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
-const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}`;
-const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
+const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}`;
+const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, portal, address, street, number, neighborhood, city, state, zip_code, organization_id, settings, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;
@@ -205,7 +204,8 @@ async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise
 
     if (!email) return;
 
-    if (!isRealEstateBrokerCategory(supplier.category)) {
+    // Fonte única da verdade: o dropdown "Portais" do cadastro decide, não a categoria.
+    if (supplier.portal !== 'Portal do Corretor') {
         // organizationId nulo = fornecedor "Todas as organizações": pode ter
         // sincronizado em várias orgs antes (ver ramo abaixo) — desativa em
         // todas, não só numa.
@@ -253,6 +253,58 @@ async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise
     }
 }
 
+// Fonte única da verdade para o Portal do Parceiro: o dropdown "Portais" materializa
+// (ou reativa) o workspace do parceiro; qualquer outro valor desativa os workspaces
+// existentes desse fornecedor (não apaga — preserva histórico/documentos/usuários).
+async function syncPartnerWorkspace(supplier: Partial<Supplier>): Promise<void> {
+    const supplierId = supplier.id;
+    if (!supplierId) return;
+
+    const now = new Date().toISOString();
+
+    if (supplier.portal !== 'Portal do Parceiro') {
+        await supabase
+            .from('partner_workspaces')
+            .update({ is_active: false, updated_at: now })
+            .eq('supplier_id', supplierId);
+        return;
+    }
+
+    const organizationId = supplier.organization_id || null;
+
+    // Procura um workspace já existente para (fornecedor, organização) — organização
+    // nula = parceiro global, mesmo conceito de suppliers.organization_id.
+    let existingQuery = supabase
+        .from('partner_workspaces')
+        .select('id')
+        .eq('supplier_id', supplierId);
+    existingQuery = organizationId
+        ? existingQuery.eq('organization_id', organizationId)
+        : existingQuery.is('organization_id', null);
+    const { data: existing } = await existingQuery.maybeSingle();
+
+    if (existing) {
+        await supabase
+            .from('partner_workspaces')
+            .update({ is_active: true, updated_at: now })
+            .eq('id', existing.id);
+    } else {
+        const { error } = await supabase
+            .from('partner_workspaces')
+            .insert({ organization_id: organizationId, supplier_id: supplierId, is_active: true, settings: {} });
+        if (error) {
+            console.error('[SUPPLIER SERVICE] Error materializing partner workspace:', error);
+            throw error;
+        }
+    }
+}
+
+// Aplica a fonte única da verdade (dropdown "Portais") a todos os portais externos.
+async function syncPortalMemberships(supplier: Partial<Supplier>): Promise<void> {
+    await syncRealEstateBrokerProfile(supplier);
+    await syncPartnerWorkspace(supplier);
+}
+
 export const supplierService = {
     listSuppliers: async (organizationId?: string): Promise<(Supplier & { organization_name?: string })[]> => {
         let query = supabase
@@ -283,7 +335,7 @@ export const supplierService = {
         let query = supabase
             .from('suppliers')
             .select(SUPPLIER_SELECT)
-            .ilike('category', REAL_ESTATE_BROKER_CATEGORY)
+            .eq('portal', 'Portal do Corretor')
             .order('name', { ascending: true });
 
         if (organizationId) {
@@ -418,7 +470,7 @@ export const supplierService = {
         }
 
         if (error) throw error;
-        await syncRealEstateBrokerProfile(data as Supplier);
+        await syncPortalMemberships(data as Supplier);
         return data as Supplier;
     },
 
@@ -481,7 +533,7 @@ export const supplierService = {
         }
 
         if (error) throw error;
-        await syncRealEstateBrokerProfile(data as Supplier);
+        await syncPortalMemberships(data as Supplier);
         return data as Supplier;
     },
 
@@ -511,7 +563,7 @@ export const supplierService = {
 
         if (error) throw error;
 
-        if (existing?.email && isRealEstateBrokerCategory(existing.category)) {
+        if (existing?.email && existing.portal === 'Portal do Corretor') {
             // organization_id nulo = fornecedor "Todas as organizações", que pode
             // ter sincronizado em várias orgs (syncRealEstateBrokerProfile) —
             // desativa em todas, não só na org do fornecedor.
@@ -522,5 +574,11 @@ export const supplierService = {
             if (existing.organization_id) query = query.eq('organization_id', existing.organization_id);
             await query;
         }
+
+        // Desativa também qualquer workspace de parceiro vinculado (não apaga — preserva histórico).
+        await supabase
+            .from('partner_workspaces')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('supplier_id', id);
     }
 };

@@ -77,8 +77,9 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
   const refreshSuppliers = async () => {
     setLoading(true);
     try {
+      // Fonte única da verdade: só fornecedores marcados com Portais = "Portal do Fornecedor".
       const sups = await supplierService.listSuppliers(organizationId);
-      setSuppliers(sups);
+      setSuppliers(sups.filter((s) => s.portal === 'Portal do Fornecedor'));
     } catch (err) {
       console.error('Erro ao atualizar fornecedores:', err);
     } finally {

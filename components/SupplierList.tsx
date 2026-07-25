@@ -30,6 +30,7 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'type', label: 'Tipo', sortable: true },
     { key: 'category', label: 'Categoria', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
+    { key: 'portal', label: 'Portais', sortable: true },
     // Contato = e-mail + telefone combinados numa célula — sem valor único óbvio
     // pra ordenar, exceção documentada em ui_ux_standard_guide.md §6.3.
     { key: 'contact', label: 'Contato', sortable: false },
@@ -37,7 +38,7 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 90, name: 260, nickname: 140, type: 130, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
+    code: 90, name: 260, nickname: 140, type: 130, category: 160, organization: 200, portal: 170, contact: 220, document: 160, actions: 110,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -51,6 +52,12 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'type', label: 'Tipo', type: 'select', options: [
         { value: 'PJ', label: 'Pessoa Jurídica' }, { value: 'PF', label: 'Pessoa Física' },
     ] },
+    { key: 'portal', label: 'Portais', type: 'select', options: [
+        { value: 'Nenhum', label: 'Nenhum' },
+        { value: 'Portal do Corretor', label: 'Portal do Corretor' },
+        { value: 'Portal do Fornecedor', label: 'Portal do Fornecedor' },
+        { value: 'Portal do Parceiro', label: 'Portal do Parceiro' },
+    ] },
 ];
 
 function getAdvancedFilterValue(supplier: Supplier, key: string): unknown {
@@ -61,6 +68,7 @@ function getAdvancedFilterValue(supplier: Supplier, key: string): unknown {
         case 'organization': return supplier.organization_name ?? '';
         case 'document': return supplier.document ?? '';
         case 'type': return supplier.type ?? '';
+        case 'portal': return supplier.portal ?? 'Nenhum';
         default: return null;
     }
 }
@@ -234,6 +242,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         + (tableColumns.visibleColumns.includes('type') ? cols.getWidth('type') : 0)
         + (tableColumns.visibleColumns.includes('category') ? cols.getWidth('category') : 0)
         + (tableColumns.visibleColumns.includes('organization') ? cols.getWidth('organization') : 0)
+        + (tableColumns.visibleColumns.includes('portal') ? cols.getWidth('portal') : 0)
         + (tableColumns.visibleColumns.includes('contact') ? cols.getWidth('contact') : 0)
         + (tableColumns.visibleColumns.includes('document') ? cols.getWidth('document') : 0)
         + cols.getWidth('actions');
@@ -245,7 +254,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 s.nickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.document?.includes(searchTerm) ||
-                s.category?.toLowerCase().includes(searchTerm.toLowerCase())
+                s.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                s.portal?.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
         result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
@@ -261,6 +271,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     if (col === 'type') return (a.type || '').localeCompare(b.type || '') * dir;
                     if (col === 'category') return (a.category || '').localeCompare(b.category || '') * dir;
                     if (col === 'organization') return (a.organization_name || '').localeCompare(b.organization_name || '') * dir;
+                    if (col === 'portal') return (a.portal || 'Nenhum').localeCompare(b.portal || 'Nenhum') * dir;
                     if (col === 'document') return (a.document || '').localeCompare(b.document || '') * dir;
                 }
                 return a.name.localeCompare(b.name);
@@ -293,13 +304,13 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     };
 
     return (
-        <div className="space-y-6">
-            <div>
+        <div>
+            <div className="mb-6">
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Fornecedores</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores.</p>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-3">
                 {/* "Total" em destaque (2 colunas, valor maior); os demais são a decomposição dele */}
                 <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Fornecedores" value={kpis.total} icon={<Truck className="w-4 h-4" />} color="blue" />
                 <KpiCard shadow={false} size="sm" label="Pessoa Jurídica" value={kpis.pj} icon={<Building2 className="w-4 h-4" />} color="indigo" />
@@ -307,9 +318,43 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 <KpiCard shadow={false} size="sm" label="Categorias" value={kpis.categorias} icon={<Tag className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
-                conteúdo dividem um único card; a única linha visível entre os dois é o
-                border-b abaixo, sem duas bordas concêntricas. */}
+            {/* Toolbar de botões (UI UX tabela.md §4) — escopo (exibição Razão Social/Apelido)
+                à esquerda, ação primária (Novo fornecedor) à direita. Barra própria, acima da
+                toolbar de busca, porque muda o escopo de exibição, não o filtro dos dados. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" title="Escolha se as listas mostram a Razão Social ou o Apelido do fornecedor">
+                    <button
+                        onClick={() => handleNameModeChange('razao')}
+                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'razao'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                    >
+                        Razão Social
+                    </button>
+                    <button
+                        onClick={() => handleNameModeChange('apelido')}
+                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'apelido'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                    >
+                        Apelido
+                    </button>
+                </div>
+
+                <button
+                    onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo fornecedor
+                </button>
+            </div>
+
+            {/* Toolbar §5 (variante acoplada à tabela) — toolbar e conteúdo dividem um único
+                card; a única linha visível entre os dois é o border-b abaixo, sem duas bordas
+                concêntricas. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-white">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -335,30 +380,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 >
                     <RefreshCw className="w-4 h-4" />
                 </button>
-
-                {/* Separador entre grupo "filtrar" e grupo "exibição" (razão social/apelido) */}
-                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
-
-                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" title="Escolha se as listas mostram a Razão Social ou o Apelido do fornecedor">
-                    <button
-                        onClick={() => handleNameModeChange('razao')}
-                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'razao'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-400 hover:text-gray-600'
-                            }`}
-                    >
-                        Razão Social
-                    </button>
-                    <button
-                        onClick={() => handleNameModeChange('apelido')}
-                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'apelido'
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-400 hover:text-gray-600'
-                            }`}
-                    >
-                        Apelido
-                    </button>
-                </div>
 
                 {/* Separador entre grupo "filtrar" (busca/ordenar/filtros/refresh) e grupo "visualizar" (colunas/grid/lista) */}
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
@@ -398,14 +419,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
-
-                <button
-                    onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo fornecedor
-                </button>
             </div>
             </div>
 
@@ -424,6 +437,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 {tableColumns.visibleColumns.includes('type') && <col data-col-key="type" style={{ width: `${cols.getWidth('type')}px` }} />}
                                 {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
                                 {tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
+                                {tableColumns.visibleColumns.includes('portal') && <col data-col-key="portal" style={{ width: `${cols.getWidth('portal')}px` }} />}
                                 {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
                                 {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
@@ -435,7 +449,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             <thead>
                                 {/* sticky: cabeçalho fixo em tabelas longas (ui_ux_standard_guide.md §6.5) */}
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="w-10 px-4 py-5 text-center">
+                                    <th className="w-10 px-4 py-5 border-r border-gray-100 text-center">
                                         <input
                                             type="checkbox"
                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
@@ -445,42 +459,47 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         />
                                     </th>
                                     {tableColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="code" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Fornecedor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Fornecedor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="name" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('nickname') && (
-                                        <SortableHeader label="Apelido" colKey="nickname" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Apelido" colKey="nickname" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="nickname" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('type') && (
-                                        <SortableHeader label="Tipo" colKey="type" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Tipo" colKey="type" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="type" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader label="Categoria" colKey="category" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Categoria" colKey="category" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="category" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="organization" />
                                         </SortableHeader>
                                     )}
+                                    {tableColumns.visibleColumns.includes('portal') && (
+                                        <SortableHeader label="Portais" colKey="portal" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="portal" />
+                                        </SortableHeader>
+                                    )}
                                     {tableColumns.visibleColumns.includes('contact') && (
-                                        <SortableHeader label="Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="contact" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
                                             <cols.ResizeHandle colKey="document" />
                                         </SortableHeader>
                                     )}
@@ -499,7 +518,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
                                             className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(supplier.id) ? 'bg-blue-50/60' : ''}`}
                                         >
-                                            <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <td className="px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
                                                 <input
                                                     type="checkbox"
                                                     title="Dica: segure Shift e clique para selecionar um intervalo"
@@ -509,38 +528,45 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                 />
                                             </td>
                                             {tableColumns.visibleColumns.includes('code') && (
-                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                                                     {supplier.code || '-'}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
                                                     {/* Sempre razão social aqui — a coluna "Apelido" ao lado já cobre a exibição curta; o toggle abaixo só controla a preferência nas outras telas. */}
                                                     <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors truncate">{supplier.name}</p>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('nickname') && (
-                                                <td className="px-6 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <span className="text-sm font-normal text-gray-700 truncate block">{supplier.nickname || '-'}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('type') && (
-                                                <td className="px-6 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <span className="text-sm font-normal text-gray-700">{supplier.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('category') && (
-                                                <td className="px-6 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <span className="text-sm font-normal text-gray-700">{supplier.category}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('organization') && (
-                                                <td className="px-6 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <span className="text-sm font-normal text-gray-700">{supplier.organization_name}</span>
                                                 </td>
                                             )}
+                                            {tableColumns.visibleColumns.includes('portal') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                    <span className={`text-sm font-normal ${supplier.portal && supplier.portal !== 'Nenhum' ? 'text-gray-700' : 'text-gray-400'}`}>
+                                                        {supplier.portal || 'Nenhum'}
+                                                    </span>
+                                                </td>
+                                            )}
                                             {tableColumns.visibleColumns.includes('contact') && (
-                                                <td className="px-6 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <div className="space-y-1.5">
                                                         {supplier.email && (
                                                             <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
@@ -558,7 +584,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('document') && (
-                                                <td className="px-6 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <span className="text-sm font-normal text-gray-600">
                                                         {supplier.document || '---'}
                                                     </span>
@@ -584,12 +610,12 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     <Truck className="w-10 h-10 text-blue-200" />
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <h4 className="text-lg font-bold text-gray-900">Nenhum Fornecedor</h4>
+                                                    <h4 className="text-lg font-semibold text-gray-900">Nenhum Fornecedor</h4>
                                                     <p className="text-sm text-gray-500">Comece sua base de parceiros cadastrando o primeiro fornecedor.</p>
                                                 </div>
                                                 <button
                                                     onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
-                                                    className="mt-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 font-bold text-sm"
+                                                    className="mt-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 font-semibold text-sm"
                                                 >
                                                     Cadastrar Agora
                                                 </button>
@@ -627,6 +653,12 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400 font-bold uppercase tracking-widest">Organização</span>
                                             <span className="text-gray-900 font-semibold">{supplier.organization_name}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-gray-400 font-bold uppercase tracking-widest">Portais</span>
+                                            <span className={supplier.portal && supplier.portal !== 'Nenhum' ? 'text-gray-900 font-semibold' : 'text-gray-400 font-medium'}>
+                                                {supplier.portal || 'Nenhum'}
+                                            </span>
                                         </div>
                                         {supplier.email && (
                                             <div className="flex items-center gap-2.5 text-sm text-gray-600 underline-offset-4 hover:underline cursor-pointer">

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Organization } from '../types';
 import { PaymentAccount } from '../types/financial';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { taxPayableService } from '../services/taxPayableService';
 import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, Landmark, Plus, X } from 'lucide-react';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
@@ -23,6 +24,9 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
     const [logoPreview, setLogoPreview] = useState<string | null>(organization?.logoUrl || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const confirm = useConfirm();
+    // Regime no momento em que a tela abriu — base para detectar troca e reprocessar.
+    const initialRegime = organization?.settings?.tax_recognition_regime ?? 'CAIXA';
+    const [reprocessing, setReprocessing] = useState(false);
 
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [accountsLoading, setAccountsLoading] = useState(false);
@@ -107,8 +111,22 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        // Troca de regime de reconhecimento re-data os tributos PENDENTES da org
+        // automaticamente (idempotente; preserva os já pagos). Roda antes de salvar,
+        // com a página ainda montada, e usa o regime novo explícito.
+        const newRegime = formData.settings?.tax_recognition_regime ?? 'CAIXA';
+        if (organization?.id && newRegime !== initialRegime) {
+            setReprocessing(true);
+            try {
+                await taxPayableService.generateAllForOrganization(organization.id, newRegime);
+            } catch (err) {
+                console.error('[OrganizationPage] Falha ao reprocessar tributos após troca de regime:', err);
+            } finally {
+                setReprocessing(false);
+            }
+        }
         onUpdate(formData);
     };
 
@@ -131,10 +149,11 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                 </div>
                 <Button
                     onClick={handleSubmit}
+                    disabled={reprocessing}
                     className="flex items-center transition-all"
                 >
                     <Save className="w-4 h-4 mr-2" />
-                    Salvar Alterações
+                    {reprocessing ? 'Reprocessando tributos…' : 'Salvar Alterações'}
                 </Button>
             </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

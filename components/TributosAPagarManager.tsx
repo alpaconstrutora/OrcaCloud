@@ -106,6 +106,8 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
         amount:      tributo ? String(tributo.amount ?? '') : '',
         due_date:    tributo?.due_date ?? today(),
         category:    tributo?.category ?? 'Manual',
+        // Competência (mês de auferimento). Default = mês do vencimento existente/hoje.
+        competencia: (tributo?.transaction_date ?? tributo?.due_date ?? today()).slice(0, 7),
     });
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -127,6 +129,8 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
         setErr(null);
         try {
             const amount = parseFloat(form.amount.replace(',', '.'));
+            // Competência = 1º dia do mês escolhido (transaction_date).
+            const competencia = form.competencia ? `${form.competencia}-01` : undefined;
             if (isEdit) {
                 await taxPayableService.update(tributo!.id, {
                     due_date:    form.due_date,
@@ -134,6 +138,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                     description: form.description,
                     party_name:  form.party_name || null,
                     category:    form.category || null,
+                    competencia,
                 });
             } else {
                 await taxPayableService.create(organizationId, {
@@ -142,6 +147,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                     description: form.description,
                     party_name:  form.party_name || undefined,
                     category:    form.category || 'Manual',
+                    competencia,
                 });
             }
             onSave();
@@ -211,6 +217,16 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                         </div>
                     </div>
                     <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Competência</label>
+                        <input
+                            type="month"
+                            value={form.competencia}
+                            onChange={e => setForm(f => ({ ...f, competencia: e.target.value }))}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p className="text-[11px] text-slate-400 mt-1">Mês de auferimento (usado no fechamento por competência). Padrão: mês do vencimento.</p>
+                    </div>
+                    <div>
                         <label className="block text-xs font-semibold text-slate-500 mb-1">Origem</label>
                         <input
                             type="text"
@@ -261,6 +277,8 @@ export default function TributosAPagarManager({ organizationId, organizations, o
     const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
     // Competência (regime de fato gerador = transaction_date) — só filtra na aba Fechamento
     const [competencia, setCompetencia] = usePersistedState<string>('tributosPagarManager:competencia', today().slice(0, 7));
+    // Regime de reconhecimento da org — define o rótulo do seletor (competência × recebimento)
+    const [regime, setRegime] = useState<'CAIXA' | 'COMPETENCIA'>('CAIXA');
     const tableColumns = useTableColumns(TRIBUTO_COLUMNS, 'tributosPagarManagerColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tributosPagarManagerFilters:advanced');
 
@@ -281,6 +299,15 @@ export default function TributosAPagarManager({ organizationId, organizations, o
     const effectiveOrgId = selectedOrgId === 'ALL'
         ? (organizationId || organizations?.[0]?.id || '')
         : selectedOrgId;
+
+    useEffect(() => {
+        if (!effectiveOrgId) return;
+        let active = true;
+        taxPayableService.getRecognitionRegime(effectiveOrgId)
+            .then(r => { if (active) setRegime(r); })
+            .catch(() => { /* mantém default CAIXA */ });
+        return () => { active = false; };
+    }, [effectiveOrgId]);
 
     const load = useCallback(async () => {
         if (!effectiveOrgId) return;
@@ -573,10 +600,12 @@ export default function TributosAPagarManager({ organizationId, organizations, o
             {/* Toolbar de botões — §5.3 (escopo à esquerda, ações à direita) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    {/* Escopo — competência mensal (só na aba Fechamento; fato gerador) */}
+                    {/* Escopo — competência/recebimento mensal (só na aba Fechamento; rótulo segue o regime da org) */}
                     {activeView === 'fechamento' && (
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500 font-semibold whitespace-nowrap">Competência</span>
+                            <span className="text-xs text-gray-500 font-semibold whitespace-nowrap" title={regime === 'COMPETENCIA' ? 'Mês de auferimento da receita' : 'Mês de recebimento (regime de caixa)'}>
+                                {regime === 'COMPETENCIA' ? 'Competência' : 'Mês de recebimento'}
+                            </span>
                             <input
                                 type="month"
                                 value={competencia}

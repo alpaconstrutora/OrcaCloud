@@ -171,7 +171,7 @@ export const taxPayableService = {
     /** Lançamento manual de tributo (reference_id NULL = editável/excluível aqui). */
     async create(
         organizationId: string,
-        data: { due_date: string; amount: number; description: string; party_name?: string; category?: string },
+        data: { due_date: string; amount: number; description: string; party_name?: string; category?: string; competencia?: string },
     ): Promise<TaxPayable> {
         const { data: row, error } = await supabase
             .from('internal_transactions')
@@ -179,7 +179,8 @@ export const taxPayableService = {
                 organization_id: organizationId,
                 source_system:   TAX_SOURCE_SYSTEM,
                 direction:       'DEBIT',
-                transaction_date: data.due_date,
+                // Competência (auferimento) = transaction_date; default = vencimento.
+                transaction_date: data.competencia || data.due_date,
                 due_date:        data.due_date,
                 amount:          data.amount,
                 description:     data.description,
@@ -199,14 +200,16 @@ export const taxPayableService = {
     /** Corrige dados de um tributo (valor, vencimento, descrição, tributo). */
     async update(
         id: string,
-        data: { amount?: number; due_date?: string; description?: string; party_name?: string | null; category?: string | null },
+        data: { amount?: number; due_date?: string; description?: string; party_name?: string | null; category?: string | null; competencia?: string },
     ): Promise<void> {
         const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (data.amount      !== undefined) updates.amount = data.amount;
         if (data.due_date    !== undefined) {
             updates.due_date = data.due_date;
-            updates.transaction_date = data.due_date;
+            updates.transaction_date = data.due_date; // default; competência sobrescreve abaixo
         }
+        // Competência (auferimento) editada explicitamente → transaction_date.
+        if (data.competencia !== undefined) updates.transaction_date = data.competencia;
         if (data.description !== undefined) updates.description = data.description;
         if (data.party_name  !== undefined) updates.party_name = data.party_name;
         if (data.category    !== undefined) updates.category = data.category;
@@ -344,6 +347,20 @@ export const taxPayableService = {
         const origin = deal.type === 'SALE' ? 'Venda de Ativo' : 'Locação';
         const shortId = deal.id.substring(0, 8);
 
+        // Regime de COMPETÊNCIA em VENDA: a receita é auferida no mês do contrato
+        // (commercial_deals.date), independente do recebimento — então todos os
+        // tributos da venda caem nesse mês. Locação segue por parcela (competência
+        // mensal do aluguel) e o regime de CAIXA sempre segue o recebimento.
+        let saleAccrualDate: string | null = null;
+        if (recognitionRegime === 'COMPETENCIA' && deal.type === 'SALE') {
+            const { data: d } = await supabase
+                .from('commercial_deals')
+                .select('date')
+                .eq('id', deal.id)
+                .maybeSingle();
+            saleAccrualDate = (d?.date as string | undefined)?.slice(0, 10) || null;
+        }
+
         // Sempre limpa os automáticos PENDENTES deste negócio antes de regerar
         // (parcela cancelada, mudança de valor, alíquota desativada). Preserva os
         // já PAGOS/conciliados (dinheiro que saiu).
@@ -364,12 +381,9 @@ export const taxPayableService = {
             .map((p: { reference_id: string; amount: number; due_date?: string; transaction_date?: string }) => ({
                 reference_id: p.reference_id,
                 amount: Number(p.amount) || 0,
-                // COMPETÊNCIA: mês de auferimento (transaction_date da parcela);
-                // CAIXA: data de recebimento (due_date). Mesmos valores, data-base distinta.
-                fato_gerador: (recognitionRegime === 'COMPETENCIA'
-                    ? (p.transaction_date || p.due_date || today())
-                    : (p.due_date || p.transaction_date || today())
-                ).slice(0, 10),
+                // Venda+Competência: mês do contrato (saleAccrualDate). Demais casos
+                // (Caixa, ou Locação em qualquer regime): data de recebimento da parcela.
+                fato_gerador: (saleAccrualDate || p.due_date || p.transaction_date || today()).slice(0, 10),
             }))
             .filter(p => p.amount > 0);
         if (validParcels.length === 0) return;
@@ -451,7 +465,7 @@ export const taxPayableService = {
      * (o generateForDeal faz upsert e preserva os já pagos). Retorna quantos
      * negócios foram processados.
      */
-    async generateAllForOrganization(organizationId: string): Promise<number> {
+    async generateAllForOrganization(organizationId: string, regime?: TaxRecognitionRegime): Promise<number> {
         if (!organizationId) return 0;
         const allowedStatuses = ['COMPLETED', 'PENDING', 'APPROVED', 'WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA', 'DONE'];
         const { data: deals, error } = await supabase
@@ -461,14 +475,15 @@ export const taxPayableService = {
             .in('type', ['SALE', 'RENTAL']);
         if (error) { console.error('[TAX-PAYABLE] Falha ao listar negócios p/ backfill:', error); throw error; }
 
-        // Regime resolvido uma vez para todo o lote.
-        const regime = await this.getRecognitionRegime(organizationId);
+        // Regime resolvido uma vez para todo o lote (ou recebido explicitamente,
+        // ex: logo após trocar o regime na tela de Organização).
+        const resolvedRegime = regime ?? await this.getRecognitionRegime(organizationId);
 
         let count = 0;
         for (const d of (deals || [])) {
             if (!allowedStatuses.includes(d.status || '')) continue;
             try {
-                await this.generateForDeal({ id: d.id, type: d.type, property_id: d.property_id }, organizationId, regime);
+                await this.generateForDeal({ id: d.id, type: d.type, property_id: d.property_id }, organizationId, resolvedRegime);
                 count++;
             } catch (e) {
                 console.error(`[TAX-PAYABLE] Backfill falhou p/ deal ${d.id}:`, e);

@@ -115,6 +115,52 @@ export const empreendimentoService = {
         return data || [];
     },
 
+    /**
+     * Mapa obra (`projects.id`) → empreendimento a que ela pertence.
+     *
+     * O vínculo mora nos DOIS sentidos do módulo: `empreendimentos.project_id` (obra
+     * principal) e `empreendimento_towers.project_id` (obra por torre, multi-torre).
+     * Uma obra só aparece uma vez — o vínculo principal tem precedência.
+     *
+     * Nenhuma das colunas tem FK (DDL deadlocka no módulo), então a obra apontada pode
+     * nem existir mais; quem consome deve tratar o id ausente, não confiar no mapa.
+     */
+    async mapObrasToEmpreendimentos(
+        organizationId?: string | null,
+    ): Promise<Record<string, { id: string; name: string; towerName?: string }>> {
+        // organizationId ausente = "Todas as organizações": não filtra, deixa a RLS
+        // recortar pelas orgs do usuário (CLAUDE.md regra #5).
+        let query = supabase
+            .from('empreendimentos')
+            .select('id, name, project_id')
+            .order('name');
+        if (organizationId) query = query.eq('organization_id', organizationId);
+
+        const { data: emps, error } = await query;
+        if (error) throw new Error(`Failed to map obras to empreendimentos: ${error.message}`);
+
+        const list = (emps || []) as { id: string; name: string; project_id: string | null }[];
+        const map: Record<string, { id: string; name: string; towerName?: string }> = {};
+        if (list.length === 0) return map;
+
+        // Torres primeiro: assim o vínculo principal sobrescreve e vira o que prevalece.
+        const { data: towers } = await supabase
+            .from('empreendimento_towers')
+            .select('name, project_id, empreendimento_id')
+            .in('empreendimento_id', list.map(e => e.id))
+            .not('project_id', 'is', null);
+
+        const byId = new Map(list.map(e => [e.id, e]));
+        for (const t of (towers || []) as { name: string; project_id: string; empreendimento_id: string }[]) {
+            const emp = byId.get(t.empreendimento_id);
+            if (emp) map[t.project_id] = { id: emp.id, name: emp.name, towerName: t.name };
+        }
+        for (const e of list) {
+            if (e.project_id) map[e.project_id] = { id: e.id, name: e.name };
+        }
+        return map;
+    },
+
     async getById(id: string, opts?: { includeChildren?: boolean }): Promise<Empreendimento | EmpreendimentoWithChildren | null> {
         const { data: empreendimento, error } = await supabase
             .from('empreendimentos')

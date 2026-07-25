@@ -1,5 +1,6 @@
 import React from 'react';
 import { projectService, ProjectData } from '../services/projectService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TipoObra } from '../types/project';
@@ -85,6 +86,9 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'code',          label: 'Código',      sortable: true },
     { key: 'name',          label: 'Nome',        sortable: true },
     { key: 'organization',  label: 'Organização', sortable: true },
+    // Empreendimento (Incorporação) ao qual a obra está vinculada — via
+    // empreendimentos.project_id ou empreendimento_towers.project_id.
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     // Vinculado = obra/orçamento/planejamento ligado (ou sugestão) — sem valor único
     // comparável entre os contextos (Obra/Orçamento/Planejamento/Diário), ver §6.3.
     { key: 'linked',        label: 'Vinculado',   sortable: false },
@@ -165,6 +169,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
 }) => {
     const [projects, setProjects] = React.useState<ProjectSummary[]>([]);
     const [orderCounts, setOrderCounts] = React.useState<Record<string, number>>({});
+    // Obra → empreendimento (Incorporação). Carregado à parte da lista de projetos porque
+    // o vínculo mora no módulo de Empreendimentos, não em `projects.settings`.
+    const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [isLoading, setIsLoading] = React.useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('projectListFilters:search', '');
@@ -231,6 +238,16 @@ const ProjectList: React.FC<ProjectListProps> = ({
         };
         updateProjects();
     }, [projectsProp, clientId, organizationId]);
+
+    // Sem organização ativa ("Todas as organizações") o mapa não é bloqueado — o service
+    // simplesmente não filtra e a RLS recorta (CLAUDE.md regra #5).
+    React.useEffect(() => {
+        let cancelled = false;
+        empreendimentoService.mapObrasToEmpreendimentos(organizationId)
+            .then(map => { if (!cancelled) setEmpreendimentoByProject(map); })
+            .catch(() => { if (!cancelled) setEmpreendimentoByProject({}); });
+        return () => { cancelled = true; };
+    }, [organizationId]);
 
     const handleDelete = async (id: string, name: string) => {
         const effectiveOrders = getEffectiveOrderCount(id);
@@ -348,6 +365,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             const orgB = organizations.find(o => o.id === b.settings?.organizationId)?.name || '';
                             return sortDirection === 'asc' ? orgA.localeCompare(orgB) : orgB.localeCompare(orgA);
                         }
+                        case 'empreendimento': {
+                            const empA = empreendimentoByProject[a.id]?.name || '';
+                            const empB = empreendimentoByProject[b.id]?.name || '';
+                            return sortDirection === 'asc' ? empA.localeCompare(empB) : empB.localeCompare(empA);
+                        }
                         case 'lock': {
                             // Aproximação direta (orderCounts), não a contagem em cascata de
                             // getEffectiveOrderCount — suficiente para ordenar bloqueado/livre.
@@ -372,7 +394,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, organizations, orderCounts]);
+    }, [projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, organizations, orderCounts, empreendimentoByProject]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;
@@ -522,7 +544,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         </h1>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie suas {isObraContext ? 'obras' : (isPlanejamentoContext ? 'planejamentos' : (isDiarioContext ? 'diários' : 'orçamentos'))} com infraestrutura de alta performance.</p>
                     </div>
-                    {/* Variante compacta do CTA primário (ui_ux_standard_guide.md §17) */}
+                    {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) */}
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setIsImportModalOpen(true)}
@@ -609,7 +631,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 )}
 
                 {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio
-                    cabeçalho (ui_ux_standard_guide.md §6.4); default sem coluna selecionada
+                    cabeçalho (ui_ux_guia_unificado.md §6.4); default sem coluna selecionada
                     ficou dentro do .sort() (mais recente primeiro / código para Obras). */}
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
@@ -714,6 +736,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <SortableHeader
                                             label="Organização"
                                             colKey="organization"
+                                            uppercase={false}
+                                            sortColumn={sortColumn}
+                                            sortDirection={sortDirection}
+                                            onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
+                                        />
+                                    )}
+                                    {visibleColumns.includes('empreendimento') && (
+                                        <SortableHeader
+                                            label="Empreendimento"
+                                            colKey="empreendimento"
                                             uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
@@ -856,6 +889,24 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             return (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                     {org ? org.name : <span className="text-gray-400 italic">—</span>}
+                                                </td>
+                                            );
+                                        })()}
+                                        {visibleColumns.includes('empreendimento') && (() => {
+                                            const emp = empreendimentoByProject[project.id];
+                                            return (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                    {emp ? (
+                                                        <div className="flex flex-col">
+                                                            <span className="truncate max-w-[180px]">{emp.name}</span>
+                                                            {/* Multi-torre: a obra é de uma torre específica, não do empreendimento inteiro. */}
+                                                            {emp.towerName && (
+                                                                <span className="text-xs text-gray-400">{emp.towerName}</span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400 italic">—</span>
+                                                    )}
                                                 </td>
                                             );
                                         })()}
@@ -1043,7 +1094,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-3">
                                                 {/* Para Planejamento/Diário, o clique na linha já abre Cronograma/Diário
                                                     (onRowClick) — um botão de texto repetindo a mesma ação duplicaria o
-                                                    controle (ui_ux_standard_guide.md §9.1). */}
+                                                    controle (ui_ux_guia_unificado.md §9.1). */}
                                                 {(!isPlanejamentoContext && !isDiaryContext) && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }}

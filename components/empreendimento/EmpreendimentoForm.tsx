@@ -1,6 +1,7 @@
 // components/empreendimento/EmpreendimentoForm.tsx
 import React from 'react';
-import { X, Loader2, Building2, HardHat, Link2, AlertCircle } from 'lucide-react';
+import { Loader2, Building2, HardHat, Link2, AlertCircle } from 'lucide-react';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService, EmpreendimentoTypeRecord } from '../../services/empreendimentoTypeService';
@@ -16,7 +17,7 @@ import {
 import { PlantStudy } from '../../types/plantaAi';
 
 interface Props {
-  /** Vazio quando o usuário está com "Todas as organizações" — o modal pede a org num seletor. */
+  /** Vazio quando o usuário está com "Todas as organizações" — o painel pede a org num seletor. */
   organizationId: string;
   editing?: Empreendimento | null;
   onClose: () => void;
@@ -51,7 +52,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   const [plantStudies, setPlantStudies] = React.useState<PlantStudy[]>([]);
   const [empreendimentoTypes, setEmpreendimentoTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
   // Torres do empreendimento — só existem depois de criado. O vínculo de obra por torre
-  // (multi-torre) mora aqui no modal, junto do vínculo de obra principal (project_id).
+  // (multi-torre) mora aqui no painel, junto do vínculo de obra principal (project_id).
   const [towers, setTowers] = React.useState<EmpreendimentoTower[]>([]);
   const [towerLinkBusyId, setTowerLinkBusyId] = React.useState<string | null>(null);
   // Org efetiva do registro. Vem da prop quando há uma org ativa específica;
@@ -267,19 +268,21 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   const sectionCls = 'text-xs font-semibold text-gray-500 mb-3';
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-[10px] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-[10px]">
-          <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-blue-600" />
-            {editing ? 'Editar Empreendimento' : 'Novo Empreendimento'}
-          </h2>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-[6px] hover:bg-gray-100 transition-colors">
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
+    // Painel lateral (UI_PATTERNS.md): editar/criar item de lista sem perder o
+    // contexto da tela por trás. Era um modal central — trocado a pedido.
+    <Sheet open onClose={onClose} size="2xl">
+      <SheetHeader onClose={onClose}>
+        <SheetTitle className="flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-blue-600" />
+          {editing ? 'Editar Empreendimento' : 'Novo Empreendimento'}
+        </SheetTitle>
+        <SheetDescription>
+          {editing ? editing.name : 'Cadastre a incorporação e seus vínculos.'}
+        </SheetDescription>
+      </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+        <SheetPanel className="p-6 space-y-6">
           {/* Identificação */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -536,25 +539,26 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-            >
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {editing ? 'Salvar' : 'Criar'}
-            </button>
-          </div>
-        </form>
-      </div>
+        </SheetPanel>
+
+        <SheetFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+          >
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {editing ? 'Salvar' : 'Criar'}
+          </button>
+        </SheetFooter>
+      </form>
 
       {notification && (
         <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
@@ -564,7 +568,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
           {notification.message}
         </div>
       )}
-    </div>
+    </Sheet>
   );
 };
 

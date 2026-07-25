@@ -10,6 +10,7 @@ import SupplierCategoriesSettings from './SupplierCategoriesSettings';
 import FinancialCategoriesManager from './FinancialCategoriesManager';
 import ContractTypesSettings from './ContractTypesSettings';
 import EmpreendimentoTypesSettings from './EmpreendimentoTypesSettings';
+import PaymentTypesSettings from './PaymentTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
 import TaxSettingsManager from './TaxSettingsManager';
 import InssBracketsSettings from './InssBracketsSettings';
@@ -19,7 +20,7 @@ import CofinsRatesSettings from './CofinsRatesSettings';
 type SettingsLeafId =
     | 'geral'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
-    | 'cat-empreendimentos' | 'cat-financeiro'
+    | 'cat-empreendimentos' | 'cat-financeiro' | 'cat-pagamentos'
     | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis' | 'tributos-cofins'
     | 'whatsapp' | 'email' | 'database';
 
@@ -39,6 +40,7 @@ const SETTINGS_NAV: SettingsNavNode[] = [
         { id: 'cat-fornecedores', label: 'Fornecedores' },
         { id: 'cat-contratos', label: 'Tipos de Contrato' },
         { id: 'cat-empreendimentos', label: 'Tipos de Empreendimento' },
+        { id: 'cat-pagamentos', label: 'Tipos de Pagamento' },
         { id: 'cat-financeiro', label: 'Financeiro' },
     ]},
     { id: 'indices', label: 'Índices de Reajuste', icon: Percent, leafId: 'indices' },
@@ -494,6 +496,7 @@ const Settings: React.FC = () => {
             {activeLeaf === 'cat-fornecedores' && <SupplierCategoriesSettings />}
             {activeLeaf === 'cat-contratos' && <ContractTypesSettings />}
             {activeLeaf === 'cat-empreendimentos' && <EmpreendimentoTypesSettings />}
+            {activeLeaf === 'cat-pagamentos' && <PaymentTypesSettings />}
             {activeLeaf === 'cat-financeiro' && <FinancialCategoriesManager />}
 
             {activeLeaf === 'indices' && (

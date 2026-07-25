@@ -41,7 +41,7 @@ export interface PaymentInstallment {
      * parcelas geradas como 'MENSAL' por padrão (o gerador espaça 1 mês entre
      * elas); o usuário pode reclassificar linha a linha.
      */
-    installmentType?: 'SINAL' | 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'AVULSA';
+    installmentType?: 'SINAL' | 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'AVULSA' | 'CHAVES' | (string & {});
 }
 
 export interface FinancialTransaction {

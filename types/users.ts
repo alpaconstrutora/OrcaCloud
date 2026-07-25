@@ -158,6 +158,24 @@ export interface ClientCategory {
     created_at?: string;
 }
 
+/**
+ * Catálogo gerenciável de Tipos de Pagamento (Configurações → Categorias Gerais)
+ * — o QUE cada parcela do Plano de Pagamento representa (Sinal, mensal, nas
+ * chaves...). `code` é a chave estável gravada em `commercial_deals.custom_installments`
+ * (retrocompat) e usada para resolver a periodicidade do gerador; `interval_months`
+ * null = tipo não gera série automática. Ver `constants/paymentTypes.ts`.
+ */
+export interface PaymentType {
+    id: string;
+    name: string;
+    code?: string;
+    interval_months?: number | null;
+    generates_series?: boolean;
+    active?: boolean;
+    organization_id?: string;
+    created_at?: string;
+}
+
 export type OrganizationRole = 'admin' | 'member' | 'viewer';
 
 /** Produto Òpura que o membro acessa: Plataforma principal, Pro, Offices ou E-commerce */

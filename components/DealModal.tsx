@@ -1,7 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass } from 'lucide-react';
-import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
+import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType } from '../types';
 import { commercialService } from '../services/commercialService';
+import { paymentTypeService } from '../services/paymentTypeService';
+import {
+    DEFAULT_PAYMENT_TYPES,
+    labelForInstallmentType,
+    intervalMonthsForType,
+    sortPaymentTypes,
+} from '../constants/paymentTypes';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { propertyExportService } from '../services/propertyExportService';
@@ -19,36 +26,45 @@ import { useStore } from '../store/useStore';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'partes' | 'contrato';
 
-/** Rótulos do Tipo de Pagamento (Plano de Pagamento) — mesma lista usada na
- * Entrada, em cada parcela e no modal de Gerar Parcelas. */
-const INSTALLMENT_TYPE_LABELS: Record<NonNullable<PaymentInstallment['installmentType']>, string> = {
-    SINAL: 'Sinal',
-    MENSAL: 'Parcelas mensais',
-    TRIMESTRAL: 'Parcelas trimestrais',
-    SEMESTRAL: 'Parcelas semestrais',
-    ANUAL: 'Parcelas anuais',
-    AVULSA: 'Parcelas avulsas',
+/** Checklist de documentos exigidos do cliente/comprador, por tipo de pessoa.
+ * As chaves (`key`) são o que fica gravado em commercial_deals.doc_checklist —
+ * NÃO renomear sem migração de dados. Rótulos podem mudar livremente. */
+const DEAL_DOC_CHECKLIST: Record<'PF' | 'PJ', { key: string; label: string }[]> = {
+    PF: [
+        { key: 'rg_cnh', label: 'RG / CNH' },
+        { key: 'cpf', label: 'CPF' },
+        { key: 'certidao_estado_civil', label: 'Certidão de estado civil' },
+        { key: 'comprovante_residencia', label: 'Comprovante de residência' },
+        { key: 'declaracao_irpf', label: 'Declaração IRPF (último ano)' },
+        { key: 'certidao_negativa_federal', label: 'Certidão negativa federal' },
+        { key: 'comprovante_renda', label: 'Comprovante de renda (3 últimos)' },
+        { key: 'extratos_bancarios', label: 'Extratos bancários (3 meses)' },
+    ],
+    PJ: [
+        { key: 'cnpj', label: 'CNPJ' },
+        { key: 'contrato_social', label: 'Contrato social ou estatuto atualizado (última alteração)' },
+        { key: 'docs_socios', label: 'Documentos dos sócios/administradores' },
+        { key: 'certidoes_negativas_empresa', label: 'Certidões negativas da empresa' },
+        { key: 'balanco_dre_faturamento', label: 'Balanço, DRE ou faturamento' },
+        { key: 'procuracao', label: 'Procuração, se houver representante' },
+    ],
 };
 
-/** Intervalo (em meses) entre parcelas geradas para cada Tipo de Pagamento.
- * SINAL e AVULSA não têm periodicidade própria (não geram série no modal de
- * Gerar Parcelas — Sinal é a Entrada; Avulsa é criada uma a uma) — caem no
- * fallback de 1 mês só por segurança de tipo, sem uso prático real. */
-const INSTALLMENT_TYPE_INTERVAL_MONTHS: Record<NonNullable<PaymentInstallment['installmentType']>, number> = {
-    SINAL: 1,
-    MENSAL: 1,
-    TRIMESTRAL: 3,
-    SEMESTRAL: 6,
-    ANUAL: 12,
-    AVULSA: 1,
-};
-
-/** Tipos que o modal de Gerar Parcelas oferece — só os periódicos. Sinal já
- * tem seu próprio campo (Entrada) e Avulsa seu próprio botão ("+ Parcela
- * Avulsa"); gerar em lote qualquer um dos dois não combina com o modelo de
- * blocos-por-tipo com rateio compartilhado implementado abaixo. */
-const GENERATOR_INSTALLMENT_TYPES: NonNullable<PaymentInstallment['installmentType']>[] =
-    ['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL'];
+/** Tipos de Pagamento padrão do sistema, no formato de lista `PaymentType`.
+ * Usado como fallback enquanto o catálogo da organização carrega. A fonte de
+ * verdade agora é "Configurações → Categorias Gerais → Tipos de Pagamento"
+ * (tabela `payment_types`); ver `constants/paymentTypes.ts`. Os rótulos, a
+ * periodicidade do gerador e os tipos que geram série são resolvidos em runtime
+ * a partir da lista carregada — SINAL/AVULSA/CHAVES continuam sendo códigos
+ * tratados por literal na lógica de blocos abaixo. */
+const DEFAULT_PAYMENT_TYPE_LIST: PaymentType[] = DEFAULT_PAYMENT_TYPES.map(d => ({
+    id: `default-${d.code.toLowerCase()}`,
+    name: d.name,
+    code: d.code,
+    interval_months: d.interval_months,
+    generates_series: d.generates_series,
+    active: true,
+}));
 
 /** Sentinela de "não alterar este campo" nos selects de edição em lote —
  * distinto de `''` (que, para Forma de Pagamento, significa limpar o campo).
@@ -73,6 +89,7 @@ const BULK_KEEP = '__KEEP__';
  */
 interface InstallmentLoteModalProps {
     installments: PaymentInstallment[]; // selecionadas
+    installmentTypes: PaymentType[];    // catálogo Tipos de Pagamento (ordenado)
     onClose: () => void;
     onSave: (patch: {
         discountType: 'VALUE' | 'PERCENT' | null;
@@ -81,7 +98,7 @@ interface InstallmentLoteModalProps {
         installmentType?: PaymentInstallment['installmentType'];
     }) => void;
 }
-const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ installments, onClose, onSave }) => {
+const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ installments, installmentTypes, onClose, onSave }) => {
     const [discountType, setDiscountType] = useState<'VALUE' | 'PERCENT' | ''>('');
     const [discountAmount, setDiscountAmount] = useState('');
     const [bulkPaymentType, setBulkPaymentType] = useState(BULK_KEEP);
@@ -177,8 +194,8 @@ const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ ins
                         >
                             <option value={BULK_KEEP}>Não alterar</option>
                             <option value="">Nenhum (limpar de todas)</option>
-                            {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
-                                <option key={value} value={value}>{label}</option>
+                            {installmentTypes.map(t => (
+                                <option key={t.code || t.id} value={t.code}>{t.name}</option>
                             ))}
                         </select>
                     </div>
@@ -281,7 +298,25 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [loading, setLoading] = useState(false);
+    // Aviso padrão de salvamento — mostrado dentro da própria tela "Gerenciar
+    // Negociação" (tela cheia) antes de fechar, já que o toast do módulo-pai só
+    // aparece depois que a tela some (o usuário não via confirmação nenhuma).
+    const [savedNotice, setSavedNotice] = useState(false);
     const [org, setOrg] = useState<Organization | null>(null);
+
+    // Catálogo de Tipos de Pagamento (Configurações → Categorias Gerais). Alimenta
+    // o dropdown "Tipo Pagto." de cada parcela/Entrada, o gerador de parcelas e a
+    // edição em lote. Cai nos padrões do sistema enquanto carrega (não pisca vazio).
+    const [paymentTypes, setPaymentTypes] = useState<PaymentType[]>(DEFAULT_PAYMENT_TYPE_LIST);
+    const installmentTypeOptions = useMemo(
+        () => sortPaymentTypes(paymentTypes.filter(t => t.active !== false)),
+        [paymentTypes],
+    );
+    const generatorTypes = useMemo(
+        () => installmentTypeOptions.filter(t => t.generates_series),
+        [installmentTypeOptions],
+    );
+    const typeLabel = (code?: string) => labelForInstallmentType(paymentTypes, code);
 
     // Seleção em lote das parcelas (Plano de Pagamento) — mesmo padrão de
     // BankReconciliation.tsx (Extrato Bancário): Set de ids + âncora de
@@ -472,9 +507,46 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (isOpen) load();
     }, [isOpen, buildingId, userOrganizations.length]);
 
+    // Catálogo de Tipos de Pagamento da org da negociação (REGRA #5: sem org,
+    // o service devolve os padrão + o que a RLS liberar; nunca bloqueia a leitura).
+    useEffect(() => {
+        if (!isOpen) return;
+        const dealOrgId = formData.organization_id || organizationId || undefined;
+        let cancelled = false;
+        paymentTypeService.listTypes(dealOrgId)
+            .then(list => { if (!cancelled && list.length) setPaymentTypes(list); })
+            .catch(err => console.error('[DealModal] Erro ao carregar tipos de pagamento:', err));
+        return () => { cancelled = true; };
+    }, [isOpen, formData.organization_id, organizationId]);
+
     const selectedProperty = properties.find(p => p.id === formData.property_id);
     const selectedClient = clients.find(c => c.id === formData.client_id);
     const selectedBroker = brokers.find(b => b.id === formData.broker_id);
+
+    // Um mesmo corretor cadastrado como fornecedor "em todas as organizações"
+    // é materializado em broker_profiles UMA vez por org (syncRealEstateBrokerProfiles
+    // roda para cada org do usuário). Como a negociação lista corretores de todas as
+    // orgs, o mesmo corretor aparecia 2, 3 vezes no dropdown. Deduplica por
+    // identidade real do corretor (e-mail → CPF → nome+agência), mantendo o primeiro
+    // registro. Se o corretor já selecionado tiver sido "engolido" pela dedup, mantém
+    // sua linha para não zerar a seleção salva.
+    const uniqueBrokers = useMemo(() => {
+        const seen = new Set<string>();
+        const list: BrokerProfile[] = [];
+        for (const b of brokers) {
+            const key = (b.email || '').trim().toLowerCase()
+                || (b.cpf || '').replace(/\D/g, '')
+                || `${(b.name || '').trim().toLowerCase()}|${(b.agency_name || '').trim().toLowerCase()}`;
+            if (key && seen.has(key)) continue;
+            if (key) seen.add(key);
+            list.push(b);
+        }
+        if (formData.broker_id && !list.some(b => b.id === formData.broker_id)) {
+            const current = brokers.find(b => b.id === formData.broker_id);
+            if (current) list.push(current);
+        }
+        return list;
+    }, [brokers, formData.broker_id]);
 
     // Linhas de endereço do cliente selecionado — conferência antes de emitir
     // contrato (aba "Dados do Cliente"). Mesma convenção de exibição de
@@ -534,7 +606,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // por isso os blocos preservados são recalculados junto (mesmo valor
         // por parcela em todos, só a última parcela do bloco recém-gerado
         // absorve o resto do arredondamento).
-        const intervalMonths = INSTALLMENT_TYPE_INTERVAL_MONTHS[installmentType] ?? 1;
+        const intervalMonths = intervalMonthsForType(paymentTypes, installmentType);
         const count = Math.max(1, Math.floor(Number(installmentCount) || 1));
 
         setFormData(prev => {
@@ -863,6 +935,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             const savedDeal = await commercialService.saveDeal(payload);
             console.log('[DealModal] Negociação salva com sucesso:', savedDeal);
 
+            // Emite o aviso padrão de salvamento e dá um instante para o usuário
+            // vê-lo dentro da tela antes de propagar/fechar.
+            setSavedNotice(true);
+            await new Promise(resolve => setTimeout(resolve, 900));
+
             if (onSave) onSave();
             onClose();
         } catch (err: any) {
@@ -1152,6 +1229,63 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <option value="Outros">Outros</option>
                                 </select>
                             </div>
+
+                            {/* Checklist de documentos do cliente/comprador — muda conforme
+                                Pessoa Física / Jurídica do cadastro. Persistido em
+                                commercial_deals.doc_checklist. */}
+                            {selectedClient && (() => {
+                                const isPJ = selectedClient.type === 'PJ';
+                                const items = DEAL_DOC_CHECKLIST[isPJ ? 'PJ' : 'PF'];
+                                const checked = formData.doc_checklist || {};
+                                const doneCount = items.filter(i => checked[i.key]).length;
+                                const toggle = (key: string) => setFormData(prev => ({
+                                    ...prev,
+                                    doc_checklist: { ...(prev.doc_checklist || {}), [key]: !(prev.doc_checklist || {})[key] },
+                                }));
+                                return (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-purple-600">
+                                                <FileText className="w-5 h-5" />
+                                                <h3 className="font-black uppercase tracking-widest text-xs">
+                                                    Documentos — {isPJ ? 'Pessoa Jurídica' : 'Pessoa Física'}
+                                                </h3>
+                                            </div>
+                                            <span className="text-xs font-black bg-white px-2 py-1 rounded-lg border border-gray-100 text-purple-600 shadow-sm uppercase tracking-widest">
+                                                {doneCount}/{items.length}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {items.map(item => {
+                                                const isChecked = !!checked[item.key];
+                                                return (
+                                                    <button
+                                                        key={item.key}
+                                                        type="button"
+                                                        onClick={() => toggle(item.key)}
+                                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all ${
+                                                            isChecked
+                                                                ? 'bg-emerald-50 border-emerald-200'
+                                                                : 'bg-gray-50 border-transparent hover:border-purple-200'
+                                                        }`}
+                                                    >
+                                                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border transition-all ${
+                                                            isChecked
+                                                                ? 'bg-emerald-500 border-emerald-500 text-white'
+                                                                : 'bg-white border-gray-300 text-transparent'
+                                                        }`}>
+                                                            <Check className="w-4 h-4" />
+                                                        </span>
+                                                        <span className={`text-sm font-bold ${isChecked ? 'text-emerald-800' : 'text-gray-700'}`}>
+                                                            {item.label}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     )}
 
@@ -1464,8 +1598,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
                                                         className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none cursor-pointer"
                                                     >
-                                                        {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
-                                                            <option key={value} value={value}>{label}</option>
+                                                        {installmentTypeOptions.map(t => (
+                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
                                                         ))}
                                                     </select>
 
@@ -1562,8 +1696,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
                                                     >
                                                         <option value="">Tipo Pagto.</option>
-                                                        {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
-                                                            <option key={value} value={value}>{label}</option>
+                                                        {installmentTypeOptions.map(t => (
+                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
                                                         ))}
                                                     </select>
 
@@ -1680,7 +1814,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     className="w-full px-6 py-4 bg-amber-50/60 border border-transparent focus:bg-white focus:border-amber-400 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
                                 >
                                     <option value="">Sem corretor / Venda direta</option>
-                                    {brokers.map(b => (
+                                    {uniqueBrokers.map(b => (
                                         <option key={b.id} value={b.id}>
                                             {b.name}{b.agency_name ? ` - ${b.agency_name}` : ''}
                                         </option>
@@ -1986,6 +2120,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     </div>
                 </div>
 
+                {/* Aviso padrão de salvamento (toast) — mesmo padrão visual do
+                    toast de sucesso dos módulos (fixo, canto inferior direito). */}
+                {savedNotice && (
+                    <div className="fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium bg-emerald-600 text-white animate-in slide-in-from-bottom-4 duration-300">
+                        <Check className="w-5 h-5 shrink-0" />
+                        Negociação salva com sucesso!
+                    </div>
+                )}
+
                 {/* Barra de ação em lote — parcelas selecionadas no Plano de Pagamento
                     (guia §10: fixa no rodapé, fora do fluxo normal). */}
                 {activeTab === 'pagamento' && selectedInstallmentIds.size > 0 && (
@@ -2020,6 +2163,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 {showInstallmentLoteModal && (
                     <InstallmentLoteDiscountModal
                         installments={(formData.custom_installments || []).filter(i => selectedInstallmentIds.has(i.id))}
+                        installmentTypes={installmentTypeOptions}
                         onClose={() => setShowInstallmentLoteModal(false)}
                         onSave={applyBulkInstallmentEdit}
                     />
@@ -2073,8 +2217,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         onChange={(e) => setGenerateInstallmentType(e.target.value as NonNullable<PaymentInstallment['installmentType']>)}
                                         className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
                                     >
-                                        {GENERATOR_INSTALLMENT_TYPES.map(value => (
-                                            <option key={value} value={value}>{INSTALLMENT_TYPE_LABELS[value]}</option>
+                                        {generatorTypes.map(t => (
+                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
                                         ))}
                                     </select>
                                     <p className="text-xs text-gray-400 mt-1">
@@ -2092,7 +2236,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     return (
                                         <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 space-y-1">
                                             {sameTypeCount > 0 && (
-                                                <p>Substitui as {sameTypeCount} parcela(s) de "{INSTALLMENT_TYPE_LABELS[generateInstallmentType]}" atuais — ajustes manuais nelas (descontos, valores editados, forma de pagamento e observações) serão perdidos.</p>
+                                                <p>Substitui as {sameTypeCount} parcela(s) de "{typeLabel(generateInstallmentType)}" atuais — ajustes manuais nelas (descontos, valores editados, forma de pagamento e observações) serão perdidos.</p>
                                             )}
                                             {otherTypesCount > 0 && (
                                                 <p>As {otherTypesCount} parcela(s) de outro(s) tipo(s) são mantidas (só o valor é recalculado para a soma continuar batendo com o Valor Total).</p>
@@ -2241,7 +2385,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             onChange={() => handleToggleRecalcType(type)}
                                                             className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                                                         />
-                                                        <span className="text-sm font-bold text-gray-700">{INSTALLMENT_TYPE_LABELS[type]}</span>
+                                                        <span className="text-sm font-bold text-gray-700">{typeLabel(type)}</span>
                                                         <span className="text-xs text-gray-400">({g.count} parcela{g.count !== 1 ? 's' : ''})</span>
                                                     </span>
                                                     <span className="text-xs font-semibold text-gray-500">

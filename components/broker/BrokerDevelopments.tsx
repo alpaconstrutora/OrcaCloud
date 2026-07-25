@@ -226,8 +226,14 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 bedrooms: u.specs?.bedrooms ?? null,
                 bathrooms: u.specs?.bathrooms ?? null,
                 parking_spaces: u.specs?.parkingSpaces ?? null,
-                floor: u.specs?.floor ?? null,
-                position_type: null,
+                // Pavimento e Posição moram na COLUNA de commercial_properties (é lá que
+                // o publish do espelho grava — EspelhoVendasTab.handlePublish), ao
+                // contrário de dormitórios/banheiros/vagas, que caem em specs. Ler de
+                // specs (ou fixar null, no caso da posição) deixava as duas sempre
+                // vazias — mesmo com o dado preenchido no Empreendimento e no Comercial.
+                // `?? ` e não `||`: pavimento 0 é térreo, valor legítimo.
+                floor: u.floor ?? u.specs?.floor ?? null,
+                position_type: u.position_type ?? null,
                 visible_to_broker: (u as any).visible_to_broker ?? true,
             }));
     }, [activeTable, loading, units, selectedBuildingId, priceMode]);

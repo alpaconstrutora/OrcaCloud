@@ -66,7 +66,7 @@ const SalesManagementModule: React.FC<Props> = ({
     }
   }, [defaultTab])
 
-  const brokerInternalTab = sourceView ? (BROKER_INTERNAL_TAB[sourceView] ?? 'estoque') : 'estoque'
+  const brokerInternalTab = sourceView ? (BROKER_INTERNAL_TAB[sourceView] ?? 'analytics') : 'analytics'
 
   // Aba Corretores: lista → portal (ao selecionar um corretor)
   if (activeTab === 'corretores') {

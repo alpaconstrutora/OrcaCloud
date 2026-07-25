@@ -43,7 +43,10 @@ interface BrokerPortalProps {
     onBack?: () => void;
 }
 
+// Analytics é a PRIMEIRA aba (e a default ao abrir o portal) — os KPIs de topo
+// pertencem a ela.
 const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'estoque', label: 'Estoque', icon: LayoutGrid },
     { id: 'empreendimentos', label: 'Empreendimentos', icon: Building2 },
     { id: 'propostas', label: 'Propostas', icon: FileText },
@@ -54,23 +57,23 @@ const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'treinamento', label: 'Treinamento', icon: BookOpen },
     { id: 'agenda', label: 'Agenda', icon: Calendar },
     { id: 'chat', label: 'Chat', icon: MessageSquare },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'saude', label: 'Saúde', icon: Activity },
     { id: 'integracoes', label: 'Integrações', icon: Link2 },
 ];
 
 // Agrupamento das abas para a navegação em sidebar do portal público (Fase 1+2 do redesign UI/UX).
 const NAV_GROUPS: { label: string; tabs: PortalTab[] }[] = [
+    { label: 'Desempenho', tabs: ['analytics'] },
     { label: 'Comercial', tabs: ['estoque', 'empreendimentos', 'propostas', 'leads'] },
     { label: 'Financeiro', tabs: ['comissoes'] },
     { label: 'Conteúdo', tabs: ['materiais', 'treinamento'] },
     { label: 'Engajamento', tabs: ['ranking', 'agenda', 'chat'] },
-    { label: 'Gestão', tabs: ['analytics', 'saude', 'integracoes'] },
+    { label: 'Gestão', tabs: ['saude', 'integracoes'] },
 ];
 const TAB_BY_ID: Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }> =
     Object.fromEntries(ALL_TABS.map(t => [t.id, t])) as Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }>;
 
-const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack }) => {
+const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analytics', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack }) => {
     const { organizations } = useStore();
     const confirm = useConfirm();
 
@@ -547,13 +550,17 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             </div>
             )}
 
-            {/* KPI Cards — §4 (componente canônico KpiCard, cor semântica por KPI) */}
+            {/* KPI Cards — §4 (componente canônico KpiCard, cor semântica por KPI).
+                Visíveis SOMENTE na aba Analytics: são o resumo de desempenho do
+                corretor, não um cromo global do portal. */}
+            {currentTab === 'analytics' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard label="Unidades Disponíveis" value={loading ? '…' : stats.available} sub={loading ? undefined : `de ${visibleUnits.length} unidades`} icon={<Building2 className="w-5 h-5" />} color="blue" />
                 <KpiCard label="Propostas Enviadas" value={loading ? '…' : stats.sent} sub="Aguardando análise" icon={<Send className="w-5 h-5" />} color="amber" pulse={!loading && stats.sent > 0} />
                 <KpiCard label="Propostas Aprovadas" value={loading ? '…' : stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                 <KpiCard label="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} sub="5% sobre aprovadas" icon={<DollarSign className="w-5 h-5" />} color="violet" />
             </div>
+            )}
 
             {/* Toolbar de botões (§5.3) — controles de escopo do portal (voltar + org)
                 à esquerda, ações do admin (prévia mobile + configurar abas) à direita.

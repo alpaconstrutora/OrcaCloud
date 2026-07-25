@@ -375,7 +375,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       'broker-events': 'agenda', 'broker-chat': 'chat', 'broker-analytics': 'analytics',
       'broker-health': 'saude', 'broker-integrations': 'integracoes'
     };
-    return <BrokerPortal profile={currentProfile} organizationId={activeOrganizationId || undefined} activeTab={(tabMap[activeView] || 'estoque') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'} />;
+    return <BrokerPortal profile={currentProfile} organizationId={activeOrganizationId || undefined} activeTab={(tabMap[activeView] || 'analytics') as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'} />;
   }
   if (currentProfile.group === ProfileGroup.PARTNER) {
     return (

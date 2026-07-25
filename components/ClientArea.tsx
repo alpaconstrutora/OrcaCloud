@@ -45,7 +45,9 @@ import {
     Wallet,
     Wrench,
     ClipboardList,
-    MoreHorizontal
+    MoreHorizontal,
+    ChevronDown,
+    HelpCircle
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Bar, LabelList, Legend } from 'recharts';
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
@@ -158,6 +160,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // que faltava e fazia a config não persistir/refletir. `undefined` = ainda não
     // configurado (usa preset/legado do projeto).
     const [clientPortalTabs, setClientPortalTabs] = React.useState<string[] | undefined>(clientProfile?.portalTabs);
+    const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
+    const accountMenuRef = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        if (!isAccountMenuOpen) return;
+        const onDocClick = (e: MouseEvent) => {
+            if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) setIsAccountMenuOpen(false);
+        };
+        document.addEventListener('mousedown', onDocClick);
+        return () => document.removeEventListener('mousedown', onDocClick);
+    }, [isAccountMenuOpen]);
     React.useEffect(() => { setClientPortalTabs(clientProfile?.portalTabs); }, [clientProfile?.id, clientProfile?.portalTabs]);
     React.useEffect(() => {
         if (!isAdmin || !clientProfile?.id) {
@@ -3594,6 +3606,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const tabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));
     // admin vê todas no desktop para poder configurar; cliente vê só as habilitadas
     const desktopNavTabs = isAdmin ? ALL_TABS : tabs;
+    // Modo link público (portalToken) — só nele renderizamos a casca própria do
+    // portal (banner + header + sidebar), espelhando o Portal do Corretor (isStandalone).
+    // No app autenticado a navegação já vem do Layout global — não duplicar.
+    const isStandalone = !!portalToken;
+    const clientDisplayName = clientProfile?.name || settings.name || 'Cliente';
 
     const toggleTabVisibility = async (tabId: string) => {
         const current = enabledTabIds;
@@ -3629,7 +3646,100 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     }
 
     return (
-        <div className="portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-8">
+        <div className={isStandalone
+            ? 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-0 md:h-screen md:flex md:flex-col md:overflow-hidden'
+            : 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 space-y-4 md:space-y-8'}>
+
+            {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Corretor) ══ */}
+            {isStandalone && (
+                <div className="hidden md:flex h-9 bg-indigo-50 border-b border-indigo-200 items-center justify-center gap-3 shrink-0 text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                    <span>Acesso via link público</span>
+                </div>
+            )}
+            {isStandalone && (
+                <header className="hidden md:flex h-16 border-b border-gray-100 bg-white items-center justify-between px-6 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Portal do Cliente</div>
+                        <h1 className="text-md font-bold text-gray-900 tracking-tight">Área do Cliente</h1>
+                    </div>
+                    <div className="relative" ref={accountMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsAccountMenuOpen(o => !o)}
+                            className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+                            aria-haspopup="menu"
+                            aria-expanded={isAccountMenuOpen}
+                        >
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                                {clientDisplayName.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="font-semibold text-gray-600">{clientDisplayName} (CLIENTE)</span>
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isAccountMenuOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isAccountMenuOpen && (
+                            <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
+                                <div className="border-b border-gray-100 px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+                                            {clientDisplayName.charAt(0).toUpperCase()}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-bold text-gray-900">{clientDisplayName}</div>
+                                            <div className="truncate text-xs text-gray-500">{clientProfile?.email || ''}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {clientProfile && (
+                                    <div className="p-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            role="menuitem"
+                                        >
+                                            <UserCircle className="h-4 w-4 text-gray-400" />
+                                            <span className="flex-1">Meus dados</span>
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="border-t border-gray-100 p-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAccountMenuOpen(false)}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <HelpCircle className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Dúvidas? Fale com a incorporadora.</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </header>
+            )}
+
+            <div className={isStandalone ? 'md:flex md:flex-1 md:overflow-hidden md:min-h-0' : ''}>
+                {isStandalone && (
+                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex">
+                        {desktopNavTabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                                    activeTab === tab.id
+                                        ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 font-bold'
+                                        : 'text-gray-500 hover:text-gray-900 hover:bg-white'
+                                }`}
+                            >
+                                {tab.icon}
+                                <span>{tab.label}</span>
+                            </button>
+                        ))}
+                    </aside>
+                )}
+                <div className={isStandalone ? 'md:flex-1 md:overflow-y-auto md:p-6 space-y-4 md:space-y-8' : 'space-y-4 md:space-y-8'}>
             {/* Prévia Mobile — renderiza o portal como o cliente vê, dentro de um iframe estreito */}
             {showMobilePreview && !isPreview && (
                 <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Cliente">
@@ -3959,8 +4069,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </div>
             )}
 
-            {/* Desktop Navigation Tabs */}
-            <div className="hidden md:flex items-center gap-3 flex-wrap">
+            {/* Desktop Navigation Tabs — ocultas no modo link público (a sidebar navega) */}
+            <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} items-center gap-3 flex-wrap`}>
                 <div className="flex flex-wrap gap-2 md:gap-4 p-1.5 bg-white border border-gray-100 rounded-2xl shadow-sm">
                     {desktopNavTabs.map(tab => {
                         const isVisible = enabledTabIds.includes(tab.id);
@@ -4410,6 +4520,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             <div className="hidden md:block text-center pt-10 pb-6 opacity-30 select-none pointer-events-none">
                 <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Poderoso e intuitivo • Opura Platinum © 2026</p>
             </div>
+                </div>{/* /content column */}
+            </div>{/* /body wrapper */}
         </div>
     );
 };

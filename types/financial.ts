@@ -725,6 +725,8 @@ export interface TaxPayable {
     /** Empreendimento (Incorporação) de origem — derivado do negócio comercial, não é coluna da view. */
     empreendimento_id?: string | null;
     empreendimento_name?: string | null;
+    /** Cliente do negócio de origem — usado na coluna Descrição. Derivado, não é coluna da view. */
+    client_name?: string | null;
     created_at?: string;
     updated_at?: string;
 }

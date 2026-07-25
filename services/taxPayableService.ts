@@ -138,9 +138,24 @@ function dealIdFromReference(referenceId?: string | null): string | null {
 }
 
 /**
- * Resolve o Empreendimento (Incorporação) de cada tributo automático.
- * Caminho: tributo → deal → imóvel → empreendimento_units (rental_property_id
+ * Descrição do tributo com o CLIENTE no lugar do nome do tributo — este já tem
+ * coluna própria na tabela, repeti-lo na descrição é redundante. Reescreve o
+ * prefixo até ` s/ ` das descrições geradas (`{tributo} s/ {origem} (n) — Deal #x`);
+ * descrição manual ou em outro formato fica intacta.
+ */
+function describeWithClient(description: string | undefined, clientName: string | undefined): string | undefined {
+    if (!description || !clientName) return description;
+    const sep = description.indexOf(' s/ ');
+    if (sep < 0) return description;
+    return `${clientName}${description.slice(sep)}`;
+}
+
+/**
+ * Resolve, a partir do negócio de origem, o Empreendimento (Incorporação) e o
+ * cliente de cada tributo automático.
+ * Empreendimento: tributo → deal → imóvel → empreendimento_units (rental_property_id
  * OU commercial_property_id) → torre → empreendimento.
+ * Cliente: deal.client_id → clients.name (usado na coluna Descrição).
  * Lançamento manual e negócio sem unidade vinculada ficam sem empreendimento.
  */
 async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: string): Promise<TaxPayable[]> {
@@ -150,16 +165,40 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
     try {
         const { data: deals } = await supabase
             .from('commercial_deals')
-            .select('id, property_id')
+            .select('id, property_id, client_id')
             .eq('organization_id', organizationId)
             .in('id', dealIds);
 
         const propertyByDeal = new Map<string, string>();
-        (deals || []).forEach((d: { id: string; property_id?: string | null }) => {
+        const clientIdByDeal = new Map<string, string>();
+        (deals || []).forEach((d: { id: string; property_id?: string | null; client_id?: string | null }) => {
             if (d.property_id) propertyByDeal.set(d.id, d.property_id);
+            if (d.client_id)   clientIdByDeal.set(d.id, d.client_id);
         });
+
+        // Nome do cliente — vai para a coluna Descrição no lugar do nome do tributo.
+        const clientNameById = new Map<string, string>();
+        const clientIds = [...new Set(clientIdByDeal.values())];
+        if (clientIds.length > 0) {
+            const { data: clients } = await supabase
+                .from('clients')
+                .select('id, name')
+                .in('id', clientIds);
+            (clients || []).forEach((c: { id: string; name?: string | null }) => clientNameById.set(c.id, c.name ?? ''));
+        }
+        const clientNameForRow = (r: TaxPayable): string | undefined => {
+            const dealId = dealIdFromReference(r.reference_id);
+            const clientId = dealId ? clientIdByDeal.get(dealId) : undefined;
+            return clientId ? (clientNameById.get(clientId) || undefined) : undefined;
+        };
+        const withClient = (r: TaxPayable): TaxPayable => {
+            const clientName = clientNameForRow(r);
+            if (!clientName) return r;
+            return { ...r, client_name: clientName, description: describeWithClient(r.description, clientName) };
+        };
+
         const propertyIds = [...new Set(propertyByDeal.values())];
-        if (propertyIds.length === 0) return rows;
+        if (propertyIds.length === 0) return rows.map(withClient);
 
         const inList = propertyIds.map(id => `"${id}"`).join(',');
         const { data: units } = await supabase
@@ -174,7 +213,7 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
             if (u.rental_property_id)     towerByProperty.set(u.rental_property_id, u.tower_id);
         });
         const towerIds = [...new Set(towerByProperty.values())];
-        if (towerIds.length === 0) return rows;
+        if (towerIds.length === 0) return rows.map(withClient);
 
         const { data: towers } = await supabase
             .from('empreendimento_towers')
@@ -185,7 +224,7 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
             if (t.empreendimento_id) empByTower.set(t.id, t.empreendimento_id);
         });
         const empIds = [...new Set(empByTower.values())];
-        if (empIds.length === 0) return rows;
+        if (empIds.length === 0) return rows.map(withClient);
 
         const { data: emps } = await supabase
             .from('empreendimentos')
@@ -194,7 +233,8 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
         const nameByEmp = new Map<string, string>();
         (emps || []).forEach((e: { id: string; name?: string | null }) => nameByEmp.set(e.id, e.name ?? ''));
 
-        return rows.map(r => {
+        return rows.map(row => {
+            const r = withClient(row);
             const dealId = dealIdFromReference(r.reference_id);
             const propertyId = dealId ? propertyByDeal.get(dealId) : undefined;
             const towerId = propertyId ? towerByProperty.get(propertyId) : undefined;
@@ -468,6 +508,26 @@ export const taxPayableService = {
             }
         }
 
+        // Cliente do negócio — vai na descrição no lugar do nome do tributo
+        // (o tributo já tem coluna própria na tela). Sem cliente, cai no nome do tributo.
+        let clientName: string | null = null;
+        {
+            const { data: d } = await supabase
+                .from('commercial_deals')
+                .select('client_id')
+                .eq('id', deal.id)
+                .maybeSingle();
+            const clientId = (d as { client_id?: string | null } | null)?.client_id ?? null;
+            if (clientId) {
+                const { data: c } = await supabase
+                    .from('clients')
+                    .select('name')
+                    .eq('id', clientId)
+                    .maybeSingle();
+                clientName = (c as { name?: string | null } | null)?.name || null;
+            }
+        }
+
         // Sempre limpa os automáticos PENDENTES deste negócio antes de regerar
         // (parcela cancelada, mudança de valor, alíquota desativada). Preserva os
         // já PAGOS/conciliados (dinheiro que saiu).
@@ -513,7 +573,7 @@ export const taxPayableService = {
                 due_date:        taxDueDate(taxName, parcel.fato_gerador),
                 amount:          Number(amount.toFixed(2)),
                 direction:       'DEBIT',
-                description:     `${taxName} s/ ${origin} (${instSuffix}) — Deal #${shortId}`,
+                description:     `${clientName || taxName} s/ ${origin} (${instSuffix}) — Deal #${shortId}`,
                 party_name:      taxName,
                 party_type:      TAX_PARTY_TYPE,
                 project_id:      null,

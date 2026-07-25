@@ -1,5 +1,4 @@
 import React, { Suspense, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
 import type { BrokerProfile } from '../types'
 
 // Sub-módulos carregados sob demanda (lazy) por aba
@@ -73,28 +72,18 @@ const SalesManagementModule: React.FC<Props> = ({
   if (activeTab === 'corretores') {
     if (selectedBroker) {
       return (
-        <div className="space-y-0">
-          {/* Breadcrumb de volta */}
-          <div className="flex items-center gap-3 px-6 py-3 bg-white border-b border-gray-100">
-            <button
-              onClick={() => setSelectedBroker(null)}
-              className="flex items-center gap-2 text-button font-black text-gray-400 hover:text-blue-600 uppercase tracking-widest transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Meus Corretores
-            </button>
-            <span className="text-gray-300">/</span>
-            <span className="text-xs font-black text-blue-700 uppercase tracking-widest">{selectedBroker.name}</span>
-          </div>
-          <Suspense fallback={<Spinner />}>
-            <BrokerPortal
-              profile={profile}
-              organizationId={organizationId}
-              activeTab={brokerInternalTab as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'}
-              initialBroker={selectedBroker}
-            />
-          </Suspense>
-        </div>
+        <Suspense fallback={<Spinner />}>
+          {/* Voltar para "Meus Corretores" fica DENTRO do BrokerPortal (toolbar
+              de botões §5.3) — a barra de breadcrumb separada foi removida (§18:
+              não duplicar o contexto que o próprio portal já mostra). */}
+          <BrokerPortal
+            profile={profile}
+            organizationId={organizationId}
+            activeTab={brokerInternalTab as 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes'}
+            initialBroker={selectedBroker}
+            onBack={() => setSelectedBroker(null)}
+          />
+        </Suspense>
       )
     }
 

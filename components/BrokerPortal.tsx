@@ -39,6 +39,8 @@ interface BrokerPortalProps {
     portalToken?: string;
     /** Corretor pré-selecionado na impersonação (usado quando admin clica em "Acessar Portal" na BrokerList). */
     initialBroker?: import('../types').BrokerProfile;
+    /** Volta para a lista "Meus Corretores" (botão de voltar §5.3). Ausente = sem botão (ex: link público). */
+    onBack?: () => void;
 }
 
 const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
@@ -68,7 +70,7 @@ const NAV_GROUPS: { label: string; tabs: PortalTab[] }[] = [
 const TAB_BY_ID: Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }> =
     Object.fromEntries(ALL_TABS.map(t => [t.id, t])) as Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }>;
 
-const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker }) => {
+const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack }) => {
     const { organizations } = useStore();
     const confirm = useConfirm();
 
@@ -535,72 +537,13 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
             {/* Header — só no app autenticado; no portal público a casca acima já tem header próprio */}
             {!isStandalone && (
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-4">
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                            Portal do Corretor
-                        </h1>
-                        {/* Seletor de impersonação — somente admin */}
-                        {isAdmin && (
-                            <select
-                                onChange={(e) => {
-                                    const broker = allBrokers.find(b => b.id === e.target.value);
-                                    setSelectedAdminBroker(broker || null);
-                                }}
-                                className="h-9 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-[6px] px-3 focus:ring-0 cursor-pointer hover:bg-amber-100 transition-colors"
-                                value={selectedAdminBroker?.id || ''}
-                            >
-                                <option value="">Impersonar Corretor</option>
-                                {allBrokers.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name} ({b.email})</option>
-                                ))}
-                            </select>
-                        )}
-                    </div>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        {effectiveBrokerEmail ? `Olá, ${effectiveBrokerEmail.split('@')[0]}` : 'Bem-vindo'} • Estoque, propostas, leads e comissões em tempo real.
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    {/* Botão Prévia Mobile — somente admin */}
-                    {isAdmin && (
-                        <button
-                            onClick={() => setShowMobilePreview(true)}
-                            title="Visualizar como o corretor vê no celular"
-                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
-                        >
-                            <Smartphone className="w-4 h-4" />
-                        </button>
-                    )}
-                    {/* Botão Configurar Abas — somente admin, quando um corretor estiver selecionado */}
-                    {isAdmin && effectiveBroker && (
-                        <button
-                            onClick={() => setShowTabConfig(true)}
-                            title="Configurar abas visíveis do corretor"
-                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
-                        >
-                            <Settings2 className="w-4 h-4" />
-                        </button>
-                    )}
-
-                    {/* Seletor de organização — somente admin com múltiplas orgs */}
-                    {isAdmin && organizations.length > 1 && (
-                        <div className="flex flex-col gap-1.5 min-w-[300px]">
-                            <label className="text-xs font-semibold text-gray-500 px-1">Selecione a organização</label>
-                            <select
-                                value={selectedOrgId}
-                                onChange={(e) => setSelectedOrgId(e.target.value)}
-                                className="h-9 bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium rounded-[6px] px-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none appearance-none cursor-pointer transition-all"
-                            >
-                                {organizations.map(org => (
-                                    <option key={org.id} value={org.id}>{org.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-                </div>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                    Portal do Corretor
+                </h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    {effectiveBrokerEmail ? `Olá, ${effectiveBrokerEmail.split('@')[0]}` : 'Bem-vindo'} • Estoque, propostas, leads e comissões em tempo real.
+                </p>
             </div>
             )}
 
@@ -611,6 +554,61 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 <KpiCard label="Propostas Aprovadas" value={loading ? '…' : stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                 <KpiCard label="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} sub="5% sobre aprovadas" icon={<DollarSign className="w-5 h-5" />} color="violet" />
             </div>
+
+            {/* Toolbar de botões (§5.3) — controles de escopo do portal (voltar + org)
+                à esquerda, ações do admin (prévia mobile + configurar abas) à direita.
+                Fica no app autenticado; a casca pública tem navegação própria. */}
+            {!isStandalone && (onBack || (isAdmin && (organizations.length > 1 || effectiveBroker))) && (
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    {onBack && (
+                        <button
+                            onClick={onBack}
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
+                        >
+                            <ChevronDown className="w-4 h-4 rotate-90" />
+                            Meus Corretores
+                        </button>
+                    )}
+                    {/* Seletor de organização — somente admin com múltiplas orgs */}
+                    {isAdmin && organizations.length > 1 && (
+                        <select
+                            value={selectedOrgId}
+                            onChange={(e) => setSelectedOrgId(e.target.value)}
+                            title="Selecione a organização"
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium rounded-[6px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                        >
+                            {organizations.map(org => (
+                                <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                        </select>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                    {/* Prévia Mobile — somente admin */}
+                    {isAdmin && (
+                        <button
+                            onClick={() => setShowMobilePreview(true)}
+                            title="Visualizar como o corretor vê no celular"
+                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
+                        >
+                            <Smartphone className="w-4 h-4" />
+                        </button>
+                    )}
+                    {/* Configurar Abas — somente admin, com um corretor selecionado */}
+                    {isAdmin && effectiveBroker && (
+                        <button
+                            onClick={() => setShowTabConfig(true)}
+                            title="Configurar abas visíveis do corretor"
+                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
+                        >
+                            <Settings2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            </div>
+            )}
 
             {/* Modal de configuração de abas — somente admin */}
             {showTabConfig && (

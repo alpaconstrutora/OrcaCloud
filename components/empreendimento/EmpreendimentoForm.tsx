@@ -6,6 +6,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService, EmpreendimentoTypeRecord } from '../../services/empreendimentoTypeService';
 import { imovibService } from '../../services/imovibService';
 import { organizationService } from '../../services/organizationService';
+import { companyService } from '../../services/companyService';
 import { supabase } from '../../lib/supabase';
 import { useStore } from '../../store/useStore';
 import { useConfirm } from '../ui/confirm';
@@ -59,6 +60,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   // então não tinha como ver nem corrigir a organização de um empreendimento já existente.
   const [orgId, setOrgId] = React.useState<string>(editing?.organization_id || organizationId || '');
   const [organizations, setOrganizations] = React.useState<Organization[]>([]);
+  const [companies, setCompanies] = React.useState<{ id: string; razao_social: string; nome_fantasia?: string | null; regime_tributario?: string | null }[]>([]);
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -66,6 +68,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   };
   const [form, setForm] = React.useState({
     name: editing?.name ?? '',
+    company_id: editing?.company_id ?? '',
     code: editing?.code ?? '',
     status: (editing?.status ?? 'PLANEJAMENTO') as EmpreendimentoStatus,
     tipo: (editing?.tipo ?? '') as EmpreendimentoTipo | '',
@@ -97,6 +100,15 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   React.useEffect(() => {
     organizationService.listOrganizations().then(setOrganizations).catch(() => setOrganizations([]));
   }, []);
+
+  // Empresas da organização selecionada — fonte do regime tributário usado na
+  // geração de Tributos a Pagar das Locações dos imóveis deste empreendimento.
+  React.useEffect(() => {
+    if (!orgId) { setCompanies([]); return; }
+    companyService.list(orgId)
+      .then(cs => setCompanies(cs.map(c => ({ id: c.id, razao_social: c.razao_social, nome_fantasia: c.nome_fantasia, regime_tributario: c.regime_tributario }))))
+      .catch(() => setCompanies([]));
+  }, [orgId]);
 
   // Trocar a organização de um empreendimento JÁ EXISTENTE não desfaz vínculos (obra,
   // estudos, torres continuam com o mesmo id salvo) — só pode fazer esses registros
@@ -209,6 +221,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
     try {
       const payload: Partial<EmpreendimentoInsert> = {
         organization_id: orgId,
+        company_id: form.company_id || null,
         name: form.name.trim(),
         code: form.code || undefined,
         status: form.status,
@@ -288,6 +301,26 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
             <div className="md:col-span-2">
               <label className={labelCls}>Nome *</label>
               <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelCls}>Empresa (regime tributário)</label>
+              <select
+                className={inputCls}
+                value={form.company_id}
+                onChange={e => set('company_id', e.target.value)}
+                disabled={!orgId}
+                title={!orgId ? 'Selecione a organização primeiro.' : undefined}
+              >
+                <option value="">— Sem empresa —</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome_fantasia || c.razao_social}{c.regime_tributario ? ` · ${c.regime_tributario === 'lucro_real' ? 'Lucro Real' : c.regime_tributario === 'lucro_presumido' ? 'Lucro Presumido' : c.regime_tributario === 'simples' ? 'Simples' : c.regime_tributario === 'mei' ? 'MEI' : c.regime_tributario}` : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-400 font-medium mt-1">
+                Define o regime usado para calcular PIS/COFINS/INSS das Locações dos imóveis deste empreendimento.
+              </p>
             </div>
             <div>
               <label className={labelCls}>Código</label>

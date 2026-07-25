@@ -2,6 +2,45 @@ import { supabase } from '../lib/supabase';
 import type { PropertyDeal } from '../types';
 import type { TaxPayable, TaxPayableBusinessStatus } from '../types/financial';
 import { taxSettingsService } from './taxSettingsService';
+import { pisRatesService } from './pisRatesService';
+import { cofinsRatesService } from './cofinsRatesService';
+import { inssBracketsService } from './inssBracketsService';
+
+// Regime tributário da empresa (companies.regime_tributario) → rótulo usado nas
+// tabelas oficiais tax_pis_rates/tax_cofins_rates. Simples/MEI não têm PIS/COFINS
+// destacados (ficam no DAS), então ficam fora do mapa (⇒ não gera PIS/COFINS).
+const REGIME_LABEL: Record<string, string> = {
+    lucro_real: 'Lucro Real',
+    lucro_presumido: 'Lucro Presumido',
+};
+
+/** Alíquota da tabela por exercício/regime — usa o exercício mais recente ≤ ano. */
+function rateForYear(
+    rates: { exercicio: number; regime_tributario: string; aliquota: number }[],
+    regimeLabel: string,
+    year: number,
+): number | null {
+    const candidates = rates.filter(r => r.regime_tributario === regimeLabel && r.exercicio <= year);
+    if (candidates.length === 0) return null;
+    const ex = Math.max(...candidates.map(r => r.exercicio));
+    return candidates.find(r => r.exercicio === ex)?.aliquota ?? null;
+}
+
+/** Alíquota da faixa de INSS onde o valor cai (exercício mais recente ≤ ano). */
+function inssRateForValue(
+    brackets: { exercicio: number; base_de: number; base_ate: number; aliquota: number }[],
+    value: number,
+    year: number,
+): number | null {
+    const years = brackets.filter(b => b.exercicio <= year).map(b => b.exercicio);
+    if (years.length === 0) return null;
+    const ex = Math.max(...years);
+    const inYear = brackets.filter(b => b.exercicio === ex);
+    const hit = inYear.find(b => value >= b.base_de && value <= b.base_ate);
+    if (hit) return hit.aliquota;
+    // Acima da última faixa: aplica a alíquota da faixa de maior teto.
+    return inYear.reduce((top, b) => (b.base_ate > (top?.base_ate ?? -1) ? b : top), inYear[0])?.aliquota ?? null;
+}
 
 export interface TaxPayableFilters {
     search?: string;
@@ -206,7 +245,50 @@ export const taxPayableService = {
      * valor da parcela. O vencimento segue a regra fiscal de cada tributo
      * (ver taxDueDate).
      */
-    async generateForDeal(deal: Pick<PropertyDeal, 'id' | 'type'>, organizationId: string): Promise<void> {
+    /**
+     * Resolve o regime tributário (companies.regime_tributario) da empresa dona
+     * do imóvel da locação: primeiro o vínculo direto do imóvel
+     * (commercial_properties.company_id); na falta, herda do empreendimento
+     * (empreendimentos.company_id via empreendimento_units.commercial_property_id).
+     * Retorna null se não houver empresa/regime definidos.
+     */
+    async resolveRentalRegime(propertyId: string | undefined | null, organizationId: string): Promise<string | null> {
+        if (!propertyId) return null;
+        const { data: prop } = await supabase
+            .from('commercial_properties')
+            .select('company_id')
+            .eq('id', propertyId)
+            .maybeSingle();
+        let companyId: string | null = (prop as { company_id?: string | null } | null)?.company_id ?? null;
+
+        if (!companyId) {
+            const { data: unit } = await supabase
+                .from('empreendimento_units')
+                .select('empreendimento_id')
+                .eq('commercial_property_id', propertyId)
+                .maybeSingle();
+            const empId = (unit as { empreendimento_id?: string | null } | null)?.empreendimento_id ?? null;
+            if (empId) {
+                const { data: emp } = await supabase
+                    .from('empreendimentos')
+                    .select('company_id')
+                    .eq('id', empId)
+                    .maybeSingle();
+                companyId = (emp as { company_id?: string | null } | null)?.company_id ?? null;
+            }
+        }
+        if (!companyId) return null;
+
+        const { data: comp } = await supabase
+            .from('companies')
+            .select('regime_tributario')
+            .eq('id', companyId)
+            .eq('org_id', organizationId)
+            .maybeSingle();
+        return (comp as { regime_tributario?: string | null } | null)?.regime_tributario ?? null;
+    },
+
+    async generateForDeal(deal: Pick<PropertyDeal, 'id' | 'type' | 'property_id'>, organizationId: string): Promise<void> {
         if (!organizationId || !deal?.id) return;
         if (deal.type !== 'SALE' && deal.type !== 'RENTAL') return;
 
@@ -238,35 +320,66 @@ export const taxPayableService = {
             .filter(p => p.amount > 0);
         if (validParcels.length === 0) return;
 
-        const taxes = (await taxSettingsService.list(organizationId))
-            .filter(t => t.ativo && t.aliquota != null && t.aliquota > 0)
-            // Aplicabilidade por origem: só gera o tributo marcado para o tipo do negócio.
-            .filter(t => deal.type === 'SALE' ? t.aplica_venda_ativo : t.aplica_locacao);
-        if (taxes.length === 0) return;
-
+        // Cada item = um tributo incidente sobre UMA parcela.
         const rows: Record<string, unknown>[] = [];
-        for (const parcel of validParcels) {
-            // sufixo da parcela (ex.: p1, dp, custom-p2) para compor o reference_id do tributo
+        const pushRow = (parcel: DealParcel, taxKey: string, taxName: string, amount: number) => {
+            if (!(amount > 0)) return;
             const instSuffix = parcel.reference_id.replace(`tx-${deal.id}-`, '');
-            for (const t of taxes) {
-                rows.push({
-                    organization_id: organizationId,
-                    source_system:   TAX_SOURCE_SYSTEM,
-                    reference_id:    `tax-${deal.id}-${instSuffix}-${t.id}`,
-                    transaction_date: parcel.fato_gerador,
-                    due_date:        taxDueDate(t.nome, parcel.fato_gerador),
-                    amount:          Number((parcel.amount * (t.aliquota as number) / 100).toFixed(2)),
-                    direction:       'DEBIT',
-                    description:     `${t.nome} s/ ${origin} (${instSuffix}) — Deal #${shortId}`,
-                    party_name:      t.nome,
-                    party_type:      TAX_PARTY_TYPE,
-                    project_id:      null,
-                    category:        origin,
-                    status:          'PENDING',
-                    business_status: 'PREVISTO',
-                });
+            rows.push({
+                organization_id: organizationId,
+                source_system:   TAX_SOURCE_SYSTEM,
+                reference_id:    `tax-${deal.id}-${instSuffix}-${taxKey}`,
+                transaction_date: parcel.fato_gerador,
+                due_date:        taxDueDate(taxName, parcel.fato_gerador),
+                amount:          Number(amount.toFixed(2)),
+                direction:       'DEBIT',
+                description:     `${taxName} s/ ${origin} (${instSuffix}) — Deal #${shortId}`,
+                party_name:      taxName,
+                party_type:      TAX_PARTY_TYPE,
+                project_id:      null,
+                category:        origin,
+                status:          'PENDING',
+                business_status: 'PREVISTO',
+            });
+        };
+
+        if (deal.type === 'SALE') {
+            // Vendas de Ativos: catálogo livre da aba Geral (tax_settings), como antes.
+            const taxes = (await taxSettingsService.list(organizationId))
+                .filter(t => t.ativo && t.aliquota != null && t.aliquota > 0 && t.aplica_venda_ativo);
+            if (taxes.length === 0) return;
+            for (const parcel of validParcels) {
+                for (const t of taxes) {
+                    pushRow(parcel, t.id, t.nome, parcel.amount * (t.aliquota as number) / 100);
+                }
+            }
+        } else {
+            // Locações: PIS/COFINS pelas tabelas oficiais (exercício + regime da
+            // empresa dona do imóvel) e INSS pela faixa progressiva onde a parcela cai.
+            const [regime, pisRates, cofinsRates, inssBrackets] = await Promise.all([
+                this.resolveRentalRegime(deal.property_id, organizationId),
+                pisRatesService.list(),
+                cofinsRatesService.list(),
+                inssBracketsService.list(),
+            ]);
+            const regimeLabel = regime ? REGIME_LABEL[regime] : null;
+            if (!regimeLabel) {
+                console.warn(`[TAX-PAYABLE] Locação ${shortId}: sem empresa/regime (Lucro Real/Presumido) definidos no imóvel/empreendimento — PIS/COFINS não gerados. INSS segue.`);
+            }
+            for (const parcel of validParcels) {
+                const year = parseLocal(parcel.fato_gerador).getFullYear();
+                if (regimeLabel) {
+                    const pis = rateForYear(pisRates, regimeLabel, year);
+                    const cofins = rateForYear(cofinsRates, regimeLabel, year);
+                    if (pis != null)    pushRow(parcel, 'pis',    'PIS',    parcel.amount * pis / 100);
+                    if (cofins != null) pushRow(parcel, 'cofins', 'COFINS', parcel.amount * cofins / 100);
+                }
+                const inss = inssRateForValue(inssBrackets, parcel.amount, year);
+                if (inss != null) pushRow(parcel, 'inss', 'INSS', parcel.amount * inss / 100);
             }
         }
+
+        if (rows.length === 0) return;
 
         const { error } = await supabase
             .from('internal_transactions')
@@ -287,7 +400,7 @@ export const taxPayableService = {
         const allowedStatuses = ['COMPLETED', 'PENDING', 'APPROVED', 'WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA', 'DONE'];
         const { data: deals, error } = await supabase
             .from('commercial_deals')
-            .select('id, type, status')
+            .select('id, type, status, property_id')
             .eq('organization_id', organizationId)
             .in('type', ['SALE', 'RENTAL']);
         if (error) { console.error('[TAX-PAYABLE] Falha ao listar negócios p/ backfill:', error); throw error; }
@@ -296,7 +409,7 @@ export const taxPayableService = {
         for (const d of (deals || [])) {
             if (!allowedStatuses.includes(d.status || '')) continue;
             try {
-                await this.generateForDeal({ id: d.id, type: d.type }, organizationId);
+                await this.generateForDeal({ id: d.id, type: d.type, property_id: d.property_id }, organizationId);
                 count++;
             } catch (e) {
                 console.error(`[TAX-PAYABLE] Backfill falhou p/ deal ${d.id}:`, e);

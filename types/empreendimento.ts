@@ -27,6 +27,9 @@ export type CommonAreaCategory = 'LAZER' | 'COMUM' | 'TECNICA' | 'CIRCULACAO' | 
 export interface Empreendimento {
     id: string;
     organization_id: string;
+    /** Empresa (companies) dona do empreendimento — define o regime tributário
+     *  usado na geração de Tributos a Pagar das Locações dos seus imóveis. */
+    company_id?: string | null;
     name: string;
     code?: string;
     status: EmpreendimentoStatus;

@@ -34,6 +34,12 @@ if ('serviceWorker' in navigator) {
     reloading = true;
     window.location.reload();
   });
+  // Limpeza única do cache legado de REST do Supabase (removido do vite.config).
+  // O SW novo é NetworkOnly nessas rotas e não usa mais esse cache; apagamos as
+  // entradas antigas para não deixar dado velho ocupando storage.
+  if ('caches' in window) {
+    caches.delete('supabase-api-cache').catch(() => {});
+  }
   // Tabs abertas por muito tempo: checa atualização do SW periodicamente (e ao voltar o foco).
   navigator.serviceWorker.ready.then((reg) => {
     const check = () => { reg.update().catch(() => {}); };

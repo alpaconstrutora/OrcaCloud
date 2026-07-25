@@ -103,15 +103,14 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              // Stale-while-revalidate for Supabase REST API (read)
+              // REST do Supabase: SEMPRE rede, nunca cache no Service Worker.
+              // Respostas são filtradas por sessão/RLS (chave só de URL cacheava
+              // dado de um usuário/estado e servia para outro) e o React Query já
+              // faz cache/dedup em memória com invalidação controlada. Cachear aqui
+              // causava "dado some e volta só com hard refresh": em qualquer engasgo
+              // de rede o NetworkFirst servia a lista antiga (ex.: organizações).
               urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'supabase-api-cache',
-                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 5 },
-                networkTimeoutSeconds: 3,
-                cacheableResponse: { statuses: [0, 200] },
-              },
+              handler: 'NetworkOnly',
             },
           ],
         },

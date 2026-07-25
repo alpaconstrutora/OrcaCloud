@@ -540,9 +540,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setFormData(prev => {
             const allExisting = prev.custom_installments || [];
             const adhoc = allExisting.filter(i => i.installmentType === 'AVULSA');
+            // Uma parcela pertence ao BLOCO-ALVO (será substituída pelas novas)
+            // quando é do tipo escolhido OU quando é legada/sem tipo (installmentType
+            // nulo — deals antigos e parcelas semeadas pelo espelho de Locações).
+            // Sem tratar o caso sem-tipo aqui, elas caíam em otherBlocks e eram
+            // PRESERVADAS: gerar 36 mensais sobre 36 sem-tipo resultava em 72.
+            const isTargetGroup = (i: PaymentInstallment) =>
+                i.installmentType === installmentType || !i.installmentType;
             // Blocos de OUTROS tipos — preservados (data/id/desconto/forma de
             // pagamento/observação mantidos), só o valor é recalculado abaixo.
-            const otherBlocks = allExisting.filter(i => i.installmentType !== 'AVULSA' && i.installmentType !== installmentType);
+            const otherBlocks = allExisting.filter(i => i.installmentType !== 'AVULSA' && !isTargetGroup(i));
 
             const downPayment = prev.down_payment || 0;
             const baseValue = prev.value || 0;
@@ -599,12 +606,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             let targetInserted = false;
             const merged: PaymentInstallment[] = [];
             for (const inst of allExisting) {
-                if (inst.installmentType === installmentType) {
+                // Avulsas ficam intactas na posição original.
+                if (inst.installmentType === 'AVULSA') { merged.push(inst); continue; }
+                // Bloco-alvo (tipo escolhido OU legado sem tipo) → substituído de
+                // uma vez na 1ª ocorrência; as demais ocorrências são descartadas.
+                if (isTargetGroup(inst)) {
                     if (!targetInserted) {
                         merged.push(...newBlock);
                         targetInserted = true;
                     }
-                    continue; // demais ocorrências antigas do tipo-alvo já foram substituídas
+                    continue;
                 }
                 merged.push(recalculatedOtherById.get(inst.id) ?? inst);
             }

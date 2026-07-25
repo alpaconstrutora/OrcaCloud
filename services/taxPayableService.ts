@@ -266,15 +266,19 @@ export const taxPayableService = {
         if (!companyId) {
             // Herança do empreendimento: a unidade liga ao imóvel de Venda por
             // commercial_property_id e ao de Locação por rental_property_id (eixos
-            // independentes) — casar os dois para cobrir os dois tipos.
-            const { data: units, error: unitErr } = await supabase
-                .from('empreendimento_units')
-                .select('empreendimento_id')
-                .or(`commercial_property_id.eq.${propertyId},rental_property_id.eq.${propertyId}`)
-                .limit(1);
-            if (unitErr) console.error('[TAX-REGIME] erro lendo empreendimento_units:', unitErr);
-            const empId = (units as { empreendimento_id?: string | null }[] | null)?.[0]?.empreendimento_id ?? null;
-            console.log('[TAX-REGIME] unidade encontrada?', (units || []).length, '→ empreendimento_id:', empId);
+            // independentes). Consultas separadas e tolerantes a erro — não usar
+            // .or (falha inteira 400 se uma coluna não existir neste banco).
+            const findUnitBy = async (col: string): Promise<string | null> => {
+                const { data, error } = await supabase
+                    .from('empreendimento_units')
+                    .select('empreendimento_id')
+                    .eq(col, propertyId)
+                    .limit(1);
+                if (error) { console.warn(`[TAX-REGIME] busca por ${col} falhou:`, error.message); return null; }
+                return (data as { empreendimento_id?: string | null }[] | null)?.[0]?.empreendimento_id ?? null;
+            };
+            const empId = (await findUnitBy('rental_property_id')) ?? (await findUnitBy('commercial_property_id'));
+            console.log('[TAX-REGIME] empreendimento_id da unidade:', empId);
             if (empId) {
                 const { data: emp } = await supabase
                     .from('empreendimentos')

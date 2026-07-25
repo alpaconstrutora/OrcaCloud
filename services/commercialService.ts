@@ -269,6 +269,14 @@ export const commercialService = {
         const dbPayload: Partial<PropertyDeal> = { ...deal };
 
         Object.keys(dbPayload).forEach(key => {
+            // Campos transitórios de UI (ex: _clientName, _propertyName, injetados
+            // por RentalsModule.sortedDeals para ordenação/exibição) não são colunas
+            // de commercial_deals — se vazarem no update, o PostgREST rejeita com
+            // "Could not find the '_clientName' column ... in the schema cache".
+            if (key.startsWith('_')) {
+                delete dbPayload[key as keyof typeof dbPayload];
+                return;
+            }
             if (dbPayload[key as keyof typeof dbPayload] === "") {
                 delete dbPayload[key as keyof typeof dbPayload];
             }

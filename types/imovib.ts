@@ -172,6 +172,9 @@ export interface PropertyDeal {
     payment_due_date?: string;
     /** Origem/canal do negócio (ex.: Direto, Portal, Imobiliária) — alimenta "Fontes de Locação"/Vendas */
     origin_channel?: string;
+    /** Checklist de documentos do cliente/comprador (mapa chave→marcado). As chaves
+     *  variam conforme o tipo de pessoa (PF/PJ) — ver DEAL_DOC_CHECKLIST em DealModal. */
+    doc_checklist?: Record<string, boolean>;
     broker_id?: string;
     broker_name?: string;
     broker_commission_pct?: number;

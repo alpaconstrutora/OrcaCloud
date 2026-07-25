@@ -262,12 +262,15 @@ export const taxPayableService = {
         let companyId: string | null = (prop as { company_id?: string | null } | null)?.company_id ?? null;
 
         if (!companyId) {
-            const { data: unit } = await supabase
+            // Herança do empreendimento: a unidade liga ao imóvel de Venda por
+            // commercial_property_id e ao de Locação por rental_property_id (eixos
+            // independentes) — casar os dois para cobrir os dois tipos.
+            const { data: units } = await supabase
                 .from('empreendimento_units')
                 .select('empreendimento_id')
-                .eq('commercial_property_id', propertyId)
-                .maybeSingle();
-            const empId = (unit as { empreendimento_id?: string | null } | null)?.empreendimento_id ?? null;
+                .or(`commercial_property_id.eq.${propertyId},rental_property_id.eq.${propertyId}`)
+                .limit(1);
+            const empId = (units as { empreendimento_id?: string | null }[] | null)?.[0]?.empreendimento_id ?? null;
             if (empId) {
                 const { data: emp } = await supabase
                     .from('empreendimentos')
@@ -283,7 +286,6 @@ export const taxPayableService = {
             .from('companies')
             .select('regime_tributario')
             .eq('id', companyId)
-            .eq('org_id', organizationId)
             .maybeSingle();
         return (comp as { regime_tributario?: string | null } | null)?.regime_tributario ?? null;
     },

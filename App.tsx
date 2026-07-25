@@ -91,6 +91,9 @@ const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
           scheduleInfo: cli.schedule_info ?? cli.scheduleInfo ?? null,
           aiInsight: cli.ai_insight ?? cli.aiInsight ?? null,
           visualGallery: cli.visual_gallery ?? cli.visualGallery ?? [],
+          // Fonte canônica das abas visíveis: prioriza portal_tabs da RPC
+          // (clients.portal_tabs), com fallback ao legado no próprio cliente.
+          portalTabs: (res.portal_tabs ?? cli.portal_tabs ?? cli.portalTabs) ?? undefined,
         });
         // Monta settings: usa projeto vinculado se disponível, e injeta portal_tabs em qualquer caso
         const baseSettings = res.project

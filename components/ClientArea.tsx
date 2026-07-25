@@ -153,6 +153,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // salva/mostra o estado do projeto errado (bug: aba marcada não aparecia
     // para o cliente, ou aba desmarcada continuava aparecendo).
     const [linkedClientProject, setLinkedClientProject] = React.useState<{ id: string; name: string; settings: ProjectSettings; budget: BudgetEntry[] } | null>(null);
+    // Fonte canônica da visibilidade de abas: o próprio cliente (clients.portal_tabs).
+    // Não depende de existir projeto OBRA vinculado por settings.clientId — a "ponte"
+    // que faltava e fazia a config não persistir/refletir. `undefined` = ainda não
+    // configurado (usa preset/legado do projeto).
+    const [clientPortalTabs, setClientPortalTabs] = React.useState<string[] | undefined>(clientProfile?.portalTabs);
+    React.useEffect(() => { setClientPortalTabs(clientProfile?.portalTabs); }, [clientProfile?.id, clientProfile?.portalTabs]);
     React.useEffect(() => {
         if (!isAdmin || !clientProfile?.id) {
             setLinkedClientProject(null);
@@ -3570,14 +3576,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const clientCategory = clientProfile?.category ?? '';
     const categoryPreset = CATEGORY_TAB_PRESETS[clientCategory];
 
-    // Fonte de verdade da visibilidade das abas: o projeto OBRA vinculado ao
-    // cliente (linkedClientProject), quando encontrado — não o projeto que
-    // porventura esteja carregado no workspace do admin.
-    const tabVisibilitySettings = (isAdmin && linkedClientProject) ? linkedClientProject.settings : settings;
+    // Fonte de verdade da visibilidade das abas, em ordem de precedência:
+    //   1. clients.portal_tabs (canônico — via link do cliente vem em clientProfile.portalTabs)
+    //   2. legado: clientPortalTabs no projeto OBRA vinculado / settings do link
+    //   3. preset por categoria / todas as abas
+    // (1) elimina a dependência de existir projeto OBRA com settings.clientId.
+    const legacyTabSettings = (isAdmin && linkedClientProject) ? linkedClientProject.settings : settings;
+    const legacyTabs = legacyTabSettings.clientPortalTabs && legacyTabSettings.clientPortalTabs.length > 0
+        ? legacyTabSettings.clientPortalTabs
+        : undefined;
 
-    const enabledTabIds = tabVisibilitySettings.clientPortalTabs && tabVisibilitySettings.clientPortalTabs.length > 0
-        ? tabVisibilitySettings.clientPortalTabs
-        : (categoryPreset ?? ALL_TABS.map(t => t.id));
+    const enabledTabIds = (clientPortalTabs && clientPortalTabs.length > 0)
+        ? clientPortalTabs
+        : (legacyTabs ?? categoryPreset ?? ALL_TABS.map(t => t.id));
 
     // tabs visíveis para o cliente (mobile + client desktop)
     const tabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));
@@ -3585,27 +3596,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const desktopNavTabs = isAdmin ? ALL_TABS : tabs;
 
     const toggleTabVisibility = async (tabId: string) => {
-        const current = tabVisibilitySettings.clientPortalTabs && tabVisibilitySettings.clientPortalTabs.length > 0
-            ? tabVisibilitySettings.clientPortalTabs
-            : ALL_TABS.map(t => t.id);
+        const current = enabledTabIds;
         const next = current.includes(tabId)
             ? current.filter(id => id !== tabId)
             : [...current, tabId];
 
-        if (isAdmin && linkedClientProject) {
-            const updatedSettings = { ...linkedClientProject.settings, clientPortalTabs: next };
-            const previous = linkedClientProject;
-            setLinkedClientProject({ ...linkedClientProject, settings: updatedSettings });
+        // Persistência canônica: grava no próprio cliente (clients.portal_tabs).
+        // Não depende de existir projeto OBRA vinculado — resolve o bug de
+        // "não persiste" / "não reflete no link".
+        if (isAdmin && clientProfile?.id) {
+            const previous = clientPortalTabs;
+            setClientPortalTabs(next);
             try {
-                await projectService.saveProject({
-                    id: linkedClientProject.id,
-                    name: linkedClientProject.name,
-                    settings: updatedSettings,
-                    budget: linkedClientProject.budget,
-                });
+                await clientService.saveClient({ id: clientProfile.id, portalTabs: next });
             } catch (err) {
                 console.error('Erro ao salvar visibilidade de aba:', err);
-                setLinkedClientProject(previous);
+                setClientPortalTabs(previous);
             }
             return;
         }

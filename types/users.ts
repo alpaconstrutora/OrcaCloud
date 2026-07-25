@@ -55,6 +55,8 @@ export interface Client {
         };
         };
     visualGallery?: string[];
+    /** Abas visíveis no Portal do Cliente. Fonte canônica, keyed pelo cliente. */
+    portalTabs?: string[];
 }
 
 export interface Investor {

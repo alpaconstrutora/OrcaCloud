@@ -56,7 +56,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, portal, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);

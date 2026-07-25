@@ -23,6 +23,9 @@ interface ClientListProps {
     onClientsChange?: () => void;
     onSelectClient?: (client: Client) => void;
     organizationId?: string;
+    /** Quando true (módulo Portal do Cliente), exibe apenas os clientes cujo
+     *  campo "Portais" = 'Portal do Cliente'. Em "Meus Clientes" fica false. */
+    portalContext?: boolean;
 }
 
 const CLIENT_COLUMNS: ColumnConfig[] = [
@@ -86,7 +89,7 @@ function getAdvancedFilterValue(c: Client, key: string): unknown {
     }
 }
 
-const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient, organizationId }) => {
+const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient, organizationId, portalContext }) => {
     const { activeOrganizationId, organizations } = useStore();
     const [clients, setClients] = React.useState<Client[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
@@ -265,6 +268,8 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
     const filteredClients = React.useMemo(() => {
         let result = clients
+            // Módulo Portal do Cliente: só clientes marcados com Portais = 'Portal do Cliente'.
+            .filter(c => !portalContext || c.portal === 'Portal do Cliente')
             .filter(c =>
                 c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -306,7 +311,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 // toda coluna ordenável já ordena pelo próprio cabeçalho, sem dropdown redundante).
                 return a.name.localeCompare(b.name);
             });
-    }, [clients, searchTerm, categoryFilter, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [clients, portalContext, searchTerm, categoryFilter, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const handleSendComunicado = async () => {
         if (!comunicadoModal || !comunicadoForm.title.trim()) return;

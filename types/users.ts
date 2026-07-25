@@ -28,6 +28,9 @@ export interface Client {
     city?: string;
     state?: string;
     category?: string;
+    /** Portais em que o cliente é exposto. 'Portal do Cliente' o faz aparecer na
+     *  tabela do módulo Portal do Cliente; 'Nenhum' (default) o oculta de lá. */
+    portal?: 'Nenhum' | 'Portal do Cliente';
     organization_name?: string;
     organization_id?: string;
     created_at?: string;
@@ -87,6 +90,17 @@ export interface SupplierPortalSettings {
     supplierPortalTabs?: string[];
 }
 
+/** Portal externo em que o fornecedor é exposto. É a fonte única da verdade:
+ *  'Portal do Corretor' o sincroniza em broker_profiles (tabela do Portal do Corretor);
+ *  'Portal do Fornecedor' o exibe na tabela do Portal do Fornecedor;
+ *  'Portal do Parceiro' materializa/ativa o workspace na tabela do Portal do Parceiro;
+ *  'Nenhum' (default) não o expõe em nenhum portal. */
+export type SupplierPortal =
+    | 'Nenhum'
+    | 'Portal do Corretor'
+    | 'Portal do Fornecedor'
+    | 'Portal do Parceiro';
+
 export interface Supplier {
     id: string;
     code?: string;
@@ -107,6 +121,7 @@ export interface Supplier {
     zip_code?: string;
     organization_id?: string | null;
     organization_name?: string;
+    portal?: SupplierPortal;
     settings?: SupplierPortalSettings;
     created_at?: string;
     // Dados oficiais trazidos pela consulta CNPJa (Receita Federal / Simples / Cadastro de Contribuintes)

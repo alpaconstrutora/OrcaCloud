@@ -38,6 +38,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         city: '',
         state: '',
         category: 'Vendas',
+        portal: 'Nenhum',
         organization_id: activeOrganizationId ?? undefined
     });
 
@@ -67,6 +68,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 city: '',
                 state: '',
                 category: 'Vendas',
+                portal: 'Nenhum',
                 organization_id: activeOrganizationId ?? undefined
             });
         }
@@ -160,6 +162,21 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                 ))}
                             </select>
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Portais</label>
+                        <select
+                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                            value={formData.portal ?? 'Nenhum'}
+                            onChange={(e) => update({ portal: e.target.value as Client['portal'] })}
+                        >
+                            <option value="Nenhum">Nenhum</option>
+                            <option value="Portal do Cliente">Portal do Cliente</option>
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">
+                            Selecione "Portal do Cliente" para exibir este cliente na tabela do Portal do Cliente.
+                        </p>
                     </div>
 
                     <div className="grid grid-cols-3 gap-4">

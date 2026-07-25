@@ -1353,7 +1353,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div className="grid grid-cols-2 gap-6">
                                     {genConfig.type === 'VISTA' ? (
                                         <div className="col-span-2">
-                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Data do Pagamento</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Data do Pagamento</label>
                                             <input
                                                 type="date"
                                                 value={genConfig.startDate}
@@ -1364,7 +1364,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     ) : (
                                         <>
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Sinal (Entrada)</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-2">Sinal (Entrada)</label>
                                                 <input
                                                     type="number"
                                                     value={genConfig.sinal}
@@ -1373,7 +1373,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Entrega (Chaves)</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-2">Entrega (Chaves)</label>
                                                 <input
                                                     type="number"
                                                     value={genConfig.chaves}
@@ -1382,7 +1382,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Parcelas Mensais</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-2">Parcelas Mensais</label>
                                                 <input
                                                     type="number"
                                                     value={genConfig.numMensais}
@@ -1391,7 +1391,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Data da 1ª Parcela</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-2">Data da 1ª Parcela</label>
                                                 <input
                                                     type="date"
                                                     value={genConfig.startDate}
@@ -1400,7 +1400,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Balão Semestral (Qtd • Valor)</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-2">Balão Semestral (Qtd • Valor)</label>
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="number"
@@ -1419,7 +1419,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Balão Anual (Qtd • Valor)</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-2">Balão Anual (Qtd • Valor)</label>
                                                 <div className="flex gap-2">
                                                     <input
                                                         type="number"
@@ -1672,16 +1672,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             {financialInfo.installments.map((inst, idx) => (
                                                 <tr key={inst.id} className="hover:bg-indigo-50/30 transition-colors group">
                                                     <td className="px-8 py-4">
-                                                        <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{String(inst.description ?? '')}</span>
+                                                        <span className="text-sm font-normal text-gray-700">{String(inst.description ?? '')}</span>
                                                     </td>
                                                     <td className="px-8 py-4">
-                                                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 tabular-nums">
+                                                        <div className="flex items-center gap-2 text-sm font-normal text-gray-600 tabular-nums">
                                                             <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                                                             {inst.dueDate ? new Date(String(inst.dueDate) + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                                         </div>
                                                     </td>
                                                     <td className="px-8 py-4">
-                                                        <span className="text-base font-black text-gray-900 tabular-nums">
+                                                        <span className="text-sm font-medium text-gray-800 tabular-nums">
                                                             R$ {(Number(inst.value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </td>
@@ -1903,17 +1903,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     return (
                                         <tr key={charge.id} className="hover:bg-blue-50/30 transition-colors group">
                                             <td className="px-8 py-4">
-                                                <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{charge.description}</span>
+                                                <span className="text-sm font-normal text-gray-700">{charge.description}</span>
                                             </td>
                                             <td className="px-8 py-4">
-                                                <div className={`flex items-center gap-2 text-button font-bold tabular-nums ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
+                                                <div className={`flex items-center gap-2 text-sm font-normal tabular-nums ${overdue ? 'text-red-500' : 'text-gray-600'}`}>
                                                     <Calendar className="w-3.5 h-3.5" />
                                                     {new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                     {overdue && <span className="text-[9px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-black uppercase">Vencido</span>}
                                                 </div>
                                             </td>
                                             <td className="px-8 py-4">
-                                                <span className="text-base font-black text-gray-900 tabular-nums">R$ {charge.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                <span className="text-sm font-medium text-gray-800 tabular-nums">R$ {charge.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                             </td>
                                             <td className="px-8 py-4 text-center">
                                                 <button
@@ -2101,18 +2101,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <tr key={med.id} className="hover:bg-indigo-50/30 transition-colors group">
                                         <td className="px-8 py-4">
                                             <div className="flex items-center gap-3">
-                                                <span className="w-6 h-6 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black shrink-0">{idx + 1}</span>
-                                                <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{med.description}</span>
+                                                <span className="w-6 h-6 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-lg text-xs font-semibold shrink-0">{idx + 1}</span>
+                                                <span className="text-sm font-normal text-gray-700">{med.description}</span>
                                             </div>
                                         </td>
                                         <td className="px-8 py-4">
-                                            <div className="flex items-center gap-2 text-xs font-bold text-gray-400 tabular-nums">
+                                            <div className="flex items-center gap-2 text-sm font-normal text-gray-600 tabular-nums">
                                                 <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                                                 {new Date(med.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                             </div>
                                         </td>
                                         <td className="px-8 py-4">
-                                            <span className="text-base font-black text-gray-900 tabular-nums">R$ {med.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                            <span className="text-sm font-medium text-gray-800 tabular-nums">R$ {med.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                                         </td>
                                         <td className="px-8 py-4 text-center">
                                             <button
@@ -2703,7 +2703,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {entries.map((item) => (
                                     <tr key={item.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onClick={() => setSelectedEntry(item)}>
                                         <td className="px-8 py-4 whitespace-nowrap">
-                                            <span className="text-sm font-bold text-gray-900">{new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                            <span className="text-sm font-normal text-gray-700">{new Date(item.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                                         </td>
                                         <td className="px-8 py-4 whitespace-nowrap">
                                             <div className="flex items-center gap-2">
@@ -2722,7 +2722,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     </div>
                                                 ))}
                                                 {(item.images || []).length > 3 && (
-                                                    <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center text-[8px] font-bold text-gray-500">
+                                                    <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-200 flex items-center justify-center text-[8px] font-semibold text-gray-500">
                                                         +{(item.images || []).length - 3}
                                                     </div>
                                                 )}
@@ -3785,7 +3785,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <UserCircle className="w-5 h-5 text-indigo-600" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Meus Dados</h2>
+                                    <h2 className="text-lg font-black text-gray-900">Meus Dados</h2>
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Informações cadastrais</p>
                                 </div>
                             </div>
@@ -3797,7 +3797,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <div className="p-8 space-y-5">
                             {/* Nome */}
                             <div>
-                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Nome completo</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-2">Nome completo</label>
                                 <div className="relative">
                                     <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                     <input
@@ -3812,7 +3812,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <div className="grid grid-cols-2 gap-4">
                                 {/* E-mail */}
                                 <div>
-                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">E-mail</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-2">E-mail</label>
                                     <div className="relative">
                                         <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                         <input
@@ -3825,7 +3825,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                                 {/* Telefone */}
                                 <div>
-                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Telefone</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-2">Telefone</label>
                                     <div className="relative">
                                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                         <input
@@ -3840,7 +3840,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                             {/* CPF/CNPJ */}
                             <div>
-                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                                <label className="block text-xs font-semibold text-slate-500 mb-2">
                                     {meusDadosForm.type === 'PJ' ? 'CNPJ' : 'CPF'}
                                 </label>
                                 <div className="relative">
@@ -3861,7 +3861,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="col-span-2">
-                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Logradouro</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Logradouro</label>
                                             <input
                                                 type="text"
                                                 placeholder="Rua / Av."
@@ -3871,7 +3871,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Número</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Número</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.address_number || ''}
@@ -3882,7 +3882,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Bairro</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Bairro</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.neighborhood || ''}
@@ -3891,7 +3891,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">CEP</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-2">CEP</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.zip_code || ''}
@@ -3902,7 +3902,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Cidade</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Cidade</label>
                                             <input
                                                 type="text"
                                                 value={meusDadosForm.city || ''}
@@ -3911,7 +3911,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Estado</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-2">Estado</label>
                                             <input
                                                 type="text"
                                                 maxLength={2}
@@ -4345,30 +4345,30 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
                                     <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-lg animate-in zoom-in-95 fade-in duration-200" onClick={e => e.stopPropagation()}>
                                         <div className="flex items-center justify-between p-7 border-b border-gray-100">
-                                            <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Novo Chamado de Manutenção</h2>
+                                            <h2 className="text-lg font-black text-gray-900">Novo Chamado de Manutenção</h2>
                                             <button onClick={() => setShowNewRequestForm(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"><X className="w-5 h-5" /></button>
                                         </div>
                                         <div className="p-7 space-y-4">
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Título *</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
                                                 <input type="text" value={newRequestForm.title} onChange={e => setNewRequestForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Torneira com vazamento" className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
-                                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Categoria</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Categoria</label>
                                                     <select value={newRequestForm.category} onChange={e => setNewRequestForm(f => ({ ...f, category: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Elétrica','Hidráulica','Estrutural','Pintura','Serralheria','Geral','Outro'].map(c => <option key={c}>{c}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Prioridade</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prioridade</label>
                                                     <select value={newRequestForm.priority} onChange={e => setNewRequestForm(f => ({ ...f, priority: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Baixa','Média','Alta','Urgente'].map(p => <option key={p}>{p}</option>)}
                                                     </select>
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">Descrição</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição</label>
                                                 <textarea value={newRequestForm.description} onChange={e => setNewRequestForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o problema com detalhes..." rows={3} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400 resize-none" />
                                             </div>
                                             <button

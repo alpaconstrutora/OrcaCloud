@@ -549,7 +549,13 @@ export const contractService = {
             .from('contracts')
             .select('id, organization_id, number, title, contract_type, nature, status, original_value, current_value, start_date, end_date, is_recurring, billing_cycle, due_day, reajuste_index, reajuste_data_base, reajuste_proximo, sla_days, warranty_months, signature_status, signature_url, signed_contract_url, direction, domain, minuta_versions, created_at')
             .eq('client_id', clientId)
-            .eq('direction', 'OUTGOING')
+            // NÃO filtrar por direction: é a direção FINANCEIRA, não "contrato
+            // emitido ao cliente". Locação virou INCOMING em 20270815000001
+            // (aluguel é receita do locador), então `= OUTGOING` escondia todo
+            // contrato CL-* desta visão. O corte de "contrato do cliente" é o
+            // domain — mesmo critério da RPC fn_portal_get_contracts
+            // (20270825000020), que espelha esta query no acesso via link.
+            .in('domain', ['VENDAS', 'LOCACAO', 'SERVICOS'])
             .neq('status', 'Rascunho')
             .order('created_at', { ascending: false });
         if (orgId) query = query.eq('organization_id', orgId);

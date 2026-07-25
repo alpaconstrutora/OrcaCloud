@@ -103,7 +103,10 @@ export const commercialPriceTableService = {
                 bedrooms: num(p.bedrooms, specs.bedrooms),
                 bathrooms: num(p.bathrooms, specs.bathrooms),
                 parking_spaces: num(p.parking_spaces, specs.parkingSpaces),
-                floor: p.floor != null ? Number(p.floor) : null,
+                // Fallback para specs igual ao das RPCs do portal (app e link têm que
+                // concordar). NÃO usa o `num()` acima: ele é `||`, e pavimento 0 é
+                // térreo — cairia no specs e viraria "—".
+                floor: p.floor != null ? Number(p.floor) : (specs.floor != null ? Number(specs.floor) : null),
                 position_type: p.position_type ?? null,
                 visible_to_broker: p.visible_to_broker ?? true,
                 show_price_to_broker: p.show_price_to_broker ?? true,

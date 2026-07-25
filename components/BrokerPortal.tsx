@@ -17,6 +17,8 @@ import BrokerAnalytics from './broker/BrokerAnalytics';
 import BrokerHealthPanel from './broker/BrokerHealthPanel';
 import BrokerIntegrations from './broker/BrokerIntegrations';
 import MobilePreviewFrame from './MobilePreviewFrame';
+import { KpiCard } from './ui/KpiCard';
+import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
 import { commercialService } from '../services/commercialService';
 import { brokerService } from '../services/brokerService';
@@ -38,26 +40,6 @@ interface BrokerPortalProps {
     /** Corretor pré-selecionado na impersonação (usado quando admin clica em "Acessar Portal" na BrokerList). */
     initialBroker?: import('../types').BrokerProfile;
 }
-
-interface StatCardProps { title: string; value: string | number; subtext?: string; icon: React.ElementType; color: string }
-const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) => (
-    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-all">
-        <div>
-            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>
-            <h3 className="text-2xl font-black text-gray-900">{value}</h3>
-            {subtext && <p className="text-xs mt-1.5 text-gray-500 font-medium">{subtext}</p>}
-        </div>
-        <div className={`p-4 rounded-2xl ${color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
-            color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
-                color === 'amber' ? 'bg-amber-50 text-amber-600' :
-                    color === 'blue' ? 'bg-blue-50 text-blue-600' :
-                        color === 'purple' ? 'bg-purple-50 text-purple-600' :
-                            'bg-gray-50 text-gray-600'
-            }`}>
-            <Icon className="w-6 h-6" />
-        </div>
-    </div>
-);
 
 const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'estoque', label: 'Estoque', icon: LayoutGrid },
@@ -476,20 +458,20 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
                     <div
-                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+                        className="relative bg-white rounded-[10px] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between p-8 border-b border-gray-100">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-                                    <User className="w-5 h-5 text-indigo-600" />
+                                <div className="w-10 h-10 bg-blue-50 rounded-[6px] flex items-center justify-center">
+                                    <User className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Minha Conta</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Dados cadastrais</p>
+                                    <h2 className="text-lg font-black text-gray-900">Minha conta</h2>
+                                    <p className="text-xs font-semibold text-gray-500 mt-0.5">Dados cadastrais</p>
                                 </div>
                             </div>
-                            <button onClick={() => setShowMyAccount(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                            <button onClick={() => setShowMyAccount(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-[6px] transition-all">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -502,7 +484,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                 ['Imobiliária', effectiveBroker?.agency_name || '—'],
                             ].map(([label, value]) => (
                                 <div key={label}>
-                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label}</div>
+                                    <div className="text-xs font-semibold text-slate-500 mb-1">{label}</div>
                                     <div className="text-sm font-semibold text-gray-800">{value}</div>
                                 </div>
                             ))}
@@ -566,7 +548,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                     const broker = allBrokers.find(b => b.id === e.target.value);
                                     setSelectedAdminBroker(broker || null);
                                 }}
-                                className="bg-amber-50 border-amber-200 text-amber-700 text-xs font-black uppercase tracking-widest rounded-xl px-4 py-1.5 focus:ring-0 cursor-pointer shadow-sm hover:bg-amber-100 transition-colors"
+                                className="h-9 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium rounded-[6px] px-3 focus:ring-0 cursor-pointer hover:bg-amber-100 transition-colors"
                                 value={selectedAdminBroker?.id || ''}
                             >
                                 <option value="">Impersonar Corretor</option>
@@ -587,7 +569,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                         <button
                             onClick={() => setShowMobilePreview(true)}
                             title="Visualizar como o corretor vê no celular"
-                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
+                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
                         >
                             <Smartphone className="w-4 h-4" />
                         </button>
@@ -597,7 +579,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                         <button
                             onClick={() => setShowTabConfig(true)}
                             title="Configurar abas visíveis do corretor"
-                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
+                            className="hidden md:flex items-center justify-center h-9 w-9 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95"
                         >
                             <Settings2 className="w-4 h-4" />
                         </button>
@@ -606,11 +588,11 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                     {/* Seletor de organização — somente admin com múltiplas orgs */}
                     {isAdmin && organizations.length > 1 && (
                         <div className="flex flex-col gap-1.5 min-w-[300px]">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Selecione a Organização</label>
+                            <label className="text-xs font-semibold text-gray-500 px-1">Selecione a organização</label>
                             <select
                                 value={selectedOrgId}
                                 onChange={(e) => setSelectedOrgId(e.target.value)}
-                                className="bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 shadow-sm outline-none appearance-none cursor-pointer"
+                                className="h-9 bg-gray-50 border border-gray-200 text-gray-700 text-sm font-medium rounded-[6px] px-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none appearance-none cursor-pointer transition-all"
                             >
                                 {organizations.map(org => (
                                     <option key={org.id} value={org.id}>{org.name}</option>
@@ -622,12 +604,12 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             </div>
             )}
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Unidades Disponíveis" value={loading ? '…' : stats.available} subtext={loading ? '' : `de ${visibleUnits.length} unidades`} icon={Building2} color="indigo" />
-                <StatCard title="Propostas Enviadas" value={loading ? '…' : stats.sent} subtext="Aguardando análise" icon={Send} color="blue" />
-                <StatCard title="Propostas Aprovadas" value={loading ? '…' : stats.approved} subtext="Vendas confirmadas" icon={CheckCircle2} color="emerald" />
-                <StatCard title="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} subtext="5% sobre aprovadas" icon={DollarSign} color="amber" />
+            {/* KPI Cards — §4 (componente canônico KpiCard, cor semântica por KPI) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard label="Unidades Disponíveis" value={loading ? '…' : stats.available} sub={loading ? undefined : `de ${visibleUnits.length} unidades`} icon={<Building2 className="w-5 h-5" />} color="blue" />
+                <KpiCard label="Propostas Enviadas" value={loading ? '…' : stats.sent} sub="Aguardando análise" icon={<Send className="w-5 h-5" />} color="amber" pulse={!loading && stats.sent > 0} />
+                <KpiCard label="Propostas Aprovadas" value={loading ? '…' : stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                <KpiCard label="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} sub="5% sobre aprovadas" icon={<DollarSign className="w-5 h-5" />} color="violet" />
             </div>
 
             {/* Modal de configuração de abas — somente admin */}
@@ -635,20 +617,20 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowTabConfig(false)}>
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
                     <div
-                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+                        className="relative bg-white rounded-[10px] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between p-8 border-b border-gray-100">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-                                    <Settings2 className="w-5 h-5 text-indigo-600" />
+                                <div className="w-10 h-10 bg-blue-50 rounded-[6px] flex items-center justify-center">
+                                    <Settings2 className="w-5 h-5 text-blue-600" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Portal do Corretor</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para o corretor</p>
+                                    <h2 className="text-lg font-black text-gray-900">Portal do corretor</h2>
+                                    <p className="text-xs font-semibold text-gray-500 mt-0.5">Abas visíveis para o corretor</p>
                                 </div>
                             </div>
-                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-[6px] transition-all">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -659,17 +641,17 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                     <button
                                         key={tab.id}
                                         onClick={() => toggleTabVisibility(tab.id)}
-                                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                                        className={`w-full flex items-center justify-between gap-4 p-4 rounded-[6px] border transition-all ${
                                             isVisible
-                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                ? 'bg-blue-50 border-blue-200 text-blue-700'
                                                 : 'bg-gray-50 border-gray-100 text-gray-400'
                                         }`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <tab.icon className={`w-4 h-4 ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`} />
-                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
+                                            <tab.icon className={`w-4 h-4 ${isVisible ? 'text-blue-500' : 'text-gray-300'}`} />
+                                            <span className="text-sm font-medium">{tab.label}</span>
                                         </div>
-                                        <div className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest ${isVisible ? 'text-indigo-500' : 'text-gray-300'}`}>
+                                        <div className={`flex items-center gap-2 text-sm font-normal ${isVisible ? 'text-blue-600' : 'text-gray-400'}`}>
                                             {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
                                         </div>
                                     </button>
@@ -677,7 +659,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                             })}
                         </div>
                         <div className="px-8 pb-8">
-                            <p className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest">
+                            <p className="text-xs font-medium text-gray-400 text-center">
                                 Clique em cada aba para alternar visibilidade do corretor
                             </p>
                         </div>
@@ -687,28 +669,30 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
             {/* Tab Navigation — só no app autenticado; no portal público a navegação fica na sidebar da casca */}
             {!isStandalone && (
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {navTabs.map(tab => {
-                    const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
-                    return (
-                        <button
-                            key={tab.id}
-                            onClick={() => { setCurrentTab(tab.id as PortalTab); setShowSimulator(false); }}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                                currentTab === tab.id
-                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                                    : hidden
-                                        ? 'bg-gray-50 text-gray-300 border border-dashed border-gray-200'
-                                        : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
-                            }`}
-                            title={hidden ? 'Oculta para o corretor' : undefined}
-                        >
-                            <tab.icon className="w-4 h-4" />
-                            {tab.label}
-                            {hidden && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
-                        </button>
-                    );
-                })}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {navTabs.map(tab => {
+                        const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => { setCurrentTab(tab.id as PortalTab); setShowSimulator(false); }}
+                                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                    currentTab === tab.id
+                                        ? 'bg-white text-blue-600 shadow-sm'
+                                        : hidden
+                                            ? 'text-gray-300'
+                                            : 'text-gray-400 hover:text-gray-600'
+                                }`}
+                                title={hidden ? 'Oculta para o corretor' : undefined}
+                            >
+                                <tab.icon className="w-4 h-4" />
+                                {tab.label}
+                                {hidden && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
             )}
 
@@ -716,7 +700,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             {currentTab === 'estoque' && !showSimulator && (
                 <div className="space-y-6">
                     <div className="flex flex-col xl:flex-row gap-4 justify-between xl:items-center">
-                        <div className="flex bg-gray-100 p-1 rounded-2xl w-fit shrink-0">
+                        <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit shrink-0">
                             {[
                                 { id: 'SALE', label: 'Vendas' },
                                 { id: 'RENTAL', label: 'Locação' },
@@ -725,7 +709,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                 <button
                                     key={p.id}
                                     onClick={() => setSelectedPurpose(p.id as 'SALE' | 'RENTAL' | 'BOTH')}
-                                    className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedPurpose === p.id
+                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedPurpose === p.id
                                         ? 'bg-white text-gray-900 shadow-sm'
                                         : 'text-gray-400 hover:text-gray-600'
                                         }`}
@@ -737,13 +721,13 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
                         {buildings.length > 0 && (
                             <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide">
-                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest px-2 shrink-0">Empreendimento:</span>
-                                <div className="flex bg-gray-100 p-1 rounded-2xl min-w-max">
+                                <span className="text-xs font-semibold text-gray-500 px-2 shrink-0">Empreendimento:</span>
+                                <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 min-w-max">
                                     <button
                                         onClick={() => setSelectedBuildingId('all')}
-                                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${selectedBuildingId === 'all'
-                                            ? 'bg-indigo-600 text-white shadow-sm'
-                                            : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                                        className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedBuildingId === 'all'
+                                            ? 'bg-white text-blue-600 shadow-sm'
+                                            : 'text-gray-400 hover:text-gray-600'
                                             }`}
                                     >
                                         Geral
@@ -752,9 +736,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                         <button
                                             key={b.id}
                                             onClick={() => setSelectedBuildingId(b.id)}
-                                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all max-w-[150px] truncate ${selectedBuildingId === b.id
-                                                ? 'bg-indigo-600 text-white shadow-sm'
-                                                : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                                            className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all max-w-[150px] truncate ${selectedBuildingId === b.id
+                                                ? 'bg-white text-blue-600 shadow-sm'
+                                                : 'text-gray-400 hover:text-gray-600'
                                                 }`}
                                             title={b.name}
                                         >
@@ -807,9 +791,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             )}
 
             {currentTab === 'propostas' && !showSimulator && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-100">
-                        <h3 className="text-lg font-black text-gray-900">Minhas Propostas</h3>
+                        <h3 className="text-lg font-black text-gray-900">Minhas propostas</h3>
                         <p className="text-sm text-gray-400 mt-1">Histórico de propostas enviadas</p>
                     </div>
 
@@ -826,8 +810,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                 return (
                                     <div key={p.id || i} className="p-5 flex items-center justify-between hover:bg-gray-50 transition-colors">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                                                <Building2 className="w-5 h-5 text-indigo-600" />
+                                            <div className="w-10 h-10 bg-blue-50 rounded-[6px] flex items-center justify-center">
+                                                <Building2 className="w-5 h-5 text-blue-600" />
                                             </div>
                                             <div>
                                                 <p className="text-sm font-bold text-gray-900">
@@ -840,26 +824,18 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="text-right">
-                                                <p className="text-sm font-black text-gray-900">{formatCurrency(p.total_value || 0)}</p>
-                                                <span className={`inline-block mt-1 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${p.status === 'ENVIADA' ? 'bg-blue-50 text-blue-600' :
-                                                    p.status === 'APROVADA' ? 'bg-emerald-50 text-emerald-600' :
-                                                        p.status === 'REJEITADA' ? 'bg-red-50 text-red-600' :
-                                                            'bg-gray-100 text-gray-500'
+                                                <p className="text-sm font-medium text-gray-800">{formatCurrency(p.total_value || 0)}</p>
+                                                <span className={`text-sm font-normal ${p.status === 'ENVIADA' ? 'text-blue-600' :
+                                                    p.status === 'APROVADA' ? 'text-emerald-600' :
+                                                        p.status === 'REJEITADA' ? 'text-red-600' :
+                                                            'text-gray-500'
                                                     }`}>
                                                     {p.status}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                                                <button onClick={() => handleProposalPdf(p, `Unidade ${unit?.number || unit?.name || '-'}`)}
-                                                    title="Baixar PDF"
-                                                    className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all">
-                                                    <Download className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleProposalShare(p.id)}
-                                                    title="Gerar link público"
-                                                    className="p-2 rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-all">
-                                                    <Share2 className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="download" title="Baixar PDF" onClick={() => handleProposalPdf(p, `Unidade ${unit?.number || unit?.name || '-'}`)} />
+                                                <ActionIconButton kind="share" title="Gerar link público" onClick={() => handleProposalShare(p.id)} />
                                             </div>
                                         </div>
                                     </div>

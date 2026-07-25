@@ -619,7 +619,25 @@ export const contractService = {
 
         // Idempotência primária: busca por deal_id (requer migration 20261228000006 aplicada)
         const existing = await contractService.getContractByDealId(deal.id);
-        if (existing) return existing;
+        if (existing) {
+            // Reconciliação: a negociação pode ter trocado de cliente DEPOIS da geração
+            // do contrato (ex: locatário corrigido). O contrato ficava congelado no
+            // cliente antigo e sumia do Portal do Cliente — tanto na visão do app
+            // (listContractsByClientId) quanto no link (fn_portal_get_contracts), pois
+            // ambos filtram por client_id. As parcelas continuavam aparecendo (vêm do
+            // deal), o que fazia o problema parecer "portal sem conexão". Caso real:
+            // CL-2026-002 apontando para um cliente de Vendas. Ver ClientArea.tsx:211.
+            if (existing.client_id && existing.client_id !== deal.client_id) {
+                const { data: fixed } = await supabase
+                    .from('contracts')
+                    .update({ client_id: deal.client_id } as any)
+                    .eq('id', existing.id)
+                    .select('id, organization_id, deal_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+                    .maybeSingle();
+                if (fixed) return fixed as Contract;
+            }
+            return existing;
+        }
 
         // Título com o nome da unidade, quando disponível.
         let unitLabel = '';
@@ -642,12 +660,20 @@ export const contractService = {
             const year = new Date().getFullYear();
             if (isRental) {
                 // Locação tem sua própria sequência (CL-), independente das vendas.
-                const { count } = await supabase
+                // Deriva do MAIOR sufixo existente, não de COUNT(*): com contagem, a
+                // exclusão de um contrato faz o próximo número repetir um já usado, e
+                // a idempotência por número abaixo passa a casar com contrato alheio.
+                const { data: last } = await supabase
                     .from('contracts')
-                    .select('id', { count: 'exact', head: true })
+                    .select('number')
                     .eq('organization_id', deal.organization_id)
-                    .eq('domain', 'LOCACAO');
-                number = `${cfg.numberPrefix}-${year}-${String((count || 0) + 1).padStart(3, '0')}`;
+                    .eq('domain', 'LOCACAO')
+                    .like('number', `${cfg.numberPrefix}-${year}-%`)
+                    .order('number', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                const lastSeq = parseInt((last?.number || '').split('-').pop() || '0', 10) || 0;
+                number = `${cfg.numberPrefix}-${year}-${String(lastSeq + 1).padStart(3, '0')}`;
             } else {
                 try {
                     number = await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
@@ -674,8 +700,16 @@ export const contractService = {
             .eq('number', number)
             .maybeSingle();
         if (byNumber) {
-            await supabase.from('contracts').update({ deal_id: deal.id } as any).eq('id', (byNumber as any).id);
-            return byNumber as Contract;
+            // Só é o MESMO contrato se for do mesmo cliente. Número colidido de outro
+            // cliente não pode ser adotado: sobrescrever o deal_id roubaria o contrato
+            // alheio (e deixaria a negociação original órfã). Nesse caso, desambigua
+            // com sufixo derivado do deal — único e estável entre chamadas.
+            if ((byNumber as any).client_id && (byNumber as any).client_id !== deal.client_id) {
+                number = `${number}-${deal.id.slice(0, 4)}`;
+            } else {
+                await supabase.from('contracts').update({ deal_id: deal.id } as any).eq('id', (byNumber as any).id);
+                return byNumber as Contract;
+            }
         }
 
         // Mapeia o estágio da negociação para o status do contrato.

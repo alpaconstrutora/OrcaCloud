@@ -253,24 +253,28 @@ export const taxPayableService = {
      * Retorna null se não houver empresa/regime definidos.
      */
     async resolveRentalRegime(propertyId: string | undefined | null, organizationId: string): Promise<string | null> {
-        if (!propertyId) return null;
-        const { data: prop } = await supabase
+        if (!propertyId) { console.warn('[TAX-REGIME] sem property_id no negócio'); return null; }
+        const { data: prop, error: propErr } = await supabase
             .from('commercial_properties')
             .select('company_id')
             .eq('id', propertyId)
             .maybeSingle();
+        if (propErr) console.error('[TAX-REGIME] erro lendo commercial_properties:', propErr);
         let companyId: string | null = (prop as { company_id?: string | null } | null)?.company_id ?? null;
+        console.log('[TAX-REGIME] property', propertyId, '→ company_id direto:', companyId);
 
         if (!companyId) {
             // Herança do empreendimento: a unidade liga ao imóvel de Venda por
             // commercial_property_id e ao de Locação por rental_property_id (eixos
             // independentes) — casar os dois para cobrir os dois tipos.
-            const { data: units } = await supabase
+            const { data: units, error: unitErr } = await supabase
                 .from('empreendimento_units')
                 .select('empreendimento_id')
                 .or(`commercial_property_id.eq.${propertyId},rental_property_id.eq.${propertyId}`)
                 .limit(1);
+            if (unitErr) console.error('[TAX-REGIME] erro lendo empreendimento_units:', unitErr);
             const empId = (units as { empreendimento_id?: string | null }[] | null)?.[0]?.empreendimento_id ?? null;
+            console.log('[TAX-REGIME] unidade encontrada?', (units || []).length, '→ empreendimento_id:', empId);
             if (empId) {
                 const { data: emp } = await supabase
                     .from('empreendimentos')
@@ -278,16 +282,19 @@ export const taxPayableService = {
                     .eq('id', empId)
                     .maybeSingle();
                 companyId = (emp as { company_id?: string | null } | null)?.company_id ?? null;
+                console.log('[TAX-REGIME] empreendimento', empId, '→ company_id:', companyId);
             }
         }
-        if (!companyId) return null;
+        if (!companyId) { console.warn('[TAX-REGIME] nenhuma empresa resolvida p/ property', propertyId); return null; }
 
         const { data: comp } = await supabase
             .from('companies')
             .select('regime_tributario')
             .eq('id', companyId)
             .maybeSingle();
-        return (comp as { regime_tributario?: string | null } | null)?.regime_tributario ?? null;
+        const regime = (comp as { regime_tributario?: string | null } | null)?.regime_tributario ?? null;
+        console.log('[TAX-REGIME] company', companyId, '→ regime_tributario:', JSON.stringify(regime));
+        return regime;
     },
 
     async generateForDeal(deal: Pick<PropertyDeal, 'id' | 'type' | 'property_id'>, organizationId: string): Promise<void> {
@@ -365,6 +372,7 @@ export const taxPayableService = {
                 inssBracketsService.list(),
             ]);
             const regimeLabel = regime ? REGIME_LABEL[regime] : null;
+            console.log(`[TAX-PAYABLE] Locação ${shortId}: regime=${JSON.stringify(regime)} → label=${JSON.stringify(regimeLabel)}; pisRates=${pisRates.length} cofinsRates=${cofinsRates.length} inssBrackets=${inssBrackets.length}`);
             if (!regimeLabel) {
                 console.warn(`[TAX-PAYABLE] Locação ${shortId}: sem empresa/regime (Lucro Real/Presumido) definidos no imóvel/empreendimento — PIS/COFINS não gerados. INSS segue.`);
             }
@@ -373,6 +381,7 @@ export const taxPayableService = {
                 if (regimeLabel) {
                     const pis = rateForYear(pisRates, regimeLabel, year);
                     const cofins = rateForYear(cofinsRates, regimeLabel, year);
+                    console.log(`[TAX-PAYABLE] parcela ${parcel.reference_id} ano=${year} → PIS=${pis} COFINS=${cofins}`);
                     if (pis != null)    pushRow(parcel, 'pis',    'PIS',    parcel.amount * pis / 100);
                     if (cofins != null) pushRow(parcel, 'cofins', 'COFINS', parcel.amount * cofins / 100);
                 }

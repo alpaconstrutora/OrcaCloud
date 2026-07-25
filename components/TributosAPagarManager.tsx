@@ -259,6 +259,8 @@ export default function TributosAPagarManager({ organizationId, organizations, o
     const [dueTo, setDueTo]             = usePersistedState('tributosPagarManagerFilters:dueTo', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [activeView, setActiveView] = usePersistedState<ViewId>('tributosPagarManager:view', 'tributos');
+    // Competência (regime de fato gerador = transaction_date) — só filtra na aba Fechamento
+    const [competencia, setCompetencia] = usePersistedState<string>('tributosPagarManager:competencia', today().slice(0, 7));
     const tableColumns = useTableColumns(TRIBUTO_COLUMNS, 'tributosPagarManagerColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tributosPagarManagerFilters:advanced');
 
@@ -398,6 +400,10 @@ export default function TributosAPagarManager({ organizationId, organizations, o
 
     const sorted = useMemo(() => {
         let result = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        // Fechamento: recorta pela competência (mês do fato gerador = transaction_date)
+        if (activeView === 'fechamento' && competencia) {
+            result = result.filter(r => (r.transaction_date ?? '').slice(0, 7) === competencia);
+        }
         result = [...result];
         if (tableColumns.sortColumn) {
             result.sort((a, b) => {
@@ -417,7 +423,7 @@ export default function TributosAPagarManager({ organizationId, organizations, o
             });
         }
         return result;
-    }, [rows, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rows, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia]);
 
     /** Só não-PAGO pode ser baixado. */
     const isSelectable = (t: TaxPayable) => t.effective_status !== 'PAGO' && t.effective_status !== 'CANCELADO';
@@ -567,6 +573,19 @@ export default function TributosAPagarManager({ organizationId, organizations, o
             {/* Toolbar de botões — §5.3 (escopo à esquerda, ações à direita) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
+                    {/* Escopo — competência mensal (só na aba Fechamento; fato gerador) */}
+                    {activeView === 'fechamento' && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500 font-semibold whitespace-nowrap">Competência</span>
+                            <input
+                                type="month"
+                                value={competencia}
+                                onChange={e => setCompetencia(e.target.value)}
+                                className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                            />
+                        </div>
+                    )}
+
                     {/* Escopo — seletor de organização */}
                     {organizations && organizations.length > 1 && (
                         <div className="relative flex items-center h-9">

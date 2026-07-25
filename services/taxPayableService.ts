@@ -54,6 +54,11 @@ export interface TaxPayableFilters {
 const TAX_PARTY_TYPE = 'TAX';
 const TAX_SOURCE_SYSTEM = 'COMMERCIAL'; // isenta o hard-lock de período
 
+// Regime de reconhecimento dos tributos comerciais (organizations.settings).
+// CAIXA = fato gerador na data de recebimento (due_date da parcela);
+// COMPETENCIA = fato gerador no mês de auferimento da receita (transaction_date).
+export type TaxRecognitionRegime = 'CAIXA' | 'COMPETENCIA';
+
 function today() { return new Date().toISOString().slice(0, 10); }
 
 // ── Datas ────────────────────────────────────────────────────
@@ -310,9 +315,31 @@ export const taxPayableService = {
         return regime;
     },
 
-    async generateForDeal(deal: Pick<PropertyDeal, 'id' | 'type' | 'property_id'>, organizationId: string): Promise<void> {
+    /**
+     * Regime de reconhecimento de tributos da organização (settings). Default CAIXA
+     * (comportamento histórico) quando não configurado.
+     */
+    async getRecognitionRegime(organizationId: string): Promise<TaxRecognitionRegime> {
+        if (!organizationId) return 'CAIXA';
+        const { data } = await supabase
+            .from('organizations')
+            .select('settings')
+            .eq('id', organizationId)
+            .maybeSingle();
+        const regime = (data?.settings as { tax_recognition_regime?: string } | null)?.tax_recognition_regime;
+        return regime === 'COMPETENCIA' ? 'COMPETENCIA' : 'CAIXA';
+    },
+
+    async generateForDeal(
+        deal: Pick<PropertyDeal, 'id' | 'type' | 'property_id'>,
+        organizationId: string,
+        regime?: TaxRecognitionRegime,
+    ): Promise<void> {
         if (!organizationId || !deal?.id) return;
         if (deal.type !== 'SALE' && deal.type !== 'RENTAL') return;
+
+        // Regime da org (recebido do backfill em lote ou resolvido aqui p/ chamada avulsa).
+        const recognitionRegime = regime ?? await this.getRecognitionRegime(organizationId);
 
         const origin = deal.type === 'SALE' ? 'Venda de Ativo' : 'Locação';
         const shortId = deal.id.substring(0, 8);
@@ -337,7 +364,12 @@ export const taxPayableService = {
             .map((p: { reference_id: string; amount: number; due_date?: string; transaction_date?: string }) => ({
                 reference_id: p.reference_id,
                 amount: Number(p.amount) || 0,
-                fato_gerador: (p.due_date || p.transaction_date || today()).slice(0, 10),
+                // COMPETÊNCIA: mês de auferimento (transaction_date da parcela);
+                // CAIXA: data de recebimento (due_date). Mesmos valores, data-base distinta.
+                fato_gerador: (recognitionRegime === 'COMPETENCIA'
+                    ? (p.transaction_date || p.due_date || today())
+                    : (p.due_date || p.transaction_date || today())
+                ).slice(0, 10),
             }))
             .filter(p => p.amount > 0);
         if (validParcels.length === 0) return;
@@ -429,11 +461,14 @@ export const taxPayableService = {
             .in('type', ['SALE', 'RENTAL']);
         if (error) { console.error('[TAX-PAYABLE] Falha ao listar negócios p/ backfill:', error); throw error; }
 
+        // Regime resolvido uma vez para todo o lote.
+        const regime = await this.getRecognitionRegime(organizationId);
+
         let count = 0;
         for (const d of (deals || [])) {
             if (!allowedStatuses.includes(d.status || '')) continue;
             try {
-                await this.generateForDeal({ id: d.id, type: d.type, property_id: d.property_id }, organizationId);
+                await this.generateForDeal({ id: d.id, type: d.type, property_id: d.property_id }, organizationId, regime);
                 count++;
             } catch (e) {
                 console.error(`[TAX-PAYABLE] Backfill falhou p/ deal ${d.id}:`, e);

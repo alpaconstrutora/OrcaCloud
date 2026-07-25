@@ -4,6 +4,7 @@ import { PaymentAccount } from '../types/financial';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, Landmark, Plus, X } from 'lucide-react';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 interface OrganizationPageProps {
     organization: Organization | null;
@@ -21,6 +22,7 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
     });
     const [logoPreview, setLogoPreview] = useState<string | null>(organization?.logoUrl || null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const confirm = useConfirm();
 
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [accountsLoading, setAccountsLoading] = useState(false);
@@ -60,7 +62,8 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
     };
 
     const handleDeleteAccount = async (id: string) => {
-        if (!confirm('Remover esta conta?')) return;
+        const ok = await confirm({ title: 'Remover conta?', message: 'Remover esta conta de pagamento?', variant: 'danger', confirmLabel: 'Remover' });
+        if (!ok) return;
         try {
             await financialRegistryService.deletePaymentAccount(id);
             setAccounts(prev => prev.filter(a => a.id !== id));
@@ -276,6 +279,35 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                             placeholder="(00) 00000-0000"
                                         />
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tributação */}
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <Landmark className="w-5 h-5 text-blue-600" />
+                                Tributação
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Regime de reconhecimento de tributos</label>
+                                    <select
+                                        value={formData.settings?.tax_recognition_regime ?? 'CAIXA'}
+                                        onChange={(e) => setFormData(prev => ({
+                                            ...prev,
+                                            settings: { ...prev.settings, tax_recognition_regime: e.target.value as 'CAIXA' | 'COMPETENCIA' },
+                                        }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white cursor-pointer"
+                                    >
+                                        <option value="CAIXA">Regime de Caixa (recebimento)</option>
+                                        <option value="COMPETENCIA">Regime de Competência (auferimento)</option>
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1.5">
+                                        Define a data do fato gerador dos tributos comerciais (PIS/COFINS/CSLL/IRRF/INSS s/ Vendas de Ativos e Locações):
+                                        Caixa usa a data de recebimento da parcela; Competência usa o mês de auferimento da receita, independente do recebimento.
+                                        Após alterar, use <strong>Gerar</strong> em Tributos a Pagar para reprocessar os pendentes.
+                                    </p>
                                 </div>
                             </div>
                         </div>

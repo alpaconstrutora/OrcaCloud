@@ -306,6 +306,15 @@ export interface Organization {
     settings?: {
         /** Visibilidade de módulos por produto e por cargo. Retrocompatível com formato flat (legacy). */
         module_visibility?: ModuleVisibilityConfig | Record<string, Record<string, boolean>>;
+        /**
+         * Regime de reconhecimento dos tributos comerciais (PIS/COFINS/CSLL/IRRF/INSS
+         * s/ Vendas de Ativos e Locações). Define a data-base do fato gerador na
+         * geração dos tributos:
+         * - 'CAIXA' (default): data de recebimento da parcela (due_date).
+         * - 'COMPETENCIA': mês de auferimento da receita (transaction_date),
+         *   independente do recebimento.
+         */
+        tax_recognition_regime?: 'CAIXA' | 'COMPETENCIA';
     };
     resources?: {
         roles: ResourceRole[];

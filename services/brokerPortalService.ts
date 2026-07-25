@@ -128,6 +128,38 @@ export const brokerPortalService = {
     },
 
     /**
+     * Colunas visíveis da tabela de preços do Portal do Corretor (por organização).
+     * NÃO é preferência de tela: é o que o corretor enxerga no link público — o
+     * admin escolhe na visão do app e o link passa a refletir. `null` = org nunca
+     * configurou, o front usa o default (todas as colunas).
+     */
+    async getPriceColumns(orgId: string): Promise<string[] | null> {
+        const { data, error } = await supabase
+            .from('broker_portal_price_columns')
+            .select('visible_columns')
+            .eq('org_id', orgId)
+            .maybeSingle();
+        if (error) throw error;
+        const cols = data?.visible_columns;
+        return Array.isArray(cols) ? (cols as string[]) : null;
+    },
+
+    async savePriceColumns(orgId: string, columns: string[]): Promise<void> {
+        const { error } = await supabase
+            .from('broker_portal_price_columns')
+            .upsert({ org_id: orgId, visible_columns: columns, updated_at: new Date().toISOString() }, { onConflict: 'org_id' });
+        if (error) throw error;
+    },
+
+    /** Espelho anon de getPriceColumns — o link não tem sessão Supabase. */
+    async getPriceColumnsByToken(token: string): Promise<string[] | null> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_get_price_columns', { p_token: token });
+        if (error) throw error;
+        const res = data as { valid: boolean; columns?: string[] | null };
+        return Array.isArray(res?.columns) ? res.columns : null;
+    },
+
+    /**
      * Planos de vendas ATIVOS de um empreendimento, para o Simulador de Proposta
      * no modo público (sem sessão Supabase). Espelha salesPlanService.listActive,
      * mas via RPC anon — sales_plans só tem RLS `TO authenticated` (20270717000000).

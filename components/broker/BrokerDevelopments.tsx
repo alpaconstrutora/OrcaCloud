@@ -5,7 +5,8 @@ import type { CommercialPriceTable, CommercialPriceTableItem } from '../../servi
 import { rentalPriceTableService } from '../../services/rentalPriceTableService';
 import { brokerPortalService } from '../../services/brokerPortalService';
 import { formatMoney } from '../ui/Format';
-import { SortableHeader } from '../ui/TableUtils';
+import { SortableHeader, ColumnConfigButton, useTableColumns } from '../ui/TableUtils';
+import type { ColumnConfig } from '../ui/TableUtils';
 import type { BrokerUnit } from '../../types';
 
 interface BrokerDevelopmentsProps {
@@ -52,13 +53,45 @@ const UnitStatusBadge: React.FC<{ status?: string }> = ({ status }) => {
     );
 };
 
+// position_type (commercial_properties) — mesmas labels de PriceTableManager.tsx/PropertyModal.tsx.
+const POSITION_LABEL: Record<string, string> = { FRONT: 'Frente', LATERAL: 'Lateral', BACK: 'Fundos' };
+
 const num = (v: number | null | undefined) => (v != null ? String(v) : '—');
 const areaFmt = (v: number | null | undefined) => (v != null ? `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²` : '—');
 
-type SortKey = 'unit' | 'status' | 'area' | 'bedrooms' | 'parking' | 'price';
+// Espelho EXATO das colunas de PriceTableManager.tsx (Comercial › Venda de
+// Ativos › Tabela de Preços) — mesmas chaves, mesma ordem, todas as 12. O que
+// varia é só a apresentação: aqui "Preço nesta versão" e "Visível p/ Corretor"
+// são leitura, não campo editável (a edição continua sendo lá).
+// Os labels de preço mudam com o eixo Venda/Locação, como no MODE_CONFIG de lá.
+const buildColumns = (priceMode: 'sale' | 'rental'): ColumnConfig[] => [
+    { key: 'unit',            label: 'Unidade',            sortable: true },
+    { key: 'status',          label: 'Status',             sortable: true },
+    { key: 'privArea',        label: 'Área privativa',     sortable: true },
+    { key: 'bedrooms',        label: 'Dormitórios',        sortable: true },
+    { key: 'parking',         label: 'Vagas',              sortable: true },
+    { key: 'bathrooms',       label: 'Banheiros',          sortable: true },
+    { key: 'floor',           label: 'Pavimento',          sortable: true },
+    { key: 'position',        label: 'Posição',            sortable: true },
+    { key: 'current',         label: priceMode === 'rental' ? 'Aluguel vigente' : 'Preço vigente', sortable: true },
+    { key: 'price',           label: priceMode === 'rental' ? 'Aluguel nesta versão' : 'Preço nesta versão', sortable: true },
+    { key: 'delta',           label: 'Δ',                  sortable: true },
+    { key: 'visibleToBroker', label: 'Visível p/ Corretor', sortable: true },
+];
+const COLUMN_KEYS = buildColumns('sale').map(c => c.key);
+
+// Δ da unidade: variação % entre o preço desta versão e o vigente. Mesma
+// fórmula de itemDelta() em PriceTableManager.tsx.
+const itemDelta = (i: CommercialPriceTableItem) => {
+    const cur = i.current_price ?? i.price;
+    return cur > 0 ? ((i.price - cur) / cur) * 100 : 0;
+};
+
+type SortKey = 'unit' | 'status' | 'privArea' | 'bedrooms' | 'parking' | 'bathrooms' | 'floor'
+    | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker';
 type BuildingSortKey = 'name' | 'units';
 
-const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, onMakeProposal }) => {
+const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal }) => {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     // Eixo de preço exibido: venda (price) ou locação (rental_price). Toggle no
     // detalhe do empreendimento — o mesmo prédio pode ter as duas tabelas.
@@ -69,12 +102,66 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
 
     // Sort local (não persistido) — lista embutida numa aba do portal, não a tela
     // principal de gestão de preços (essa já existe em PriceTableManager, com
-    // colunas configuráveis). Ver ui_ux_standard_guide.md §6.3: mesmo aqui, toda
+    // colunas configuráveis). Ver ui_ux_guia_unificado.md §6.3: mesmo aqui, toda
     // coluna de valor único continua ordenável — só a persistência é dispensada.
     const [buildingSort, setBuildingSort] = useState<{ col: BuildingSortKey; dir: 'asc' | 'desc' }>({ col: 'name', dir: 'asc' });
     const [itemSort, setItemSort] = useState<{ col: SortKey; dir: 'asc' | 'desc' }>({ col: 'unit', dir: 'asc' });
 
     const selectedBuilding = useMemo(() => buildings.find(b => b.id === selectedBuildingId) || null, [buildings, selectedBuildingId]);
+
+    // REGRA #5: com o seletor em "Todas as organizações" o `organizationId` chega
+    // null. A org sai do empreendimento aberto (ele é de uma só) — assim a
+    // configuração de colunas nunca fica indisponível sem explicação.
+    const effectiveOrgId = organizationId || selectedBuilding?.organization_id || buildings[0]?.organization_id;
+
+    // Colunas visíveis. Diferente do resto do sistema, aqui a escolha NÃO é
+    // preferência de tela: o que o admin marca na visão do app é o que o
+    // corretor passa a ver no link público. Por isso a fonte da verdade é o
+    // banco (broker_portal_price_columns, por organização) — o localStorage do
+    // useTableColumns fica só como cache otimista até a leitura chegar.
+    const columns = useMemo(() => buildColumns(priceMode), [priceMode]);
+    const tableColumns = useTableColumns(buildColumns('sale'), 'brokerDevelopments:priceColumns');
+    const { visibleColumns, setVisibleColumns } = tableColumns;
+    const isCol = (key: string) => visibleColumns.includes(key);
+    const [prefsLoaded, setPrefsLoaded] = useState(false);
+    const [savingColumns, setSavingColumns] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const cols = portalToken
+                    ? await brokerPortalService.getPriceColumnsByToken(portalToken)
+                    : effectiveOrgId ? await brokerPortalService.getPriceColumns(effectiveOrgId) : null;
+                // Filtra chave desconhecida: se uma coluna for renomeada/removida no
+                // código, a preferência antiga no banco não deve ressuscitá-la.
+                if (!cancelled && cols) setVisibleColumns(cols.filter(k => COLUMN_KEYS.includes(k)));
+            } catch (err) {
+                console.error('[BrokerDevelopments] Erro ao carregar colunas do portal:', err);
+            } finally {
+                if (!cancelled) setPrefsLoaded(true);
+            }
+        };
+        load();
+        return () => { cancelled = true; };
+    }, [portalToken, effectiveOrgId, setVisibleColumns]);
+
+    // Grava a escolha assim que o admin mexe (é o que faz o link refletir).
+    // Só na visão do app: o corretor no link nunca escreve.
+    useEffect(() => {
+        if (!prefsLoaded || portalToken || !effectiveOrgId) return;
+        setSavingColumns(true);
+        const t = setTimeout(async () => {
+            try {
+                await brokerPortalService.savePriceColumns(effectiveOrgId, visibleColumns);
+            } catch (err) {
+                console.error('[BrokerDevelopments] Erro ao salvar colunas do portal:', err);
+            } finally {
+                setSavingColumns(false);
+            }
+        }, 500);
+        return () => clearTimeout(t);
+    }, [visibleColumns, prefsLoaded, portalToken, effectiveOrgId]);
 
     const unitCountByBuilding = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -141,6 +228,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 parking_spaces: u.specs?.parkingSpaces ?? null,
                 floor: u.specs?.floor ?? null,
                 position_type: null,
+                visible_to_broker: (u as any).visible_to_broker ?? true,
             }));
     }, [activeTable, loading, units, selectedBuildingId, priceMode]);
 
@@ -162,10 +250,16 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
         return [...rows].sort((a, b) => {
             switch (itemSort.col) {
                 case 'status': return (a.property_status || '').localeCompare(b.property_status || '', 'pt-BR') * dir;
-                case 'area': return (n(a.private_area) - n(b.private_area)) * dir;
+                case 'privArea': return (n(a.private_area) - n(b.private_area)) * dir;
                 case 'bedrooms': return (n(a.bedrooms) - n(b.bedrooms)) * dir;
                 case 'parking': return (n(a.parking_spaces) - n(b.parking_spaces)) * dir;
-                case 'price': return (n(a.current_price ?? a.price) - n(b.current_price ?? b.price)) * dir;
+                case 'bathrooms': return (n(a.bathrooms) - n(b.bathrooms)) * dir;
+                case 'floor': return (n(a.floor) - n(b.floor)) * dir;
+                case 'position': return (a.position_type || '').localeCompare(b.position_type || '', 'pt-BR') * dir;
+                case 'current': return (n(a.current_price ?? a.price) - n(b.current_price ?? b.price)) * dir;
+                case 'price': return (n(a.price) - n(b.price)) * dir;
+                case 'delta': return (itemDelta(a) - itemDelta(b)) * dir;
+                case 'visibleToBroker': return (Number(a.visible_to_broker ?? true) - Number(b.visible_to_broker ?? true)) * dir;
                 default: return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
             }
         });
@@ -276,6 +370,24 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                             Tabela vigente: {activeTable.version_label}
                         </span>
                     )}
+                    {/* Só na visão do app: a escolha vale para a organização inteira e é
+                        o que o corretor enxerga no link — o corretor não a edita.
+                        REGRA #5: NÃO condicionar a `organizationId` (com o seletor em
+                        "Todas as organizações" ele vem null e o botão sumiria) — a org
+                        sai do empreendimento aberto, que é sempre de uma só. */}
+                    {!portalToken && (
+                        <div className="flex items-center gap-1.5">
+                            {savingColumns && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+                            <ColumnConfigButton
+                                columns={columns}
+                                visibleColumns={visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -303,24 +415,42 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <SortableHeader colKey="unit" label="Unidade" uppercase={false}
+                                    {isCol('unit') && <SortableHeader colKey="unit" label="Unidade" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100" />
-                                    <SortableHeader colKey="status" label="Status" uppercase={false}
+                                        className="px-6 py-2 border-r border-gray-100" />}
+                                    {isCol('status') && <SortableHeader colKey="status" label="Status" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100" />
-                                    <SortableHeader colKey="area" label="Área privativa" uppercase={false}
+                                        className="px-6 py-2 border-r border-gray-100" />}
+                                    {isCol('privArea') && <SortableHeader colKey="privArea" label="Área privativa" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
-                                    <SortableHeader colKey="bedrooms" label="Dormitórios" uppercase={false}
+                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
+                                    {isCol('bedrooms') && <SortableHeader colKey="bedrooms" label="Dormitórios" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
-                                    <SortableHeader colKey="parking" label="Vagas" uppercase={false}
+                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
+                                    {isCol('parking') && <SortableHeader colKey="parking" label="Vagas" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
-                                    <SortableHeader colKey="price" label={priceMode === 'rental' ? 'Aluguel' : 'Preço'} uppercase={false}
+                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
+                                    {isCol('bathrooms') && <SortableHeader colKey="bathrooms" label="Banheiros" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 text-right" />
+                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
+                                    {isCol('floor') && <SortableHeader colKey="floor" label="Pavimento" uppercase={false}
+                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
+                                    {isCol('position') && <SortableHeader colKey="position" label="Posição" uppercase={false}
+                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                        className="px-6 py-2 border-r border-gray-100" />}
+                                    {isCol('current') && <SortableHeader colKey="current" label={priceMode === 'rental' ? 'Aluguel vigente' : 'Preço vigente'} uppercase={false}
+                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
+                                    {isCol('price') && <SortableHeader colKey="price" label={priceMode === 'rental' ? 'Aluguel nesta versão' : 'Preço nesta versão'} uppercase={false}
+                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
+                                    {isCol('delta') && <SortableHeader colKey="delta" label="Δ" uppercase={false}
+                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                        className="px-6 py-2 border-r border-gray-100 text-right" />}
+                                    {isCol('visibleToBroker') && <SortableHeader colKey="visibleToBroker" label="Visível p/ Corretor" uppercase={false}
+                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                        className="px-6 py-2 text-center whitespace-nowrap" />}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -333,27 +463,49 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                             onClick={() => clickable && handleRowClick(item.property_id)}
                                             title={clickable ? 'Clique para iniciar uma proposta com esta unidade' : 'Unidade não disponível no estoque atual'}
                                         >
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                            {isCol('unit') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                 <span className="group-hover:text-blue-700 flex items-center gap-1.5">
                                                     {item.property_name || '—'}
                                                     {clickable && <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />}
                                                 </span>
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                            </td>}
+                                            {isCol('status') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <UnitStatusBadge status={item.property_status} />
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600 whitespace-nowrap">
+                                            </td>}
+                                            {isCol('privArea') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600 whitespace-nowrap">
                                                 {areaFmt(item.private_area)}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                            </td>}
+                                            {isCol('bedrooms') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
                                                 {num(item.bedrooms)}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                            </td>}
+                                            {isCol('parking') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
                                                 {num(item.parking_spaces)}
-                                            </td>
-                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">
+                                            </td>}
+                                            {isCol('bathrooms') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                                {num(item.bathrooms)}
+                                            </td>}
+                                            {isCol('floor') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                                {num(item.floor)}
+                                            </td>}
+                                            {isCol('position') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                {item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : '—'}
+                                            </td>}
+                                            {isCol('current') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
                                                 {formatMoney(item.current_price ?? item.price)}
-                                            </td>
+                                            </td>}
+                                            {isCol('price') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                                                {formatMoney(item.price)}
+                                            </td>}
+                                            {isCol('delta') && (() => {
+                                                const diff = itemDelta(item);
+                                                return <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+                                                    {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
+                                                </td>;
+                                            })()}
+                                            {/* Leitura: o switch que edita este flag vive em PriceTableManager.tsx. */}
+                                            {isCol('visibleToBroker') && <td className="px-6 py-2.5 text-center text-sm font-normal text-gray-600">
+                                                {(item.visible_to_broker ?? true) ? 'Sim' : 'Não'}
+                                            </td>}
                                         </tr>
                                     );
                                 })}

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Property, PropertyDeal, PropertyStatus } from '../types';
+import { Property, PropertyDeal, PropertyStatus, DealUnit } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
 import { projectService } from './projectService';
 import { financialSyncService } from './financialSyncService';
@@ -28,6 +28,60 @@ function translatePropertyDeleteError(error: { code?: string; message?: string }
         return 'Este imóvel tem reservas ou propostas de corretor vinculadas. Cancele-as no Portal do Corretor antes de excluir.';
     }
     return `Não foi possível excluir: há registros vinculados a este imóvel. (${msg})`;
+}
+
+/**
+ * Normaliza a lista de unidades de uma negociação.
+ *
+ * Contratos anteriores à tabela `commercial_deal_units` (e qualquer linha que o
+ * backfill não tenha alcançado) só têm `property_id`. Em vez de espalhar
+ * `if (deal.units?.length)` por toda a base, toda leitura passa por aqui e
+ * enxerga SEMPRE uma lista — com uma única unidade, no caso legado.
+ */
+export function dealUnitsOf(deal: Partial<PropertyDeal> | null | undefined): DealUnit[] {
+    if (!deal) return [];
+    const list = (deal.units || []).filter(u => !!u?.property_id);
+    if (list.length > 0) {
+        // Garante exatamente uma principal: a marcada, senão a primeira.
+        const primaryIdx = Math.max(0, list.findIndex(u => u.is_primary));
+        return list.map((u, i) => ({ ...u, value: Number(u.value) || 0, is_primary: i === primaryIdx }));
+    }
+    if (deal.property_id) {
+        return [{ property_id: deal.property_id, value: Number(deal.value) || 0, is_primary: true }];
+    }
+    return [];
+}
+
+/** Unidade principal (a que espelha `commercial_deals.property_id`). */
+export function primaryUnitOf(deal: Partial<PropertyDeal> | null | undefined): DealUnit | undefined {
+    const units = dealUnitsOf(deal);
+    return units.find(u => u.is_primary) || units[0];
+}
+
+/**
+ * `commercial_deal_units` só existe depois da migration 20270825000020. Enquanto
+ * ela não for aplicada, toda leitura da tabela falha com PGRST205/42P01 e
+ * derrubaria a tela de Locações inteira. Este flag registra a ausência na
+ * primeira falha e o código passa a operar no modo legado (1 unidade por
+ * contrato, via `property_id`) sem erro visível.
+ */
+let dealUnitsTableMissing = false;
+function noteDealUnitsError(error: { code?: string; message?: string } | null | undefined): boolean {
+    const code = error?.code || '';
+    const msg = error?.message || '';
+    if (code === '42P01' || code === 'PGRST205' || msg.includes('commercial_deal_units')) {
+        if (!dealUnitsTableMissing) {
+            console.warn('[COMMERCIAL SERVICE] Tabela commercial_deal_units indisponível — operando em modo 1 unidade por contrato. Aplique a migration 20270825000020.');
+        }
+        dealUnitsTableMissing = true;
+        return true;
+    }
+    return false;
+}
+
+/** Soma dos valores das unidades — é o valor do contrato. */
+export function dealUnitsTotal(units: DealUnit[] | undefined): number {
+    return (units || []).reduce((s, u) => s + (Number(u.value) || 0), 0);
 }
 
 export const commercialService = {
@@ -182,12 +236,10 @@ export const commercialService = {
             .eq('parent_id', id);
         const childIds = (kids || []).map(k => k.id as string);
 
-        const { count } = await supabase
-            .from('commercial_deals')
-            .select('id', { count: 'exact', head: true })
-            .in('property_id', [id, ...childIds]);
+        const targets = [id, ...childIds];
+        const dealIds = await this.dealIdsForProperties(targets);
 
-        return { children: childIds.length, deals: count || 0 };
+        return { children: childIds.length, deals: dealIds.length };
     },
 
     /**
@@ -212,13 +264,11 @@ export const commercialService = {
             targets.push(...(kids || []).map(k => k.id as string));
         }
 
-        // 1. Negociações (uma a uma, para reusar o estorno de parcelas)
-        const { data: deals } = await supabase
-            .from('commercial_deals')
-            .select('id')
-            .in('property_id', targets);
-        for (const d of deals || []) {
-            await commercialService.deleteDeal(d.id as string);
+        // 1. Negociações (uma a uma, para reusar o estorno de parcelas).
+        //    Inclui os contratos em que a unidade é apenas UMA das participantes.
+        const dealIds = await commercialService.dealIdsForProperties(targets);
+        for (const dealId of dealIds) {
+            await commercialService.deleteDeal(dealId);
         }
 
         // 2. Unidades filhas
@@ -239,23 +289,218 @@ export const commercialService = {
         if (error) throw new Error(translatePropertyDeleteError(error));
     },
 
+    /**
+     * `propertyId` filtra pelas negociações que CONTÊM aquela unidade — não só as
+     * em que ela é a principal. Num contrato "apto + vaga", pedir os contratos da
+     * vaga tem que devolver o contrato inteiro.
+     */
     async listDeals(propertyId?: string) {
-        let query = supabase
-            .from('commercial_deals')
-            .select('*')
-            .order('date', { ascending: false });
-
-        if (propertyId) {
-            query = query.eq('property_id', propertyId);
+        let dealIdsFilter: string[] | null = null;
+        if (propertyId && !dealUnitsTableMissing) {
+            const { data: links, error: linkErr } = await supabase
+                .from('commercial_deal_units')
+                .select('deal_id')
+                .eq('property_id', propertyId);
+            if (linkErr) noteDealUnitsError(linkErr);
+            dealIdsFilter = Array.from(new Set((links || []).map(l => l.deal_id as string)));
         }
 
-        const { data, error } = await query;
+        const buildQuery = (withUnits: boolean) => {
+            let q = supabase
+                .from('commercial_deals')
+                .select(withUnits
+                    ? '*, units:commercial_deal_units(id, deal_id, property_id, organization_id, value, is_primary)'
+                    : '*')
+                .order('date', { ascending: false });
+            if (propertyId) {
+                // Cobre tanto os contratos multi-unidade (via deal_units) quanto os
+                // legados que só têm property_id e nunca foram materializados.
+                q = (withUnits && dealIdsFilter && dealIdsFilter.length > 0)
+                    ? q.or(`property_id.eq.${propertyId},id.in.(${dealIdsFilter.join(',')})`)
+                    : q.eq('property_id', propertyId);
+            }
+            return q;
+        };
+
+        // `as any` porque o select é montado dinamicamente (com ou sem o join de
+        // unidades) e o parser de tipos do supabase-js não resolve string variável.
+        let { data, error } = await (buildQuery(!dealUnitsTableMissing) as any);
+        if (error && noteDealUnitsError(error)) {
+            ({ data, error } = await (buildQuery(false) as any));
+        }
         if (error) throw error;
-        return (data || []) as PropertyDeal[];
+        return ((data || []) as PropertyDeal[]).map(d => ({ ...d, units: dealUnitsOf(d) }));
+    },
+
+    /**
+     * IDs das negociações que envolvem qualquer uma das properties dadas, seja
+     * como unidade principal (`commercial_deals.property_id`) ou como item do
+     * contrato (`commercial_deal_units`). Deduplicado.
+     */
+    async dealIdsForProperties(propertyIds: string[]): Promise<string[]> {
+        if (!propertyIds.length) return [];
+        const ids = new Set<string>();
+
+        const { data: direct } = await supabase
+            .from('commercial_deals')
+            .select('id')
+            .in('property_id', propertyIds);
+        (direct || []).forEach(d => ids.add(d.id as string));
+
+        if (!dealUnitsTableMissing) {
+            const { data: links, error } = await supabase
+                .from('commercial_deal_units')
+                .select('deal_id')
+                .in('property_id', propertyIds);
+            if (error) noteDealUnitsError(error);
+            (links || []).forEach(l => ids.add(l.deal_id as string));
+        }
+
+        return Array.from(ids);
+    },
+
+    /** Nomes das unidades, na ordem dada — usado nos rótulos ("Apto 101 + Vaga 12"). */
+    async propertyNames(propertyIds: string[]): Promise<Record<string, string>> {
+        if (!propertyIds.length) return {};
+        const { data } = await supabase
+            .from('commercial_properties')
+            .select('id, name')
+            .in('id', propertyIds);
+        const map: Record<string, string> = {};
+        (data || []).forEach(p => { map[p.id as string] = (p.name as string) || ''; });
+        return map;
+    },
+
+    /**
+     * Substitui a lista de unidades de uma negociação: apaga as que saíram e
+     * grava/atualiza as atuais. Devolve as properties REMOVIDAS, para que o
+     * chamador possa devolvê-las ao estoque (status AVAILABLE).
+     */
+    async syncDealUnits(dealId: string, organizationId: string | undefined, units: DealUnit[]): Promise<string[]> {
+        if (dealUnitsTableMissing) return [];
+
+        const { data: existing, error: readErr } = await supabase
+            .from('commercial_deal_units')
+            .select('id, property_id')
+            .eq('deal_id', dealId);
+        if (readErr && noteDealUnitsError(readErr)) return [];
+
+        const keepIds = new Set(units.map(u => u.property_id));
+        const removed = (existing || [])
+            .filter(e => !keepIds.has(e.property_id as string))
+            .map(e => e.property_id as string);
+
+        if (removed.length > 0) {
+            await supabase
+                .from('commercial_deal_units')
+                .delete()
+                .eq('deal_id', dealId)
+                .in('property_id', removed);
+        }
+
+        if (units.length > 0) {
+            const rows = units.map(u => ({
+                deal_id: dealId,
+                property_id: u.property_id,
+                organization_id: organizationId || u.organization_id || null,
+                value: Number(u.value) || 0,
+                is_primary: !!u.is_primary,
+            }));
+            const { error } = await supabase
+                .from('commercial_deal_units')
+                .upsert(rows, { onConflict: 'deal_id,property_id' });
+            if (error) {
+                if (noteDealUnitsError(error)) return [];
+                console.error('[COMMERCIAL SERVICE] Erro ao sincronizar unidades do contrato:', error);
+                throw error;
+            }
+        }
+
+        return removed;
+    },
+
+    /**
+     * REGRA: Uma Unidade, Um Contrato Ativo — agora aplicada ao CONJUNTO de
+     * unidades do contrato, não a uma só. `excludeDealId` deixa o próprio
+     * contrato de fora ao editar.
+     *
+     * `checkStatus` liga a verificação do estoque (usada ao avançar para RESERVA):
+     * a unidade precisa estar AVAILABLE ou RESERVED.
+     *
+     * A mensagem NOMEIA a unidade em conflito — com N unidades, "esta unidade"
+     * não diria ao usuário qual delas travou o contrato.
+     */
+    async assertUnitsAvailable(propertyIds: string[], excludeDealId?: string, checkStatus = false) {
+        if (!propertyIds.length) return;
+
+        const names = await this.propertyNames(propertyIds);
+        const label = (id: string) => names[id] || 'unidade';
+
+        if (checkStatus) {
+            const { data: props } = await supabase
+                .from('commercial_properties')
+                .select('id, status')
+                .in('id', propertyIds);
+            const blocked = (props || []).filter(p => p.status !== 'AVAILABLE' && p.status !== 'RESERVED');
+            if (blocked.length > 0) {
+                const list = blocked.map(p => `${label(p.id as string)} (${p.status})`).join(', ');
+                throw new Error(`Unidade(s) não disponível(is) para reserva: ${list}. Verifique se já foram vendidas ou alugadas.`);
+            }
+        }
+
+        // Conflitos por unidade principal (legado) e por item de contrato.
+        const conflicts = new Map<string, string>(); // propertyId → dealId
+        const register = (propertyId: string, dealId: string) => {
+            if (excludeDealId && dealId === excludeDealId) return;
+            if (!conflicts.has(propertyId)) conflicts.set(propertyId, dealId);
+        };
+
+        const { data: directDeals } = await supabase
+            .from('commercial_deals')
+            .select('id, property_id, status')
+            .in('property_id', propertyIds)
+            .neq('status', 'CANCELLED');
+        (directDeals || []).forEach(d => register(d.property_id as string, d.id as string));
+
+        let links: { deal_id: string; property_id: string }[] = [];
+        if (!dealUnitsTableMissing) {
+            const { data, error } = await supabase
+                .from('commercial_deal_units')
+                .select('deal_id, property_id')
+                .in('property_id', propertyIds);
+            if (error) noteDealUnitsError(error);
+            links = (data || []) as { deal_id: string; property_id: string }[];
+        }
+        const linkDealIds = Array.from(new Set((links || []).map(l => l.deal_id as string)))
+            .filter(id => !excludeDealId || id !== excludeDealId);
+        if (linkDealIds.length > 0) {
+            const { data: activeDeals } = await supabase
+                .from('commercial_deals')
+                .select('id, status')
+                .in('id', linkDealIds)
+                .neq('status', 'CANCELLED');
+            const activeIds = new Set((activeDeals || []).map(d => d.id as string));
+            (links || []).forEach(l => {
+                if (activeIds.has(l.deal_id as string)) register(l.property_id as string, l.deal_id as string);
+            });
+        }
+
+        if (conflicts.size > 0) {
+            const list = Array.from(conflicts.keys()).map(label).join(', ');
+            throw new Error(
+                `Já existe contrato ativo para: ${list}. Cancele o contrato atual (ou remova a unidade dele) antes de prosseguir.`
+            );
+        }
     },
 
     async saveDeal(deal: Partial<PropertyDeal>) {
         let result: PropertyDeal;
+
+        // As unidades do contrato NÃO são coluna de commercial_deals — vivem em
+        // commercial_deal_units. Extraídas antes de qualquer coisa; se vazassem no
+        // payload, o PostgREST rejeitaria ("Could not find the 'units' column").
+        const units = dealUnitsOf(deal);
+        const primaryUnit = units.find(u => u.is_primary) || units[0];
 
         // custom_installments é gravado como coluna normal (dbPayload abaixo) E
         // usado mais adiante para acionar o sync com o cofre financeiro (Contas a
@@ -267,6 +512,16 @@ export const commercialService = {
         // voltar. Persistir aqui também garante que o rascunho sobreviva
         // independente do status.
         const dbPayload: Partial<PropertyDeal> = { ...deal };
+        delete dbPayload.units;
+
+        // Quem manda é a lista de unidades: property_id é a principal e value é a
+        // SOMA. Contratos legados (1 unidade) caem no mesmo caminho sem mudança de
+        // comportamento, porque dealUnitsOf sintetiza a lista a partir do próprio
+        // property_id/value.
+        if (primaryUnit) {
+            dbPayload.property_id = primaryUnit.property_id;
+            dbPayload.value = Number(dealUnitsTotal(units).toFixed(2));
+        }
 
         Object.keys(dbPayload).forEach(key => {
             // Campos transitórios de UI (ex: _clientName, _propertyName, injetados
@@ -298,25 +553,8 @@ export const commercialService = {
         if (deal.id) {
             // 1.1 — Ao avançar para RESERVA (ou WAITING_PAYMENT legacy), verifica se a unidade
             // ainda está disponível (outro deal pode ter reservado no intervalo)
-            if ((dbPayload.status === 'RESERVA' || dbPayload.status === 'WAITING_PAYMENT') && dbPayload.property_id) {
-                const { data: prop } = await supabase
-                    .from('commercial_properties')
-                    .select('status')
-                    .eq('id', dbPayload.property_id)
-                    .single();
-                if (prop && prop.status !== 'AVAILABLE' && prop.status !== 'RESERVED') {
-                    throw new Error(`Unidade não disponível para reserva (status atual: ${prop.status}). Verifique se já foi vendida ou alugada.`);
-                }
-                // Também verifica se há outro deal ativo (não este) para a mesma unidade
-                const { data: otherDeals } = await supabase
-                    .from('commercial_deals')
-                    .select('id, status')
-                    .eq('property_id', dbPayload.property_id)
-                    .neq('id', deal.id)
-                    .neq('status', 'CANCELLED');
-                if (otherDeals && otherDeals.length > 0) {
-                    throw new Error('Já existe outro contrato ativo para esta unidade. Cancele-o antes de reservar.');
-                }
+            if ((dbPayload.status === 'RESERVA' || dbPayload.status === 'WAITING_PAYMENT') && units.length > 0) {
+                await this.assertUnitsAvailable(units.map(u => u.property_id), deal.id, true);
             }
 
             const { data, error } = await supabase
@@ -332,16 +570,36 @@ export const commercialService = {
             }
             result = data as PropertyDeal;
         } else {
-            // REGRA: Unicidade de Unidade (Uma Unidade, Uma Venda Ativa)
-            if (dbPayload.property_id && (dbPayload.type === 'SALE' || dbPayload.type === 'RENTAL')) {
-                const { data: existingDeals } = await supabase
-                    .from('commercial_deals')
-                    .select('id, status')
-                    .eq('property_id', dbPayload.property_id)
-                    .neq('status', 'CANCELLED');
+            // REGRA: Unicidade de Unidade (Uma Unidade, Um Contrato Ativo) —
+            // aplicada a TODAS as unidades do contrato.
+            if (units.length > 0 && (dbPayload.type === 'SALE' || dbPayload.type === 'RENTAL')) {
+                await this.assertUnitsAvailable(units.map(u => u.property_id));
+            }
 
-                if (existingDeals && existingDeals.length > 0) {
-                    throw new Error('Já existe um contrato ativo para esta unidade. Cancele o contrato atual antes de cadastrar um novo.');
+            // Código sequencial de 3 dígitos (001, 002, ...) por organização, apenas
+            // para negociações de Venda de Ativos (type='SALE'). Atribuído na criação
+            // e persistido em commercial_deals.code — estável, nunca reaproveitado.
+            // O try/catch protege o insert caso a migration da coluna ainda não tenha
+            // sido aplicada (o PostgREST rejeitaria `code` como coluna desconhecida).
+            if (dbPayload.type === 'SALE' && !dbPayload.code) {
+                try {
+                    let codeQuery = supabase
+                        .from('commercial_deals')
+                        .select('code')
+                        .eq('type', 'SALE');
+                    if (dbPayload.organization_id) {
+                        codeQuery = codeQuery.eq('organization_id', dbPayload.organization_id);
+                    }
+                    const { data: codeRows, error: codeErr } = await codeQuery;
+                    if (codeErr) throw codeErr;
+                    const maxCode = (codeRows || []).reduce((max, row) => {
+                        const n = parseInt((row as { code?: string }).code || '', 10);
+                        return Number.isNaN(n) ? max : Math.max(max, n);
+                    }, 0);
+                    dbPayload.code = String(maxCode + 1).padStart(3, '0');
+                } catch (e) {
+                    console.warn('[COMMERCIAL SERVICE] Não foi possível gerar código sequencial (coluna code ausente?):', e);
+                    delete dbPayload.code;
                 }
             }
 
@@ -358,6 +616,31 @@ export const commercialService = {
             result = data as PropertyDeal;
         }
 
+        // Persiste a lista de unidades do contrato. As que SAÍRAM voltam ao
+        // estoque logo abaixo — sem isso, remover uma unidade de um contrato
+        // ativo a deixaria eternamente "Locada" sem contrato nenhum.
+        let removedPropertyIds: string[] = [];
+        if (units.length > 0) {
+            try {
+                removedPropertyIds = await this.syncDealUnits(
+                    result.id,
+                    result.organization_id || dbPayload.organization_id,
+                    units
+                );
+            } catch (e) {
+                console.error('[COMMERCIAL SERVICE] Falha ao gravar unidades do contrato:', e);
+            }
+        }
+        if (removedPropertyIds.length > 0) {
+            await supabase
+                .from('commercial_properties')
+                .update({ status: 'AVAILABLE', client_id: null })
+                .in('id', removedPropertyIds);
+            console.log(`[COMMERCIAL SERVICE] ${removedPropertyIds.length} unidade(s) removida(s) do contrato voltaram a AVAILABLE`);
+        }
+
+        result.units = units;
+
         // Estágios que reservam a unidade (impede negociação duplicada da mesma unidade).
         // Inclui PENDING/APPROVED: qualquer negociação ativa, mesmo sem contrato formal
         // gerado ainda, trava a unidade — decisão do usuário 2026-07-19 (unidade com
@@ -373,7 +656,10 @@ export const commercialService = {
         if (FINANCIAL_STATUSES.includes(result.status)) {
             try {
                 // Atualizar status do imóvel em qualquer estágio ativo (inclusive PENDING).
-                if (result.property_id && result.client_id && result.type !== 'SERVICE'
+                // TODAS as unidades do contrato mudam de estado, não só a principal.
+                // (O trigger fn_propagate_commercial_status_to_unit replica cada uma
+                //  para empreendimento_units.rental_status automaticamente.)
+                if (units.length > 0 && result.client_id && result.type !== 'SERVICE'
                     && (result.status === 'COMPLETED' || RESERVA_STATUSES.includes(result.status))) {
                     const propertyUpdates: Partial<Property> = {
                         status: result.status === 'COMPLETED'
@@ -381,8 +667,10 @@ export const commercialService = {
                             : PropertyStatus.RESERVED,
                         client_id: result.client_id
                     };
-                    await this.saveProperty({ id: result.property_id, ...propertyUpdates });
-                    console.log(`[COMMERCIAL SERVICE] Property ${result.property_id} status updated to ${propertyUpdates.status} (Deal: ${result.status})`);
+                    for (const u of units) {
+                        await this.saveProperty({ id: u.property_id, ...propertyUpdates });
+                    }
+                    console.log(`[COMMERCIAL SERVICE] ${units.length} unidade(s) atualizada(s) para ${propertyUpdates.status} (Deal: ${result.status})`);
                 }
 
                 // Fallback: PostgREST cache delay might strip new columns from the RETURNING clause.
@@ -451,12 +739,12 @@ export const commercialService = {
             }
             const cancelOrgId = result.organization_id || dbPayload.organization_id;
             await Promise.allSettled([
-                // (a) Libera a unidade no espelho
-                result.property_id
+                // (a) Libera TODAS as unidades do contrato no espelho
+                units.length > 0
                     ? supabase.from('commercial_properties')
                         .update({ status: 'AVAILABLE', client_id: null })
-                        .eq('id', result.property_id)
-                        .then(() => console.log(`[COMMERCIAL SERVICE] Property ${result.property_id} reverted to AVAILABLE (distrato)`))
+                        .in('id', units.map(u => u.property_id))
+                        .then(() => console.log(`[COMMERCIAL SERVICE] ${units.length} unidade(s) revertida(s) para AVAILABLE (distrato)`))
                     : Promise.resolve(),
                 // (b) Estorna parcelas pendentes do vault (deleteDealInstallments ignora PAID, remove PENDING)
                 cancelOrgId
@@ -488,9 +776,24 @@ export const commercialService = {
             // 2b. Remove tributos a pagar pendentes deste negócio
             await taxPayableService.removeForDeal(id, deal.organization_id);
 
-            // Revert property status to AVAILABLE
-            if (deal.property_id) {
-                await supabase.from('commercial_properties').update({ status: 'AVAILABLE', client_id: null }).eq('id', deal.property_id);
+            // Revert property status to AVAILABLE — todas as unidades do contrato.
+            let unitRows: { property_id: string }[] = [];
+            if (!dealUnitsTableMissing) {
+                const { data, error } = await supabase
+                    .from('commercial_deal_units')
+                    .select('property_id')
+                    .eq('deal_id', id);
+                if (error) noteDealUnitsError(error);
+                unitRows = (data || []) as { property_id: string }[];
+            }
+            const propertyIds = Array.from(new Set([
+                ...(unitRows || []).map(u => u.property_id as string),
+                ...(deal.property_id ? [deal.property_id as string] : []),
+            ]));
+            if (propertyIds.length > 0) {
+                await supabase.from('commercial_properties')
+                    .update({ status: 'AVAILABLE', client_id: null })
+                    .in('id', propertyIds);
             }
         }
 

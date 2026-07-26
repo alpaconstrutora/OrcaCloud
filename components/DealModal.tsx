@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass } from 'lucide-react';
-import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType } from '../types';
-import { commercialService } from '../services/commercialService';
+import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
+import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
+import ActionIconButton from './ui/ActionIconButton';
 import { paymentTypeService } from '../services/paymentTypeService';
 import {
     DEFAULT_PAYMENT_TYPES,
@@ -294,6 +295,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     }, [initialData, isOpen]);
 
     const [properties, setProperties] = useState<Property[]>([]);
+    /** Unidade cujo cartão de detalhe/specs está aberto na aba Unidades. */
+    const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
     const [clients, setClients] = useState<Client[]>([]);
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
@@ -454,6 +457,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 signed_contract_url: formData.signed_contract_url,
                 // Locação: alimenta recorrência/reajuste do contrato
                 payment_due_date: formData.payment_due_date,
+                end_date: formData.end_date,
+                billing_cycle: formData.billing_cycle,
+                reajuste_index: formData.reajuste_index,
+                // Fonte do valor da PARCELA do aluguel — `value` é o total do contrato.
+                custom_installments: formData.custom_installments,
             }, isRental ? 'LOCACAO' : 'VENDAS');
             setLinkedContract(contract);
         } catch (err: any) {
@@ -519,7 +527,75 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         return () => { cancelled = true; };
     }, [isOpen, formData.organization_id, organizationId]);
 
+    // ─────────────────────────────────────────────────────────────────────
+    // UNIDADES DO CONTRATO
+    // Um contrato pode reunir várias unidades (apto + vaga + box no mesmo
+    // aluguel). `formData.units` é a fonte de verdade: `value` do contrato é a
+    // SOMA das unidades e `property_id` é a unidade principal. Contratos
+    // legados (só property_id) são normalizados por dealUnitsOf.
+    // ─────────────────────────────────────────────────────────────────────
+    const dealUnits = useMemo(() => dealUnitsOf(formData), [formData]);
+    const unitsTotal = useMemo(() => dealUnitsTotal(dealUnits), [dealUnits]);
+
+    /** Preço de referência da unidade conforme o eixo (locação usa rental_price). */
+    const referenceValueOf = (p: Property | undefined) =>
+        !p ? 0 : (formData.type === 'RENTAL' ? (p.rental_price ?? p.price ?? 0) : (p.price ?? 0));
+
+    /** Aplica uma nova lista de unidades e propaga total, principal e comissão. */
+    const applyUnits = (next: DealUnit[]) => {
+        const normalized = next.map((u, i) => ({ ...u, is_primary: next.some(x => x.is_primary) ? !!u.is_primary : i === 0 }));
+        const primary = normalized.find(u => u.is_primary) || normalized[0];
+        const total = dealUnitsTotal(normalized);
+        const primaryProp = properties.find(p => p.id === primary?.property_id);
+        setFormData(prev => ({
+            ...prev,
+            units: normalized,
+            property_id: primary?.property_id || '',
+            value: total,
+            broker_commission_value: recalcCommission(total, prev.broker_commission_pct || 0),
+            linked_project_id: primaryProp?.project_id || prev.linked_project_id || ''
+        }));
+    };
+
+    const addUnit = (propertyId: string) => {
+        if (!propertyId || dealUnits.some(u => u.property_id === propertyId)) return;
+        const prop = properties.find(p => p.id === propertyId);
+        applyUnits([...dealUnits, {
+            property_id: propertyId,
+            value: referenceValueOf(prop),
+            is_primary: dealUnits.length === 0
+        }]);
+        setExpandedUnitId(propertyId);
+    };
+
+    const removeUnit = (propertyId: string) => {
+        const rest = dealUnits.filter(u => u.property_id !== propertyId);
+        // Se a principal saiu, a primeira restante assume.
+        applyUnits(rest.map((u, i) => ({ ...u, is_primary: i === 0 })));
+        if (expandedUnitId === propertyId) setExpandedUnitId(null);
+    };
+
+    const setUnitValue = (propertyId: string, value: number) =>
+        applyUnits(dealUnits.map(u => u.property_id === propertyId ? { ...u, value } : u));
+
+    const setPrimaryUnit = (propertyId: string) =>
+        applyUnits(dealUnits.map(u => ({ ...u, is_primary: u.property_id === propertyId })));
+
+    const availableToAdd = useMemo(
+        () => properties.filter(p => !dealUnits.some(u => u.property_id === p.id)),
+        [properties, dealUnits]
+    );
+
+    /** Obras distintas entre as unidades — só para avisar, nunca bloquear. */
+    const mixedProjects = useMemo(() => {
+        const ids = new Set(dealUnits
+            .map(u => properties.find(p => p.id === u.property_id)?.project_id)
+            .filter(Boolean) as string[]);
+        return ids.size > 1;
+    }, [dealUnits, properties]);
+
     const selectedProperty = properties.find(p => p.id === formData.property_id);
+    const expandedProperty = properties.find(p => p.id === (expandedUnitId || formData.property_id));
     const selectedClient = clients.find(c => c.id === formData.client_id);
     const selectedBroker = brokers.find(b => b.id === formData.broker_id);
 
@@ -894,15 +970,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             alert('Selecione um imóvel antes de exportar.');
             return;
         }
-        propertyExportService.generateProposalPDF(formData as PropertyDeal, selectedProperty, selectedClient, org);
+        // Todas as unidades do contrato, na ordem da lista (principal primeiro).
+        const unitProperties = dealUnits
+            .map(u => properties.find(p => p.id === u.property_id))
+            .filter(Boolean) as Property[];
+        propertyExportService.generateProposalPDF(formData as PropertyDeal, selectedProperty, selectedClient, org, unitProperties);
     };
 
     const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
         if (e) e.preventDefault();
 
-        if (!formData.property_id || !formData.client_id) {
-            setActiveTab(!formData.property_id ? 'unidade' : 'cliente');
-            alert('Por favor, selecione o imóvel e o cliente para continuar.');
+        if (dealUnits.length === 0 || !formData.client_id) {
+            setActiveTab(dealUnits.length === 0 ? 'unidade' : 'cliente');
+            alert('Por favor, selecione ao menos um imóvel e o cliente para continuar.');
             return;
         }
 
@@ -961,7 +1041,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // divididos agora que cada um vive na sua própria aba, aponta exatamente
     // onde falta o dado (badge por aba, não mais genérico).
     const hasMissingClient = !formData.client_id;
-    const hasMissingProperty = !formData.property_id;
+    const hasMissingProperty = dealUnits.length === 0;
     const hasBroker = !!formData.broker_id;
     const hasContratoContent = formData.id && (
         ['WAITING_PAYMENT', 'CONTRATO', 'ASSINATURA'].includes(formData.status || '') ||
@@ -1042,7 +1122,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             </div>
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] truncate max-w-xl">
-                                {selectedProperty ? `${selectedProperty.name} • ${selectedProperty.address}` : 'Registro de Ativo Imobiliário'}
+                                {selectedProperty
+                                    ? `${selectedProperty.name}${dealUnits.length > 1 ? ` +${dealUnits.length - 1}` : ''} • ${selectedProperty.address}`
+                                    : 'Registro de Ativo Imobiliário'}
                             </p>
                         </div>
                     </div>
@@ -1251,6 +1333,82 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             )}
 
+                            {/* Vigência / periodicidade / índice — só locação.
+                                Sem estes campos o contrato nasce SEM end_date: as parcelas
+                                caem no fallback de 12 ciclos e nenhum alerta de vencimento
+                                (nem a renovação) é possível. Ver contractService.createFromDeal. */}
+                            {formData.type === 'RENTAL' && (
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between px-1">
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Fim da Vigência</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    // +12 meses − 1 dia, em UTC puro (em UTC-3 o
+                                                    // construtor local retrocede um dia).
+                                                    const base = formData.date || new Date().toISOString().slice(0, 10);
+                                                    const [y, m, d] = base.slice(0, 10).split('-').map(Number);
+                                                    const dt = new Date(Date.UTC(y, m - 1, d));
+                                                    dt.setUTCFullYear(dt.getUTCFullYear() + 1);
+                                                    dt.setUTCDate(dt.getUTCDate() - 1);
+                                                    setFormData({ ...formData, end_date: dt.toISOString().slice(0, 10) });
+                                                }}
+                                                className="text-[11px] font-black uppercase tracking-widest text-purple-600 hover:text-purple-700"
+                                            >
+                                                12 meses
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="date"
+                                            value={formData.end_date || ''}
+                                            onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                                            className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner"
+                                        />
+                                        {formData.end_date && formData.date && formData.end_date <= formData.date && (
+                                            <p className="text-[11px] font-bold text-red-500 px-1">
+                                                O fim da vigência deve ser posterior ao início do contrato.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Periodicidade</label>
+                                            <select
+                                                value={formData.billing_cycle || 'Mensal'}
+                                                onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as PropertyDeal['billing_cycle'] })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
+                                            >
+                                                <option value="Mensal">Mensal</option>
+                                                <option value="Bimestral">Bimestral</option>
+                                                <option value="Semestral">Semestral</option>
+                                                <option value="Anual">Anual</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Índice de Reajuste</label>
+                                            <select
+                                                value={formData.reajuste_index || 'IGP-M'}
+                                                onChange={(e) => setFormData({ ...formData, reajuste_index: e.target.value })}
+                                                className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
+                                            >
+                                                <option value="IGP-M">IGP-M</option>
+                                                <option value="IPCA">IPCA</option>
+                                                <option value="INCC">INCC</option>
+                                                <option value="INCC-M">INCC-M</option>
+                                                <option value="CUB">CUB</option>
+                                                <option value="OUTROS">Outros</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <p className="text-[11px] font-medium text-gray-400 px-1">
+                                        O índice precisa estar cadastrado em Configurações do Sistema para o reajuste ser calculado na renovação.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Checklist de documentos do cliente/comprador — muda conforme
                                 Pessoa Física / Jurídica do cadastro. Persistido em
                                 commercial_deals.doc_checklist. */}
@@ -1318,50 +1476,132 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-purple-600">
                                     <Building className="w-5 h-5" />
-                                    <h3 className="font-black uppercase tracking-widest text-xs">Imóvel da Negociação</h3>
+                                    <h3 className="font-black uppercase tracking-widest text-xs">Imóveis da Negociação</h3>
                                     <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                 </div>
+
+                                <p className="text-xs text-gray-500 px-1">
+                                    Um mesmo contrato pode reunir várias unidades (apartamento, vaga, box).
+                                    O valor de cada uma é editável e o total do contrato é a soma.
+                                </p>
+
+                                {/* Lista das unidades do contrato */}
+                                <div className="space-y-2">
+                                    {dealUnits.length === 0 && (
+                                        <div className="p-6 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-center text-sm text-gray-400">
+                                            Nenhuma unidade adicionada. Selecione abaixo.
+                                        </div>
+                                    )}
+                                    {dealUnits.map(u => {
+                                        const prop = properties.find(p => p.id === u.property_id);
+                                        const isExpanded = (expandedUnitId || formData.property_id) === u.property_id;
+                                        return (
+                                            <div
+                                                key={u.property_id}
+                                                className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${isExpanded ? 'bg-white border-purple-200 shadow-sm' : 'bg-gray-50 border-gray-100'}`}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpandedUnitId(u.property_id)}
+                                                    className="flex-1 text-left min-w-0"
+                                                >
+                                                    <p className="text-sm text-gray-900 truncate">{prop?.name || 'Unidade removida do inventário'}</p>
+                                                    <p className="text-xs text-gray-400 truncate">{prop?.address || '—'}</p>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPrimaryUnit(u.property_id)}
+                                                    title={u.is_primary ? 'Unidade principal do contrato' : 'Definir como unidade principal'}
+                                                    className={`px-2 py-1 rounded-lg border text-xs transition-colors shrink-0 ${u.is_primary ? 'border-purple-200 bg-purple-50 text-purple-600' : 'border-gray-200 text-gray-400 hover:text-purple-600'}`}
+                                                >
+                                                    {u.is_primary ? 'Principal' : 'Tornar principal'}
+                                                </button>
+
+                                                <div className="relative shrink-0">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        value={u.value || ''}
+                                                        onChange={(e) => setUnitValue(u.property_id, parseFloat(e.target.value) || 0)}
+                                                        className="w-36 pl-9 pr-3 py-2 bg-white border border-gray-200 focus:border-purple-500 rounded-xl outline-none text-sm text-right text-gray-700 transition-all"
+                                                        placeholder="0,00"
+                                                    />
+                                                </div>
+
+                                                <ActionIconButton
+                                                    kind="delete"
+                                                    title="Remover unidade do contrato"
+                                                    onClick={() => removeUnit(u.property_id)}
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Adicionar unidade */}
                                 <select
-                                    required
-                                    value={formData.property_id || ''}
-                                    onChange={(e) => {
-                                        const propId = e.target.value;
-                                        const prop = properties.find(p => p.id === propId);
-                                        setFormData({
-                                            ...formData,
-                                            property_id: propId,
-                                            linked_project_id: prop?.project_id || formData.linked_project_id || ''
-                                        });
-                                    }}
-                                    className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-base"
+                                    value=""
+                                    onChange={(e) => addUnit(e.target.value)}
+                                    disabled={availableToAdd.length === 0}
+                                    className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none text-gray-700 transition-all cursor-pointer shadow-inner text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <option value="" disabled>Selecione um imóvel do inventário...</option>
-                                    {properties.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toLocaleString('pt-BR')}</option>
+                                    <option value="">
+                                        {availableToAdd.length === 0
+                                            ? 'Todas as unidades do inventário já estão neste contrato'
+                                            : '+ Adicionar unidade ao contrato...'}
+                                    </option>
+                                    {availableToAdd.map(p => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.name} - R$ {referenceValueOf(p).toLocaleString('pt-BR')}
+                                        </option>
                                     ))}
                                 </select>
 
-                                {selectedProperty && (
+                                {/* Total do contrato */}
+                                {dealUnits.length > 0 && (
+                                    <div className="flex items-center justify-between px-6 py-4 bg-purple-50 rounded-2xl border border-purple-100">
+                                        <span className="text-xs text-purple-500 uppercase tracking-widest">
+                                            Total do contrato · {dealUnits.length} {dealUnits.length === 1 ? 'unidade' : 'unidades'}
+                                        </span>
+                                        <span className="text-2xl text-purple-700 font-mono">
+                                            R$ {unitsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {mixedProjects && (
+                                    <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 rounded-2xl border border-amber-100 text-xs text-amber-700">
+                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                        <span>
+                                            As unidades deste contrato pertencem a obras diferentes. O contrato será
+                                            vinculado à obra da unidade principal.
+                                        </span>
+                                    </div>
+                                )}
+
+                                {expandedProperty && (
                                     <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 flex items-center gap-6 animate-in slide-in-from-left-4 duration-500 shadow-sm">
                                         <div className="w-20 h-20 rounded-xl border-2 border-white shadow-lg overflow-hidden bg-white shrink-0">
-                                            {selectedProperty.images?.[0] ?
-                                                <img src={selectedProperty.images[0]} className="w-full h-full object-cover" alt="Preview" /> :
+                                            {expandedProperty.images?.[0] ?
+                                                <img src={expandedProperty.images[0]} className="w-full h-full object-cover" alt="Preview" /> :
                                                 <div className="w-full h-full flex items-center justify-center text-gray-200"><Building className="w-10 h-10" /></div>
                                             }
                                         </div>
                                         <div className="flex-1">
                                             <div className="flex items-center justify-between mb-2">
-                                                <p className="text-lg font-black text-gray-900 tracking-tight">{selectedProperty.name}</p>
+                                                <p className="text-lg font-black text-gray-900 tracking-tight">{expandedProperty.name}</p>
                                                 <span className="text-xs font-black bg-white px-2 py-1 rounded-lg border border-gray-100 text-purple-600 shadow-sm uppercase tracking-widest">Ativo Disponível</span>
                                             </div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-relaxed">{selectedProperty.address}</p>
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-relaxed">{expandedProperty.address}</p>
                                             <div className="flex items-center gap-4 mt-4">
                                                 <div className="flex items-center gap-1.5 text-gray-400">
                                                     <Maximize2 className="w-3.5 h-3.5" />
-                                                    <span className="text-xs font-black tracking-widest">{selectedProperty.area} m²</span>
+                                                    <span className="text-xs font-black tracking-widest">{expandedProperty.area} m²</span>
                                                 </div>
                                                 <div className="h-3 w-px bg-gray-200" />
-                                                <p className="text-sm font-black text-purple-600 font-mono">R$ {(selectedProperty.price || 0).toLocaleString('pt-BR')}</p>
+                                                <p className="text-sm font-black text-purple-600 font-mono">R$ {(expandedProperty.price || 0).toLocaleString('pt-BR')}</p>
                                                 {formData.linked_project_id && (() => {
                                                     const proj = projects.find(p => p.id === formData.linked_project_id);
                                                     return proj ? (
@@ -1379,18 +1619,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 )}
 
-                                {selectedProperty && (() => {
+                                {expandedProperty && (() => {
                                     const posLabel: Record<string, string> = { FRONT: 'Frente', LATERAL: 'Lateral', BACK: 'Fundos' };
                                     const sunLabel: Record<string, string> = { NORTH: 'Norte', SOUTH: 'Sul', EAST: 'Leste', WEST: 'Oeste' };
                                     const specs = [
-                                        { label: 'Pavimento', icon: <Layers className="w-3.5 h-3.5" />, value: selectedProperty.floor ?? '—' },
-                                        { label: 'Área Privativa', icon: <Maximize2 className="w-3.5 h-3.5" />, value: selectedProperty.private_area ? `${selectedProperty.private_area} m²` : '—' },
-                                        { label: 'Dormitórios', icon: <BedDouble className="w-3.5 h-3.5" />, value: selectedProperty.specs?.bedrooms ?? '—' },
-                                        { label: 'Banheiros', icon: <Bath className="w-3.5 h-3.5" />, value: selectedProperty.specs?.bathrooms ?? '—' },
-                                        { label: 'Suítes', icon: <DoorClosed className="w-3.5 h-3.5" />, value: selectedProperty.specs?.suites ?? '—' },
-                                        { label: 'Vagas', icon: <Car className="w-3.5 h-3.5" />, value: selectedProperty.specs?.parkingSpaces ?? '—' },
-                                        { label: 'Posição', icon: <Building className="w-3.5 h-3.5" />, value: selectedProperty.position_type ? (posLabel[selectedProperty.position_type] || selectedProperty.position_type) : '—' },
-                                        { label: 'Orientação', icon: <Compass className="w-3.5 h-3.5" />, value: selectedProperty.sun_orientation ? (sunLabel[selectedProperty.sun_orientation] || selectedProperty.sun_orientation) : '—' },
+                                        { label: 'Pavimento', icon: <Layers className="w-3.5 h-3.5" />, value: expandedProperty.floor ?? '—' },
+                                        { label: 'Área Privativa', icon: <Maximize2 className="w-3.5 h-3.5" />, value: expandedProperty.private_area ? `${expandedProperty.private_area} m²` : '—' },
+                                        { label: 'Dormitórios', icon: <BedDouble className="w-3.5 h-3.5" />, value: expandedProperty.specs?.bedrooms ?? '—' },
+                                        { label: 'Banheiros', icon: <Bath className="w-3.5 h-3.5" />, value: expandedProperty.specs?.bathrooms ?? '—' },
+                                        { label: 'Suítes', icon: <DoorClosed className="w-3.5 h-3.5" />, value: expandedProperty.specs?.suites ?? '—' },
+                                        { label: 'Vagas', icon: <Car className="w-3.5 h-3.5" />, value: expandedProperty.specs?.parkingSpaces ?? '—' },
+                                        { label: 'Posição', icon: <Building className="w-3.5 h-3.5" />, value: expandedProperty.position_type ? (posLabel[expandedProperty.position_type] || expandedProperty.position_type) : '—' },
+                                        { label: 'Orientação', icon: <Compass className="w-3.5 h-3.5" />, value: expandedProperty.sun_orientation ? (sunLabel[expandedProperty.sun_orientation] || expandedProperty.sun_orientation) : '—' },
                                     ];
                                     return (
                                         <div className="grid grid-cols-4 gap-3 animate-in slide-in-from-left-4 duration-500">
@@ -1444,27 +1684,28 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
 
                                 {/* Valor */}
+                                {/* Valor — derivado da SOMA das unidades (aba Unidade).
+                                    Read-only de propósito: com N unidades no contrato, um
+                                    total digitado à mão divergiria do rateio por unidade. */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Valor do Fechamento</label>
                                     <div className="relative group">
-                                        <span className="absolute left-8 top-1/2 -translate-y-1/2 font-mono font-bold text-purple-300 group-focus-within:text-white transition-colors">BRL</span>
+                                        <span className="absolute left-8 top-1/2 -translate-y-1/2 font-mono font-bold text-purple-300 transition-colors">BRL</span>
                                         <input
-                                            required
-                                            type="number"
-                                            value={formData.value || ''}
-                                            onChange={(e) => {
-                                                const newValue = parseFloat(e.target.value) || 0;
-                                                const pct = formData.broker_commission_pct || 0;
-                                                setFormData({
-                                                    ...formData,
-                                                    value: newValue,
-                                                    broker_commission_value: recalcCommission(newValue, pct)
-                                                });
-                                            }}
-                                            className="w-full pl-20 pr-8 py-6 bg-purple-600 text-white placeholder-purple-300 rounded-[2rem] outline-none font-black text-3xl shadow-xl shadow-purple-600/20 focus:scale-[1.01] transition-all"
+                                            type="text"
+                                            readOnly
+                                            value={(formData.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            className="w-full pl-20 pr-8 py-6 bg-purple-600 text-white placeholder-purple-300 rounded-[2rem] outline-none font-black text-3xl shadow-xl shadow-purple-600/20 transition-all cursor-default"
                                             placeholder="0,00"
                                         />
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('unidade')}
+                                        className="text-xs text-gray-400 hover:text-purple-600 px-1 transition-colors"
+                                    >
+                                        Soma de {dealUnits.length} {dealUnits.length === 1 ? 'unidade' : 'unidades'} — editar na aba Unidade
+                                    </button>
                                 </div>
 
                                 {/* Datas */}

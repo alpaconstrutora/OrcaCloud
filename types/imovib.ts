@@ -149,6 +149,24 @@ export interface TowerMatrixConfig {
     top_orientation?: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST';
 }
 
+/**
+ * Uma unidade que compõe uma negociação/contrato comercial (tabela
+ * `commercial_deal_units`). Um contrato de locação pode reunir apartamento +
+ * vaga + box sob um único inquilino; cada linha carrega o valor daquela unidade
+ * e a soma alimenta `PropertyDeal.value`.
+ */
+export interface DealUnit {
+    id?: string;
+    deal_id?: string;
+    property_id: string;
+    organization_id?: string;
+    value: number;
+    /** A unidade principal é a que espelha `PropertyDeal.property_id`. */
+    is_primary?: boolean;
+    /** Campo transitório de UI (nome da unidade) — nunca vai ao banco. */
+    _propertyName?: string;
+}
+
 export interface PropertyDeal {
     id: string;
     organization_id?: string;
@@ -156,7 +174,15 @@ export interface PropertyDeal {
      *  organização entre as negociações de Venda de Ativos (type='SALE'). Estável:
      *  atribuído na criação e nunca reaproveitado. */
     code?: string;
+    /** Unidade PRINCIPAL do contrato. Mantida por compatibilidade com todo o
+     *  código que lê a coluna direta (Dashboard, Corretor, BI, Espelho); a lista
+     *  completa vive em `units`. */
     property_id: string;
+    /** Todas as unidades do contrato. Derivada de `commercial_deal_units` na
+     *  leitura e persistida por `commercialService.saveDeal` na escrita — NÃO é
+     *  coluna de `commercial_deals`. Quando presente, manda em `property_id`
+     *  (a is_primary) e em `value` (a soma). */
+    units?: DealUnit[];
     client_id: string;
     linked_project_id?: string;
     type: 'SALE' | 'RENTAL' | 'SERVICE';
@@ -183,6 +209,12 @@ export interface PropertyDeal {
      * regime de competência para datar os tributos gerados (taxPayableService).
      */
     rental_competencia_offset_months?: number;
+    /** Só locação. Fim da vigência (YYYY-MM-DD) — vira contracts.end_date e delimita as parcelas. */
+    end_date?: string;
+    /** Só locação. Periodicidade do faturamento; default Mensal em createFromDeal. */
+    billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
+    /** Só locação. Índice de reajuste — MESMOS nomes de contract_index_values.index_name. */
+    reajuste_index?: string;
     /** Checklist de documentos do cliente/comprador (mapa chave→marcado). As chaves
      *  variam conforme o tipo de pessoa (PF/PJ) — ver DEAL_DOC_CHECKLIST em DealModal. */
     doc_checklist?: Record<string, boolean>;

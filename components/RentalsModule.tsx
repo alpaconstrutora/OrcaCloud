@@ -33,10 +33,14 @@ import RentalPricingIntelligenceModal from './RentalPricingIntelligenceModal';
 import { rentalPricingService } from '../services/rentalPricingService';
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
+import RentalRenewals from './rentals/RentalRenewals';
+import { contractRenewalService } from '../services/contractRenewalService';
 
 interface RentalsModuleProps {
     organizationId?: string;
 }
+
+type RentalsTab = 'inventory' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables';
 
 // Valor de locação canônico da unidade: rental_price (gravado pela Inteligência
 // de Aluguéis e pela Tabela de aluguéis); fallback para price ("Aluguel base"
@@ -46,9 +50,11 @@ const rentalValueOf = (p: Partial<Property>): number =>
     (p.rental_price != null ? Number(p.rental_price) : (p.price != null ? Number(p.price) : 0));
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'brokers' | 'price-tables'>(
-        (localStorage.getItem('rentals_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'brokers' | 'price-tables') || 'inventory'
+    const [activeTab, setActiveTab] = useState<RentalsTab>(
+        (localStorage.getItem('rentals_active_tab') as RentalsTab) || 'inventory'
     );
+    // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
+    const [renewalsBadge, setRenewalsBadge] = useState(0);
     const [properties, setProperties] = useState<Property[]>([]);
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -110,6 +116,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
     useEffect(() => {
         loadData();
+    }, [organizationId]);
+
+    // Badge da aba Renovações. REGRA #5: org nula não bloqueia — a RLS recorta.
+    useEffect(() => {
+        let active = true;
+        contractRenewalService.listRentalsExpiring(organizationId, 30)
+            .then(list => { if (active) setRenewalsBadge(list.length); })
+            .catch(err => console.error('[Rentals] Erro ao contar renovações pendentes:', err));
+        return () => { active = false; };
     }, [organizationId]);
 
     // Habilitação de corretor por empreendimento (Portal do Corretor) — carrega
@@ -400,11 +415,24 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // Contratos ordenáveis (§6.3) — Imóvel/Cliente não são campos diretos do
     // negócio, então resolvemos o nome uma vez antes de comparar.
     const sortedDeals = useMemo(() => {
-        const withLookup = deals.map(d => ({
-            ...d,
-            _propertyName: properties.find(p => p.id === d.property_id)?.name || '',
-            _clientName: clients.find(c => c.id === d.client_id)?.name || '',
-        }));
+        const withLookup = deals.map(d => {
+            // Um contrato pode reunir várias unidades — o rótulo mostra a
+            // principal + a contagem das demais; o title lista todas.
+            const unitIds = (d.units && d.units.length > 0)
+                ? d.units.map(u => u.property_id)
+                : (d.property_id ? [d.property_id] : []);
+            const unitNames = unitIds
+                .map(id => properties.find(p => p.id === id)?.name || '')
+                .filter(Boolean);
+            const primaryName = properties.find(p => p.id === d.property_id)?.name || unitNames[0] || '';
+            return {
+                ...d,
+                _propertyName: primaryName,
+                _unitCount: unitIds.length,
+                _unitNames: unitNames.join(' + '),
+                _clientName: clients.find(c => c.id === d.client_id)?.name || '',
+            };
+        });
         if (!dealSortConfig) return withLookup;
         const { key, direction } = dealSortConfig;
         return [...withLookup].sort((a: any, b: any) => {
@@ -455,7 +483,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         };
     }, [properties, deals]);
 
-    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
     const getStatusColor = (status: PropertyStatus) => {
         switch (status) {
             case PropertyStatus.AVAILABLE: return 'text-emerald-600';
@@ -715,7 +743,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             </div>
 
-            {/* KPIs — §20/Anatomia (UI UX tabela.md): sempre logo após o título, ANTES
+            {/* KPIs — §20/Anatomia (ui_ux_guia_unificado.md): sempre logo após o título, ANTES
                 das abas. Antes desta correção, a grade de KPI só existia dentro da
                 subaba "Unidades" e vinha depois da barra de abas — a mesma classe de
                 bug do FiscalModule (abas/botões do pai antes do KPI do filho, §3.2). */}
@@ -727,7 +755,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Toolbar de abas — UI UX tabela.md §3 / ui_ux_standard_guide.md §19.1:
+            {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1:
                 card branco externo (mesmo peso visual da toolbar de botões abaixo)
                 envolvendo o trilho cinza interno onde ficam os botões das abas.
                 Antes só existia o trilho, sem o card — abas ficavam "soltas" na
@@ -757,6 +785,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             Resultados
                         </button>
                         <button
+                            onClick={() => setActiveTab('renewals')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'renewals' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Renovações
+                            {renewalsBadge > 0 && (
+                                <span className="ml-0.5 px-1.5 rounded-[6px] bg-amber-100 text-amber-700 text-xs font-medium">
+                                    {renewalsBadge}
+                                </span>
+                            )}
+                        </button>
+                        <button
                             onClick={() => setActiveTab('brokers')}
                             className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                         >
@@ -774,7 +814,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
-            {/* Toolbar de botões — UI UX tabela.md §4. Esta tela não tem controles de
+            {/* Toolbar de botões — ui_ux_guia_unificado.md §5.3. Esta tela não tem controles de
                 escopo reais (não é conta/competência/período) — "Relatórios" fica à
                 esquerda como ação secundária, a ação primária (criar) à direita. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
@@ -857,7 +897,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             onEdit={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }}
                                             onDelete={() => handleDeleteProperty(property.id)}
                                             onRegisterDeal={() => {
-                                                setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'RENTAL', value: rentalValueOf(property), date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                setEditingDeal({
+                                                    id: '', property_id: property.id, client_id: '', type: 'RENTAL',
+                                                    value: rentalValueOf(property), date: new Date().toISOString().split('T')[0], status: 'PENDING',
+                                                    // O contrato nasce com esta unidade; outras podem ser
+                                                    // acrescentadas na aba Unidade do DealModal.
+                                                    units: [{ property_id: property.id, value: rentalValueOf(property), is_primary: true }]
+                                                });
                                                 setIsDealModalOpen(true);
                                             }}
                                             getStatusColor={getStatusColor}
@@ -971,7 +1017,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <button
                                                                 onClick={() => {
-                                                                    setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'RENTAL', value: rentalValueOf(property), date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                                    setEditingDeal({
+                                                    id: '', property_id: property.id, client_id: '', type: 'RENTAL',
+                                                    value: rentalValueOf(property), date: new Date().toISOString().split('T')[0], status: 'PENDING',
+                                                    // O contrato nasce com esta unidade; outras podem ser
+                                                    // acrescentadas na aba Unidade do DealModal.
+                                                    units: [{ property_id: property.id, value: rentalValueOf(property), is_primary: true }]
+                                                });
                                                                     setIsDealModalOpen(true);
                                                                 }}
                                                                 className="text-emerald-600 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-lg transition-all"
@@ -1173,7 +1225,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 <span className="text-xs font-medium text-purple-600 mb-1 inline-block">
                                                     Locação ativa
                                                 </span>
-                                                <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || 'Imóvel em referência'}</h4>
+                                                <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors"
+                                                    title={deal._unitNames || undefined}>
+                                                    {deal._propertyName || property?.name || 'Imóvel em referência'}
+                                                    {deal._unitCount > 1 && (
+                                                        <span className="ml-1.5 text-sm font-normal text-gray-400">+{deal._unitCount - 1}</span>
+                                                    )}
+                                                </h4>
                                                 <div className="flex items-center gap-2 mt-2 text-gray-500">
                                                     <User className="w-4 h-4" />
                                                     <span className="text-sm font-normal">
@@ -1240,8 +1298,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
                                                         #{deal.id.substring(0, 8).toUpperCase()}
                                                     </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                        {property?.name || '---'}
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors"
+                                                        title={deal._unitNames || undefined}>
+                                                        {deal._propertyName || property?.name || '---'}
+                                                        {deal._unitCount > 1 && (
+                                                            <span className="ml-1.5 text-xs text-gray-400">+{deal._unitCount - 1}</span>
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                         {client?.name || 'Não vinculado'}
@@ -1296,6 +1358,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     />
                 )
             }
+
+            {activeTab === 'renewals' && (
+                <RentalRenewals
+                    organizationId={effectiveOrganizationId}
+                    clients={clients}
+                    onRenewed={() => { loadData(); notify('Contrato renovado com sucesso.'); }}
+                />
+            )}
 
             {activeTab === 'brokers' && (
                 <div className="space-y-6">

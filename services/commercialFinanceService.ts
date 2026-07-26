@@ -91,13 +91,40 @@ export const commercialFinanceService = {
             }
         } catch (e) { console.error('Error fetching ref names:', e); }
 
+        // Um contrato pode reunir várias unidades (apto + vaga + box). O rateio
+        // por unidade fica na tabela commercial_deal_units; aqui basta o rótulo
+        // completo — a cobrança continua sendo UMA série de parcelas sobre o total.
+        let propertyIds: string[] = deal.property_id ? [deal.property_id] : [];
+        let propertyNames = propertyName;
+        try {
+            const { data: unitRows } = await supabase
+                .from('commercial_deal_units')
+                .select('property_id, is_primary')
+                .eq('deal_id', deal.id);
+            if (unitRows && unitRows.length > 0) {
+                propertyIds = unitRows.map(u => u.property_id as string);
+                const { data: props } = await supabase
+                    .from('commercial_properties')
+                    .select('id, name')
+                    .in('id', propertyIds);
+                const nameById = new Map((props || []).map(p => [p.id as string, (p.name as string) || '']));
+                propertyNames = propertyIds.map(id => nameById.get(id) || '').filter(Boolean).join(' + ') || propertyName;
+            }
+        } catch (e) { console.error('Error fetching deal units:', e); }
+
         const metadata = {
             dealId: deal.id,
             dealType: deal.type,
             clientId: deal.client_id,
             clientName,
+            // Unidade principal — mantida para não quebrar os consumidores legados
+            // que leem metadata.propertyId (BI, Conciliação, Portal do Cliente).
             propertyId: deal.property_id,
             propertyName,
+            /** Todas as unidades do contrato. */
+            propertyIds,
+            /** Rótulo concatenado ("Apto 101 + Vaga 12"). */
+            propertyNames,
             linkedProjectId: deal.linked_project_id
         };
 
@@ -651,6 +678,76 @@ export const commercialFinanceService = {
 
         // Remover comissão do Portal do Corretor
         await this.deleteBrokerCommissionFromPortal(dealId);
+    },
+
+    /**
+     * Remove as parcelas de um negócio a partir de uma data (não o negócio todo).
+     *
+     * Usado pela RENOVAÇÃO de locação (contractRenewalService): a partir do
+     * início do contrato-filho quem fatura é o filho, então o que a negociação
+     * tiver marcado daquela data em diante viraria cobrança em duplicidade.
+     *
+     * Mesmo cuidado do `deleteDealInstallments`: mexe nas DUAS camadas — o JSONB
+     * do "Gestão Comercial" (fonte) e o espelho em `internal_transactions`
+     * (Contas a Receber). Limpar só o espelho não adianta: o próximo
+     * `syncDealToFinance` o recriaria a partir do JSONB.
+     *
+     * Nunca toca em parcela PAGA/RECEBIDA/conciliada — dinheiro que entrou fica.
+     */
+    async deleteDealInstallmentsFrom(dealId: string, organizationId: string | undefined, fromDate: string): Promise<number> {
+        if (!organizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
+        let removed = 0;
+
+        const { data: allProjects, error } = await supabase
+            .from('projects')
+            .select('id, name, settings')
+            .eq('name', 'Gestão Comercial')
+            .filter('settings->>organizationId', 'eq', organizationId);
+        if (error || !allProjects) {
+            console.error('[COMMERCIAL-FINANCE] Falha ao carregar projetos para corte de parcelas:', error);
+            return 0;
+        }
+
+        for (const proj of allProjects) {
+            const info = (proj.settings as ProjectSettings)?.financialInfo;
+            if (!info?.installments) continue;
+
+            const kept = info.installments.filter((i: PaymentInstallment) => {
+                if (i.dealId !== dealId) return true;
+                if (i.status === 'PAID') return true;
+                if ((i.dueDate || '').slice(0, 10) < fromDate) return true;
+                removed++;
+                return false;
+            });
+            if (kept.length === info.installments.length) continue;
+
+            (proj.settings as ProjectSettings).financialInfo = { ...info, installments: kept };
+            await projectService.saveProject(proj as unknown as Parameters<typeof projectService.saveProject>[0]);
+        }
+
+        // Espelho em internal_transactions. Mesmo padrão de reference_id do
+        // deleteDealInstallments, e sem filtrar por source_system (deal ligado a
+        // obra real materializa como 'PROJECT', não 'COMMERCIAL').
+        try {
+            const { data: mirrored } = await supabase
+                .from('internal_transactions')
+                .select('id, status, business_status, due_date')
+                .eq('organization_id', organizationId)
+                .gte('due_date', fromDate)
+                .like('reference_id', `tx-${dealId}-%`);
+            const toDelete = (mirrored || [])
+                .filter((r: { status?: string; business_status?: string }) =>
+                    r.status !== 'CONCILIATED' && !['RECEBIDO', 'PAGO'].includes(r.business_status ?? ''))
+                .map((r: { id: string }) => r.id);
+            if (toDelete.length) {
+                await supabase.from('internal_transactions').delete().in('id', toDelete);
+            }
+        } catch (e) {
+            console.error('[COMMERCIAL-FINANCE] Erro ao cortar espelho em internal_transactions:', e);
+        }
+
+        console.log(`[COMMERCIAL-FINANCE] Corte de parcelas do Deal ${dealId} a partir de ${fromDate}: ${removed} removida(s).`);
+        return removed;
     },
 
     /**

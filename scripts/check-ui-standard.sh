@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Autoverificação mecânica do docs/ui_ux_standard_guide.md (ver CLAUDE.md,
+# Autoverificação mecânica do docs/ui_ux_guia_unificado.md (ver CLAUDE.md,
 # REGRA OBRIGATÓRIA #1). Roda 4 checagens binárias — sem exceção "opcional",
 # sem julgamento humano no meio do caminho. Exit 1 se achar qualquer violação.
 #

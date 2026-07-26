@@ -294,7 +294,7 @@ interface SortableHeaderProps {
   className?: string;
   /** Conteúdo extra dentro do <th> (ex.: alça de redimensionar coluna). Opcional — quem não passar não muda em nada. */
   children?: React.ReactNode;
-  /** Default true (padrão histórico). false = sentence case, sem tracking-wider — ver ui_ux_standard_guide.md §6.2. */
+  /** Default true (padrão histórico). false = sentence case, sem tracking-wider — ver ui_ux_guia_unificado.md §6.2. */
   uppercase?: boolean;
 }
 

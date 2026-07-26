@@ -5,7 +5,7 @@
 
 ---
 
-## REGRA OBRIGATÓRIA #1 — Padrão de UI (`docs/ui_ux_standard_guide.md`)
+## REGRA OBRIGATÓRIA #1 — Padrão de UI (`docs/ui_ux_guia_unificado.md`)
 
 **Gatilho:** qualquer edição que toque tabela, KPI card, toolbar, busca, badge de
 status, coluna de ações, modal de confirmação, toast, ou **qualquer célula com
@@ -19,7 +19,7 @@ abaixo não é opcional e não é "boa vontade" — é passo obrigatório do tra
 
 ### Protocolo (sem pular etapa, sem exceção)
 
-1. **Antes de editar**: ler `docs/ui_ux_standard_guide.md` inteiro (não só a seção
+1. **Antes de editar**: ler `docs/ui_ux_guia_unificado.md` inteiro (não só a seção
    que parece relevante — o documento é curto o suficiente para ler completo).
 2. **Depois de editar**: rodar `scripts/check-ui-standard.sh` **nos arquivos
    que você tocou**, não em amostra, não "por cima":
@@ -51,7 +51,7 @@ O protocolo de cima é pra quando você está editando uma tela. Quando o pedido
 é um **levantamento** ("liste o que está e o que não está implementado",
 "audite 100%", "confere se bate com o guia"), use o
 **`CHECKLIST DE AUDITORIA COMPLETA`** que fica dentro do próprio
-`docs/ui_ux_standard_guide.md` (logo após o `CHECKLIST DE APLICAÇÃO`) — ele
+`docs/ui_ux_guia_unificado.md` (logo após o `CHECKLIST DE APLICAÇÃO`) — ele
 lista todas as seções do guia e exige veredito + evidência (`arquivo:linha`)
 para cada uma, sem pular nenhuma, mesmo as que "obviamente não se aplicam".
 Só é permitido declarar "100% auditado" depois dessa lista existir por
@@ -64,7 +64,7 @@ do guia (KPI cards, busca persistida, ColumnConfigButton), mas os `LazySelect`
 dentro das colunas Cliente/Fornecedor, Categoria, Obra e Centro de Custo
 continuaram com `text-xs font-bold uppercase` — fora do padrão — porque a
 verificação não olhou para dentro dos componentes das células. O usuário teve
-que apontar isso pelo print. Ver `docs/ui_ux_standard_guide.md` §7.1.
+que apontar isso pelo print. Ver `docs/ui_ux_guia_unificado.md` §7.1.
 
 2026-07-09: pedido explícito de "listar 100% do padrão" em `ClientList.tsx` foi
 respondido com uma auditoria por amostragem (focada nos problemas mais óbvios),
@@ -73,7 +73,7 @@ primeira lista; quando o usuário perguntou diretamente "auditou 100%?", a
 resposta consertou o §17 mas ainda não recontou §6.1/§6.2 do zero — e mesmo
 assim foi declarado "18/18 auditado". O usuário perdeu a confiança no relatório
 de conformidade por causa disso. Ver `CHECKLIST DE AUDITORIA COMPLETA` em
-`docs/ui_ux_standard_guide.md`.
+`docs/ui_ux_guia_unificado.md`.
 
 ---
 

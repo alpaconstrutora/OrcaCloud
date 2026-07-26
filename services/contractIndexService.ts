@@ -14,6 +14,21 @@ export interface ContractIndexValue {
 
 const fmt = (d: Date) => d.toISOString().slice(0, 10).replace(/-\d{2}$/, '-01');
 
+const INDEX_NAMES: IndexName[] = ['INCC', 'INCC-M', 'IPCA', 'IGP-M', 'CUB', 'OUTROS'];
+
+/**
+ * Normaliza o nome do índice para o vocabulário de `contract_index_values`.
+ * Necessário porque contratos antigos foram gravados com 'IGPM'/'INCCM' (sem
+ * hífen) e `getClosestTo` faz match exato — o reajuste automático nunca
+ * encontrava a série e a fila acusava "índice não encontrado".
+ */
+export function normalizeIndexName(raw?: string | null): IndexName | undefined {
+    if (!raw) return undefined;
+    const up = raw.trim().toUpperCase().replace(/[\s.]/g, '');
+    const direct = INDEX_NAMES.find(n => n.replace('-', '') === up.replace('-', ''));
+    return direct ?? (INDEX_NAMES.includes(up as IndexName) ? (up as IndexName) : 'OUTROS');
+}
+
 export const contractIndexService = {
     /** Lista os N meses mais recentes de um índice (org ou global) */
     list: async (

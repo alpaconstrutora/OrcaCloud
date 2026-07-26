@@ -63,6 +63,12 @@ export interface Contract {
     // `contract_guarantees`; aqui ficam só os campos diretos do contrato de aluguel.
     guarantor_name?: string;            // Fiador (pessoa física)
     rescission_penalty_months?: number; // Multa rescisória em nº de aluguéis
+    // Renovação de locação — o filho é um contrato NOVO (não um aditivo), com
+    // número, vigência e parcelas próprias. Ver services/contractRenewalService.ts.
+    parent_contract_id?: string;        // Contrato anterior que este substitui (NULL = original)
+    renewal_seq?: number;               // 1 = primeira renovação da cadeia
+    renewed_at?: string;                // Quando a renovação foi efetivada
+    renewal_notice_days?: number;       // Antecedência do alerta (NULL = padrão do cron)
     retention_rate: number;
     responsible_email?: string;
     signed_contract_url?: string;

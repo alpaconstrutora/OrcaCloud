@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { financialService } from './financialService';
 import { projectService } from './projectService';
 import { approvalService } from './approvalService';
+import { normalizeIndexName } from './contractIndexService';
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import {
@@ -130,6 +131,86 @@ async function removeContractTransactions(contractId: string, orgId: string | un
             }
         } catch (e) { console.error('[CONTRACTS] removeContractTransactions vault error:', e); }
     }
+}
+
+/**
+ * Remove as transações do contrato geradas A PARTIR de uma data (parcelas no
+ * JSONB do projeto/vault). Variante de `removeContractTransactions` usada pela
+ * renovação: ao renovar, só as parcelas FUTURAS do contrato-pai são cortadas —
+ * as anteriores ao início do filho e as já pagas permanecem, senão o histórico
+ * financeiro do pai deixaria de bater.
+ */
+export async function removeContractTransactionsFrom(
+    contractId: string,
+    orgId: string | undefined,
+    projectId: string | undefined,
+    fromDate: string,
+): Promise<number> {
+    const tag = `[contract:${contractId}]`;
+    const keep = (t: any) => {
+        if (!(t.notes || '').includes(tag)) return true;          // não é deste contrato
+        if (t.status === 'PAID') return true;                     // pago nunca é removido
+        return (t.date || '').slice(0, 10) < fromDate;            // anterior ao corte, mantém
+    };
+
+    if (projectId) {
+        try {
+            const project = await projectService.loadProject(projectId);
+            if (project) {
+                const info = (project.settings as any)?.financialInfo;
+                if (!info) return 0;
+                const before = (info.transactions || []).length;
+                const cleaned = (info.transactions || []).filter(keep);
+                if (cleaned.length !== before) {
+                    await projectService.saveProject({
+                        ...project,
+                        settings: { ...project.settings, financialInfo: { ...info, transactions: cleaned } }
+                    });
+                }
+                return before - cleaned.length;
+            }
+        } catch (e) { console.error('[CONTRACTS] removeContractTransactionsFrom project error:', e); }
+        return 0;
+    }
+
+    if (orgId) {
+        try {
+            const vault = await findVault(orgId);
+            if (!vault) return 0;
+            const vaultInfo = vault.settings?.financialInfo;
+            if (!vaultInfo) return 0;
+            const before = (vaultInfo.transactions || []).length;
+            const cleaned = (vaultInfo.transactions || []).filter(keep);
+            if (cleaned.length !== before) {
+                await supabase.from('projects').update({
+                    settings: { ...vault.settings, financialInfo: { ...vaultInfo, transactions: cleaned } }
+                }).eq('id', vault.id);
+            }
+            return before - cleaned.length;
+        } catch (e) { console.error('[CONTRACTS] removeContractTransactionsFrom vault error:', e); }
+    }
+    return 0;
+}
+
+/**
+ * Próximo número da sequência de LOCAÇÃO (`CL-{ano}-{seq}`), independente da de
+ * vendas. Deriva do MAIOR sufixo existente, não de COUNT(*): com contagem, a
+ * exclusão de um contrato faz o próximo número repetir um já usado e a
+ * idempotência por número passa a casar com contrato alheio.
+ * Usado por `createFromDeal` e pela renovação (contractRenewalService).
+ */
+export async function nextRentalNumber(orgId: string, year: number): Promise<string> {
+    const { data: last } = await supabase
+        .from('contracts')
+        .select('number')
+        .eq('organization_id', orgId)
+        .eq('domain', 'LOCACAO')
+        .like('number', `CL-${year}-%`)
+        .order('number', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    const lastSeq = parseInt((last?.number || '').split('-').pop() || '0', 10) || 0;
+    return `CL-${year}-${String(lastSeq + 1).padStart(3, '0')}`;
 }
 
 // Returns all measurement IDs for a contract (used to clean up measurement-based transactions)
@@ -614,6 +695,7 @@ export const contractService = {
         end_date?: string;
         billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
         reajuste_index?: string;
+        custom_installments?: { value: number }[];
     }, domain: 'VENDAS' | 'LOCACAO' = 'VENDAS'): Promise<Contract> => {
         if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
         if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
@@ -645,18 +727,25 @@ export const contractService = {
             return existing;
         }
 
-        // Título com o nome da unidade, quando disponível.
+        // Título com o nome da(s) unidade(s). Um contrato de locação pode reunir
+        // várias (apto + vaga + box) — todas entram no título.
         let unitLabel = '';
-        if (deal.property_id) {
-            try {
-                const { data: prop } = await supabase
+        try {
+            const { data: unitRows } = await supabase
+                .from('commercial_deal_units')
+                .select('property_id')
+                .eq('deal_id', deal.id);
+            const ids = (unitRows || []).map(u => u.property_id as string);
+            if (ids.length === 0 && deal.property_id) ids.push(deal.property_id);
+            if (ids.length > 0) {
+                const { data: props } = await supabase
                     .from('commercial_properties')
-                    .select('name')
-                    .eq('id', deal.property_id)
-                    .maybeSingle();
-                unitLabel = (prop?.name || '').toString().trim();
-            } catch { /* título sem unidade, não bloqueia */ }
-        }
+                    .select('id, name')
+                    .in('id', ids);
+                const nameById = new Map((props || []).map(p => [p.id as string, ((p.name as string) || '').trim()]));
+                unitLabel = ids.map(id => nameById.get(id) || '').filter(Boolean).join(' + ');
+            }
+        } catch { /* título sem unidade, não bloqueia */ }
 
         // Gera número: usa o do deal se preenchido; senão sequência própria do domínio.
         let number = (deal.contract_number && deal.contract_number.trim())
@@ -666,20 +755,7 @@ export const contractService = {
             const year = new Date().getFullYear();
             if (isRental) {
                 // Locação tem sua própria sequência (CL-), independente das vendas.
-                // Deriva do MAIOR sufixo existente, não de COUNT(*): com contagem, a
-                // exclusão de um contrato faz o próximo número repetir um já usado, e
-                // a idempotência por número abaixo passa a casar com contrato alheio.
-                const { data: last } = await supabase
-                    .from('contracts')
-                    .select('number')
-                    .eq('organization_id', deal.organization_id)
-                    .eq('domain', 'LOCACAO')
-                    .like('number', `${cfg.numberPrefix}-${year}-%`)
-                    .order('number', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                const lastSeq = parseInt((last?.number || '').split('-').pop() || '0', 10) || 0;
-                number = `${cfg.numberPrefix}-${year}-${String(lastSeq + 1).padStart(3, '0')}`;
+                number = await nextRentalNumber(deal.organization_id, year);
             } else {
                 try {
                     number = await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
@@ -747,6 +823,28 @@ export const contractService = {
                     - Date.parse(deal.date.slice(0, 10) + 'T00:00:00Z')) / 86400000))
             : undefined;
 
+        // Valor do contrato.
+        //
+        // ⚠️ Em contrato RECORRENTE, `original_value` é o valor de CADA parcela —
+        // é ele que syncRecurringToFinance grava em todo lançamento gerado. Mas
+        // `deal.value` de uma locação é o valor TOTAL do contrato (36 meses ×
+        // aluguel). Gravar o total aqui fazia cada parcela nascer com o valor do
+        // contrato inteiro; o erro ficou latente enquanto locação nascia sem
+        // `end_date` (sem ela o sync nunca rodava) e só apareceu ao capturar a
+        // vigência no DealModal. Caso real: CL-2026-001, aluguel de R$ 1.000
+        // gravado como R$ 36.000.
+        //
+        // Fonte da parcela, nesta ordem: plano de parcelas do deal → total ÷ nº
+        // de parcelas → total (deal sem parcelamento, aí o valor já é o mensal).
+        const rentalInstallmentValue = (() => {
+            const first = deal.custom_installments?.[0]?.value;
+            if (first && first > 0) return first;
+            if (deal.installments && deal.installments > 1 && deal.value > 0) {
+                return parseFloat((deal.value / deal.installments).toFixed(2));
+            }
+            return deal.value || 0;
+        })();
+
         const payload = {
             deal_id: deal.id,
             organization_id: deal.organization_id,
@@ -761,7 +859,8 @@ export const contractService = {
             direction: (isRental ? 'INCOMING' : 'OUTGOING') as 'INCOMING' | 'OUTGOING',
             domain,
             status,
-            original_value: deal.value || 0,
+            // Locação: valor da PARCELA (ver rentalInstallmentValue). Vendas: total.
+            original_value: isRental ? rentalInstallmentValue : (deal.value || 0),
             start_date: deal.date || new Date().toISOString().split('T')[0],
             is_recurring: isRental,
             ...(isRental ? {
@@ -769,7 +868,10 @@ export const contractService = {
                 due_day: dueDay,
                 payment_days: paymentDays,
                 end_date: deal.end_date || undefined,
-                reajuste_index: deal.reajuste_index || 'IGPM',
+                // normalizeIndexName: o default antigo era 'IGPM' (sem hífen), que não
+                // casa com nenhum index_name de contract_index_values ('IGP-M') — a fila
+                // de reajuste falhava com "índice não encontrado" em TODO contrato de locação.
+                reajuste_index: normalizeIndexName(deal.reajuste_index) || 'IGP-M',
                 reajuste_data_base: deal.date || undefined,
                 reajuste_proximo: nextAdjustment,
             } : {}),
@@ -930,8 +1032,24 @@ export const contractService = {
             await syncAVistaToFinance(newContract);
         }
 
-        // Auto-generate installments for recurring contracts with an end date
-        if (newContract.is_recurring && newContract.start_date && newContract.end_date && newContract.original_value > 0) {
+        // Auto-generate installments for recurring contracts with an end date.
+        //
+        // ⚠️ LOCAÇÃO ORIGINAL é exceção: quem fatura o aluguel do contrato
+        // original é a NEGOCIAÇÃO (decisão de 2026-07-26). Aquelas parcelas
+        // vivem em `internal_transactions` com `source_system='COMMERCIAL'` e
+        // `reference_id='tx-{dealId}-...'`, geradas por
+        // commercialFinanceService.syncDealToFinance. Gerar aqui também criaria
+        // uma SEGUNDA série do mesmo aluguel — duplicidade para o inquilino.
+        // Enquanto locação nascia sem `end_date` isso nunca acontecia; ao
+        // capturar a vigência no DealModal, passaria a acontecer em todo contrato.
+        //
+        // A RENOVAÇÃO é o contrário: o período renovado não existe na negociação
+        // (ela só conhece a vigência original), então o contrato-filho fatura.
+        // Não há sobreposição — o filho começa no dia seguinte ao fim do pai, e
+        // a renovação corta o que passar disso na série do deal.
+        const cAny = newContract as { domain?: string; parent_contract_id?: string };
+        const isLocacaoOriginal = cAny.domain === 'LOCACAO' && !cAny.parent_contract_id;
+        if (!isLocacaoOriginal && newContract.is_recurring && newContract.start_date && newContract.end_date && newContract.original_value > 0) {
             try {
                 await syncRecurringToFinance(newContract);
             } catch (e) {
@@ -1000,6 +1118,17 @@ export const contractService = {
     // Para recorrentes sem end_date: gera os próximos 12 meses.
     // Para recorrentes com end_date: gera do mês atual até o fim.
     syncContractToFinance: async (contract: Contract): Promise<{ count: number }> => {
+        // Locação ORIGINAL é faturada pela negociação (ver createContract).
+        // Lançar por aqui criaria uma segunda série do mesmo aluguel — é o que o
+        // botão "Lançar no financeiro" do ContractDetailView faria sem esta trava.
+        // Renovação (tem parent_contract_id) fatura pelo contrato e passa direto.
+        const cAny = contract as { domain?: string; parent_contract_id?: string };
+        if (cAny.domain === 'LOCACAO' && !cAny.parent_contract_id) {
+            throw new Error(
+                'As parcelas deste aluguel são geradas pela negociação (Comercial > Locações), não pelo contrato. '
+                + 'Lançar aqui duplicaria a cobrança do inquilino — ajuste o plano de pagamento na negociação.'
+            );
+        }
         if (!contract.is_recurring && contract.payment_term_type === 'Parcelado') {
             await syncParceladoScheduleToFinance(contract);
             return { count: contract.payment_schedule?.length ?? 0 };

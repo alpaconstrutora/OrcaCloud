@@ -32,7 +32,7 @@ const STATUS_LABEL: Record<string, string> = {
     Aprovado: 'Aprovado', Assinado: 'Assinado', Ativo: 'Ativo',
     Concluído: 'Concluído', Suspenso: 'Suspenso', Encerrado: 'Encerrado', Cancelado: 'Cancelado',
 };
-// ui_ux_standard_guide.md §8 — Status Badge: texto colorido, sem pílula/fundo/uppercase.
+// ui_ux_guia_unificado.md §8 — Status Badge: texto colorido, sem pílula/fundo/uppercase.
 const STATUS_COLOR: Record<string, string> = {
     Rascunho: 'text-gray-600', Revisão: 'text-purple-600', Enviado: 'text-blue-600',
     Aprovado: 'text-teal-600', Assinado: 'text-indigo-600', Ativo: 'text-emerald-600',
@@ -45,7 +45,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
     </span>
 );
 
-// ui_ux_standard_guide.md §2 — colunas fora do componente.
+// ui_ux_guia_unificado.md §2 — colunas fora do componente.
 // `client` só existe em domínios que mostram Contratante (showsClient); filtrada por domínio dentro do componente.
 const COLUMNS: (ColumnConfig & { clientOnly?: boolean })[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -66,7 +66,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const [guaranteesExpiring, setGuaranteesExpiring] = useState<ContractGuaranteeExpiring[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
 
-    // ui_ux_standard_guide.md §3 — busca persistida.
+    // ui_ux_guia_unificado.md §3 — busca persistida.
     const [searchTerm, setSearchTerm] = usePersistedState<string>('contractsDashboard:search', '');
 
     // Layout "com cliente" (mostra coluna Contratante): qualquer domínio OUTGOING.
@@ -134,20 +134,34 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const rascunho = contracts.filter(c => c.status === 'Rascunho' || c.status === 'Enviado');
     const totalReceita = active.reduce((s, c) => s + (c.current_value ?? 0), 0);
 
+    // Contratos que já têm renovação (contrato-filho) não alertam de vencimento —
+    // o fim da vigência deles é esperado, a continuidade já está contratada.
+    const renewedIds = new Set(
+        contracts.map(c => c.parent_contract_id).filter((id): id is string => Boolean(id))
+    );
+    // Recorrentes (locação) ENTRAM nos alertas: o filtro `|| c.is_recurring` que
+    // existia aqui fazia todo contrato de aluguel vencer em silêncio.
+    const alertaVencimento = (c: Contract) => Boolean(c.end_date) && !renewedIds.has(c.id);
+
     const vencendo30 = active.filter(c => {
-        if (!c.end_date || c.is_recurring) return false;
-        const d = daysUntil(c.end_date);
+        if (!alertaVencimento(c)) return false;
+        const d = daysUntil(c.end_date!);
         return d >= 0 && d <= 30;
     });
     const vencendo90 = active.filter(c => {
-        if (!c.end_date || c.is_recurring) return false;
-        const d = daysUntil(c.end_date);
+        if (!alertaVencimento(c)) return false;
+        const d = daysUntil(c.end_date!);
         return d > 30 && d <= 90;
     });
     const vencidos = contracts.filter(c => {
-        if (!c.end_date || c.status !== 'Ativo' || c.is_recurring) return false;
-        return daysUntil(c.end_date) < 0;
+        if (c.status !== 'Ativo' || !alertaVencimento(c)) return false;
+        return daysUntil(c.end_date!) < 0;
     });
+    // Recorrente não "vence": chega ao fim da vigência e precisa ser renovado.
+    const rotuloPrazo = (c: Contract) =>
+        c.is_recurring
+            ? `Renovar até ${c.end_date!.slice(8, 10)}/${c.end_date!.slice(5, 7)}/${c.end_date!.slice(0, 4)}`
+            : `Vence em ${daysUntil(c.end_date!)} dia(s)`;
     const reajustePendente = active.filter(c =>
         c.reajuste_index && c.reajuste_proximo && daysUntil(c.reajuste_proximo) <= 30
     );
@@ -169,10 +183,10 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const alerts: Alert[] = [
         ...vencidos.map(c => ({ id: c.id, level: 'critical' as const, label: `Vencido há ${Math.abs(daysUntil(c.end_date!))} dia(s)`, contract: c })),
         ...guaranteeAlerts,
-        ...vencendo30.map(c => ({ id: c.id, level: 'warning' as const, label: `Vence em ${daysUntil(c.end_date!)} dia(s)`, contract: c })),
+        ...vencendo30.map(c => ({ id: c.id, level: 'warning' as const, label: rotuloPrazo(c), contract: c })),
         ...reajustePendente.map(c => ({ id: c.id, level: 'warning' as const, label: `Reajuste ${c.reajuste_index} em ${daysUntil(c.reajuste_proximo!)} dia(s)`, contract: c })),
         ...semAprovacao.map(c => ({ id: c.id, level: 'info' as const, label: 'Aguardando aprovação', contract: c })),
-        ...vencendo90.map(c => ({ id: c.id, level: 'info' as const, label: `Vence em ${daysUntil(c.end_date!)} dia(s)`, contract: c })),
+        ...vencendo90.map(c => ({ id: c.id, level: 'info' as const, label: rotuloPrazo(c), contract: c })),
     ];
 
     const saldoContratual = totalReceita - measuredTotal;

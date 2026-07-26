@@ -818,7 +818,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 notify(`Financeiro atualizado: ${count} lançamento${count > 1 ? 's' : ''} criado${count > 1 ? 's' : ''}`, "success");
             }
         } catch (e) {
-            notify("Erro ao lançar no financeiro. Tente novamente.", "error");
+            // Mensagem do serviço quando existe (ex: locação faturada pela
+            // negociação) — "tente novamente" ali seria enganoso, porque repetir
+            // nunca vai funcionar.
+            notify(e instanceof Error && e.message ? e.message : "Erro ao lançar no financeiro. Tente novamente.", "error");
         } finally {
             setSyncingFinance(false);
         }

@@ -75,7 +75,6 @@ import { supabase } from '../lib/supabase';
 import BudgetPickerModal from './BudgetPickerModal';
 import ContractMeasurementModal from './ContractMeasurementModal';
 import ContractAddendumModal from './ContractAddendumModal';
-import ContractDocumentsTab from './contracts/ContractDocumentsTab';
 import UtilityBillModal from './UtilityBillModal';
 import DatabasePickerModal from './DatabasePickerModal';
 import { organizationService } from '../services/organizationService';
@@ -1093,16 +1092,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             </div>
 
             <div className="flex bg-white p-1.5 rounded-3xl border border-gray-100 shadow-sm w-fit sticky top-4 z-40 backdrop-blur-md bg-white/80">
-                {/* Contrato recorrente (locação) não tinha aba de aditivo, de
-                    documentos nem de assinatura — só Visão Geral e Faturas.
-                    Aditivos e Documentos & Assinatura passam a existir nos dois
-                    ramos: renovação por aditivo depende das duas. */}
                 {(contract.is_recurring ? [
                     { id: 'overview', label: 'Visão Geral', icon: Layers },
-                    { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 },
-                    { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
-                    { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
-                    { id: 'emissao', label: 'Emissão', icon: FileDown },
+                    { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
                 ] : [
                     { id: 'overview', label: 'Visão Geral', icon: Layers },
                     { id: 'items', label: 'Itens do Contrato', icon: FileText },
@@ -1959,21 +1951,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         />
                     </div>
 
-                    {/* Versões de documento — do contrato e de cada aditivo.
-                        Substitui o MinutaVersionsPanel, que só via o contrato e só
-                        aparecia no status 'Minuta'. Mesma aba de sempre: versionar
-                        e emitir continuam morando na Emissão.
-                        ⚠️ Os dois não podem conviver: o painel antigo escreve direto
-                        em minuta_versions, e o novo reprojeta esse JSONB a partir da
-                        tabela — uma versão criada pelo antigo sumiria na projeção. */}
-                    <ContractDocumentsTab
-                        contract={contract}
-                        onNotify={notify}
-                        onChanged={async () => {
-                            const updated = await contractService.getContractById(contract.id);
-                            if (updated) setContract(updated);
-                        }}
-                    />
+                    {/* Versões da Minuta */}
+                    {contract.status === 'Minuta' && (
+                        <MinutaVersionsPanel
+                            contract={contract}
+                            onVersionAdded={async () => {
+                                const updated = await contractService.getContractById(contract.id);
+                                if (updated) setContract(updated);
+                            }}
+                            onNotify={notify}
+                        />
+                    )}
                 </div>
             )}
 

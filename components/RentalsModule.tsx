@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
+import { supabase } from '../lib/supabase';
 import { brokerService } from '../services/brokerService';
 import { Property, PropertyStatus, PropertyDeal, Client, BrokerProfile } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
@@ -34,7 +35,6 @@ import { rentalPricingService } from '../services/rentalPricingService';
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
-import ContractDetailView from './ContractDetailView';
 import { contractRenewalService } from '../services/contractRenewalService';
 
 interface RentalsModuleProps {
@@ -56,13 +56,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     );
     // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
     const [renewalsBadge, setRenewalsBadge] = useState(0);
-    // Detalhe do contrato aberto de dentro da aba Renovações (aditivos,
-    // documentos e assinatura). Mesmo padrão de ServiceContractsModule.
-    // Aceita ?contract= na URL — é o link que o cron de vencimento manda.
-    const [detailContractId, setDetailContractId] = useState<string | null>(() => {
-        const fromUrl = new URLSearchParams(window.location.search).get('contract');
-        return fromUrl || null;
-    });
+    // A aba Renovações é só a FILA. Contrato, vigência, renovações e documentos
+    // moram todos em Gerenciar Negociação › Contrato e Assinatura — abrir um
+    // detalhe de contrato aqui dentro criaria um segundo caminho para a mesma
+    // coisa. Por isso "Ver contrato" e "Renovar" levam para lá.
+    const [dealModalTab, setDealModalTab] = useState<string | undefined>(undefined);
     const [properties, setProperties] = useState<Property[]>([]);
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -125,6 +123,53 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         loadData();
     }, [organizationId]);
+
+    /**
+     * Da fila de Renovações para a negociação de origem, já na aba
+     * "Contrato e Assinatura" — é lá que vivem vigência, renovações e documentos.
+     * O vínculo é `contracts.deal_id`; contrato sem negociação (ex.: filho de uma
+     * renovação anterior) não tem para onde ir, e a fila avisa em vez de abrir vazio.
+     */
+    const openDealForContract = async (contractId: string) => {
+        try {
+            // Sobe a cadeia de renovação até achar a negociação. Contrato-filho
+            // não herda `deal_id` de propósito (getContractByDealId usa
+            // maybeSingle; dois contratos no mesmo deal quebrariam o DealModal),
+            // então sem esta subida ele ficaria sem porta de entrada por
+            // Locações. A renovação por ADITIVO — a via padrão do Sheet — não
+            // cria esse caso: mantém o mesmo contrato e a mesma negociação.
+            let atual = contractId;
+            let numero = '';
+            let dealId: string | undefined;
+            const visitados = new Set<string>();
+
+            for (let i = 0; i < 20 && !dealId; i++) {
+                if (visitados.has(atual)) break;
+                visitados.add(atual);
+                const { data } = await supabase
+                    .from('contracts')
+                    .select('deal_id, number, parent_contract_id')
+                    .eq('id', atual)
+                    .maybeSingle();
+                if (!data) break;
+                if (!numero) numero = (data.number as string) ?? '';
+                if (data.deal_id) { dealId = data.deal_id as string; break; }
+                if (!data.parent_contract_id) break;
+                atual = data.parent_contract_id as string;
+            }
+
+            const deal = dealId ? deals.find(d => d.id === dealId) : undefined;
+            if (!deal) {
+                notify(`O contrato ${numero} não tem negociação vinculada nesta organização — abra por Comercial › Contratos.`, 'error');
+                return;
+            }
+            setEditingDeal(deal);
+            setDealModalTab('contrato');
+            setIsDealModalOpen(true);
+        } catch (e) {
+            notify(`Erro ao abrir a negociação: ${e instanceof Error ? e.message : ''}`, 'error');
+        }
+    };
 
     // Badge da aba Renovações. REGRA #5: org nula não bloqueia — a RLS recorta.
     useEffect(() => {
@@ -1368,22 +1413,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             }
 
             {activeTab === 'renewals' && (
-                detailContractId ? (
-                    <ContractDetailView
-                        contractId={detailContractId}
-                        organizationId={effectiveOrganizationId}
-                        budget={[]}
-                        onBack={() => setDetailContractId(null)}
-                    />
-                ) : (
-                    <RentalRenewals
-                        organizationId={effectiveOrganizationId}
-                        clients={clients}
-                        onRenewed={() => { loadData(); notify('Contrato renovado com sucesso.'); }}
-                        onChanged={(message) => { loadData(); notify(message); }}
-                        onOpenContract={setDetailContractId}
-                    />
-                )
+                <RentalRenewals
+                    organizationId={effectiveOrganizationId}
+                    clients={clients}
+                    onRenewed={() => { loadData(); notify('Contrato renovado com sucesso.'); }}
+                    onChanged={(message) => { loadData(); notify(message); }}
+                    onOpenContract={openDealForContract}
+                />
             )}
 
             {activeTab === 'brokers' && (
@@ -1479,10 +1515,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
             <DealModal
                 isOpen={isDealModalOpen}
-                onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); }}
+                onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); setDealModalTab(undefined); }}
                 onSave={() => loadData()}
                 initialData={editingDeal}
                 organizationId={organizationId}
+                initialTab={dealModalTab}
             />
 
             <RentalPricingIntelligenceModal

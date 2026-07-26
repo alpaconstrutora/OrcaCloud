@@ -375,8 +375,12 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                                     {/* Renovar exige vigência: sem fim definido não há de onde
                                                         derivar o início do contrato-filho. Botão fica disabled
                                                         com title explicando, nunca some nem morre em silêncio. */}
+                                                    {/* Renovar leva para a negociação (aba Contrato
+                                                        e Assinatura › Renovações), que é o único
+                                                        lugar onde se mexe no contrato. A fila aqui
+                                                        só mostra o que está vencendo. */}
                                                     <button
-                                                        onClick={() => setRenewingId(r.id)}
+                                                        onClick={() => (onOpenContract ? onOpenContract(r.id) : setRenewingId(r.id))}
                                                         disabled={r.renewed || !r.end_date}
                                                         title={
                                                             r.renewed ? `Já renovado pelo contrato ${r.renewed_by}`

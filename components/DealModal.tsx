@@ -21,6 +21,8 @@ import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
+import ContractRenewalsPanel from './rentals/ContractRenewalsPanel';
+import DocumentVersionsPanel from './contracts/DocumentVersionsPanel';
 import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
@@ -243,10 +245,14 @@ interface DealModalProps {
     organizationId?: string;
     /** ID do edifício selecionado — se informado, filtra o dropdown apenas para unidades filhas deste edifício */
     buildingId?: string;
+    /** Abre direto numa aba (ex.: 'contrato', vindo da fila de Renovações). */
+    initialTab?: string;
 }
 
-const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId }) => {
-    const [activeTab, setActiveTab] = useState<TabId>('cliente');
+const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab }) => {
+    const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
+    // Sub-aba de "Contrato e Assinatura" (só locação com contrato gerado).
+    const [contratoSubTab, setContratoSubTab] = useState<'dados' | 'renovacoes' | 'documentos'>('dados');
     const confirm = useConfirm();
     // Organizações do usuário — para listar corretores de TODAS elas (um corretor
     // cadastrado na Alpa Construtora aparece nas negociações das SPEs de cada
@@ -272,7 +278,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
     useEffect(() => {
         if (isOpen) {
-            setActiveTab('cliente');
+            // Abre na aba pedida por quem chamou (a fila de Renovações manda
+            // 'contrato'); sem isso o modal sempre voltava para 'cliente'.
+            setActiveTab((initialTab as TabId) || 'cliente');
+            setContratoSubTab(initialTab === 'contrato' ? 'renovacoes' : 'dados');
             setFormData({
                 type: defaultType || 'SALE',
                 status: 'IN_NEGOTIATION',
@@ -2117,6 +2126,58 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     ══════════════════════════════════════════ */}
                     {activeTab === 'contrato' && (
                         <div className="space-y-8">
+                            {/* Sub-abas — só locação com contrato gerado. Renovações e
+                                documentos do contrato moram AQUI, na mesma aba de
+                                sempre: a fila em Locações › Renovações apenas aponta
+                                para cá, para não existirem dois lugares que mexem no
+                                mesmo contrato. */}
+                            {formData.type === 'RENTAL' && linkedContract && (
+                                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
+                                    {([
+                                        { id: 'dados', label: 'Dados do contrato' },
+                                        { id: 'renovacoes', label: 'Renovações' },
+                                        { id: 'documentos', label: 'Documentos' },
+                                    ] as const).map(sub => (
+                                        <button
+                                            key={sub.id}
+                                            type="button"
+                                            onClick={() => setContratoSubTab(sub.id)}
+                                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                                contratoSubTab === sub.id
+                                                    ? 'bg-white text-blue-600 shadow-sm'
+                                                    : 'text-gray-400 hover:text-gray-600'
+                                            }`}
+                                        >
+                                            {sub.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'renovacoes' && (
+                                <ContractRenewalsPanel
+                                    contract={linkedContract}
+                                    onNotify={(msg, type) => (type === 'error' ? setContractError(msg) : setContractError(null))}
+                                    onChanged={async () => {
+                                        const atualizado = await contractService.getContractById(linkedContract.id);
+                                        if (atualizado) setLinkedContract(atualizado);
+                                    }}
+                                />
+                            )}
+
+                            {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'documentos' && (
+                                <DocumentVersionsPanel
+                                    ownerType="CONTRACT"
+                                    ownerId={linkedContract.id}
+                                    contractId={linkedContract.id}
+                                    organizationId={linkedContract.organization_id}
+                                    label={`Contrato ${linkedContract.number}`}
+                                    onNotify={(msg, type) => (type === 'error' ? setContractError(msg) : setContractError(null))}
+                                />
+                            )}
+
+                            {(formData.type !== 'RENTAL' || !linkedContract || contratoSubTab === 'dados') && (
+                            <>
                             {/* Nº Contrato + Etapa lado a lado */}
                             <div className="grid grid-cols-12 gap-8">
                                 <div className="col-span-12 lg:col-span-5 space-y-6">
@@ -2349,6 +2410,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     className="w-full p-6 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-[2rem] outline-none font-medium text-gray-700 transition-all shadow-inner resize-none text-sm leading-relaxed"
                                 />
                             </div>
+                            </>
+                            )}
                         </div>
                     )}
                 </form>

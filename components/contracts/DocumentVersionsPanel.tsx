@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { History, Plus, ExternalLink, Send, Pencil, Trash2, PenLine } from 'lucide-react';
+import { History, Plus, ExternalLink, Send, Pencil, Trash2 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import SignaturePanel, { Signer } from './SignaturePanel';
 import { contractDocumentVersionService } from '../../services/contractDocumentVersionService';
 import { ContractDocumentVersion, DocumentKind, DocumentOwnerType } from '../../types';
 
@@ -43,7 +42,6 @@ const DocumentVersionsPanel: React.FC<Props> = ({
     const [busyId, setBusyId] = useState<string | null>(null);
     const [docName, setDocName] = useState('');
     const [notes, setNotes] = useState('');
-    const [signingId, setSigningId] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const fileRef = useRef<HTMLInputElement>(null);
@@ -124,31 +122,6 @@ const DocumentVersionsPanel: React.FC<Props> = ({
         } catch (err) {
             onNotify(err instanceof Error ? err.message : 'Erro ao excluir versão.', 'error');
         } finally { setBusyId(null); }
-    };
-
-    /** Baixa o arquivo da versão e envia para o ZapSign em base64. */
-    const handleSend = async (ver: ContractDocumentVersion, signers: Signer[]) => {
-        if (!organizationId) {
-            onNotify('Contrato sem organização — não é possível enviar para assinatura.', 'error');
-            return;
-        }
-        try {
-            onNotify('Enviando para assinatura…', 'info');
-            const resp = await fetch(ver.url);
-            const blob = await resp.blob();
-            const base64 = await new Promise<string>((res, rej) => {
-                const fr = new FileReader();
-                fr.onload = () => res((fr.result as string).split(',')[1]);
-                fr.onerror = rej;
-                fr.readAsDataURL(blob);
-            });
-            await contractDocumentVersionService.sendForSignature(
-                ver.id, organizationId, base64, `${label} — ${ver.name || `v${ver.v}`}`, signers);
-            await load();
-            onNotify('Documento enviado para assinatura.', 'success');
-        } catch (err) {
-            onNotify(`Erro ao enviar: ${err instanceof Error ? err.message : ''}`, 'error');
-        }
     };
 
     return (
@@ -253,17 +226,14 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                                             <Send className="w-4 h-4 inline mr-1" />Emitir
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => setSigningId(signingId === ver.id ? null : ver.id)}
-                                        title="Assinatura eletrônica"
-                                        className={`p-1.5 bg-white border rounded-[6px] transition-all ${
-                                            signingId === ver.id
-                                                ? 'border-blue-300 text-blue-600'
-                                                : 'border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200'
-                                        }`}
-                                    >
-                                        <PenLine className="w-4 h-4" />
-                                    </button>
+                                    {/* Assinatura NÃO fica aqui: quem assina é o
+                                        SignaturePanel do contrato, na própria aba
+                                        Emissão. Dois pontos de assinatura na mesma
+                                        tela é duplicidade — e o ZapSign está
+                                        desativado por decisão (ver a memória sobre
+                                        a Edge Function sign-contract). Quando for
+                                        ativado, o botão por versão volta aqui usando
+                                        components/contracts/SignaturePanel.tsx. */}
                                     <ActionIconButton kind="edit" title="Renomear" icon={<Pencil className="w-4 h-4" />}
                                         onClick={() => { setEditingId(ver.id); setEditName(ver.name ?? ''); }} />
                                     {!ver.emitted && !ver.signature_token && (
@@ -273,22 +243,6 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                                 </div>
                             </div>
 
-                            {signingId === ver.id && (
-                                <div className="pt-3 border-t border-gray-100">
-                                    <SignaturePanel
-                                        label={`${label} — v${ver.v}`}
-                                        status={ver.signature_status}
-                                        signatureUrl={ver.signature_url}
-                                        completedAt={ver.signature_completed_at}
-                                        signedFileUrl={ver.signed_file_url}
-                                        onSend={(signers) => handleSend(ver, signers)}
-                                        onRefresh={async () => {
-                                            await contractDocumentVersionService.refreshSignatureStatus(ver.id);
-                                            await load();
-                                        }}
-                                    />
-                                </div>
-                            )}
                         </div>
                     ))}
                 </div>

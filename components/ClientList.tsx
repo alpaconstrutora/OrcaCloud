@@ -3,7 +3,7 @@ import { clientService } from '../services/clientService';
 import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag } from 'lucide-react';
+import { User, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag } from 'lucide-react';
 import { Client, ClientCategory } from '../types';
 import ClientModal from './ClientModal';
 import ClientRequestsAdminModal from './ClientRequestsAdminModal';
@@ -13,10 +13,10 @@ import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
+import ActionIconButton from './ui/ActionIconButton';
 import { isObra } from '../utils/projectClassification';
 
 interface ClientListProps {
@@ -60,7 +60,7 @@ const buildAdvancedFilterFields = (categories: ClientCategory[]): FilterFieldCon
     { key: 'category', label: 'Tipo', type: 'select', options: categories.map(c => ({ value: c.name, label: c.name })) },
 ];
 
-// Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+// Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
 // Cores fixas pros 3 tipos originais (histórico); categoria custom cadastrada em
 // Configurações do Sistema > Tipos de Clientes cai no fallback cinza abaixo.
 const CATEGORY_COLORS: Record<string, string> = {
@@ -147,7 +147,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const loadClients = loadData; // Alias for compatibility with existing calls
 
     // Excluir direto (sem diálogo) — usado pelo InlineDisclosureMenu, que já tem
-    // confirmação de 2 passos embutida (ui_ux_standard_guide.md §9).
+    // confirmação de 2 passos embutida (ui_ux_guia_unificado.md §9).
     const performDelete = async (id: string) => {
         try {
             await clientService.deleteClient(id);
@@ -307,7 +307,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                             return 0;
                     }
                 }
-                // Sem coluna clicada, ordenação default é nome A-Z (ui_ux_standard_guide.md §6.4:
+                // Sem coluna clicada, ordenação default é nome A-Z (ui_ux_guia_unificado.md §6.4:
                 // toda coluna ordenável já ordena pelo próprio cabeçalho, sem dropdown redundante).
                 return a.name.localeCompare(b.name);
             });
@@ -367,7 +367,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua base de contatos e clientes com infraestrutura premium.</p>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* grid-cols fixo (lg:grid-cols-5) assumia sempre 3 categorias (2 do Total + 3 = 5
+                unidades); com N categorias custom (§4.2) a soma de unidades (2 + N) passa de 5
+                e quebra para 2 linhas — corrigido com nº de colunas calculado via CSS var, que o
+                Tailwind aceita como valor arbitrário estático (`grid-cols-[repeat(var(--kpi-cols),...)]`). */}
+            <div
+                className="grid grid-cols-2 lg:grid-cols-[repeat(var(--kpi-cols),minmax(0,1fr))] gap-4"
+                style={{ ['--kpi-cols' as any]: 2 + categoryKpis.length }}
+            >
                 {/* "Total" em destaque (2 colunas); os demais são a decomposição por categoria (§4.2) */}
                 <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Clientes" value={totalClients} icon={<User className="w-4 h-4" />} color="blue" />
                 {categoryKpis.map((kpi, idx) => (
@@ -381,6 +388,17 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         color={KPI_COLOR_CYCLE[idx % KPI_COLOR_CYCLE.length]}
                     />
                 ))}
+            </div>
+
+            {/* Toolbar de botões (§5.3) — ação primária isolada da barra de busca. */}
+            <div className="flex items-center justify-end bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+                <button
+                    onClick={() => handleOpenModal()}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo cliente
+                </button>
             </div>
 
             {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
@@ -411,7 +429,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     ))}
                 </select>
 
-                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_standard_guide.md §6.4) */}
+                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_guia_unificado.md §6.4) */}
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={advancedFilterFields} state={advancedFilters} />
                 </div>
@@ -462,16 +480,6 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
-
-                {/* Variante compacta do CTA primário (§17) — movida pra dentro da régua,
-                    igual ao SupplierList.tsx (cadastro não é o fluxo principal desta tela). */}
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo cliente
-                </button>
             </div>
             </div>
 
@@ -568,7 +576,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             <cols.ResizeHandle colKey="projects" />
                                         </SortableHeader>
                                     )}
-                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                    {/* sticky right-0: mantém a coluna Ações sempre colada na borda direita do
+                                        card, mesmo quando redimensionar outra coluna encolhe a tabela e sobra
+                                        espaço morto no <col /> espaçador (§6.1) — sem isso, a borda de Ações
+                                        "andava" para a esquerda e desalinhava da toolbar acoplada acima. */}
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500 sticky right-0 z-10 bg-gray-50 border-l border-gray-100">
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
@@ -644,30 +656,28 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     )}
                                                 </td>
                                             )}
-                                            <td className="px-6 py-2.5 text-right">
-                                                <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                            <td className="px-6 py-2.5 text-right sticky right-0 z-10 bg-white group-hover:bg-blue-50/50 transition-colors border-l border-gray-100">
+                                                <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         onClick={() => handleOpenModal(client)}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
                                                     >
                                                         Editar
                                                     </button>
                                                     {onSelectClient && (
-                                                        <button
-                                                            onClick={() => handleAccessPortal(client)}
-                                                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        <ActionIconButton
+                                                            kind="view"
                                                             title="Acessar Portal"
-                                                        >
-                                                            <LayoutDashboard className="w-4 h-4" />
-                                                        </button>
+                                                            icon={<LayoutDashboard className="w-4 h-4" />}
+                                                            onClick={() => handleAccessPortal(client)}
+                                                        />
                                                     )}
-                                                    <button
-                                                        onClick={() => openTokenModal(client)}
-                                                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                    <ActionIconButton
+                                                        kind="share"
                                                         title="Link de Acesso"
-                                                    >
-                                                        <Link2 className="w-4 h-4" />
-                                                    </button>
+                                                        icon={<Link2 className="w-4 h-4" />}
+                                                        onClick={() => openTokenModal(client)}
+                                                    />
                                                     <InlineDisclosureMenu
                                                         menuItems={[
                                                             ...(client.category === 'Locação' || client.category === 'Serviços' ? [{
@@ -686,7 +696,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     />
                                                 </div>
                                             </td>
-                                            <td aria-hidden="true" />
+                                            <td aria-hidden="true"></td>
                                         </tr>
                                     );
                                 })}
@@ -735,12 +745,12 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between text-xs pt-2">
-                                            <span className="text-gray-400 uppercase tracking-widest font-bold">Organização</span>
-                                            <span className="text-gray-900 font-semibold">{client.organization_name || '-'}</span>
+                                            <span className="text-xs font-semibold text-slate-500">Organização</span>
+                                            <span className="text-gray-900 font-medium">{client.organization_name || '-'}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs">
-                                            <span className="text-gray-400 uppercase tracking-widest font-bold">Documento</span>
-                                            <span className="text-gray-900 font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{client.document || '-'}</span>
+                                            <span className="text-xs font-semibold text-slate-500">Documento</span>
+                                            <span className="text-gray-900 font-medium">{client.document || '-'}</span>
                                         </div>
 
                                         {/* Linked Projects for Grid View */}
@@ -753,10 +763,10 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             if (clientProjects.length > 0) {
                                                 return (
                                                     <div className="pt-3 mt-3 border-t border-gray-100">
-                                                        <span className="text-xs text-gray-400 uppercase tracking-widest font-bold block mb-2">Obra Vinculada</span>
+                                                        <span className="text-xs font-semibold text-slate-500 block mb-2">Obra Vinculada</span>
                                                         <div className="space-y-1">
                                                             {clientProjects.slice(0, 2).map(p => (
-                                                                <div key={p.id} className="flex items-center gap-1.5 text-xs text-gray-700 bg-blue-50/50 p-1.5 rounded-md border border-blue-100/50">
+                                                                <div key={p.id} className="flex items-center gap-1.5 text-xs text-gray-700 bg-blue-50/50 p-1.5 rounded-[6px] border border-blue-100/50">
                                                                     <Building2 className="w-3 h-3 text-blue-500" />
                                                                     <span className="font-medium truncate">{p.name}</span>
                                                                 </div>
@@ -775,53 +785,37 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                     </div>
                                 </div>
 
-                                <div className="px-6 py-4 bg-gray-50/50 rounded-b-[10px] border-t border-gray-100 flex justify-end gap-2">
+                                <div className="px-6 py-4 bg-gray-50/50 rounded-b-[10px] border-t border-gray-100 flex justify-end gap-1.5">
                                     {onSelectClient && (
-                                        <button
-                                            onClick={() => handleAccessPortal(client)}
-                                            className="p-2 text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-xl transition-all shadow-sm border border-transparent hover:border-indigo-100"
+                                        <ActionIconButton
+                                            kind="view"
                                             title="Acessar Portal"
-                                        >
-                                            <LayoutDashboard className="w-4 h-4" />
-                                        </button>
+                                            icon={<LayoutDashboard className="w-4 h-4" />}
+                                            onClick={() => handleAccessPortal(client)}
+                                        />
                                     )}
-                                    <button
-                                        onClick={() => openTokenModal(client)}
-                                        className="p-2 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-xl transition-all shadow-sm border border-transparent hover:border-emerald-100"
+                                    <ActionIconButton
+                                        kind="share"
                                         title="Link de Acesso ao Portal"
-                                    >
-                                        <Link2 className="w-4 h-4" />
-                                    </button>
+                                        icon={<Link2 className="w-4 h-4" />}
+                                        onClick={() => openTokenModal(client)}
+                                    />
                                     {(client.category === 'Locação' || client.category === 'Serviços') && (
-                                        <button
-                                            onClick={() => setRequestsModal(client)}
-                                            className="p-2 text-violet-500 hover:text-white hover:bg-violet-500 rounded-xl transition-all shadow-sm border border-transparent hover:border-violet-100"
+                                        <ActionIconButton
+                                            kind="view"
                                             title={client.category === 'Serviços' ? 'Ordens de Serviço' : 'Chamados de Manutenção'}
-                                        >
-                                            {client.category === 'Serviços' ? <ClipboardList className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
-                                        </button>
+                                            icon={client.category === 'Serviços' ? <ClipboardList className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
+                                            onClick={() => setRequestsModal(client)}
+                                        />
                                     )}
-                                    <button
-                                        onClick={() => { setComunicadoModal(client); setComunicadoForm({ title: '', body: '' }); }}
-                                        className="p-2 text-orange-400 hover:text-white hover:bg-orange-400 rounded-xl transition-all shadow-sm border border-transparent hover:border-orange-100"
+                                    <ActionIconButton
+                                        kind="share"
                                         title="Enviar Comunicado"
-                                    >
-                                        <Bell className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleOpenModal(client)}
-                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-100"
-                                        title="Editar"
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(client.id, client.name)}
-                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-red-100"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                        icon={<Bell className="w-4 h-4" />}
+                                        onClick={() => { setComunicadoModal(client); setComunicadoForm({ title: '', body: '' }); }}
+                                    />
+                                    <ActionIconButton kind="edit" onClick={() => handleOpenModal(client)} />
+                                    <ActionIconButton kind="delete" onClick={() => handleDelete(client.id, client.name)} />
                                 </div>
                             </div>
                         ))}
@@ -834,13 +828,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             {/* Token Modal */}
             {tokenModal && (
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setTokenModal(null)}>
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 space-y-6" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md p-8 space-y-6" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-xl font-black text-gray-900">Link de Acesso</h3>
+                                <h3 className="text-lg font-black text-gray-900">Link de Acesso</h3>
                                 <p className="text-sm text-gray-400 font-medium mt-0.5">{tokenModal.client.name}</p>
                             </div>
-                            <button onClick={() => setTokenModal(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors">
+                            <button onClick={() => setTokenModal(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-100 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -851,9 +845,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                             </div>
                         ) : tokenModal.token && tokenModal.token.is_active ? (
                             <div className="space-y-4">
-                                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                                    <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">Link ativo</p>
-                                    <p className="text-xs text-gray-700 font-mono break-all leading-relaxed">
+                                <div className="bg-emerald-50 border border-emerald-100 rounded-[10px] p-4">
+                                    <p className="text-xs font-semibold text-emerald-600 mb-2">Link ativo</p>
+                                    <p className="text-xs text-gray-700 break-all leading-relaxed">
                                         {clientPortalService.buildPortalUrl(tokenModal.token.token)}
                                     </p>
                                     <p className="text-xs text-gray-400 mt-2">
@@ -861,42 +855,33 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         {tokenModal.token.last_used_at && ` · Último acesso: ${new Date(tokenModal.token.last_used_at).toLocaleDateString('pt-BR')}`}
                                     </p>
                                 </div>
-                                <div className="flex gap-3">
+                                <div className="flex gap-2">
                                     <button
                                         onClick={handleCopyLink}
-                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                                        className="flex-1 flex items-center justify-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95"
                                     >
                                         {tokenCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                         {tokenCopied ? 'Copiado!' : 'Copiar Link'}
                                     </button>
-                                    <Button
-                                        onClick={handleGenerateToken}
-                                        variant="secondary"
-                                        className="rounded-2xl"
+                                    <ActionIconButton
+                                        kind="history"
                                         title="Gerar novo link (invalida o anterior)"
-                                    >
-                                        <RefreshCw className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                        onClick={handleRevokeToken}
-                                        variant="secondary"
-                                        className="rounded-2xl border-red-100 text-red-400 hover:border-red-300 hover:text-red-600"
-                                        title="Revogar acesso"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                        icon={<RefreshCw className="w-4 h-4" />}
+                                        onClick={handleGenerateToken}
+                                    />
+                                    <ActionIconButton kind="delete" title="Revogar acesso" onClick={handleRevokeToken} />
                                 </div>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 text-center">
+                                <div className="bg-gray-50 border border-gray-100 rounded-[10px] p-6 text-center">
                                     <Link2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                                     <p className="text-sm font-bold text-gray-700">Nenhum link ativo</p>
                                     <p className="text-xs text-gray-400 mt-1">Gere um link para que o cliente acesse o portal sem precisar de cadastro.</p>
                                 </div>
                                 <button
                                     onClick={handleGenerateToken}
-                                    className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                                    className="w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95"
                                 >
                                     <Link2 className="w-4 h-4" />
                                     Gerar Link de Acesso
@@ -910,19 +895,19 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             {/* Modal de Comunicado */}
             {comunicadoModal && (
                 <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setComunicadoModal(null)}>
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-8 space-y-5" onClick={e => e.stopPropagation()}>
+                    <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md p-8 space-y-5" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-xl font-black text-gray-900 flex items-center gap-2"><Bell className="w-5 h-5 text-orange-400" /> Enviar Comunicado</h3>
+                                <h3 className="text-lg font-black text-gray-900 flex items-center gap-2"><Bell className="w-5 h-5 text-orange-400" /> Enviar Comunicado</h3>
                                 <p className="text-sm text-gray-400 font-medium mt-0.5">{comunicadoModal.name}</p>
                             </div>
-                            <button onClick={() => setComunicadoModal(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setComunicadoModal(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-100 transition-colors"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-3">
                             <div>
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Título *</label>
+                                <label className="text-xs font-semibold text-slate-500 block mb-1">Título *</label>
                                 <input
-                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300"
+                                    className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300"
                                     placeholder="Ex: Informação sobre manutenção"
                                     value={comunicadoForm.title}
                                     onChange={e => setComunicadoForm(p => ({ ...p, title: e.target.value }))}
@@ -930,9 +915,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Mensagem</label>
+                                <label className="text-xs font-semibold text-slate-500 block mb-1">Mensagem</label>
                                 <textarea
-                                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+                                    className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300 resize-none"
                                     rows={4}
                                     placeholder="Detalhes do comunicado..."
                                     value={comunicadoForm.body}
@@ -940,16 +925,23 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 />
                             </div>
                         </div>
-                        <div className="flex gap-3 pt-1">
+                        <div className="flex gap-2 pt-1">
                             <button
                                 onClick={handleSendComunicado}
                                 disabled={comunicadoSending || !comunicadoForm.title.trim()}
-                                className="flex-1 flex items-center justify-center gap-2 py-3 bg-orange-500 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-orange-600 disabled:opacity-50 transition-all active:scale-95"
+                                className="flex-1 flex items-center justify-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white rounded-[6px] hover:bg-orange-600 font-medium text-[13px] disabled:opacity-50 transition-all active:scale-95"
                             >
                                 {comunicadoSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                 {comunicadoSending ? 'Enviando...' : 'Enviar'}
                             </button>
-                            <Button onClick={() => setComunicadoModal(null)} variant="secondary" className="rounded-2xl">Cancelar</Button>
+                            {/* botão local em vez de <Button>: a classe BASE do Button.tsx compartilhado
+                                traz `font-black uppercase tracking-widest`, fora do §17 */}
+                            <button
+                                onClick={() => setComunicadoModal(null)}
+                                className="flex items-center justify-center h-9 px-3.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                Cancelar
+                            </button>
                         </div>
                     </div>
                 </div>

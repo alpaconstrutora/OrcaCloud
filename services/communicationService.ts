@@ -92,6 +92,21 @@ export const communicationService = {
         return data || [];
     },
 
+    // Registro COMPLETO por id — usado pelo formulário de edição. O form reenvia
+    // os campos que edita (inclusive booleanos e arrays com default), então montá-lo
+    // sobre o objeto da listagem o acopla ao select de getCommunications: estreitar
+    // aquele select passaria a gravar `false`/`[]` por cima de dado real. Carregando
+    // por id com select('*') o formulário fica imune a essa mudança.
+    async getCommunication(id: string): Promise<Communication> {
+        const { data, error } = await supabase
+            .from('communications')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (error) throw error;
+        return data as Communication;
+    },
+
     async createCommunication(comm: Omit<Communication, 'id' | 'created_at' | 'updated_at'>): Promise<Communication> {
         const { data, error } = await supabase
             .from('communications')

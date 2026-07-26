@@ -109,6 +109,21 @@ export const evaluationService = {
         return data || [];
     },
 
+    // Registro COMPLETO por id — usado pelo formulário de edição. O form reenvia
+    // `{ ...form, competencias }`, então montá-lo sobre o objeto da listagem o
+    // acopla ao select de getCycles: estreitar aquele select passaria a gravar
+    // valores default por cima de dado real (competencias viraria o array de
+    // exemplo). Carregando por id com select('*') o formulário fica imune.
+    async getCycle(id: string): Promise<EvaluationCycle> {
+        const { data, error } = await supabase
+            .from('evaluation_cycles')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (error) throw error;
+        return data as EvaluationCycle;
+    },
+
     async createCycle(cycle: Omit<EvaluationCycle, 'id' | 'created_at' | 'updated_at'>): Promise<EvaluationCycle> {
         const { data, error } = await supabase
             .from('evaluation_cycles')
@@ -250,6 +265,19 @@ export const evaluationService = {
         const { data, error } = await q;
         if (error) throw error;
         return (data || []).map((r: any) => ({ ...r, employee_nome: r.employee?.name }));
+    },
+
+    // Registro COMPLETO por id — mesma razão de getCycle: o form de PDI reenvia o
+    // objeto de formulário inteiro. getPdiItems hoje usa select('*'), mas o form
+    // não pode depender disso.
+    async getPdiItem(id: string): Promise<PdiItem> {
+        const { data, error } = await supabase
+            .from('pdi_items')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (error) throw error;
+        return data as PdiItem;
     },
 
     async createPdiItem(item: Omit<PdiItem, 'id' | 'created_at' | 'updated_at'>): Promise<PdiItem> {

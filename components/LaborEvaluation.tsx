@@ -100,12 +100,42 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
         ]
     );
 
+    // Ao editar, recarrega o ciclo COMPLETO. handleSave reenvia `{ ...form, competencias }`,
+    // então montar o form sobre o objeto da listagem o acopla ao select de getCycles: se
+    // aquele select for estreitado, o Salvar grava default por cima do dado real — e
+    // `competencias` voltaria a ser o array de exemplo, apagando as competências do ciclo.
+    // Carregar por id remove a dependência. Mesmo motivo do CompanyDetailPage.
+    const [loadingFull, setLoadingFull] = useState(isEditing);
+    React.useEffect(() => {
+        if (!cycle?.id) return;
+        let alive = true;
+        setLoadingFull(true);
+        evaluationService.getCycle(cycle.id)
+            .then(full => {
+                if (!alive) return;
+                setForm({
+                    nome: full.nome || '',
+                    descricao: full.descricao || '',
+                    tipo: full.tipo || ('180' as CycleTipo),
+                    periodo_inicio: full.periodo_inicio || today,
+                    periodo_fim: full.periodo_fim || '',
+                    status: full.status || ('RASCUNHO' as CycleStatus),
+                });
+                if (full.competencias) setCompetencias(full.competencias);
+            })
+            .catch((e: any) => alert(e.message || 'Erro ao carregar o ciclo.'))
+            .finally(() => { if (alive) setLoadingFull(false); });
+        return () => { alive = false; };
+    }, [cycle?.id]);
+
     const addComp = () => setCompetencias(p => [...p, { id: uuid(), nome: '', descricao: '', peso: 3, categoria: '' }]);
     const removeComp = (id: string) => setCompetencias(p => p.filter(c => c.id !== id));
     const updateComp = (id: string, field: keyof Competencia, val: unknown) =>
         setCompetencias(p => p.map(c => c.id === id ? { ...c, [field]: val } : c));
 
     const handleSave = async () => {
+        // Salvar antes do carregamento gravaria o form montado sobre o objeto da lista.
+        if (loadingFull) return;
         if (!form.nome || !form.periodo_inicio || !form.periodo_fim) {
             alert('Preencha nome e período.'); return;
         }
@@ -207,7 +237,7 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
                     <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
                         Cancelar
                     </button>
-                    <button onClick={handleSave} disabled={saving}
+                    <button onClick={handleSave} disabled={saving || loadingFull}
                         className="flex items-center gap-2 px-5 py-2 bg-violet-600 text-white text-sm font-bold rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50 shadow-lg shadow-violet-900/20">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         {isEditing ? 'Salvar' : 'Criar Ciclo'}
@@ -380,7 +410,37 @@ const PdiForm: React.FC<PdiFormProps> = ({ orgId, item, employees, onClose, onSa
         progresso_pct: item?.progresso_pct || 0,
     });
 
+    // Ao editar, recarrega o item COMPLETO — handleSave reenvia o form inteiro. Ver
+    // comentário no CycleForm; getPdiItems hoje usa select('*'), mas o form não pode
+    // depender disso.
+    const [loadingFull, setLoadingFull] = useState(!!item);
+    React.useEffect(() => {
+        if (!item?.id) return;
+        let alive = true;
+        setLoadingFull(true);
+        evaluationService.getPdiItem(item.id)
+            .then(full => {
+                if (!alive) return;
+                setForm(f => ({
+                    ...f,
+                    employee_id: full.employee_id || '',
+                    competencia: full.competencia || '',
+                    descricao: full.descricao || '',
+                    acao: full.acao || '',
+                    recursos: full.recursos || '',
+                    prazo: full.prazo || '',
+                    status: full.status || 'PENDENTE',
+                    progresso_pct: full.progresso_pct || 0,
+                }));
+            })
+            .catch((e: any) => alert(e.message || 'Erro ao carregar o item de PDI.'))
+            .finally(() => { if (alive) setLoadingFull(false); });
+        return () => { alive = false; };
+    }, [item?.id]);
+
     const handleSave = async () => {
+        // Salvar antes do carregamento gravaria o form montado sobre o objeto da lista.
+        if (loadingFull) return;
         if (!form.employee_id || !form.competencia || !form.acao) {
             alert('Colaborador, competência e ação são obrigatórios.'); return;
         }
@@ -462,7 +522,7 @@ const PdiForm: React.FC<PdiFormProps> = ({ orgId, item, employees, onClose, onSa
                     <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
                         Cancelar
                     </button>
-                    <button onClick={handleSave} disabled={saving}
+                    <button onClick={handleSave} disabled={saving || loadingFull}
                         className="flex items-center gap-2 px-5 py-2 bg-violet-600 text-white text-sm font-bold rounded-xl hover:bg-violet-700 transition-colors disabled:opacity-50 shadow-lg shadow-violet-900/20">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         Salvar

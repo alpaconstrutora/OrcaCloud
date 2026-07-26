@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     MessageSquare, Plus, X, Send, Bell, Shield, BookOpen,
     AlertTriangle, Gift, Users, Building2, User, Check,
@@ -99,9 +99,47 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
         anexos: comm?.anexos || [],
     });
 
+    // Ao editar, recarrega o registro COMPLETO. O form abaixo reenvia os campos que
+    // edita — inclusive booleanos (`?? true`/`?? false`) e arrays (`|| []`) — então
+    // montá-lo sobre o objeto vindo da listagem o acopla ao select de
+    // getCommunications: se aquele select for estreitado, o Salvar passa a gravar
+    // default por cima de dado real, sem erro nenhum. Carregar por id remove a
+    // dependência. Mesmo motivo do CompanyDetailPage.
+    const [loadingFull, setLoadingFull] = useState(isEditing);
+    useEffect(() => {
+        if (!comm?.id) return;
+        let alive = true;
+        setLoadingFull(true);
+        communicationService.getCommunication(comm.id)
+            .then(full => {
+                if (!alive) return;
+                setForm(f => ({
+                    ...f,
+                    titulo: full.titulo || '',
+                    conteudo: full.conteudo || '',
+                    tipo: full.tipo || 'AVISO',
+                    scope: full.scope || 'TODOS',
+                    scope_ids: full.scope_ids || [],
+                    canal_app: full.canal_app ?? true,
+                    canal_whatsapp: full.canal_whatsapp ?? false,
+                    agendado_para: full.agendado_para || '',
+                    status: full.status || 'RASCUNHO',
+                    dds_tema: full.dds_tema || '',
+                    dds_duracao_min: full.dds_duracao_min,
+                    dds_assinaturas_required: full.dds_assinaturas_required ?? false,
+                    anexos: full.anexos || [],
+                }));
+            })
+            .catch((e: any) => alert(e.message || 'Erro ao carregar o comunicado.'))
+            .finally(() => { if (alive) setLoadingFull(false); });
+        return () => { alive = false; };
+    }, [comm?.id]);
+
     const set = (k: keyof Communication, v: unknown) => setForm(p => ({ ...p, [k]: v }));
 
     const handleSave = async (andDispatch = false) => {
+        // Salvar antes do carregamento gravaria o form montado sobre o objeto da lista.
+        if (loadingFull) return;
         if (!form.titulo || !form.conteudo) { alert('Preencha título e conteúdo.'); return; }
         setSaving(true);
         try {
@@ -259,12 +297,12 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
                     <Button onClick={onClose} variant="ghost" size="md">
                         Cancelar
                     </Button>
-                    <button onClick={() => handleSave(false)} disabled={saving}
+                    <button onClick={() => handleSave(false)} disabled={saving || loadingFull}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50">
                         {saving && !dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                         Salvar rascunho
                     </button>
-                    <button onClick={() => handleSave(true)} disabled={saving}
+                    <button onClick={() => handleSave(true)} disabled={saving || loadingFull}
                         className="flex items-center gap-2 px-5 py-2 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-50 shadow-lg shadow-teal-900/20">
                         {dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                         Enviar agora

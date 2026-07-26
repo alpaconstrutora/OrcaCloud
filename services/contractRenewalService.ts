@@ -435,6 +435,8 @@ export const contractRenewalService = {
     listRentalsExpiring: async (
         organizationId: string | null | undefined,
         daysAhead: number | null = 90,
+        /** Inclui contratos já encerrados (consulta/auditoria e reabertura). */
+        includeClosed = false,
     ): Promise<ExpiringRental[]> => {
         const today = todayISO();
         let q = supabase
@@ -443,7 +445,7 @@ export const contractRenewalService = {
                     'current_value, original_value, billing_cycle, due_day, reajuste_index, ' +
                     'reajuste_proximo, parent_contract_id, renewal_seq, domain, is_recurring, deal_id')
             .eq('domain', 'LOCACAO')
-            .in('status', ['Ativo', 'Assinado'])
+            .in('status', includeClosed ? ['Ativo', 'Assinado', 'Encerrado'] : ['Ativo', 'Assinado'])
             .order('end_date', { ascending: true, nullsFirst: false });
         if (organizationId) q = q.eq('organization_id', organizationId);
         // daysAhead null = TODOS os contratos vigentes, inclusive os sem vigência

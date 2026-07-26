@@ -53,8 +53,8 @@ interface Props {
     organizationId?: string;
     clients?: Client[];
     onRenewed?: (child: Contract) => void;
-    /** Avisa o módulo pai para recarregar (encerramento muda a lista de contratos). */
-    onChanged?: () => void;
+    /** Avisa o módulo pai para recarregar, com a mensagem do que aconteceu. */
+    onChanged?: (message: string) => void;
 }
 
 const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenewed, onChanged }) => {
@@ -66,6 +66,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
     const [closingId, setClosingId] = useState<string | null>(null);
     const confirm = useConfirm();
     const [searchTerm, setSearchTerm] = usePersistedState('rentalRenewals:search', '');
+    const [showClosed, setShowClosed] = usePersistedState<boolean>('rentalRenewals:showClosed', false);
     const tableColumns = useTableColumns(COLUMNS, 'rentalRenewalsColumns');
 
     const clientName = useCallback(
@@ -80,13 +81,13 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
             // null = TODOS os contratos de locação vigentes, não só os que vencem
             // em 90 dias. Sem a lista completa não há como encerrar nem corrigir
             // um contrato que está fora da janela ou sem vigência definida.
-            setRows(await contractRenewalService.listRentalsExpiring(organizationId, null));
+            setRows(await contractRenewalService.listRentalsExpiring(organizationId, null, showClosed));
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar os contratos de locação.');
         } finally {
             setLoading(false);
         }
-    }, [organizationId]);
+    }, [organizationId, showClosed]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -123,6 +124,27 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
 
     const toggleFaixa = (f: Exclude<Faixa, 'all'>) => setFaixa(prev => (prev === f ? 'all' : f));
 
+    const handleReopen = async (r: ExpiringRental) => {
+        const ok = await confirm({
+            title: `Reabrir o contrato ${r.number}?`,
+            message: 'O contrato volta a Ativo e reaparece entre os vigentes. '
+                + 'Se a vigência já terminou, ele entra na fila como vencido, pendente de renovação.',
+            variant: 'default',
+            confirmLabel: 'Reabrir',
+        });
+        if (!ok) return;
+        setClosingId(r.id);
+        try {
+            await contractRenewalService.reopenContract(r.id);
+            await loadData();
+            onChanged?.('Contrato reaberto.');
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Erro ao reabrir o contrato.');
+        } finally {
+            setClosingId(null);
+        }
+    };
+
     const handleClose = async (r: ExpiringRental) => {
         const ok = await confirm({
             title: `Encerrar o contrato ${r.number}?`,
@@ -137,7 +159,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
         try {
             await contractRenewalService.closeContract(r.id);
             await loadData();
-            onChanged?.();
+            onChanged?.('Contrato encerrado.');
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao encerrar o contrato.');
         } finally {
@@ -192,6 +214,17 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                 Limpar filtro de prazo
                             </button>
                         )}
+
+                        {/* Encerrados ficam fora por padrão (não há o que renovar neles);
+                            o toggle os traz para consulta e para reabrir um encerrado por engano. */}
+                        <button
+                            onClick={() => setShowClosed(!showClosed)}
+                            className={`h-9 px-3.5 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${
+                                showClosed ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            Encerrados
+                        </button>
 
                         <button
                             onClick={loadData}
@@ -319,6 +352,16 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
+                                                    {r.status === 'Encerrado' ? (
+                                                        <button
+                                                            onClick={() => handleReopen(r)}
+                                                            disabled={closingId === r.id}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-50"
+                                                        >
+                                                            {closingId === r.id ? 'Reabrindo…' : 'Reabrir'}
+                                                        </button>
+                                                    ) : (
+                                                    <>
                                                     {/* Renovar exige vigência: sem fim definido não há de onde
                                                         derivar o início do contrato-filho. Botão fica disabled
                                                         com title explicando, nunca some nem morre em silêncio. */}
@@ -341,6 +384,8 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                                     >
                                                         {closingId === r.id ? 'Encerrando…' : 'Encerrar'}
                                                     </button>
+                                                    </>
+                                                    )}
                                                 </div>
                                             </td>
                                         )}

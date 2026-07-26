@@ -93,10 +93,15 @@ interface ClientAreaProps {
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
 
 // Selo de status de contrato no dashboard do portal (minuta = "Em elaboração").
-const contractDashBadge = (status?: string): { label: string; cls: string } =>
-    status === 'Assinado' ? { label: 'Assinado', cls: 'bg-emerald-100 text-emerald-700' }
-    : status === 'Minuta' ? { label: 'Em elaboração', cls: 'bg-amber-100 text-amber-700' }
-    : { label: status || 'Ativo', cls: 'bg-blue-100 text-blue-700' };
+// `cls` (pílula) segue em uso só no mobile (fora do escopo desta aplicação do guia);
+// `textCls` é a versão §8 (texto colorido simples, sem pílula) usada no desktop.
+const contractDashBadge = (status?: string): { label: string; cls: string; textCls: string } =>
+    status === 'Assinado' ? { label: 'Assinado', cls: 'bg-emerald-100 text-emerald-700', textCls: 'text-emerald-700' }
+    : status === 'Minuta' ? { label: 'Em elaboração', cls: 'bg-amber-100 text-amber-700', textCls: 'text-amber-600' }
+    : { label: status || 'Ativo', cls: 'bg-blue-100 text-blue-700', textCls: 'text-blue-700' };
+
+// §8 — Status Badge de chamados (Últimos Chamados) em texto simples, sem pílula.
+const STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'Em Andamento': 'text-blue-700', Aguardando: 'text-purple-700', Resolvido: 'text-emerald-700', Cancelado: 'text-gray-400' };
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
@@ -498,11 +503,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     <div className="grid grid-cols-2 gap-6">
                         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                             <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Últimos Chamados</h3>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-xs font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}</div>}
+                            {recentRequests.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum chamado</p> : <div className="space-y-3">{recentRequests.map(req => (<div key={req.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><p className="text-sm font-bold text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{req.category}</p></div><span className={`text-sm font-normal shrink-0 ${STATUS_TEXT_COLOR[req.status] ?? 'text-gray-400'}`}>{req.status}</span></div>))}</div>}
                         </div>
                         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                             <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Contratos</h3>{enabledTabIds.includes('contratos') && <button onClick={() => setActiveTab('contratos')} className="text-xs font-black text-blue-500 uppercase tracking-widest hover:underline">Ver todos</button>}</div>
-                            {shownContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{shownContracts.slice(0, 3).map(c => { const badge = contractDashBadge(c.status); return (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span></div><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>); })}</div>}
+                            {shownContracts.length === 0 ? <p className="text-sm text-gray-400 font-medium text-center py-4">Nenhum contrato</p> : <div className="space-y-3">{shownContracts.slice(0, 3).map(c => { const badge = contractDashBadge(c.status); return (<div key={c.id} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0"><div className="min-w-0"><div className="flex items-center gap-2"><p className="text-sm font-bold text-gray-900 truncate">{c.title}</p><span className={`shrink-0 text-sm font-normal ${badge.textCls}`}>{badge.label}</span></div><p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{c.billing_cycle ?? c.contract_type}{c.end_date ? ` · até ${new Date(c.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}</p></div><span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span></div>); })}</div>}
                         </div>
                     </div>
                 </div>
@@ -622,7 +627,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <p className="text-sm font-bold text-gray-900 truncate">{c.title}</p>
-                                                <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span>
+                                                <span className={`shrink-0 text-sm font-normal ${badge.textCls}`}>{badge.label}</span>
                                             </div>
                                             <p className="text-xs font-bold text-gray-400 uppercase">{c.contract_type}{c.sla_days != null ? ` · SLA ${c.sla_days}d` : ''}</p>
                                         </div>
@@ -809,7 +814,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                                         <div className="flex-1 flex flex-col justify-center min-w-0">
                                             <h4 className="font-black text-gray-900 tracking-tight text-sm uppercase truncate mb-1">{event.name}</h4>
-                                            <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 rounded-full text-[9px] font-black text-gray-400 uppercase tracking-wider w-fit">
+                                            <span className="text-sm font-normal text-gray-400">
                                                 Início
                                             </span>
                                         </div>
@@ -918,25 +923,25 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <span>· Término: {new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
                                             )}
                                         </div>
-                                        {/* Chips extras por categoria */}
-                                        <div className="flex flex-wrap gap-2 mt-0.5">
+                                        {/* Chips extras por categoria — §8: texto colorido simples, sem pílula */}
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-xs font-bold">
                                             {isLocacao && contract.billing_cycle && (
-                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">
+                                                <span className="text-blue-600">
                                                     {contract.billing_cycle}{contract.due_day ? ` · dia ${contract.due_day}` : ''}
                                                 </span>
                                             )}
                                             {isLocacao && contract.reajuste_index && (
-                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${reajusteAlerta ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-gray-50 text-gray-500 border-gray-100'}`}>
+                                                <span className={reajusteAlerta ? 'text-amber-600' : 'text-gray-500'}>
                                                     {contract.reajuste_index}{reajusteAlerta ? ' · Reajuste próximo!' : ''}
                                                 </span>
                                             )}
                                             {isServicos && contract.sla_days != null && (
-                                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-indigo-100">
+                                                <span className="text-indigo-600">
                                                     SLA {contract.sla_days}d
                                                 </span>
                                             )}
                                             {isServicos && contract.warranty_months != null && (
-                                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-100">
+                                                <span className="text-emerald-600">
                                                     Garantia {contract.warranty_months}m
                                                 </span>
                                             )}
@@ -946,11 +951,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <span className="text-base font-black text-gray-900 tabular-nums">
                                             R$ {(contract.current_value || contract.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </span>
-                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                                            isSigned ? 'bg-emerald-100 text-emerald-700' :
-                                            contract.status === 'Ativo' ? 'bg-indigo-100 text-indigo-700' :
-                                            contract.status === 'Minuta' ? 'bg-purple-100 text-purple-700' :
-                                            'bg-amber-100 text-amber-700'
+                                        <span className={`text-sm font-normal ${
+                                            isSigned ? 'text-emerald-700' :
+                                            contract.status === 'Ativo' ? 'text-indigo-700' :
+                                            contract.status === 'Minuta' ? 'text-purple-700' :
+                                            'text-amber-700'
                                         }`}>
                                             {isSigned ? 'Assinado' : contract.status === 'Minuta' ? 'Minuta' : (contract.status || 'Em andamento')}
                                         </span>
@@ -1124,7 +1129,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         <p className="text-sm font-black text-purple-800">
                                                             {ver.name?.trim() || `Versão ${ver.v}`}
                                                             {ver.v === latestV && (
-                                                                <span className="ml-2 px-2 py-0.5 bg-purple-200 text-purple-700 rounded-full text-[9px] font-black uppercase">Atual</span>
+                                                                <span className="ml-2 text-xs font-normal text-purple-700">· Atual</span>
                                                             )}
                                                         </p>
                                                         <p className="text-xs text-purple-400 mt-0.5">
@@ -1591,11 +1596,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                             handleUpdateFinancial(newInsts);
                                                         }
                                                     }}
-                                                    className={`px-8 py-2 rounded-full text-xs font-black uppercase tracking-widest w-fit transition-all border shadow-sm
-                                                                ${inst.status === 'PAID'
-                                                            ? 'bg-indigo-600 text-white border-indigo-700'
-                                                            : 'bg-amber-50 text-amber-600 border-amber-200 shadow-amber-100/20'}
-                                                                ${isAdmin ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'cursor-default'}
+                                                    className={`text-sm font-normal w-fit transition-all
+                                                                ${inst.status === 'PAID' ? 'text-indigo-600' : 'text-amber-600'}
+                                                                ${isAdmin ? 'hover:underline cursor-pointer' : 'cursor-default'}
                                                             `}>
                                                     {inst.status === 'PAID' ? 'LIQUIDADO' : 'AGUARDANDO'}
                                                 </button>
@@ -1715,8 +1718,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                     handleUpdateFinancial(newInsts);
                                                                 }
                                                             }}
-                                                            className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all
-                                                                        ${inst.status === 'PAID' ? 'bg-indigo-600 text-white' : 'bg-amber-100 text-amber-600 hover:bg-amber-200'}`}
+                                                            className={`text-sm font-normal transition-all
+                                                                        ${inst.status === 'PAID' ? 'text-indigo-600' : 'text-amber-600'} ${isAdmin ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
                                                         >
                                                             {inst.status === 'PAID' ? 'LIQUIDADO' : 'AGUARDANDO'}
                                                         </button>
@@ -1927,7 +1930,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <div className={`flex items-center gap-2 text-sm font-normal tabular-nums ${overdue ? 'text-red-500' : 'text-gray-600'}`}>
                                                     <Calendar className="w-3.5 h-3.5" />
                                                     {new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                                    {overdue && <span className="text-[9px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-black uppercase">Vencido</span>}
+                                                    {overdue && <span className="text-sm font-normal text-red-500">· Vencido</span>}
                                                 </div>
                                             </td>
                                             <td className="px-8 py-4">
@@ -1941,9 +1944,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         const next = charges.map(c => c.id === charge.id ? { ...c, status: (c.status === 'PAID' ? 'PENDING' : 'PAID') as 'PAID' | 'PENDING' } : c);
                                                         handleUpdateCharges(next);
                                                     }}
-                                                    className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${charge.status === 'PAID' ? 'bg-emerald-600 text-white' : overdue ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'} ${isAdmin ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+                                                    className={`text-sm font-normal transition-all ${charge.status === 'PAID' ? 'text-emerald-600' : overdue ? 'text-red-600' : 'text-amber-600'} ${isAdmin ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
                                                 >
-                                                    {charge.status === 'PAID' ? 'PAGO' : overdue ? 'VENCIDO' : 'PENDENTE'}
+                                                    {charge.status === 'PAID' ? 'Pago' : overdue ? 'Vencido' : 'Pendente'}
                                                 </button>
                                             </td>
                                             {isAdmin && (
@@ -2140,9 +2143,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     const next = medicoes.map(m => m.id === med.id ? { ...m, status: (m.status === 'PAID' ? 'PENDING' : 'PAID') as 'PAID' | 'PENDING' } : m);
                                                     handleUpdateMedicoes(next);
                                                 }}
-                                                className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${med.status === 'PAID' ? 'bg-emerald-600 text-white' : 'bg-amber-100 text-amber-600'} ${isAdmin ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+                                                className={`text-sm font-normal transition-all ${med.status === 'PAID' ? 'text-emerald-600' : 'text-amber-600'} ${isAdmin ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
                                             >
-                                                {med.status === 'PAID' ? 'APROVADA' : 'PENDENTE'}
+                                                {med.status === 'PAID' ? 'Aprovada' : 'Pendente'}
                                             </button>
                                         </td>
                                         {isAdmin && (
@@ -2186,10 +2189,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const renderObra = () => {
         const pv = planningView;
         const fmt = (d: Date | null) => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-        const statusMap: Record<string, { label: string; cls: string; dot: string }> = {
-            concluida: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
-            andamento: { label: 'Em andamento', cls: 'bg-indigo-100 text-indigo-700', dot: 'bg-indigo-500' },
-            futura: { label: 'A iniciar', cls: 'bg-gray-100 text-gray-500', dot: 'bg-gray-300' },
+        const statusMap: Record<string, { label: string; textCls: string; dot: string }> = {
+            concluida: { label: 'Concluída', textCls: 'text-emerald-700', dot: 'bg-emerald-500' },
+            andamento: { label: 'Em andamento', textCls: 'text-indigo-700', dot: 'bg-indigo-500' },
+            futura: { label: 'A iniciar', textCls: 'text-gray-500', dot: 'bg-gray-300' },
         };
 
         if (planningLoadedKey && !pv) {
@@ -2298,7 +2301,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">{ph.groupName}</span>
                                                 <p className="text-sm font-black text-gray-900 truncate">{ph.name}</p>
                                             </div>
-                                            <span className={`shrink-0 px-2.5 py-1 rounded-full text-[9px] font-black uppercase ${st.cls}`}>{st.label}</span>
+                                            <span className={`shrink-0 text-sm font-normal ${st.textCls}`}>{st.label}</span>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -2449,7 +2452,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Sua Casa, Sua História</h3>
                         <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Cada marco é um passo mais próximo da sua nova vida.</p>
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-black uppercase tracking-widest border border-emerald-100/50">
+                    <div className="flex items-center gap-2 text-sm font-normal text-emerald-600">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         No Prazo
@@ -4377,8 +4380,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     const abertos    = clientRequests.filter(r => r.status === 'Aberto').length;
                     const emAndamento = clientRequests.filter(r => r.status === 'Em Andamento').length;
                     const resolvidos  = clientRequests.filter(r => r.status === 'Resolvido').length;
-                    const PRIORITY_COLOR: Record<string, string> = { Urgente: 'bg-red-100 text-red-600', Alta: 'bg-orange-100 text-orange-600', Média: 'bg-amber-100 text-amber-700', Baixa: 'bg-gray-100 text-gray-500' };
-                    const STATUS_COLOR: Record<string, string> = { Aberto: 'bg-amber-100 text-amber-700', 'Em Andamento': 'bg-blue-100 text-blue-700', Aguardando: 'bg-purple-100 text-purple-700', Resolvido: 'bg-emerald-100 text-emerald-700', Cancelado: 'bg-gray-100 text-gray-400' };
+                    const PRIORITY_TEXT_COLOR: Record<string, string> = { Urgente: 'text-red-600', Alta: 'text-orange-600', Média: 'text-amber-700', Baixa: 'text-gray-500' };
+                    const REQUEST_STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'Em Andamento': 'text-blue-700', Aguardando: 'text-purple-700', Resolvido: 'text-emerald-700', Cancelado: 'text-gray-400' };
                     return (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
                             <div className="flex items-center justify-between">
@@ -4433,8 +4436,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 {req.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{req.description}</p>}
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLOR[req.priority] ?? 'bg-gray-100 text-gray-500'}`}>{req.priority}</span>
-                                                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span>
+                                                <span className={`text-sm font-normal ${PRIORITY_TEXT_COLOR[req.priority] ?? 'text-gray-500'}`}>{req.priority}</span>
+                                                <span className={`text-sm font-normal ${REQUEST_STATUS_TEXT_COLOR[req.status] ?? 'text-gray-400'}`}>{req.status}</span>
                                                 {isAdmin && (
                                                     <select
                                                         value={req.status}
@@ -4443,7 +4446,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                             await clientRequestsService.updateRequest(req.id, { status: newStatus, resolved_at: newStatus === 'Resolvido' ? new Date().toISOString().split('T')[0] : undefined });
                                                             setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: newStatus } : r));
                                                         }}
-                                                        className="text-[9px] font-black uppercase bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 cursor-pointer"
+                                                        className="text-sm font-normal bg-gray-50 border border-gray-200 rounded-[6px] px-2 py-1 cursor-pointer"
                                                         onClick={e => e.stopPropagation()}
                                                     >
                                                         {['Aberto','Em Andamento','Aguardando','Resolvido','Cancelado'].map(s => <option key={s} value={s}>{s}</option>)}

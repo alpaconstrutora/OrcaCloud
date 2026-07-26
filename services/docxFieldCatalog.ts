@@ -1,9 +1,9 @@
-import { Contract } from '../types/contracts';
+import { Contract, ContractAddendum } from '../types/contracts';
 import { Client, Organization } from '../types/users';
 import { ProjectSettings } from '../types/project';
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────────
-export type FieldSource = 'organization' | 'client' | 'contract' | 'project' | 'special';
+export type FieldSource = 'organization' | 'client' | 'contract' | 'project' | 'addendum' | 'special';
 
 /** Mapeamento de um marcador {NNN} para uma origem de dado (ou texto fixo). */
 export interface TokenMapping {
@@ -21,6 +21,8 @@ export interface ResolveContext {
     client?: Client | null;
     contract?: Contract | null;
     project?: ProjectSettings | null;
+    /** Preenchido só na emissão a partir de um aditivo. */
+    addendum?: ContractAddendum | null;
 }
 
 interface FieldDef {
@@ -254,6 +256,28 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'artRrt',           label: 'ART / RRT',                get: c => c.project?.artRrt ?? '' },
             { field: 'alvara',           label: 'Alvará',                   get: c => c.project?.alvara ?? '' },
             { field: 'matriculaCNO',     label: 'Matrícula CNO',            get: c => c.project?.matriculaCNO ?? '' },
+        ],
+    },
+    {
+        // Aditivo — preenchido só quando o documento é emitido a partir de um
+        // aditivo (aba Documentos & Assinatura). Em documento de contrato os
+        // campos resolvem para string vazia, como qualquer origem ausente.
+        source: 'addendum',
+        label: 'Aditivo',
+        fields: [
+            { field: 'number',            label: 'Número do aditivo',        get: c => c.addendum?.number ?? '' },
+            { field: 'description',       label: 'Descrição',                get: c => c.addendum?.description ?? '' },
+            { field: 'type',              label: 'Tipo',                     get: c => c.addendum?.type ?? '' },
+            { field: 'status',            label: 'Situação',                 get: c => c.addendum?.status ?? '' },
+            { field: 'new_start_date',    label: 'Início da nova vigência',  get: c => fmtDate(c.addendum?.new_start_date) },
+            { field: 'new_end_date',      label: 'Fim da nova vigência',     get: c => fmtDate(c.addendum?.new_end_date) },
+            { field: 'previous_end_date', label: 'Fim da vigência anterior', get: c => fmtDate(c.addendum?.previous_end_date) },
+            { field: 'new_value',         label: 'Novo valor',               get: c => fmtCurrency(c.addendum?.new_value) },
+            { field: 'new_value_ext',     label: 'Novo valor por extenso',   get: c => valorPorExtenso(c.addendum?.new_value) },
+            { field: 'previous_value',    label: 'Valor anterior',           get: c => fmtCurrency(c.addendum?.previous_value) },
+            { field: 'reajuste_index',    label: 'Índice de reajuste',       get: c => c.addendum?.reajuste_index ?? '' },
+            { field: 'reajuste_fator',    label: 'Fator de reajuste',        get: c => c.addendum?.reajuste_fator != null ? c.addendum.reajuste_fator.toFixed(4).replace('.', ',') : '' },
+            { field: 'approved_at',       label: 'Data de aprovação',        get: c => fmtDate(c.addendum?.approved_at) },
         ],
     },
     {

@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
-import { contractRenewalService, RenewalPreview } from '../../services/contractRenewalService';
+import { contractRenewalService, RenewalPreview, RenewalMode } from '../../services/contractRenewalService';
 import { Contract } from '../../types';
 
 interface Props {
     open: boolean;
     contractId: string | null;
     onClose: () => void;
-    onRenewed: (child: Contract) => void;
+    /** Chamado nas duas vias. `child` só existe no modo novo contrato. */
+    onRenewed: (result: { mode: RenewalMode; child?: Contract; addendumId?: string; contractId: string }) => void;
 }
 
 /** Data BR sem bug de fuso: em UTC-3, `new Date(iso)` retrocede um dia. */
@@ -33,11 +34,17 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [mode, setMode] = useState<RenewalMode>('ADITIVO');
     const [months, setMonths] = useState(12);
     const [customEnd, setCustomEnd] = useState('');
     const [applyReajuste, setApplyReajuste] = useState(true);
     const [valueOverride, setValueOverride] = useState<string>('');
     const [notes, setNotes] = useState('');
+    /** Modo novo contrato: herdar os termos do pai (ciclo, dia de vencimento, índice…). */
+    const [inheritTerms, setInheritTerms] = useState(true);
+    const [overrideDueDay, setOverrideDueDay] = useState<string>('');
+    const [overrideCycle, setOverrideCycle] = useState<string>('');
+    const [overrideIndex, setOverrideIndex] = useState<string>('');
 
     const load = useCallback(async () => {
         if (!contractId) return;
@@ -48,6 +55,7 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
                 months,
                 endDate: customEnd || undefined,
                 applyReajuste,
+                mode,
             });
             setPreview(p);
         } catch (e) {
@@ -56,15 +64,17 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
         } finally {
             setLoading(false);
         }
-    }, [contractId, months, customEnd, applyReajuste]);
+    }, [contractId, months, customEnd, applyReajuste, mode]);
 
     useEffect(() => { if (open) load(); }, [open, load]);
 
     // Reset ao abrir outro contrato
     useEffect(() => {
         if (!open) return;
+        setMode('ADITIVO');
         setMonths(12); setCustomEnd(''); setApplyReajuste(true);
         setValueOverride(''); setNotes(''); setError(null);
+        setInheritTerms(true); setOverrideDueDay(''); setOverrideCycle(''); setOverrideIndex('');
     }, [open, contractId]);
 
     const handleRenew = async () => {
@@ -73,14 +83,29 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
         setError(null);
         try {
             const parsed = valueOverride ? Number(valueOverride.replace(',', '.')) : undefined;
-            const { child } = await contractRenewalService.renewContract(contractId, {
+            const base = {
                 months,
                 endDate: customEnd || undefined,
                 applyReajuste,
                 newValue: parsed && parsed > 0 ? parsed : undefined,
                 notes: notes || undefined,
-            });
-            onRenewed(child);
+            };
+
+            if (mode === 'ADITIVO') {
+                const { addendum } = await contractRenewalService.renewByAddendum(contractId, base);
+                onRenewed({ mode, addendumId: addendum.id, contractId });
+            } else {
+                const { child } = await contractRenewalService.renewContract(contractId, {
+                    ...base,
+                    inheritTerms,
+                    overrides: inheritTerms ? undefined : {
+                        ...(overrideDueDay ? { due_day: Number(overrideDueDay) } : {}),
+                        ...(overrideCycle ? { billing_cycle: overrideCycle as Contract['billing_cycle'] } : {}),
+                        ...(overrideIndex ? { reajuste_index: overrideIndex } : {}),
+                    },
+                });
+                onRenewed({ mode, child, contractId: child.id });
+            }
             onClose();
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao renovar o contrato.');
@@ -115,6 +140,42 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
                     </div>
                 ) : (
                     <>
+                        {/* Via da renovação — a escolha muda o que acontece com o
+                            contrato atual, então vem antes de tudo. */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-500">Como renovar</label>
+                            <div className="grid grid-cols-1 gap-2">
+                                <button
+                                    onClick={() => setMode('ADITIVO')}
+                                    className={`text-left p-4 rounded-[10px] border transition-all ${
+                                        mode === 'ADITIVO'
+                                            ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/20'
+                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                >
+                                    <p className="text-sm font-medium text-gray-900">Aditivo de prorrogação</p>
+                                    <p className="text-sm text-gray-500 mt-0.5">
+                                        Mantém o contrato {preview.parent.number}, estende a vigência até {fmtDate(preview.endDate)} e
+                                        gera {preview.installmentsToGenerate} parcela(s) do período novo. Assinado como {preview.nextAddendumNumber}.
+                                    </p>
+                                </button>
+                                <button
+                                    onClick={() => setMode('NOVO_CONTRATO')}
+                                    className={`text-left p-4 rounded-[10px] border transition-all ${
+                                        mode === 'NOVO_CONTRATO'
+                                            ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/20'
+                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                >
+                                    <p className="text-sm font-medium text-gray-900">Novo contrato</p>
+                                    <p className="text-sm text-gray-500 mt-0.5">
+                                        Cria o contrato {preview.nextNumber} com numeração e parcelas próprias
+                                        e <strong>encerra</strong> o {preview.parent.number}.
+                                    </p>
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Contrato atual — somente leitura */}
                         <div className="bg-gray-50 border border-gray-100 rounded-[10px] p-4 grid grid-cols-2 gap-y-3 gap-x-4">
                             <div>
@@ -228,6 +289,65 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
                             </p>
                         </div>
 
+                        {/* Termos do novo contrato — só na via de contrato novo.
+                            Herdar é o default; desmarcar revela o que antes era
+                            copiado do pai em silêncio. */}
+                        {mode === 'NOVO_CONTRATO' && (
+                            <div className="space-y-3">
+                                <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                                    <input
+                                        type="checkbox"
+                                        checked={inheritTerms}
+                                        onChange={(e) => setInheritTerms(e.target.checked)}
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    Aproveitar os mesmos termos do contrato atual
+                                </label>
+
+                                {!inheritTerms && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-gray-50 border border-gray-200 rounded-[10px]">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-slate-500">Periodicidade</label>
+                                            <select
+                                                value={overrideCycle || preview.parent.billing_cycle || 'Mensal'}
+                                                onChange={(e) => setOverrideCycle(e.target.value)}
+                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                            >
+                                                <option value="Mensal">Mensal</option>
+                                                <option value="Bimestral">Bimestral</option>
+                                                <option value="Semestral">Semestral</option>
+                                                <option value="Anual">Anual</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-slate-500">Dia de vencimento</label>
+                                            <input
+                                                type="number" min="1" max="31"
+                                                value={overrideDueDay || String(preview.parent.due_day ?? '')}
+                                                onChange={(e) => setOverrideDueDay(e.target.value)}
+                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-slate-500">Índice</label>
+                                            <select
+                                                value={overrideIndex || preview.parent.reajuste_index || 'IGP-M'}
+                                                onChange={(e) => setOverrideIndex(e.target.value)}
+                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                            >
+                                                <option value="IGP-M">IGP-M</option>
+                                                <option value="IPCA">IPCA</option>
+                                                <option value="INCC">INCC</option>
+                                                <option value="INCC-M">INCC-M</option>
+                                                <option value="CUB">CUB</option>
+                                                <option value="OUTROS">Outros</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Observações */}
                         <div className="space-y-2">
                             <label className="text-xs font-semibold text-slate-500">Observações</label>
@@ -243,13 +363,22 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
                         {/* Impacto */}
                         <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 text-blue-800 rounded-[10px] p-3 text-sm">
                             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            <span>
-                                O contrato {preview.parent.number} será encerrado
-                                {preview.pendingToCancel > 0
-                                    ? ` e ${preview.pendingToCancel} parcela(s) futura(s) dele serão canceladas.`
-                                    : '. Nenhuma parcela futura dele será cancelada.'}
-                                {' '}Parcelas já pagas não são afetadas.
-                            </span>
+                            {mode === 'ADITIVO' ? (
+                                <span>
+                                    O contrato {preview.parent.number} <strong>não</strong> será encerrado:
+                                    a vigência dele passa a terminar em {fmtDate(preview.endDate)}.
+                                    {' '}Serão geradas {preview.installmentsToGenerate} parcela(s) de {fmtDate(preview.startDate)} a {fmtDate(preview.endDate)}.
+                                    {' '}Parcelas anteriores não são afetadas.
+                                </span>
+                            ) : (
+                                <span>
+                                    O contrato {preview.parent.number} será encerrado
+                                    {preview.pendingToCancel > 0
+                                        ? ` e ${preview.pendingToCancel} parcela(s) futura(s) dele serão canceladas.`
+                                        : '. Nenhuma parcela futura dele será cancelada.'}
+                                    {' '}Parcelas já pagas não são afetadas.
+                                </span>
+                            )}
                         </div>
 
                         {error && (
@@ -275,7 +404,7 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                 >
                     <RefreshCw className={`w-[15px] h-[15px] ${saving ? 'animate-spin' : ''}`} />
-                    {saving ? 'Renovando...' : 'Renovar contrato'}
+                    {saving ? 'Renovando...' : mode === 'ADITIVO' ? 'Gerar aditivo' : 'Criar novo contrato'}
                 </button>
             </SheetFooter>
         </Sheet>

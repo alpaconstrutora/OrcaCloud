@@ -75,6 +75,7 @@ import { supabase } from '../lib/supabase';
 import BudgetPickerModal from './BudgetPickerModal';
 import ContractMeasurementModal from './ContractMeasurementModal';
 import ContractAddendumModal from './ContractAddendumModal';
+import ContractDocumentsTab from './contracts/ContractDocumentsTab';
 import UtilityBillModal from './UtilityBillModal';
 import DatabasePickerModal from './DatabasePickerModal';
 import { organizationService } from '../services/organizationService';
@@ -117,7 +118,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [projectBudget, setProjectBudget] = React.useState<BudgetEntry[]>([]);
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao'>('overview');
+    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao' | 'documentos'>('overview');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
@@ -1092,9 +1093,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             </div>
 
             <div className="flex bg-white p-1.5 rounded-3xl border border-gray-100 shadow-sm w-fit sticky top-4 z-40 backdrop-blur-md bg-white/80">
+                {/* Contrato recorrente (locação) não tinha aba de aditivo, de
+                    documentos nem de assinatura — só Visão Geral e Faturas.
+                    Aditivos e Documentos & Assinatura passam a existir nos dois
+                    ramos: renovação por aditivo depende das duas. */}
                 {(contract.is_recurring ? [
                     { id: 'overview', label: 'Visão Geral', icon: Layers },
-                    { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
+                    { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 },
+                    { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
+                    { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+                    { id: 'documentos', label: 'Documentos & Assinatura', icon: FileDown },
                 ] : [
                     { id: 'overview', label: 'Visão Geral', icon: Layers },
                     { id: 'items', label: 'Itens do Contrato', icon: FileText },
@@ -1102,10 +1110,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                     { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
                     { id: 'emissao', label: 'Emissão', icon: FileDown },
+                    { id: 'documentos', label: 'Documentos & Assinatura', icon: FileDown },
                 ]).map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao')}
+                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao' | 'documentos')}
                         className={`flex items-center gap-2 px-5 py-2 rounded-2xl transition-all font-medium text-button uppercase tracking-widest ${activeTab === tab.id
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
@@ -1856,6 +1865,19 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
 
             {/* Tab: Emissão */}
+            {activeTab === 'documentos' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    <ContractDocumentsTab
+                        contract={contract}
+                        onNotify={notify}
+                        onChanged={async () => {
+                            const updated = await contractService.getContractById(contract.id);
+                            if (updated) setContract(updated);
+                        }}
+                    />
+                </div>
+            )}
+
             {activeTab === 'emissao' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
                     {/* Ações de emissão */}

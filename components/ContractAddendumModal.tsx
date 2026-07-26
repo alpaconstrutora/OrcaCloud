@@ -40,10 +40,14 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
             setLoading(true);
             setError(null);
 
-            const existingAddendums = await contractService.listAddendums(contract.id);
+            // Numeração vem do service (MAX + 1). Era `length + 1` aqui, o que
+            // repetia número depois de excluir um aditivo — e agora há índice
+            // único (contract_id, number) que rejeitaria a duplicata.
+            const number = await contractService.nextAddendumNumber(contract.id);
             const addendumData: Omit<ContractAddendum, 'id' | 'created_at' | 'status' | 'approved_at'> = {
                 contract_id: contract.id,
-                number: `AD-${String(existingAddendums.length + 1).padStart(3, '0')}`,
+                organization_id: contract.organization_id,
+                number,
                 description: formData.description,
                 type: formData.value_impact !== 0 ? (formData.new_end_date !== contract.end_date ? 'Ambos' : 'Valor') : 'Prazo',
                 value_impact: formData.value_impact,

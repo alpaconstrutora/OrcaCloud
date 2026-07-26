@@ -34,6 +34,7 @@ import { rentalPricingService } from '../services/rentalPricingService';
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
+import ContractDetailView from './ContractDetailView';
 import { contractRenewalService } from '../services/contractRenewalService';
 
 interface RentalsModuleProps {
@@ -55,6 +56,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     );
     // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
     const [renewalsBadge, setRenewalsBadge] = useState(0);
+    // Detalhe do contrato aberto de dentro da aba Renovações (aditivos,
+    // documentos e assinatura). Mesmo padrão de ServiceContractsModule.
+    // Aceita ?contract= na URL — é o link que o cron de vencimento manda.
+    const [detailContractId, setDetailContractId] = useState<string | null>(() => {
+        const fromUrl = new URLSearchParams(window.location.search).get('contract');
+        return fromUrl || null;
+    });
     const [properties, setProperties] = useState<Property[]>([]);
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -1360,12 +1368,22 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             }
 
             {activeTab === 'renewals' && (
-                <RentalRenewals
-                    organizationId={effectiveOrganizationId}
-                    clients={clients}
-                    onRenewed={() => { loadData(); notify('Contrato renovado com sucesso.'); }}
-                    onChanged={(message) => { loadData(); notify(message); }}
-                />
+                detailContractId ? (
+                    <ContractDetailView
+                        contractId={detailContractId}
+                        organizationId={effectiveOrganizationId}
+                        budget={[]}
+                        onBack={() => setDetailContractId(null)}
+                    />
+                ) : (
+                    <RentalRenewals
+                        organizationId={effectiveOrganizationId}
+                        clients={clients}
+                        onRenewed={() => { loadData(); notify('Contrato renovado com sucesso.'); }}
+                        onChanged={(message) => { loadData(); notify(message); }}
+                        onOpenContract={setDetailContractId}
+                    />
+                )
             )}
 
             {activeTab === 'brokers' && (

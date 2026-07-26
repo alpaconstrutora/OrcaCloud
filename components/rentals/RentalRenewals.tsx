@@ -55,9 +55,11 @@ interface Props {
     onRenewed?: (child: Contract) => void;
     /** Avisa o módulo pai para recarregar, com a mensagem do que aconteceu. */
     onChanged?: (message: string) => void;
+    /** Abre o detalhe do contrato (aditivos, documentos, assinatura). */
+    onOpenContract?: (contractId: string) => void;
 }
 
-const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenewed, onChanged }) => {
+const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenewed, onChanged, onOpenContract }) => {
     const [rows, setRows] = useState<ExpiringRental[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -352,6 +354,14 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
+                                                    {onOpenContract && (
+                                                        <button
+                                                            onClick={() => onOpenContract(r.id)}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                        >
+                                                            Ver contrato
+                                                        </button>
+                                                    )}
                                                     {r.status === 'Encerrado' ? (
                                                         <button
                                                             onClick={() => handleReopen(r)}
@@ -405,7 +415,14 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                 open={Boolean(renewingId)}
                 contractId={renewingId}
                 onClose={() => setRenewingId(null)}
-                onRenewed={(child) => { loadData(); onRenewed?.(child); }}
+                onRenewed={(r) => {
+                    loadData();
+                    if (r.mode === 'ADITIVO') {
+                        onChanged?.('Aditivo de prorrogação gerado. Abra o contrato para emitir e assinar o documento.');
+                    } else if (r.child) {
+                        onRenewed?.(r.child);
+                    }
+                }}
             />
         </div>
     );

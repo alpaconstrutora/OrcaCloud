@@ -43,13 +43,22 @@ serve(async (req: Request) => {
         const body = await req.json();
         const { action, organizationId } = body;
 
-        // Suporte duplo: dealId (commercial_deals) e contractId (contracts)
+        // Alvos suportados, do mais específico para o legado:
+        //   documentVersionId → contract_document_versions (versão de documento)
+        //   addendumId        → contract_addendums (aditivo)
+        //   contractId        → contracts
+        //   dealId            → commercial_deals (compat)
         const dealId: string | undefined = body.dealId;
         const contractId: string | undefined = body.contractId;
-        const target = contractId ? 'contract' : 'deal';
+        const addendumId: string | undefined = body.addendumId;
+        const documentVersionId: string | undefined = body.documentVersionId;
+        const target = documentVersionId ? 'document_version'
+                     : addendumId ? 'addendum'
+                     : contractId ? 'contract'
+                     : 'deal';
 
-        if (!action || (!dealId && !contractId) || !organizationId) {
-            return json({ error: 'action, (dealId ou contractId) e organizationId são obrigatórios' }, 400);
+        if (!action || (!dealId && !contractId && !addendumId && !documentVersionId) || !organizationId) {
+            return json({ error: 'action, (dealId, contractId, addendumId ou documentVersionId) e organizationId são obrigatórios' }, 400);
         }
 
         // ── ENVIAR DOCUMENTO PARA ASSINATURA ─────────────────────────────────
@@ -95,7 +104,34 @@ serve(async (req: Request) => {
             const zapDoc = await zapResp.json();
             const signUrl = zapDoc.signers?.[0]?.sign_url ?? null;
 
-            if (target === 'contract') {
+            if (target === 'document_version') {
+                await adminClient.from('contract_document_versions').update({
+                    signature_token: zapDoc.token,
+                    signature_status: 'SENT',
+                    signature_url: signUrl,
+                }).eq('id', documentVersionId);
+
+                // Denormaliza no aditivo quando a versão pertence a um: a lista
+                // de aditivos mostra o status sem precisar carregar as versões.
+                const { data: ver } = await adminClient
+                    .from('contract_document_versions')
+                    .select('owner_type, owner_id')
+                    .eq('id', documentVersionId)
+                    .maybeSingle();
+                if (ver?.owner_type === 'ADDENDUM') {
+                    await adminClient.from('contract_addendums').update({
+                        signature_token: zapDoc.token,
+                        signature_status: 'SENT',
+                        signature_url: signUrl,
+                    }).eq('id', ver.owner_id);
+                }
+            } else if (target === 'addendum') {
+                await adminClient.from('contract_addendums').update({
+                    signature_token: zapDoc.token,
+                    signature_status: 'SENT',
+                    signature_url: signUrl,
+                }).eq('id', addendumId);
+            } else if (target === 'contract') {
                 await adminClient.from('contracts').update({
                     signature_token: zapDoc.token,
                     signature_status: 'SENT',
@@ -133,16 +169,54 @@ serve(async (req: Request) => {
 
             const isSigned = status === 'finished';
 
-            // Atualizar contracts (se token bate)
-            await adminClient.from('contracts')
+            // O token do ZapSign é único e há índice único parcial em
+            // signature_token nas quatro tabelas — o UPDATE é no-op onde não casa.
+
+            // 1) Versão de documento (contrato ou aditivo)
+            const { data: signedVersions } = await adminClient.from('contract_document_versions')
                 .update({
                     signature_status: isSigned ? 'SIGNED' : 'SENT',
                     ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
-                    ...(isSigned && signed_file ? { signed_contract_url: signed_file } : {}),
+                    ...(isSigned && signed_file ? { signed_file_url: signed_file } : {}),
+                })
+                .eq('signature_token', token)
+                .select('id, contract_id, owner_type, owner_id, kind');
+
+            const version = signedVersions?.[0];
+
+            // 2) Aditivo — por token direto e pela versão que pertence a ele
+            await adminClient.from('contract_addendums')
+                .update({
+                    signature_status: isSigned ? 'SIGNED' : 'SENT',
+                    ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
+                    ...(isSigned && signed_file ? { signed_document_url: signed_file } : {}),
                 })
                 .eq('signature_token', token);
 
-            // Atualizar commercial_deals (backward compat)
+            // 3) Contrato. ⚠️ A versão só propaga para o contrato quando é o
+            // CONTRATO em si — minuta e aditivo assinados não podem sobrescrever
+            // o status de assinatura nem o PDF do contrato principal.
+            const versionIsContract = version && version.kind === 'CONTRATO' && version.owner_type === 'CONTRACT';
+            if (versionIsContract) {
+                await adminClient.from('contracts')
+                    .update({
+                        signature_status: isSigned ? 'SIGNED' : 'SENT',
+                        ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
+                        ...(isSigned && signed_file ? { signed_contract_url: signed_file } : {}),
+                    })
+                    .eq('id', version.owner_id);
+            } else if (!version) {
+                // Fluxo legado: token gravado direto em contracts.
+                await adminClient.from('contracts')
+                    .update({
+                        signature_status: isSigned ? 'SIGNED' : 'SENT',
+                        ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
+                        ...(isSigned && signed_file ? { signed_contract_url: signed_file } : {}),
+                    })
+                    .eq('signature_token', token);
+            }
+
+            // 4) Atualizar commercial_deals (backward compat)
             await adminClient.from('commercial_deals')
                 .update({ signature_status: isSigned ? 'SIGNED' : 'PENDING' })
                 .eq('signature_token', token);

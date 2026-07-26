@@ -3,6 +3,7 @@ import { financialService } from './financialService';
 import { projectService } from './projectService';
 import { approvalService } from './approvalService';
 import { normalizeIndexName } from './contractIndexService';
+import { commercialFinanceService } from './commercialFinanceService';
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import {
@@ -19,6 +20,15 @@ import {
     ContractDocumentGateItem,
     DocumentRequirementPhase
 } from '../types';
+
+// Colunas de aditivo — inclui os campos de prorrogação e assinatura da
+// migration 20270828000002. Mantido em constante porque três consultas leem a
+// mesma coisa e a lista já ficou longa demais para repetir.
+const ADDENDUM_COLS =
+    'id, contract_id, organization_id, number, type, description, value_impact, new_end_date, ' +
+    'new_start_date, previous_end_date, new_value, previous_value, reajuste_index, reajuste_fator, ' +
+    'installments_generated, status, requested_by, approved_by, approved_at, notes, ' +
+    'signature_status, signature_token, signature_url, signature_completed_at, signed_document_url, created_at';
 
 // Resolve supplier name from DB (returns fallback string on error)
 async function resolveSupplierName(supplierId: string | undefined, fallback: string): Promise<string> {
@@ -213,6 +223,83 @@ export async function nextRentalNumber(orgId: string, year: number): Promise<str
     return `CL-${year}-${String(lastSeq + 1).padStart(3, '0')}`;
 }
 
+/**
+ * Aplica um aditivo de PRORROGAÇÃO de locação: estende a vigência do próprio
+ * contrato e gera as parcelas do período novo.
+ *
+ * Diferente da renovação por contrato-filho, aqui o contrato NÃO é encerrado —
+ * é o mesmo contrato que continua, com `end_date` avançado. Por isso nada
+ * anterior a `new_start_date` é tocado.
+ *
+ * Retorna false quando o aditivo não é desse tipo (aí o chamador segue pelo
+ * caminho antigo, de suprimentos/serviços).
+ */
+async function applyProrrogacaoAddendum(addendum: ContractAddendum, approvedBy: string): Promise<boolean> {
+    const { data: contract, error } = await supabase
+        .from('contracts')
+        .select('id, organization_id, project_id, deal_id, number, title, domain, is_recurring, start_date, end_date, billing_cycle, due_day, payment_days, original_value, current_value, supplier_id, client_id, direction, status')
+        .eq('id', addendum.contract_id)
+        .single();
+    if (error) throw error;
+
+    // Gate: prorrogação só existe para locação recorrente. Qualquer outra coisa
+    // volta para o caminho legado — não vamos gerar parcela em contrato de
+    // fornecedor por causa de um campo homônimo.
+    if (!contract.is_recurring || contract.domain !== 'LOCACAO') return false;
+
+    const novoValor = addendum.new_value ?? contract.current_value ?? contract.original_value ?? 0;
+    const inicio = addendum.new_start_date!;
+    const fim = addendum.new_end_date;
+    if (!fim) throw new Error('Aditivo de prorrogação sem nova data de término.');
+
+    // 1) Corta o resíduo da NEGOCIAÇÃO no período novo. A negociação só conhece
+    //    a vigência original; o que ela tiver dali para frente colidiria com as
+    //    parcelas do aditivo (mesmo aluguel cobrado duas vezes).
+    if (contract.deal_id && contract.organization_id) {
+        try {
+            await commercialFinanceService.deleteDealInstallmentsFrom(
+                contract.deal_id, contract.organization_id, inicio);
+        } catch (e) {
+            console.error('[CONTRACTS] Prorrogação: erro ao cortar parcelas da negociação:', e);
+        }
+    }
+
+    // 2) Estende o contrato. UPDATE direto de propósito: updateContract
+    //    recalcularia current_value e apagaria o reajuste embutido no aditivo.
+    const proximoReajuste = (() => {
+        const [y, m, d] = inicio.split('-').map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        dt.setUTCFullYear(dt.getUTCFullYear() + 1);
+        return dt.toISOString().slice(0, 10);
+    })();
+
+    const { error: updErr } = await supabase
+        .from('contracts')
+        .update({
+            end_date: fim,
+            current_value: novoValor,
+            reajuste_data_base: inicio,
+            reajuste_proximo: proximoReajuste,
+            status: contract.status === 'Encerrado' ? 'Ativo' : contract.status,
+        })
+        .eq('id', contract.id);
+    if (updErr) throw updErr;
+
+    // 3) Gera as parcelas só da janela nova (idempotente por data).
+    const result = await generateRecurringInstallmentsForPeriod(
+        { ...contract, end_date: fim } as unknown as Contract,
+        { fromDate: inicio, toDate: fim, amount: novoValor, label: `Aluguel ${contract.number || ''} (${addendum.number})`.trim() },
+    );
+
+    await supabase
+        .from('contract_addendums')
+        .update({ installments_generated: result.inserted })
+        .eq('id', addendum.id);
+
+    console.log(`[CONTRACTS] Aditivo ${addendum.number} aprovado por ${approvedBy}: vigência até ${fim}, ${result.inserted} parcela(s) geradas (${result.skipped} já existiam).`);
+    return true;
+}
+
 // Returns all measurement IDs for a contract (used to clean up measurement-based transactions)
 async function getContractMeasurementIds(contractId: string): Promise<string[]> {
     try {
@@ -357,6 +444,69 @@ function advanceCycleAligned(date: Date, cycle: string | undefined, dueDay?: num
     }
 }
 
+/**
+ * Primeiro vencimento de um contrato recorrente.
+ *
+ * Extraído de `syncRecurringToFinance` sem mudar a regra: a data de referência
+ * é `start_date + payment_days`, e o primeiro vencimento é a primeira
+ * ocorrência de `due_day` a partir dela. Usa hora 12:00 local de propósito —
+ * evita que conversão de fuso jogue a parcela para o dia anterior.
+ */
+export function firstRecurringDueDate(opts: {
+    startDate: string;
+    dueDay?: number;
+    billingCycle?: string;
+    paymentDays?: number;
+}): Date {
+    const ref = new Date(opts.startDate.slice(0, 10) + 'T12:00:00');
+    if (opts.paymentDays && opts.paymentDays > 0) {
+        ref.setDate(ref.getDate() + opts.paymentDays);
+    }
+    if (!opts.dueDay) return ref;
+
+    const maxDaySameMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
+    const sameMonth = new Date(ref.getFullYear(), ref.getMonth(), Math.min(opts.dueDay, maxDaySameMonth), 12, 0, 0);
+    if (sameMonth >= ref) return sameMonth;
+    const next = new Date(sameMonth);
+    advanceCycleAligned(next, opts.billingCycle, opts.dueDay);
+    return next;
+}
+
+/**
+ * Vencimentos de um contrato recorrente dentro da janela fechada [from, to].
+ *
+ * Função pura, sem I/O. É a mesma cadência de `syncRecurringToFinance` (âncora
+ * em `startDate`, alinhada a `due_day`, avançando por `billing_cycle`) — só que
+ * recortada por janela, o que permite gerar SÓ o período prorrogado de um
+ * aditivo sem tocar nas parcelas anteriores.
+ */
+export function buildRecurringDueDates(opts: {
+    /** Âncora do ciclo — o start_date do contrato, não o início da janela. */
+    startDate: string;
+    from: string;
+    to: string;
+    dueDay?: number;
+    billingCycle?: string;
+    paymentDays?: number;
+}): string[] {
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const from = opts.from.slice(0, 10);
+    const to = opts.to.slice(0, 10);
+    const cur = firstRecurringDueDate(opts);
+    const out: string[] = [];
+
+    // Guarda contra ciclo inválido/ausente que não avançaria o cursor.
+    for (let guard = 0; guard < 1200; guard++) {
+        const cursor = iso(cur);
+        if (cursor > to) break;
+        if (cursor >= from) out.push(cursor);
+        const before = cur.getTime();
+        advanceCycleAligned(cur, opts.billingCycle, opts.dueDay);
+        if (cur.getTime() <= before) break;
+    }
+    return out;
+}
+
 // Generate financial entries for a recurring contract.
 //
 // Rules:
@@ -376,25 +526,12 @@ async function syncRecurringToFinance(contract: Contract) {
 
         const dueDay = contract.due_day;
 
-        // Reference date = start_date + payment_days
-        const ref = new Date(contract.start_date + 'T12:00:00');
-        if (contract.payment_days && contract.payment_days > 0) {
-            ref.setDate(ref.getDate() + contract.payment_days);
-        }
-
-        // First payment = first occurrence of due_day >= ref
-        let cur: Date;
-        if (dueDay) {
-            const maxDaySameMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
-            const samMonth = new Date(ref.getFullYear(), ref.getMonth(), Math.min(dueDay, maxDaySameMonth), 12, 0, 0);
-            cur = samMonth >= ref ? samMonth : (() => {
-                const d = new Date(samMonth);
-                advanceCycleAligned(d, contract.billing_cycle, dueDay);
-                return d;
-            })();
-        } else {
-            cur = new Date(ref);
-        }
+        const cur = firstRecurringDueDate({
+            startDate: contract.start_date,
+            dueDay,
+            billingCycle: contract.billing_cycle,
+            paymentDays: contract.payment_days,
+        });
 
         // End boundary: contract end_date OR (last past payment + 12 future cycles)
         const endDate = contract.end_date
@@ -476,6 +613,114 @@ async function syncRecurringToFinance(contract: Contract) {
     } catch (e) {
         console.error('[CONTRACTS] Error syncing recurring contract to finance:', e);
     }
+}
+
+/**
+ * Gera parcelas de um contrato recorrente APENAS na janela [fromDate, toDate],
+ * com o valor informado explicitamente.
+ *
+ * Existe porque nenhuma função anterior servia ao aditivo de prorrogação:
+ *   • `syncRecurringToFinance` regera a série INTEIRA desde start_date — no
+ *     aditivo isso duplicaria tudo que já foi cobrado;
+ *   • ela lê `original_value`, e em locação o aluguel vigente mora em
+ *     `current_value` (é lá que `applyReajuste` escreve). Por isso o valor
+ *     entra por parâmetro: quem chama sabe qual é o aluguel do período.
+ *
+ * Idempotente por data: relê o que já existe na janela e pula os vencimentos
+ * já lançados — protege contra duplo clique em "Aprovar aditivo".
+ *
+ * REGRA #2: `project_id` só é gravado quando o contrato tem obra real; locação
+ * org-level fica nulo (parcela do comercial não tem obra).
+ */
+export async function generateRecurringInstallmentsForPeriod(
+    contract: Contract,
+    opts: { fromDate: string; toDate: string; amount: number; label?: string },
+): Promise<{ inserted: number; skipped: number; dueDates: string[] }> {
+    const { fromDate, toDate, amount } = opts;
+    if (!contract.is_recurring) throw new Error('Geração por período só se aplica a contrato recorrente.');
+    if (!(amount > 0)) throw new Error('Valor da parcela deve ser maior que zero.');
+
+    const dueDates = buildRecurringDueDates({
+        startDate: contract.start_date,
+        from: fromDate,
+        to: toDate,
+        dueDay: contract.due_day,
+        billingCycle: contract.billing_cycle,
+        paymentDays: contract.payment_days,
+    });
+    if (dueDates.length === 0) return { inserted: 0, skipped: 0, dueDates: [] };
+
+    const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
+    const label = opts.label || `Contrato ${contract.number || ''}`.trim();
+
+    // ── Contrato ligado a obra: parcelas no JSONB do projeto, tag [contract:id]
+    if (contract.project_id) {
+        const existing = new Set<string>();
+        try {
+            const project = await projectService.loadProject(contract.project_id);
+            const txs = ((project?.settings as any)?.financialInfo?.transactions || []) as Array<{ date?: string; notes?: string }>;
+            const tag = `[contract:${contract.id}]`;
+            txs.filter(t => (t.notes || '').includes(tag))
+               .forEach(t => existing.add((t.date || '').slice(0, 10)));
+        } catch { /* sem histórico legível: gera tudo */ }
+
+        const novos = dueDates.filter(d => !existing.has(d));
+        if (novos.length > 0) {
+            await financialService.addTransactionBatch(contract.project_id, novos.map((d, i) => ({
+                date: `${d}T12:00:00.000Z`,
+                type: 'EXPENSE' as const,
+                category: 'Mão de Obra / Serviço',
+                description: `${label} — parcela ${i + 1}/${novos.length} (${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)})`,
+                value: amount,
+                status: 'PENDING' as const,
+                supplier: supplierName,
+                notes: `[contract:${contract.id}] Gerado pela prorrogação de vigência`,
+            })));
+        }
+        return { inserted: novos.length, skipped: dueDates.length - novos.length, dueDates };
+    }
+
+    if (!contract.organization_id) return { inserted: 0, skipped: 0, dueDates };
+
+    // ── Contrato org-level: internal_transactions
+    const { data: jaExistem } = await supabase
+        .from('internal_transactions')
+        .select('due_date')
+        .eq('organization_id', contract.organization_id)
+        .eq('source_system', 'CONTRACT_RECURRING')
+        .eq('reference_id', contract.id)
+        .gte('due_date', fromDate)
+        .lte('due_date', toDate);
+    const existing = new Set((jaExistem || []).map(r => (r.due_date as string).slice(0, 10)));
+
+    const novos = dueDates.filter(d => !existing.has(d));
+    if (novos.length === 0) return { inserted: 0, skipped: dueDates.length, dueDates };
+
+    const party = await resolveContractParty(contract, supplierName);
+    const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
+
+    const { error } = await supabase.from('internal_transactions').insert(novos.map((d, i) => ({
+        organization_id: contract.organization_id,
+        source_system: 'CONTRACT_RECURRING',
+        reference_id: contract.id,
+        project_id: contract.project_id ?? null,
+        transaction_date: d,
+        due_date: d,
+        amount,
+        direction: txDirection,
+        description: `${label} — parcela ${i + 1}/${novos.length} (${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)})`,
+        category: 'Mão de Obra / Serviço',
+        entity_name: party.party_name ?? supplierName,
+        party_id: party.party_id,
+        party_type: party.party_type,
+        party_name: party.party_name,
+        status: 'PENDING',
+        business_status: 'PREVISTO',
+    })));
+    if (error) throw error;
+
+    console.log(`[CONTRACTS] Prorrogação: ${novos.length} parcela(s) geradas para ${contract.number} (${fromDate} → ${toDate})`);
+    return { inserted: novos.length, skipped: dueDates.length - novos.length, dueDates };
 }
 
 // Generate a single financial entry for a À Vista (non-parcelado, non-recurring) contract.
@@ -904,6 +1149,12 @@ export const contractService = {
         }
     },
 
+    // ⚠️ LEGADO. A fonte da verdade das versões passou a ser a tabela
+    // `contract_document_versions` (contractDocumentVersionService), e
+    // `contracts.minuta_versions` virou projeção com escritor único
+    // (_syncMinutaMirror). Estes quatro métodos escrevem direto no JSONB e, se
+    // usados junto do novo serviço, seriam sobrescritos na próxima projeção.
+    // Mantidos apenas para não quebrar integrações externas — não usar em código novo.
     addMinutaVersion: async (contractId: string, version: { url: string; notes: string; name?: string }): Promise<void> => {
         // Lê versões atuais, incrementa número e faz append. Versão entra como rascunho (não emitida).
         const { data, error: fetchErr } = await supabase
@@ -1063,14 +1314,28 @@ export const contractService = {
     updateContract: async (id: string, updates: Partial<Contract>): Promise<Contract> => {
         // Se estiver atualizando o valor original, precisamos manter o valor atual sincronizado
         if (updates.original_value !== undefined) {
-            const { data: addendums } = await supabase
-                .from('contract_addendums')
-                .select('value_impact')
-                .eq('contract_id', id)
-                .eq('status', 'Aprovado');
+            // ⚠️ Contrato RECORRENTE fica de fora deste recálculo. Nele
+            // `current_value` é o ALUGUEL VIGENTE — quem o define é
+            // `applyReajuste` (que só escreve em current_value) e o aditivo de
+            // prorrogação. Recalcular `original_value + Σ(aditivos)` aqui
+            // apagaria silenciosamente todo o reajuste acumulado assim que
+            // alguém editasse o valor do contrato na tela.
+            const { data: contractRow } = await supabase
+                .from('contracts')
+                .select('is_recurring')
+                .eq('id', id)
+                .maybeSingle();
 
-            const addendumsTotal = (addendums || []).reduce((sum, a) => sum + (a.value_impact || 0), 0);
-            updates.current_value = updates.original_value + addendumsTotal;
+            if (!contractRow?.is_recurring) {
+                const { data: addendums } = await supabase
+                    .from('contract_addendums')
+                    .select('value_impact')
+                    .eq('contract_id', id)
+                    .eq('status', 'Aprovado');
+
+                const addendumsTotal = (addendums || []).reduce((sum, a) => sum + (a.value_impact || 0), 0);
+                updates.current_value = updates.original_value + addendumsTotal;
+            }
         }
 
         // Sanitize UUID fields: empty string fails Postgres UUID cast
@@ -1357,12 +1622,42 @@ export const contractService = {
     listAddendums: async (contractId: string): Promise<ContractAddendum[]> => {
         const { data, error } = await supabase
             .from('contract_addendums')
-            .select('id, contract_id, number, type, description, value_impact, new_end_date, status, requested_by, approved_by, approved_at, notes, created_at')
+            .select(ADDENDUM_COLS)
             .eq('contract_id', contractId)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return data as ContractAddendum[];
+        return data as unknown as ContractAddendum[];
+    },
+
+    getAddendumById: async (id: string): Promise<ContractAddendum | null> => {
+        const { data, error } = await supabase
+            .from('contract_addendums')
+            .select(ADDENDUM_COLS)
+            .eq('id', id)
+            .maybeSingle();
+        if (error) throw error;
+        return (data as unknown as ContractAddendum) ?? null;
+    },
+
+    /**
+     * Próximo número de aditivo do contrato (`AD-001`, `AD-002`…).
+     *
+     * Deriva do MAIOR sufixo existente, não de COUNT(*): a numeração antiga era
+     * `length + 1` feita no ContractAddendumModal, então excluir um aditivo
+     * fazia o próximo repetir um número já usado. O índice único
+     * `uq_addendums_contract_number` é a rede de segurança.
+     */
+    nextAddendumNumber: async (contractId: string): Promise<string> => {
+        const { data } = await supabase
+            .from('contract_addendums')
+            .select('number')
+            .eq('contract_id', contractId);
+        const maxSeq = (data || []).reduce((max, row) => {
+            const m = /^AD-(\d+)/.exec((row.number as string) || '');
+            return m ? Math.max(max, parseInt(m[1], 10)) : max;
+        }, 0);
+        return `AD-${String(maxSeq + 1).padStart(3, '0')}`;
     },
 
     createAddendum: async (addendum: Omit<ContractAddendum, 'id' | 'created_at' | 'status' | 'approved_at'>): Promise<ContractAddendum> => {
@@ -1383,13 +1678,15 @@ export const contractService = {
 
     approveAddendum: async (id: string, approvedBy: string): Promise<void> => {
         // Fetch addendum to get value impact and contract_id
-        const { data: addendum, error: fetchError } = await supabase
+        const { data: addendumRow, error: fetchError } = await supabase
             .from('contract_addendums')
-            .select('id, contract_id, number, type, description, value_impact, new_end_date, status, requested_by, approved_by, approved_at, notes, created_at')
+            .select(ADDENDUM_COLS)
             .eq('id', id)
             .single();
 
         if (fetchError) throw fetchError;
+        // O select por constante perde a inferência de tipo do supabase-js.
+        const addendum = addendumRow as unknown as ContractAddendum;
         if (addendum.status !== 'Pendente') throw new Error('Addendum is not pending approval');
 
         const { error: updateAddendumError } = await supabase
@@ -1403,6 +1700,14 @@ export const contractService = {
 
         if (updateAddendumError) throw updateAddendumError;
 
+        // ── Ramo PRORROGAÇÃO DE LOCAÇÃO ─────────────────────────────────────
+        // Gate triplo: só entra aqui aditivo de renovação de contrato de
+        // aluguel recorrente. Suprimentos e serviços seguem pelo caminho antigo.
+        if (addendum.new_start_date) {
+            const applied = await applyProrrogacaoAddendum(addendum, approvedBy);
+            if (applied) return;
+        }
+
         // Update contract: value and/or end_date — evaluated independently
         if (addendum.value_impact !== 0 || addendum.new_end_date) {
             const { data: contract, error: contractErr } = await supabase
@@ -1415,7 +1720,17 @@ export const contractService = {
 
             const contractUpdates: Record<string, any> = {};
             if (addendum.value_impact !== 0) {
-                contractUpdates.current_value = (contract.current_value || 0) + (addendum.value_impact || 0);
+                // Recalcula pela MESMA fórmula de updateContract (original_value +
+                // Σ dos aditivos aprovados). Antes era `current_value += impacto`,
+                // e os dois caminhos divergiam: salvar o contrato depois de
+                // aprovar um aditivo reescrevia o valor com outra conta.
+                const { data: aprovados } = await supabase
+                    .from('contract_addendums')
+                    .select('value_impact')
+                    .eq('contract_id', addendum.contract_id)
+                    .eq('status', 'Aprovado');
+                const total = (aprovados || []).reduce((sum, a) => sum + (a.value_impact || 0), 0);
+                contractUpdates.current_value = (contract.original_value || 0) + total;
             }
             if (addendum.new_end_date) {
                 contractUpdates.end_date = addendum.new_end_date;

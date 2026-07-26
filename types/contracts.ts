@@ -170,6 +170,7 @@ export type AddendumStatus = 'Pendente' | 'Aprovado' | 'Rejeitado' | 'Cancelado'
 export interface ContractAddendum {
     id: string;
     contract_id: string;
+    organization_id?: string;
     number: string;
     type: AddendumType;
     description: string;
@@ -180,7 +181,64 @@ export interface ContractAddendum {
     approved_by?: string;
     approved_at?: string;
     notes?: string;
+    // Prorrogação de locação (migration 20270828000002). `new_start_date` é o
+    // gatilho do ramo de prorrogação em approveAddendum.
+    // ⚠️ Em contrato recorrente o aditivo NÃO soma montante (value_impact = 0):
+    // ele TROCA a mensalidade, que vem em `new_value`.
+    new_start_date?: string;
+    previous_end_date?: string;
+    new_value?: number;
+    previous_value?: number;
+    reajuste_index?: string;
+    reajuste_fator?: number;
+    installments_generated?: number;
+    // Assinatura própria do aditivo (ZapSign)
+    signature_status?: 'PENDING' | 'SENT' | 'SIGNED' | 'EXPIRED' | 'CANCELLED';
+    signature_token?: string;
+    signature_url?: string;
+    signature_completed_at?: string;
+    signed_document_url?: string;
     created_at?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Versões de documento (contrato e aditivo) — tabela
+// contract_document_versions (migration 20270828000001).
+// ⚠️ `Contract.minuta_versions` continua existindo, mas é PROJEÇÃO desta
+// tabela, mantida por contractDocumentVersionService._syncMinutaMirror para o
+// Portal do Cliente. Não escrever no JSONB direto.
+// ─────────────────────────────────────────────────────────────
+
+export type DocumentOwnerType = 'CONTRACT' | 'ADDENDUM';
+export type DocumentKind = 'MINUTA' | 'CONTRATO' | 'ADITIVO' | 'ANEXO';
+export type DocumentSource = 'UPLOAD' | 'TEMPLATE_DOCX' | 'TEMPLATE_HTML';
+
+export interface ContractDocumentVersion {
+    id: string;
+    organization_id?: string;
+    contract_id: string;
+    owner_type: DocumentOwnerType;
+    owner_id: string;
+    v: number;
+    kind: DocumentKind;
+    name?: string;
+    notes?: string;
+    url: string;
+    storage_path?: string;
+    mime_type?: string;
+    size_bytes?: number;
+    source?: DocumentSource;
+    template_id?: string;
+    emitted: boolean;
+    emitted_at?: string;
+    signature_status?: 'PENDING' | 'SENT' | 'SIGNED' | 'EXPIRED' | 'CANCELLED';
+    signature_token?: string;
+    signature_url?: string;
+    signature_completed_at?: string;
+    signed_file_url?: string;
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export type MeasurementStatus = 'Pendente' | 'Em Análise' | 'Processada' | 'Paga' | 'Cancelada';

@@ -1,8 +1,10 @@
 import { supabase } from '../lib/supabase';
-import { contractService, nextRentalNumber, removeContractTransactionsFrom } from './contractService';
+import {
+    contractService, nextRentalNumber, removeContractTransactionsFrom, buildRecurringDueDates,
+} from './contractService';
 import { contractIndexService, normalizeIndexName, IndexName } from './contractIndexService';
 import { commercialFinanceService } from './commercialFinanceService';
-import { Contract } from '../types';
+import { Contract, ContractAddendum } from '../types';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
@@ -80,7 +82,22 @@ export interface RenewalPreview {
     /** Parcelas PENDENTES do pai que serão canceladas (>= startDate). */
     pendingToCancel: number;
     nextNumber: string;
+    /** Via escolhida. */
+    mode: RenewalMode;
+    /** ADITIVO: quantas parcelas o período prorrogado vai gerar. */
+    installmentsToGenerate: number;
+    /** ADITIVO: número do próximo aditivo (AD-00X). */
+    nextAddendumNumber?: string;
 }
+
+/**
+ * As duas vias de renovação:
+ *  • NOVO_CONTRATO — contrato-filho com numeração e parcelas próprias; o pai é
+ *    encerrado. É o comportamento original (mantido como default).
+ *  • ADITIVO — o MESMO contrato tem a vigência estendida por um aditivo de
+ *    prorrogação; o contrato não é encerrado e nada anterior é tocado.
+ */
+export type RenewalMode = 'NOVO_CONTRATO' | 'ADITIVO';
 
 export interface RenewOptions {
     /** Duração da nova vigência. Ignorado se `endDate` for informado. Default 12. */
@@ -95,8 +112,19 @@ export interface RenewOptions {
     /** Override total do valor — ignora o índice. */
     newValue?: number;
     notes?: string;
-    /** Default true → o pai vira 'Encerrado'. */
+    /** Default true → o pai vira 'Encerrado'. Só vale em NOVO_CONTRATO. */
     closeParent?: boolean;
+    /** Via da renovação. Default 'NOVO_CONTRATO' (compatibilidade). */
+    mode?: RenewalMode;
+    /** NOVO_CONTRATO: herdar os termos do pai. Default true. */
+    inheritTerms?: boolean;
+    /** Só usado com inheritTerms=false — sobrescreve o que seria herdado. */
+    overrides?: Partial<Pick<Contract,
+        'billing_cycle' | 'due_day' | 'payment_method' | 'reajuste_index' |
+        'guarantor_name' | 'rescission_penalty_months' |
+        'client_responsible' | 'internal_responsible'>>;
+    /** ADITIVO: aprovar (e gerar as parcelas) na mesma ação. Default true. */
+    autoApprove?: boolean;
 }
 
 export interface ExpiringRental extends Contract {
@@ -236,6 +264,12 @@ export const contractRenewalService = {
             }
         }
 
+        const mode: RenewalMode = opts.mode ?? 'NOVO_CONTRATO';
+        // No ADITIVO o contrato não é encerrado: nada é "cancelado", só se corta
+        // o resíduo da negociação que invadiria o período novo. Por isso
+        // pendingToCancel só faz sentido na via do contrato-filho.
+        const pending = await countPendingFrom(parent, startDate);
+
         return {
             parent,
             startDate,
@@ -246,9 +280,141 @@ export const contractRenewalService = {
             fator,
             index,
             reajusteWarning,
-            pendingToCancel: await countPendingFrom(parent, startDate),
+            mode,
+            pendingToCancel: mode === 'ADITIVO' ? 0 : pending,
+            installmentsToGenerate: mode === 'ADITIVO'
+                ? buildRecurringDueDates({
+                    startDate: parent.start_date,
+                    from: startDate,
+                    to: endDate,
+                    dueDay: parent.due_day,
+                    billingCycle: parent.billing_cycle,
+                    paymentDays: parent.payment_days,
+                }).length
+                : 0,
             nextNumber: await nextRentalNumber(parent.organization_id, parseISO(startDate).getUTCFullYear()),
+            nextAddendumNumber: mode === 'ADITIVO'
+                ? await contractService.nextAddendumNumber(parent.id)
+                : undefined,
         };
+    },
+
+    /**
+     * Renovação por ADITIVO: estende o próprio contrato, sem encerrá-lo.
+     *
+     * O aditivo nasce ANTES de qualquer efeito no contrato — se o insert
+     * falhar, nada muda. A aprovação (que estende a vigência e gera as
+     * parcelas) fica em contractService.approveAddendum, que é o mesmo caminho
+     * de quem aprova pela aba Aditivos.
+     */
+    renewByAddendum: async (
+        parentContractId: string,
+        opts: RenewOptions = {},
+    ): Promise<{ addendum: ContractAddendum; parent: Contract; preview: RenewalPreview }> => {
+        const preview = await contractRenewalService.previewRenewal(
+            parentContractId, { ...opts, mode: 'ADITIVO' });
+        const parent = preview.parent;
+
+        // Um aditivo de prorrogação pendente para o mesmo período já basta —
+        // dois abertos gerariam parcelas em dobro quando ambos fossem aprovados.
+        const { data: pendentes } = await supabase
+            .from('contract_addendums')
+            .select('id, number, new_start_date, status')
+            .eq('contract_id', parent.id)
+            .eq('status', 'Pendente')
+            .not('new_start_date', 'is', null);
+        const conflito = (pendentes || []).find(a => a.new_start_date === preview.startDate);
+        if (conflito) {
+            throw new Error(`Já existe o aditivo ${conflito.number} pendente para este período. Aprove ou cancele antes de criar outro.`);
+        }
+
+        const number = preview.nextAddendumNumber ?? await contractService.nextAddendumNumber(parent.id);
+        const mesmoValor = Math.abs(preview.newValue - preview.currentValue) < 0.01;
+
+        const addendum = await contractService.createAddendum({
+            contract_id: parent.id,
+            organization_id: parent.organization_id,
+            number,
+            // 'Prazo' quando só estende; 'Ambos' quando também reajusta.
+            type: mesmoValor ? 'Prazo' : 'Ambos',
+            description: `Prorrogação de vigência até ${preview.endDate}`
+                + (mesmoValor ? '' : ` com reajuste para ${preview.newValue.toFixed(2)}`)
+                + (opts.notes ? ` — ${opts.notes}` : ''),
+            // ⚠️ ZERO de propósito: em contrato recorrente o aditivo troca a
+            // mensalidade (new_value), não soma um montante ao contrato.
+            // Preencher aqui faria updateContract inflar o valor do contrato.
+            value_impact: 0,
+            new_end_date: preview.endDate,
+            new_start_date: preview.startDate,
+            previous_end_date: parent.end_date,
+            new_value: preview.newValue,
+            previous_value: preview.currentValue,
+            reajuste_index: preview.index?.name ?? parent.reajuste_index,
+            reajuste_fator: preview.fator,
+            notes: opts.notes,
+        } as Omit<ContractAddendum, 'id' | 'created_at' | 'status' | 'approved_at'>);
+
+        if (opts.autoApprove !== false) {
+            await contractService.approveAddendum(addendum.id, 'Renovação');
+        }
+
+        const updatedParent = await fetchContract(parent.id);
+        const saved = await contractService.getAddendumById(addendum.id);
+        return { addendum: saved ?? addendum, parent: updatedParent, preview };
+    },
+
+    /** Despachante das duas vias — é o que a UI chama. */
+    renew: async (parentContractId: string, opts: RenewOptions = {}) =>
+        opts.mode === 'ADITIVO'
+            ? contractRenewalService.renewByAddendum(parentContractId, opts)
+            : contractRenewalService.renewContract(parentContractId, opts),
+
+    /**
+     * Desfaz uma prorrogação por aditivo. Espelho de `undoRenewal`: só enquanto
+     * nenhuma parcela do período novo tiver sido paga ou conciliada.
+     */
+    undoAddendumRenewal: async (addendumId: string): Promise<void> => {
+        const addendum = await contractService.getAddendumById(addendumId);
+        if (!addendum) throw new Error('Aditivo não encontrado.');
+        if (!addendum.new_start_date || !addendum.new_end_date) {
+            throw new Error('Este aditivo não é uma prorrogação de vigência.');
+        }
+        const contract = await fetchContract(addendum.contract_id);
+
+        if (contract.organization_id) {
+            const { count } = await supabase
+                .from('internal_transactions')
+                .select('id', { count: 'exact', head: true })
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_RECURRING')
+                .eq('reference_id', contract.id)
+                .gte('due_date', addendum.new_start_date)
+                .neq('status', 'PENDING');
+            if ((count ?? 0) > 0) {
+                throw new Error('O período prorrogado já tem parcelas pagas ou conciliadas. Desfazer não é possível — use a rescisão do contrato.');
+            }
+            await supabase
+                .from('internal_transactions')
+                .delete()
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_RECURRING')
+                .eq('reference_id', contract.id)
+                .gte('due_date', addendum.new_start_date);
+        }
+
+        await supabase
+            .from('contracts')
+            .update({
+                end_date: addendum.previous_end_date ?? null,
+                current_value: addendum.previous_value ?? contract.current_value,
+                reajuste_data_base: contract.reajuste_data_base,
+            })
+            .eq('id', contract.id);
+
+        await supabase
+            .from('contract_addendums')
+            .update({ status: 'Cancelado', installments_generated: 0 })
+            .eq('id', addendumId);
     },
 
     /**
@@ -275,6 +441,15 @@ export const contractRenewalService = {
         if (collision) number = `${number}-R${seq}`;
 
         const indexName = opts.indexName ?? normalizeIndexName(parent.reajuste_index);
+
+        // Termo do contrato-filho: por padrão herda o do pai; com
+        // `inheritTerms: false` o que vier em `overrides` prevalece (campo não
+        // informado continua herdando — o Sheet pré-preenche com o valor atual).
+        const herda = opts.inheritTerms !== false;
+        const termo = <K extends keyof Contract>(campo: K): Contract[K] =>
+            (!herda && opts.overrides && opts.overrides[campo as keyof typeof opts.overrides] !== undefined
+                ? (opts.overrides[campo as keyof typeof opts.overrides] as Contract[K])
+                : parent[campo]);
 
         // ── 2) Cria o filho ─────────────────────────────────────────────────
         // createContract dispara syncRecurringToFinance sozinho quando há
@@ -307,26 +482,28 @@ export const contractRenewalService = {
             start_date: startDate,
             end_date: endDate,
             original_value: newValue,
-            billing_cycle: parent.billing_cycle ?? 'Mensal',
-            due_day: parent.due_day,
+            // Termos herdados do pai; `overrides` só é considerado quando o
+            // usuário desmarca "aproveitar os mesmos termos" no Sheet.
+            billing_cycle: termo('billing_cycle') ?? 'Mensal',
+            due_day: termo('due_day'),
             // payment_days = 0 é OBRIGATÓRIO. No pai esse campo é o offset entre a
             // data do deal e o 1º vencimento; herdado, empurraria a 1ª parcela do
             // filho para fora da vigência. Com 0 + due_day herdado, o sync ancora
             // na 1ª ocorrência do dia de vencimento >= startDate.
             payment_days: 0,
-            reajuste_index: indexName ?? parent.reajuste_index,
+            reajuste_index: opts.overrides?.reajuste_index ?? indexName ?? parent.reajuste_index,
             reajuste_data_base: startDate,
             reajuste_proximo: addMonthsUTC(startDate, 12),
-            guarantor_name: parent.guarantor_name,
-            rescission_penalty_months: parent.rescission_penalty_months,
+            guarantor_name: termo('guarantor_name'),
+            rescission_penalty_months: termo('rescission_penalty_months'),
             retention_rate: parent.retention_rate ?? 0,
-            payment_method: parent.payment_method,
+            payment_method: termo('payment_method'),
             empresa_id: parent.empresa_id,
             cost_center_id: parent.cost_center_id,
             category_id: parent.category_id,
             responsible_email: parent.responsible_email,
-            client_responsible: parent.client_responsible,
-            internal_responsible: parent.internal_responsible,
+            client_responsible: termo('client_responsible'),
+            internal_responsible: termo('internal_responsible'),
         } as Omit<Contract, 'id' | 'created_at' | 'current_value'>);
 
         // ── 3) Encerra o pai ────────────────────────────────────────────────

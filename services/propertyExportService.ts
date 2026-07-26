@@ -17,7 +17,13 @@ const fmtCurrency = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'curr
 const fmtDate = (d?: string) => d ? new Date(d + 'T12:00:00Z').toLocaleDateString('pt-BR') : '-';
 
 export const propertyExportService = {
-    generateProposalPDF: (deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null) => {
+    /**
+     * `units` são TODAS as unidades do contrato (um negócio pode reunir apto +
+     * vaga + box). `property` continua sendo a unidade principal e é o que a
+     * proposta mostra quando há só uma — o layout de caixa única foi preservado
+     * para não mudar a aparência das propostas de uma unidade só.
+     */
+    generateProposalPDF: (deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null, units?: Property[]) => {
         const doc = new jsPDF();
         const date = new Date().toLocaleDateString('pt-BR');
 
@@ -43,21 +49,54 @@ export const propertyExportService = {
 
         let currentY = 50;
 
-        // Section: Imóvel
-        doc.setFillColor(248, 250, 252);
-        doc.rect(14, currentY, 182, 40, 'F');
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
-        doc.text('DETALHES DO IMÓVEL', 20, currentY + 10);
+        // Section: Imóvel(is)
+        const unitList = (units && units.length > 0) ? units : [property].filter(Boolean);
+        const valueByProperty = new Map((deal.units || []).map(u => [u.property_id, u.value]));
 
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Nome: ${property.name}`, 20, currentY + 20);
-        doc.text(`Endereço: ${property.address}`, 20, currentY + 25);
-        doc.text(`Tipo: ${property.type} | Área Total: ${property.total_area || property.area} m²`, 20, currentY + 30);
+        if (unitList.length > 1) {
+            // Multi-unidade: tabela com uma linha por unidade e o valor de cada
+            // uma — sem isso o cliente receberia uma proposta que cita só um
+            // imóvel mas cobra o total de vários.
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(30, 41, 59);
+            doc.text('IMÓVEIS DA PROPOSTA', 14, currentY);
+            currentY += 5;
 
-        currentY += 50;
+            autoTable(doc, {
+                startY: currentY,
+                head: [['Unidade', 'Endereço', 'Tipo', 'Área (m²)', 'Valor']],
+                body: unitList.map(u => [
+                    u.name || '-',
+                    u.address || '-',
+                    u.type || '-',
+                    String(u.total_area || u.area || '-'),
+                    fmtCurrency(valueByProperty.get(u.id) ?? 0),
+                ]),
+                foot: [['', '', '', 'Total', fmtCurrency(deal.value)]],
+                theme: 'grid',
+                headStyles: { fillColor: [30, 41, 59] },
+                footStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+                styles: { fontSize: 9 },
+            });
+
+            currentY = (doc as any).lastAutoTable.finalY + 10;
+        } else {
+            doc.setFillColor(248, 250, 252);
+            doc.rect(14, currentY, 182, 40, 'F');
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(30, 41, 59);
+            doc.text('DETALHES DO IMÓVEL', 20, currentY + 10);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Nome: ${property.name}`, 20, currentY + 20);
+            doc.text(`Endereço: ${property.address}`, 20, currentY + 25);
+            doc.text(`Tipo: ${property.type} | Área Total: ${property.total_area || property.area} m²`, 20, currentY + 30);
+
+            currentY += 50;
+        }
 
         // Section: Cliente
         doc.setFontSize(12);

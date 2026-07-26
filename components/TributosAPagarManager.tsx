@@ -35,6 +35,7 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
 const TRIBUTO_COLUMNS: ColumnConfig[] = [
     { key: 'party_name', label: 'Tributo', sortable: true },
     { key: 'category', label: 'Origem', sortable: true },
+    { key: 'client_name', label: 'Cliente', sortable: true },
     { key: 'empreendimento_name', label: 'Empreendimento', sortable: true },
     { key: 'description', label: 'Descrição', sortable: true },
     { key: 'due_date', label: 'Vencimento', sortable: true },
@@ -46,6 +47,7 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'party_name', label: 'Tributo', type: 'text' },
     { key: 'category', label: 'Origem', type: 'text' },
+    { key: 'client_name', label: 'Cliente', type: 'text' },
     { key: 'empreendimento_name', label: 'Empreendimento', type: 'text' },
     { key: 'description', label: 'Descrição', type: 'text' },
     { key: 'amount', label: 'Valor', type: 'number' },
@@ -57,6 +59,7 @@ function getAdvancedFilterValue(r: TaxPayable, key: string): unknown {
     switch (key) {
         case 'party_name': return r.party_name ?? '';
         case 'category': return r.category ?? '';
+        case 'client_name': return r.client_name ?? '';
         case 'empreendimento_name': return r.empreendimento_name ?? '';
         case 'description': return r.description ?? '';
         case 'amount': return r.amount ?? null;
@@ -441,6 +444,7 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                 switch (tableColumns.sortColumn) {
                     case 'party_name':    va = (a.party_name ?? '').toLowerCase();    vb = (b.party_name ?? '').toLowerCase();    break;
                     case 'category':      va = (a.category ?? '').toLowerCase();      vb = (b.category ?? '').toLowerCase();      break;
+                    case 'client_name':   va = (a.client_name ?? '').toLowerCase();   vb = (b.client_name ?? '').toLowerCase();   break;
                     case 'empreendimento_name':
                                           va = (a.empreendimento_name ?? '').toLowerCase(); vb = (b.empreendimento_name ?? '').toLowerCase(); break;
                     case 'description':   va = (a.description ?? '').toLowerCase();   vb = (b.description ?? '').toLowerCase();   break;
@@ -795,6 +799,11 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
                                     )}
+                                    {tableColumns.visibleColumns.includes('client_name') && (
+                                        <SortableHeader label="Cliente" colKey="client_name" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                    )}
                                     {tableColumns.visibleColumns.includes('empreendimento_name') && (
                                         <SortableHeader label="Empreendimento" colKey="empreendimento_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
@@ -853,6 +862,11 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                             {tableColumns.visibleColumns.includes('category') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[140px] truncate">
                                                     {r.category ?? '—'}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('client_name') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[180px] truncate" title={r.client_name ?? undefined}>
+                                                    {r.client_name ?? <span className="text-gray-400 italic">—</span>}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('empreendimento_name') && (

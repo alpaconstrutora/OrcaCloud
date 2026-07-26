@@ -279,6 +279,7 @@ export const taxPayableService = {
                 (r.party_name ?? '').toLowerCase().includes(s) ||
                 (r.description ?? '').toLowerCase().includes(s) ||
                 (r.category ?? '').toLowerCase().includes(s) ||
+                (r.client_name ?? '').toLowerCase().includes(s) ||
                 (r.empreendimento_name ?? '').toLowerCase().includes(s) ||
                 (r.reference_id ?? '').toLowerCase().includes(s),
             );

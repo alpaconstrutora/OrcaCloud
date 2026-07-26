@@ -443,5 +443,120 @@ export function useResizableColumns(
     </div>
   ), [handleResizeStart, handleDblClick]);
 
-  return { tableRef, getWidth, ResizeHandle };
+  /**
+   * Ajusta a largura de todas as colunas ao conteúdo real e, se ainda sobrar
+   * espaço, distribui a folga para a tabela preencher o container.
+   *
+   * **É sob comando explícito, nunca automático.** Recalcular a cada mudança de
+   * dado faria as colunas "dançarem" enquanto o usuário digita na busca — pior
+   * que a largura errada, porque tira a referência visual de onde cada coluna
+   * está. Mesma razão pela qual Excel/Sheets fazem autofit só no duplo clique.
+   *
+   * Medição: clona a tabela fora da tela com `table-layout: auto` e deixa o
+   * **navegador** calcular a largura natural de cada coluna. Isso pega de graça
+   * o que uma medição de texto erraria — avatar, ícones, células de duas linhas,
+   * padding real — sem a tela precisar declarar nada por coluna. Custa um
+   * reflow no clone (não no layout visível), por isso a amostra é limitada:
+   * nenhuma destas tabelas usa virtualização, então clonar 5.000 linhas
+   * travaria a aba, e as primeiras ~150 já definem a largura na prática.
+   */
+  const autoFit = React.useCallback((opts?: { sampleRows?: number; fill?: boolean }) => {
+    const table = tableRef.current;
+    if (!table) return;
+    const sampleRows = opts?.sampleRows ?? 150;
+    const fill = opts?.fill ?? true;
+
+    const keys = Array.from(table.querySelectorAll('col[data-col-key]'))
+      .map(c => (c as HTMLElement).dataset.colKey)
+      .filter((k): k is string => !!k);
+    if (keys.length === 0) return;
+
+    const clone = table.cloneNode(true) as HTMLTableElement;
+    // Larguras fixas do <colgroup> impediriam o cálculo natural — zerar todas.
+    clone.querySelectorAll('col').forEach(c => { (c as HTMLElement).style.width = 'auto'; });
+    // nowrap + overflow visible: queremos a largura SEM quebra de linha; o clamp
+    // em `max` logo abaixo é o que impede uma coluna de tomar a tela inteira.
+    clone.querySelectorAll('th, td').forEach(cell => {
+      const el = cell as HTMLElement;
+      el.style.whiteSpace = 'nowrap';
+      el.style.overflow = 'visible';
+      el.style.width = 'auto';
+      el.style.maxWidth = 'none';
+    });
+    const body = clone.querySelector('tbody');
+    if (body) {
+      Array.from(body.rows).slice(sampleRows).forEach(r => r.remove());
+    }
+    clone.style.tableLayout = 'auto';
+    clone.style.width = 'auto';
+    clone.style.minWidth = '0';
+    clone.style.position = 'absolute';
+    clone.style.left = '-99999px';
+    clone.style.top = '0';
+    clone.style.visibility = 'hidden';
+    clone.style.pointerEvents = 'none';
+
+    // Inserido ao lado da tabela real (não no <body>) para herdar o mesmo
+    // contexto de fonte/estilo — no body as medidas sairiam de outra tipografia.
+    const host = table.parentElement ?? document.body;
+    host.appendChild(clone);
+
+    const measured: Record<string, number> = {};
+    try {
+      const headRow = clone.querySelector('thead tr');
+      const cells = headRow ? Array.from(headRow.children) : [];
+      const cloneCols = Array.from(clone.querySelectorAll('col'));
+      cloneCols.forEach((c, i) => {
+        const key = (c as HTMLElement).dataset.colKey;
+        const cell = cells[i] as HTMLElement | undefined;
+        if (!key || !cell) return;
+        measured[key] = Math.ceil(cell.getBoundingClientRect().width);
+      });
+    } finally {
+      host.removeChild(clone);
+    }
+
+    // Degradação segura: sem layout disponível (tabela oculta, aba em background,
+    // jsdom) todas as medidas voltam 0 e o clamp jogaria TODA coluna para `min`,
+    // destruindo as larguras salvas. Nesse caso não mexe em nada.
+    const anyMeasured = Object.values(measured).some(v => v > 0);
+    if (!anyMeasured) return;
+
+    const next: Record<string, number> = {};
+    keys.forEach(k => {
+      const m = measured[k];
+      // Coluna sem medida válida mantém a largura atual em vez de virar `min`.
+      if (m == null || m <= 0) return;
+      next[k] = Math.max(min, Math.min(max, m));
+    });
+
+    if (fill) {
+      const container = (table.parentElement as HTMLElement | null)?.clientWidth ?? 0;
+      const total = keys.reduce((s, k) => s + (next[k] ?? getWidth(k)), 0);
+      const slack = container - total;
+      if (slack > 0 && total > 0) {
+        // Distribui proporcionalmente e joga o arredondamento na última coluna,
+        // para a soma bater exata com o container (senão sobra 1-2px de folga).
+        let used = 0;
+        keys.forEach((k, i) => {
+          const base = next[k] ?? getWidth(k);
+          if (i === keys.length - 1) {
+            next[k] = Math.min(max, base + (slack - used));
+          } else {
+            const add = Math.floor((base / total) * slack);
+            next[k] = Math.min(max, base + add);
+            used += add;
+          }
+        });
+      }
+    }
+
+    setWidths(prev => {
+      const merged = { ...prev, ...next };
+      try { localStorage.setItem(storageKey, JSON.stringify(merged)); } catch { /* ignore */ }
+      return merged;
+    });
+  }, [min, max, storageKey, getWidth]);
+
+  return { tableRef, getWidth, ResizeHandle, autoFit };
 }

@@ -3,7 +3,7 @@ import { clientService } from '../services/clientService';
 import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag } from 'lucide-react';
+import { User, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal } from 'lucide-react';
 import { Client, ClientCategory } from '../types';
 import ClientModal from './ClientModal';
 import ClientRequestsAdminModal from './ClientRequestsAdminModal';
@@ -456,6 +456,17 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito — nunca automático: recalcular a cada
+                                filtro/busca faria as colunas dançarem enquanto o usuário digita.
+                                Duplo clique no divisor segue sendo "restaurar padrão" (não mudamos
+                                o gesto que já existia). */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                             <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         </>
                     )}

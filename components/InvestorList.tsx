@@ -2,15 +2,20 @@ import React from 'react';
 import { investorService, Investor } from '../services/investorService';
 import { investorPortalTokenService, InvestorPortalToken } from '../services/investorPortalTokenService';
 import { supabase } from '../lib/supabase';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, TrendingUp, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, AlertCircle, Users } from 'lucide-react';
+import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, TrendingUp, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, AlertCircle, Users, MoveHorizontal } from 'lucide-react';
 import InvestorModal from './InvestorModal';
 import { useStore } from '../store/useStore';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import { isObra } from '../utils/projectClassification';
+
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    code: 90, name: 240, contact: 240, document: 160, project: 220, actions: 190,
+};
 
 const INVESTOR_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
@@ -106,7 +111,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
     const loadInvestors = loadData;
 
     // Excluir direto (sem diálogo) — usado pelo InlineDisclosureMenu, que já tem
-    // confirmação de 2 passos embutida (ui_ux_standard_guide.md §9).
+    // confirmação de 2 passos embutida (ui_ux_guia_unificado.md §9).
     const performDelete = async (id: string) => {
         try {
             await investorService.deleteInvestor(id);
@@ -210,6 +215,13 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
 
     const tableColumns = useTableColumns(INVESTOR_COLUMNS, 'investorListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'investorListFilters:advanced');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'investorListColWidths');
+    // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
+    // table-layout:fixed: o navegador redistribuiria a sobra entre as colunas e
+    // arrastar uma borda moveria a vizinha errada (§6.1).
+    const tableTotalWidth = (['code', 'name', 'contact', 'document', 'project'] as const)
+        .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
 
     // Nomes das obras vinculadas, resolvidos aqui pra virar campo filtrável (mesmo
     // critério já usado no render da coluna "Obra Vinculada" abaixo).
@@ -241,7 +253,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                     if (col === 'name') return a.name.localeCompare(b.name) * dir;
                     if (col === 'document') return (a.document || '').localeCompare(b.document || '') * dir;
                 }
-                // Sem coluna clicada, ordenação default é nome A-Z (ui_ux_standard_guide.md §6.4:
+                // Sem coluna clicada, ordenação default é nome A-Z (ui_ux_guia_unificado.md §6.4:
                 // toda coluna ordenável já ordena pelo próprio cabeçalho, sem dropdown redundante).
                 return a.name.localeCompare(b.name);
             });
@@ -287,7 +299,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                     />
                 </div>
 
-                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_standard_guide.md §6.4) */}
+                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_guia_unificado.md §6.4) */}
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 </div>
@@ -313,6 +325,15 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito — nunca automático (ver doc de autoFit
+                                em TableUtils). Duplo clique no divisor segue "restaurar padrão". */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                             <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         </>
                     )}
@@ -365,27 +386,54 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
             ) : (
                 viewMode === 'list' ? (
                         <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
+                                {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                                {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
+                                {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
+                                {tableColumns.visibleColumns.includes('project') && <col data-col-key="project" style={{ width: `${cols.getWidth('project')}px` }} />}
+                                {/* espaçador ANTES de "Ações": absorve a folga no meio, para a borda de
+                                    "Ações" não "andar" a cada redimensionamento e desalinhar da toolbar
+                                    acoplada acima (mesma correção feita em ClientList). */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             {/* thead em sentence case (§6.2) — obrigatório porque a tela adotou a escala
                                 de radius compacta (§16), mesmo critério já usado em SupplierList/ClientList. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="code" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Investidor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader label="Investidor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('contact') && (
-                                        <SortableHeader label="Acesso / Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader label="Acesso / Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="contact" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="document" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('project') && (
-                                        <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="project" />
+                                        </SortableHeader>
                                     )}
-                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -455,11 +503,13 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                                 })()}
                                             </td>
                                         )}
+                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">
-                                            <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={() => handleOpenModal(investor)}
-                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
                                                 >
                                                     Editar
                                                 </button>

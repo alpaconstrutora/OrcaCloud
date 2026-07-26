@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Plus, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, RefreshCw } from 'lucide-react';
+import { Search, Plus, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, RefreshCw, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { Supplier } from '../types';
 import { supplierService, SupplierNameMode } from '../services/supplierService';
@@ -32,7 +32,7 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'organization', label: 'Organização', sortable: true },
     { key: 'portal', label: 'Portais', sortable: true },
     // Contato = e-mail + telefone combinados numa célula — sem valor único óbvio
-    // pra ordenar, exceção documentada em ui_ux_standard_guide.md §6.3.
+    // pra ordenar, exceção documentada em ui_ux_guia_unificado.md §6.3.
     { key: 'contact', label: 'Contato', sortable: false },
     { key: 'document', label: 'Documento', sortable: true },
 ];
@@ -318,7 +318,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 <KpiCard shadow={false} size="sm" label="Categorias" value={kpis.categorias} icon={<Tag className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Toolbar de botões (UI UX tabela.md §4) — escopo (exibição Razão Social/Apelido)
+            {/* Toolbar de botões (ui_ux_guia_unificado.md §5.3) — escopo (exibição Razão Social/Apelido)
                 à esquerda, ação primária (Novo fornecedor) à direita. Barra própria, acima da
                 toolbar de busca, porque muda o escopo de exibição, não o filtro dos dados. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
@@ -368,7 +368,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ver ui_ux_standard_guide.md §6.4) */}
+                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ver ui_ux_guia_unificado.md §6.4) */}
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 </div>
@@ -395,6 +395,15 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito — nunca automático (ver doc de autoFit
+                                em TableUtils). Duplo clique no divisor segue "restaurar padrão". */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                             <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         </>
                     )}
@@ -440,14 +449,17 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 {tableColumns.visibleColumns.includes('portal') && <col data-col-key="portal" style={{ width: `${cols.getWidth('portal')}px` }} />}
                                 {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
                                 {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
-                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                                 {/* coluna "espaçadora" sem largura fixa — absorve o espaço sobrando quando
                                     a tabela é mais estreita que o container, em vez do navegador redistribuir
-                                    esse espaço entre as colunas de dado (ver §6.1 do guia de UI). */}
+                                    esse espaço entre as colunas de dado (ver §6.1 do guia de UI).
+                                    Fica ANTES de "Ações" de propósito: com ela depois, toda a sobra ia para
+                                    a direita de "Ações" e a borda dela "andava" a cada redimensionamento,
+                                    desalinhando da toolbar acoplada acima. */}
                                 <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                             </colgroup>
                             <thead>
-                                {/* sticky: cabeçalho fixo em tabelas longas (ui_ux_standard_guide.md §6.5) */}
+                                {/* sticky: cabeçalho fixo em tabelas longas (ui_ux_guia_unificado.md §6.5) */}
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-4 py-5 border-r border-gray-100 text-center">
                                         <input
@@ -503,11 +515,12 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             <cols.ResizeHandle colKey="document" />
                                         </SortableHeader>
                                     )}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-5 text-center relative overflow-hidden text-table-header font-semibold text-gray-500">
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
-                                    <th aria-hidden="true" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -590,6 +603,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     </span>
                                                 </td>
                                             )}
+                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5 text-right">
                                                 {/* Editar = clique na linha (ação dominante); kebab só tem Excluir, isolado de propósito */}
                                                 <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
@@ -599,7 +614,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     />
                                                 </div>
                                             </td>
-                                            <td aria-hidden="true" />
                                         </tr>
                                     ))
                                 ) : (
@@ -773,7 +787,7 @@ interface SupplierBulkCategoryModalProps {
 }
 
 // Modal dedicado de edição em lote — categoria dos fornecedores selecionados.
-// Ver docs/ui_ux_standard_guide.md § 10: edição em lote deve abrir modal, não
+// Ver docs/ui_ux_guia_unificado.md § 10: edição em lote deve abrir modal, não
 // empilhar selects inline na barra fixa.
 const SupplierBulkCategoryModal: React.FC<SupplierBulkCategoryModalProps> = ({ count, categories, onClose, onSave }) => {
     const [category, setCategory] = React.useState('');

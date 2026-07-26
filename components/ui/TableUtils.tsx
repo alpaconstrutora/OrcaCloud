@@ -532,8 +532,15 @@ export function useResizableColumns(
 
     if (fill) {
       const container = (table.parentElement as HTMLElement | null)?.clientWidth ?? 0;
+      // Colunas estruturais sem `data-col-key` e com largura fixa (ex: o checkbox
+      // de 40px de SupplierList) ocupam espaço real mas não são redimensionáveis.
+      // Ignorá-las faria a soma final estourar o container e criar scroll lateral.
+      // O <col> espaçador nao tem width e soma 0 aqui — que é justamente o papel dele.
+      const fixedExtras = Array.from(table.querySelectorAll('col'))
+        .filter(c => !(c as HTMLElement).dataset.colKey)
+        .reduce((s, c) => s + (parseInt((c as HTMLElement).style.width, 10) || 0), 0);
       const total = keys.reduce((s, k) => s + (next[k] ?? getWidth(k)), 0);
-      const slack = container - total;
+      const slack = container - total - fixedExtras;
       if (slack > 0 && total > 0) {
         // Distribui proporcionalmente e joga o arredondamento na última coluna,
         // para a soma bater exata com o container (senão sobra 1-2px de folga).

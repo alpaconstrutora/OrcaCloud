@@ -1333,82 +1333,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             )}
 
-                            {/* Vigência / periodicidade / índice — só locação.
-                                Sem estes campos o contrato nasce SEM end_date: as parcelas
-                                caem no fallback de 12 ciclos e nenhum alerta de vencimento
-                                (nem a renovação) é possível. Ver contractService.createFromDeal. */}
-                            {formData.type === 'RENTAL' && (
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between px-1">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Fim da Vigência</label>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    // +12 meses − 1 dia, em UTC puro (em UTC-3 o
-                                                    // construtor local retrocede um dia).
-                                                    const base = formData.date || new Date().toISOString().slice(0, 10);
-                                                    const [y, m, d] = base.slice(0, 10).split('-').map(Number);
-                                                    const dt = new Date(Date.UTC(y, m - 1, d));
-                                                    dt.setUTCFullYear(dt.getUTCFullYear() + 1);
-                                                    dt.setUTCDate(dt.getUTCDate() - 1);
-                                                    setFormData({ ...formData, end_date: dt.toISOString().slice(0, 10) });
-                                                }}
-                                                className="text-[11px] font-black uppercase tracking-widest text-purple-600 hover:text-purple-700"
-                                            >
-                                                12 meses
-                                            </button>
-                                        </div>
-                                        <input
-                                            type="date"
-                                            value={formData.end_date || ''}
-                                            onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                            className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner"
-                                        />
-                                        {formData.end_date && formData.date && formData.end_date <= formData.date && (
-                                            <p className="text-[11px] font-bold text-red-500 px-1">
-                                                O fim da vigência deve ser posterior ao início do contrato.
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Periodicidade</label>
-                                            <select
-                                                value={formData.billing_cycle || 'Mensal'}
-                                                onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as PropertyDeal['billing_cycle'] })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
-                                            >
-                                                <option value="Mensal">Mensal</option>
-                                                <option value="Bimestral">Bimestral</option>
-                                                <option value="Semestral">Semestral</option>
-                                                <option value="Anual">Anual</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Índice de Reajuste</label>
-                                            <select
-                                                value={formData.reajuste_index || 'IGP-M'}
-                                                onChange={(e) => setFormData({ ...formData, reajuste_index: e.target.value })}
-                                                className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
-                                            >
-                                                <option value="IGP-M">IGP-M</option>
-                                                <option value="IPCA">IPCA</option>
-                                                <option value="INCC">INCC</option>
-                                                <option value="INCC-M">INCC-M</option>
-                                                <option value="CUB">CUB</option>
-                                                <option value="OUTROS">Outros</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <p className="text-[11px] font-medium text-gray-400 px-1">
-                                        O índice precisa estar cadastrado em Configurações do Sistema para o reajuste ser calculado na renovação.
-                                    </p>
-                                </div>
-                            )}
-
                             {/* Checklist de documentos do cliente/comprador — muda conforme
                                 Pessoa Física / Jurídica do cadastro. Persistido em
                                 commercial_deals.doc_checklist. */}
@@ -2212,6 +2136,98 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             />
                                         </div>
                                     </div>
+
+                                    {/* Vigência da locação — mora AQUI, na aba Contrato, junto do
+                                        número: é dado do contrato, não da negociação. (Nasceu na aba
+                                        Cliente, ao lado da competência do aluguel, e ninguém achava.)
+                                        Sem `end_date` o contrato gerado não tem fim de vigência: as
+                                        parcelas caem no fallback de 12 ciclos, nada entra na fila de
+                                        Renovações e nenhum alerta de vencimento dispara.
+                                        Ver contractService.createFromDeal. */}
+                                    {formData.type === 'RENTAL' && (
+                                        <div className="space-y-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Início da Vigência</label>
+                                                    <input
+                                                        type="date"
+                                                        value={formData.date || ''}
+                                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                        className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Fim da Vigência</label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                // +12 meses − 1 dia, em UTC puro (em UTC-3 o
+                                                                // construtor local retrocede um dia).
+                                                                const base = formData.date || new Date().toISOString().slice(0, 10);
+                                                                const [y, m, d] = base.slice(0, 10).split('-').map(Number);
+                                                                const dt = new Date(Date.UTC(y, m - 1, d));
+                                                                dt.setUTCFullYear(dt.getUTCFullYear() + 1);
+                                                                dt.setUTCDate(dt.getUTCDate() - 1);
+                                                                setFormData({ ...formData, end_date: dt.toISOString().slice(0, 10) });
+                                                            }}
+                                                            className="text-[11px] font-black uppercase tracking-widest text-purple-600 hover:text-purple-700"
+                                                        >
+                                                            12 meses
+                                                        </button>
+                                                    </div>
+                                                    <input
+                                                        type="date"
+                                                        value={formData.end_date || ''}
+                                                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                                                        className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {formData.end_date && formData.date && formData.end_date <= formData.date && (
+                                                <p className="text-[11px] font-bold text-red-500 px-1">
+                                                    O fim da vigência deve ser posterior ao início.
+                                                </p>
+                                            )}
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Periodicidade</label>
+                                                    <select
+                                                        value={formData.billing_cycle || 'Mensal'}
+                                                        onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as PropertyDeal['billing_cycle'] })}
+                                                        className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
+                                                    >
+                                                        <option value="Mensal">Mensal</option>
+                                                        <option value="Bimestral">Bimestral</option>
+                                                        <option value="Semestral">Semestral</option>
+                                                        <option value="Anual">Anual</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Índice de Reajuste</label>
+                                                    <select
+                                                        value={formData.reajuste_index || 'IGP-M'}
+                                                        onChange={(e) => setFormData({ ...formData, reajuste_index: e.target.value })}
+                                                        className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
+                                                    >
+                                                        <option value="IGP-M">IGP-M</option>
+                                                        <option value="IPCA">IPCA</option>
+                                                        <option value="INCC">INCC</option>
+                                                        <option value="INCC-M">INCC-M</option>
+                                                        <option value="CUB">CUB</option>
+                                                        <option value="OUTROS">Outros</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <p className="text-[11px] font-medium text-gray-400 px-1">
+                                                O índice precisa estar cadastrado em Configurações do Sistema para o reajuste ser calculado na renovação.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     {/* Ponte → Contrato formal (Venda ou Locação, negociação já salva) */}
                                     {canGenerateContract && formData.id && (

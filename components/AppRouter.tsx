@@ -20,6 +20,7 @@ const ProjectOverview       = React.lazy(() => import('./ProjectOverview'));
 const Settings              = React.lazy(() => import('./Settings'));
 const ClientArea            = React.lazy(() => import('./ClientArea').then(m => ({ default: m.ClientArea })));
 const OrganizationList      = React.lazy(() => import('./OrganizationList'));
+const OrganizationCreateSheet = React.lazy(() => import('./OrganizationCreateSheet'));
 const BudgetEditor          = React.lazy(() => import('./BudgetEditor'));
 const ParametricEstimator   = React.lazy(() => import('./ParametricEstimator'));
 const FinancialScheduleL    = React.lazy(() => import('./FinancialSchedule').then(m => ({ default: m.FinancialSchedule })));
@@ -650,7 +651,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
               <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Planejamento</h1>
               <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie seus planejamentos com infraestrutura de alta performance.</p>
             </div>
-            {/* Variante compacta do CTA primário (ui_ux_standard_guide.md §17) — ação de
+            {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) — ação de
                 criação é o fluxo principal desta tela, então fica isolada junto ao título,
                 mas no tamanho compacto (h-9), não mais nos 50px da escala antiga. */}
             <div className="flex items-center gap-2">
@@ -1079,9 +1080,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'organization':
       return (
+        <>
         <OrganizationList
           organizations={organizations}
-          onCreate={() => setIsCreatingOrganization(true)}
+          // Zera editingOrganizationId: handleUpsertOrganization usa
+          // `editingOrganizationId || data.id` para decidir criar × atualizar, então um
+          // id remanescente de uma edição anterior faria "Nova empresa" sobrescrever
+          // aquela organização em vez de criar uma nova.
+          onCreate={() => { setEditingOrganizationId(null); setIsCreatingOrganization(true); }}
           onEdit={(org: Organization) => { setEditingOrganizationId(org.id); setIsCreatingOrganization(true); }}
           onSave={(org: Organization) => handleUpsertOrganization(org, false)}
           onDelete={handleDeleteOrganization}
@@ -1097,6 +1103,19 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onExportProject={handleExportProject}
           onSelect={(org: Organization) => setActiveOrganizationId(org?.id || null)}
         />
+        {/* O botão "Nova empresa" só ligava o estado abaixo; nada renderizava o
+            formulário. Ver OrganizationCreateSheet.tsx.
+            Montado só quando aberto: o componente é lazy e o Suspense que o cobre é o
+            da tela inteira — mantê-lo sempre montado trocaria a lista por um spinner
+            enquanto o chunk carrega. */}
+        {isCreatingOrganization && (
+          <OrganizationCreateSheet
+            open
+            onClose={() => { setIsCreatingOrganization(false); setEditingOrganizationId(null); }}
+            onCreate={(org: Organization) => handleUpsertOrganization(org, true)}
+          />
+        )}
+        </>
       );
 
     case 'org-type-templates':

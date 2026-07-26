@@ -508,10 +508,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
                                 {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
                                 {tableColumns.visibleColumns.includes('projects') && <col data-col-key="projects" style={{ width: `${cols.getWidth('projects')}px` }} />}
-                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                                 {/* coluna "espaçadora" sem largura fixa — absorve o espaço sobrando quando
-                                    a tabela é mais estreita que o container (ver §6.1 do guia de UI). */}
+                                    a tabela é mais estreita que o container (ver §6.1 do guia de UI).
+                                    Fica ANTES de "Ações" de propósito: com ela depois, todo o espaço
+                                    sobrando ia para a direita de "Ações", que então "andava" a cada
+                                    redimensionamento e desalinhava da toolbar acoplada acima. Antes de
+                                    "Ações", o espaço é absorvido no meio e "Ações" fica sempre colada
+                                    na borda direita do card. */}
                                 <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                             </colgroup>
                             {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força
                                 uppercase internamente por padrão; classes de estilo movidas pro <tr>, igual ao
@@ -576,15 +581,12 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             <cols.ResizeHandle colKey="projects" />
                                         </SortableHeader>
                                     )}
-                                    {/* sticky right-0: mantém a coluna Ações sempre colada na borda direita do
-                                        card, mesmo quando redimensionar outra coluna encolhe a tabela e sobra
-                                        espaço morto no <col /> espaçador (§6.1) — sem isso, a borda de Ações
-                                        "andava" para a esquerda e desalinhava da toolbar acoplada acima. */}
-                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500 sticky right-0 z-10 bg-gray-50 border-l border-gray-100">
+                                    {/* espaçador — casa com o <col /> sem largura do colgroup, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
-                                    <th aria-hidden="true" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -656,7 +658,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     )}
                                                 </td>
                                             )}
-                                            <td className="px-6 py-2.5 text-right sticky right-0 z-10 bg-white group-hover:bg-blue-50/50 transition-colors border-l border-gray-100">
+                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                            <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         onClick={() => handleOpenModal(client)}
@@ -696,7 +700,6 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     />
                                                 </div>
                                             </td>
-                                            <td aria-hidden="true"></td>
                                         </tr>
                                     );
                                 })}

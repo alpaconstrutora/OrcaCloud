@@ -1,26 +1,36 @@
 import React from 'react';
 import {
+    AlertTriangle,
     ArrowLeftRight,
     Building2,
     Calculator,
     CheckCircle2,
     FileSpreadsheet,
     FileText,
+    FolderOpen,
+    Layers,
     Lock,
     Plus,
     RefreshCw,
+    Ruler,
+    Search,
     ShieldCheck,
+    Sigma,
 } from 'lucide-react';
-import Button from './ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import { KpiCard } from './ui/KpiCard';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 import {
     statusLabel,
     formatNumber,
     shortHash,
     statusTone,
     isVersionStructureEditable,
+    AreaButton,
     EmptyState,
+    LoadingState,
     RpcFeedback,
     AreaQaPanel,
     LifecycleAuditPanel,
@@ -52,6 +62,9 @@ type TableView = 'resumo' | 'estrutura' | 'quadro_i' | 'quadro_ii' | 'quadro_ivb
 type StructureEditKind = 'block' | 'floor' | 'unit' | 'space';
 
 export default function AreaEngineModule({ organizationId }: AreaEngineModuleProps) {
+    const confirm = useConfirm();
+    // §3 — busca persistida (sobrevive a navegação/reload)
+    const [projectSearchTerm, setProjectSearchTerm] = usePersistedState<string>('areaEngine:projectSearch', '');
     const [projects, setProjects] = React.useState<AreaProject[]>([]);
     const [versions, setVersions] = React.useState<AreaVersion[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
@@ -121,9 +134,10 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [structureSubTab, setStructureSubTab] = React.useState<StructureEditKind>('block');
     // Edicao em lote de espacos privativos (Camada B)
     const [selectedSpaceIds, setSelectedSpaceIds] = React.useState<Set<string>>(new Set());
+    const [lastCheckedSpaceIndex, setLastCheckedSpaceIndex] = React.useState<number | null>(null);
     const [bulkCoverageClass, setBulkCoverageClass] = React.useState('covered_different');
     const [bulkCoefficientValue, setBulkCoefficientValue] = React.useState('0.75');
-    // Assistente de vaga/deposito (Camada B)
+    // Assistente de vaga/depósito (Camada B)
     const [isVagaWizardOpen, setIsVagaWizardOpen] = React.useState(false);
     const [vagaParentUnitId, setVagaParentUnitId] = React.useState('');
     const [vagaQuantity, setVagaQuantity] = React.useState('1');
@@ -132,6 +146,15 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [vagaLinkType, setVagaLinkType] = React.useState<'parking' | 'storage' | 'box' | 'exclusive_area' | 'other'>('parking');
     const [vagaAffectsPrivateArea, setVagaAffectsPrivateArea] = React.useState(true);
     const [vagaAffectsCoefficient, setVagaAffectsCoefficient] = React.useState(true);
+
+    const filteredProjects = React.useMemo(() => {
+        const term = projectSearchTerm.trim().toLowerCase();
+        if (!term) return projects;
+        return projects.filter(project =>
+            project.name.toLowerCase().includes(term) ||
+            (project.normative_reference || '').toLowerCase().includes(term)
+        );
+    }, [projects, projectSearchTerm]);
 
     const selectedVersion = versions.find(v => v.id === selectedVersionId) || null;
     const technicalApproval = approvals.find(approval => approval.approval_type === 'technical');
@@ -758,6 +781,14 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
     async function deleteStructureRecord(kind: 'block' | 'floor' | 'unit' | 'space', id: string) {
         if (!versionIsEditable()) return;
+        const kindLabel: Record<typeof kind, string> = { block: 'bloco', floor: 'pavimento', unit: 'unidade', space: 'espaço' };
+        const ok = await confirm({
+            title: `Excluir ${kindLabel[kind]}?`,
+            message: 'O registro sai da estrutura desta versão e os quadros precisarão ser recalculados. Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         setActionLoading(`delete-${kind}`);
         setError(null);
         try {
@@ -802,6 +833,13 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
     async function deleteAccessoryLink(id: string) {
         if (!versionIsEditable()) return;
+        const ok = await confirm({
+            title: 'Remover vínculo acessório?',
+            message: 'A unidade acessória deixa de ser vinculada à unidade principal no cálculo desta versão.',
+            variant: 'danger',
+            confirmLabel: 'Remover',
+        });
+        if (!ok) return;
         setActionLoading('delete-accessory-link');
         setError(null);
         try {
@@ -846,6 +884,13 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
     async function deleteCommonAllocation(id: string) {
         if (!versionIsEditable()) return;
+        const ok = await confirm({
+            title: 'Remover alocação comum?',
+            message: 'A área comum não proporcional deixa de ser alocada nesta unidade. Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Remover',
+        });
+        if (!ok) return;
         setActionLoading('delete-common-allocation');
         setError(null);
         try {
@@ -867,6 +912,18 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
+    }
+
+    // §10.1 — Shift+clique seleciona o intervalo desde a última âncora.
+    function handleSpaceCheck(id: string, index: number, shiftKey: boolean) {
+        if (shiftKey && lastCheckedSpaceIndex !== null) {
+            const [start, end] = lastCheckedSpaceIndex < index ? [lastCheckedSpaceIndex, index] : [index, lastCheckedSpaceIndex];
+            const rangeIds = privateSpacesList.slice(start, end + 1).map(space => space.id);
+            setSelectedSpaceIds(prev => new Set([...prev, ...rangeIds]));
+            return;
+        }
+        toggleSpaceSelection(id);
+        setLastCheckedSpaceIndex(index);
     }
 
     function toggleSelectAllPrivateSpaces() {
@@ -908,7 +965,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         }
     }
 
-    // ── Assistente de vaga/deposito (Camada B) ───────────────────────────────
+    // ── Assistente de vaga/depósito (Camada B) ───────────────────────────────
     async function createVagasWizard(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (!versionIsEditable()) return;
@@ -1001,49 +1058,79 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     }, [structure]);
 
     return (
-        <div className="min-h-screen bg-slate-50 p-6 space-y-5">
-            <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-blue-600">NBR 12721</p>
-                    <h1 className="text-2xl font-black text-slate-900">Motor de areas</h1>
-                    <p className="text-sm text-slate-500 mt-1">Quadros I, II e IV-B com rastreabilidade de calculo, aprovacao e lock.</p>
+        <div className="p-2 space-y-6">
+            {/* §20 — título solto (sem card/hero), subtítulo mt-1.5 */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Motor de Áreas</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Quadros I, II e IV-B da NBR 12721 com rastreabilidade de cálculo, aprovação e lock.</p>
+            </div>
+
+            {/* §4 — KPI cards com o componente canônico, cor semântica por métrica */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard
+                    label="Soma dos coeficientes"
+                    value={formatNumber(coefficientSum, 6)}
+                    sub={quadroII.length > 0 ? `${quadroII.length} unidade(s) no Quadro II` : undefined}
+                    icon={<Sigma className="w-5 h-5" />}
+                    color="blue"
+                />
+                <KpiCard
+                    label="Área real total"
+                    value={`${formatNumber(realTotal)} m²`}
+                    icon={<Ruler className="w-5 h-5" />}
+                    color="emerald"
+                />
+                <KpiCard
+                    label="Área equivalente"
+                    value={`${formatNumber(equivalentTotal)} m²`}
+                    icon={<Layers className="w-5 h-5" />}
+                    color="indigo"
+                />
+                <KpiCard
+                    label="Pendências da estrutura"
+                    value={structureChecklist.length}
+                    sub={structureChecklist.length > 0 ? 'Resolva antes de calcular' : 'Nenhuma pendência'}
+                    icon={<AlertTriangle className="w-5 h-5" />}
+                    color={structureChecklist.length > 0 ? 'amber' : 'gray'}
+                />
+            </div>
+
+            {/* §5.3 — toolbar de botões: escopo/ações à esquerda, ação primária à direita */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    <AreaButton variant="secondary" onClick={() => setIsCreateOpen(true)} disabled={!!actionLoading}>
+                        <Plus className="w-[15px] h-[15px]" /> Novo projeto
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={openImport} disabled={!!actionLoading}>
+                        <Building2 className="w-[15px] h-[15px]" /> Importar de Empreendimento
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={() => setIsStructureOpen(true)} disabled={!selectedVersionId || !!actionLoading}>
+                        <Plus className="w-[15px] h-[15px]" /> Estrutura
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={createRevisionFromSelectedVersion} disabled={!selectedVersionId || !!actionLoading}>
+                        <Plus className="w-[15px] h-[15px]" /> Nova revisão
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={loadProjects} disabled={loading}>
+                        <RefreshCw className="w-[15px] h-[15px]" /> Atualizar
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={() => void exportAreaPackage('xlsx')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
+                        <FileSpreadsheet className="w-[15px] h-[15px]" /> XLSX
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={() => void exportAreaPackage('pdf')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
+                        <FileText className="w-[15px] h-[15px]" /> PDF
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={runWriteBack} disabled={!canWriteBack || actionLoading === 'write-back'}>
+                        <ArrowLeftRight className="w-[15px] h-[15px]" /> Fração ideal → Empreendimento
+                    </AreaButton>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" onClick={() => setIsCreateOpen(true)} disabled={!!actionLoading}>
-                        <Plus className="w-4 h-4" /> Novo projeto
-                    </Button>
-                    <Button variant="secondary" onClick={openImport} disabled={!!actionLoading}>
-                        <Building2 className="w-4 h-4" /> Importar de Empreendimento
-                    </Button>
-                    <Button variant="secondary" onClick={() => setIsStructureOpen(true)} disabled={!selectedVersionId || !!actionLoading}>
-                        <Plus className="w-4 h-4" /> Estrutura
-                    </Button>
-                    <Button variant="secondary" onClick={createRevisionFromSelectedVersion} disabled={!selectedVersionId || !!actionLoading}>
-                        <Plus className="w-4 h-4" /> Nova revisao
-                    </Button>
-                    <Button variant="secondary" onClick={loadProjects} disabled={loading}>
-                        <RefreshCw className="w-4 h-4" /> Atualizar
-                    </Button>
-                    <Button
-                        onClick={runValidatedCalculation}
-                        disabled={!selectedVersionId || !!actionLoading}
-                    >
-                        <Calculator className="w-4 h-4" /> Calcular
-                    </Button>
-                    <Button variant="secondary" onClick={() => void exportAreaPackage('xlsx')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
-                        <FileSpreadsheet className="w-4 h-4" /> XLSX
-                    </Button>
-                    <Button variant="secondary" onClick={() => void exportAreaPackage('pdf')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
-                        <FileText className="w-4 h-4" /> PDF
-                    </Button>
-                    <Button variant="secondary" onClick={runWriteBack} disabled={!canWriteBack || actionLoading === 'write-back'}>
-                        <ArrowLeftRight className="w-4 h-4" /> Fracao ideal → Empreendimento
-                    </Button>
-                </div>
-            </header>
+                {/* §17 — ação primária, única azul sólida da tela */}
+                <AreaButton onClick={runValidatedCalculation} disabled={!selectedVersionId || !!actionLoading} className="shrink-0">
+                    <Calculator className="w-[15px] h-[15px]" /> Calcular
+                </AreaButton>
+            </div>
 
             {error && (
-                <div className="border border-red-200 bg-red-50 text-red-700 rounded-lg px-4 py-3 text-sm font-medium">
+                <div className="border border-red-200 bg-red-50 text-red-700 rounded-[10px] px-4 py-3 text-sm font-medium">
                     {error}
                 </div>
             )}
@@ -1056,20 +1143,20 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 <SheetPanel className="p-6">
                     <form id="area-create-form" onSubmit={createAreaProject} className="space-y-4">
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Nome</span>
+                            <span className="text-xs font-semibold text-slate-500">Nome</span>
                             <input
                                 value={newProjectName}
                                 onChange={event => setNewProjectName(event.target.value)}
-                                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                                 placeholder="Ex.: Torre Residencial A"
                             />
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Tipo</span>
+                            <span className="text-xs font-semibold text-slate-500">Tipo</span>
                             <select
                                 value={newProjectType}
                                 onChange={event => setNewProjectType(event.target.value as typeof newProjectType)}
-                                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                             >
                                 <option value="vertical">Vertical</option>
                                 <option value="mixed">Misto</option>
@@ -1080,21 +1167,21 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             </select>
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Versao</span>
+                            <span className="text-xs font-semibold text-slate-500">Versao</span>
                             <input
                                 value={newVersionLabel}
                                 onChange={event => setNewVersionLabel(event.target.value)}
-                                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                                 placeholder="Versao inicial"
                             />
                         </label>
                     </form>
                 </SheetPanel>
                 <SheetFooter>
-                    <Button type="button" variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
-                    <Button type="submit" form="area-create-form" disabled={actionLoading === 'create-project'}>
+                    <AreaButton type="button" variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancelar</AreaButton>
+                    <AreaButton type="submit" form="area-create-form" disabled={actionLoading === 'create-project'}>
                         <Plus className="w-4 h-4" /> Criar
-                    </Button>
+                    </AreaButton>
                 </SheetFooter>
             </Sheet>
 
@@ -1106,11 +1193,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 <SheetPanel className="p-6">
                     <form id="area-import-form" onSubmit={runImport} className="space-y-4">
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Empreendimento</span>
+                            <span className="text-xs font-semibold text-slate-500">Empreendimento</span>
                             <select
                                 value={selectedEmpreendimentoId}
                                 onChange={event => setSelectedEmpreendimentoId(event.target.value)}
-                                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                             >
                                 {empreendimentos.length === 0 && <option value="">Nenhum empreendimento encontrado</option>}
                                 {empreendimentos.map(emp => (
@@ -1121,15 +1208,15 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     </form>
                 </SheetPanel>
                 <SheetFooter>
-                    <Button type="button" variant="secondary" onClick={() => setIsImportOpen(false)}>Cancelar</Button>
-                    <Button type="submit" form="area-import-form" disabled={!selectedEmpreendimentoId || actionLoading === 'import'}>
+                    <AreaButton type="button" variant="secondary" onClick={() => setIsImportOpen(false)}>Cancelar</AreaButton>
+                    <AreaButton type="submit" form="area-import-form" disabled={!selectedEmpreendimentoId || actionLoading === 'import'}>
                         <Building2 className="w-4 h-4" /> Importar
-                    </Button>
+                    </AreaButton>
                 </SheetFooter>
             </Sheet>
 
             {importReport && (
-                <div className="border border-emerald-200 bg-emerald-50 text-emerald-800 rounded-lg px-4 py-3 text-sm">
+                <div className="border border-emerald-200 bg-emerald-50 text-emerald-800 rounded-[10px] px-4 py-3 text-sm">
                     <p className="font-bold">
                         {importReport.isNewProject ? 'Importacao concluida' : `Re-sincronizacao concluida (versao v${importReport.versionNumber})`}
                     </p>
@@ -1142,8 +1229,8 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                         </p>
                     )}
                     {importReport.drift && (
-                        <div className="mt-2 rounded-lg border border-emerald-200 bg-white/70 p-2 text-xs">
-                            <p className="font-bold uppercase tracking-widest text-[10px] text-emerald-700">Mudancas vs versao anterior</p>
+                        <div className="mt-2 rounded-[10px] border border-emerald-200 bg-white/70 p-2 text-xs">
+                            <p className="font-semibold text-xs text-emerald-700">Mudancas vs versao anterior</p>
                             {(importReport.drift.unitsAdded.length + importReport.drift.unitsRemoved.length + importReport.drift.unitsAreaChanged.length + importReport.drift.blocksAdded.length + importReport.drift.blocksRemoved.length) === 0 ? (
                                 <p className="mt-1">Nenhuma mudanca estrutural.</p>
                             ) : (
@@ -1166,7 +1253,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             )}
 
             {writeBackReport && (
-                <div className="border border-blue-200 bg-blue-50 text-blue-800 rounded-lg px-4 py-3 text-sm">
+                <div className="border border-blue-200 bg-blue-50 text-blue-800 rounded-[10px] px-4 py-3 text-sm">
                     <p className="font-bold">Fracao ideal escrita no Empreendimento</p>
                     <p className="mt-1 text-xs">
                         {writeBackReport.unitsUpdated} unidade(s) atualizada(s).
@@ -1177,53 +1264,53 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
             <Sheet open={isVagaWizardOpen} onClose={() => setIsVagaWizardOpen(false)} size="md">
                 <SheetHeader onClose={() => setIsVagaWizardOpen(false)}>
-                    <SheetTitle>Assistente de vaga/deposito</SheetTitle>
+                    <SheetTitle>Assistente de vaga/depósito</SheetTitle>
                     <SheetDescription>Cria N unidades acessorias (vaga/deposito), 1 espaco privativo cada e o vinculo com a unidade principal, em um unico passo.</SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="p-6">
                     <form id="area-vaga-form" onSubmit={createVagasWizard} className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <label className="space-y-1 block md:col-span-2">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Unidade principal</span>
-                            <select value={vagaParentUnitId} onChange={event => setVagaParentUnitId(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+                            <span className="text-xs font-semibold text-slate-500">Unidade principal</span>
+                            <select value={vagaParentUnitId} onChange={event => setVagaParentUnitId(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
                                 <option value="">Selecione</option>
                                 {structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}
                             </select>
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Quantidade</span>
-                            <input value={vagaQuantity} onChange={event => setVagaQuantity(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Quantidade</span>
+                            <input value={vagaQuantity} onChange={event => setVagaQuantity(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Prefixo do codigo</span>
-                            <input value={vagaCodePrefix} onChange={event => setVagaCodePrefix(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Prefixo do codigo</span>
+                            <input value={vagaCodePrefix} onChange={event => setVagaCodePrefix(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Area cada (m2)</span>
-                            <input value={vagaArea} onChange={event => setVagaArea(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Area cada (m2)</span>
+                            <input value={vagaArea} onChange={event => setVagaArea(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Tipo</span>
-                            <select value={vagaLinkType} onChange={event => setVagaLinkType(event.target.value as typeof vagaLinkType)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+                            <span className="text-xs font-semibold text-slate-500">Tipo</span>
+                            <select value={vagaLinkType} onChange={event => setVagaLinkType(event.target.value as typeof vagaLinkType)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
                                 <option value="parking">Vaga</option>
-                                <option value="storage">Deposito</option>
+                                <option value="storage">Depósito</option>
                                 <option value="box">Box</option>
-                                <option value="exclusive_area">Area exclusiva</option>
+                                <option value="exclusive_area">Área exclusiva</option>
                                 <option value="other">Outro</option>
                             </select>
                         </label>
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                        <label className="flex items-center gap-2 text-sm font-normal text-slate-600">
                             <input type="checkbox" checked={vagaAffectsPrivateArea} onChange={event => setVagaAffectsPrivateArea(event.target.checked)} /> Afeta area privativa
                         </label>
-                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                        <label className="flex items-center gap-2 text-sm font-normal text-slate-600">
                             <input type="checkbox" checked={vagaAffectsCoefficient} onChange={event => setVagaAffectsCoefficient(event.target.checked)} /> Afeta coeficiente
                         </label>
                     </form>
                 </SheetPanel>
                 <SheetFooter>
-                    <Button type="button" variant="secondary" onClick={() => setIsVagaWizardOpen(false)}>Cancelar</Button>
-                    <Button type="submit" form="area-vaga-form" disabled={!selectedVersionId || !vagaParentUnitId || actionLoading === 'create-vaga'}>
+                    <AreaButton type="button" variant="secondary" onClick={() => setIsVagaWizardOpen(false)}>Cancelar</AreaButton>
+                    <AreaButton type="submit" form="area-vaga-form" disabled={!selectedVersionId || !vagaParentUnitId || actionLoading === 'create-vaga'}>
                         <Plus className="w-4 h-4" /> Criar
-                    </Button>
+                    </AreaButton>
                 </SheetFooter>
             </Sheet>
 
@@ -1235,83 +1322,106 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 <SheetPanel className="p-6">
                     <form id="area-structure-form" onSubmit={createMinimalStructure} className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Unidade 1</span>
-                            <input value={structureUnit1Code} onChange={event => setStructureUnit1Code(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Unidade 1</span>
+                            <input value={structureUnit1Code} onChange={event => setStructureUnit1Code(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Area 1</span>
-                            <input value={structureUnit1Area} onChange={event => setStructureUnit1Area(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Area 1</span>
+                            <input value={structureUnit1Area} onChange={event => setStructureUnit1Area(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Unidade 2</span>
-                            <input value={structureUnit2Code} onChange={event => setStructureUnit2Code(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Unidade 2</span>
+                            <input value={structureUnit2Code} onChange={event => setStructureUnit2Code(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                         <label className="space-y-1 block">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Area 2</span>
-                            <input value={structureUnit2Area} onChange={event => setStructureUnit2Area(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Area 2</span>
+                            <input value={structureUnit2Area} onChange={event => setStructureUnit2Area(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                         <label className="space-y-1 block md:col-span-2">
-                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Area comum proporcional</span>
-                            <input value={structureCommonArea} onChange={event => setStructureCommonArea(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                            <span className="text-xs font-semibold text-slate-500">Area comum proporcional</span>
+                            <input value={structureCommonArea} onChange={event => setStructureCommonArea(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                         </label>
                     </form>
                 </SheetPanel>
                 <SheetFooter>
-                    <Button type="button" variant="secondary" onClick={() => setIsStructureOpen(false)}>Cancelar</Button>
-                    <Button type="submit" form="area-structure-form" disabled={!selectedVersionId || actionLoading === 'create-structure'}>
+                    <AreaButton type="button" variant="secondary" onClick={() => setIsStructureOpen(false)}>Cancelar</AreaButton>
+                    <AreaButton type="submit" form="area-structure-form" disabled={!selectedVersionId || actionLoading === 'create-structure'}>
                         <Plus className="w-4 h-4" /> Gerar e calcular
-                    </Button>
+                    </AreaButton>
                 </SheetFooter>
             </Sheet>
 
             <section className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5">
                 <aside className="space-y-4">
-                    <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+                    <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Projetos</h2>
-                            <span className="text-xs text-slate-400">{projects.length}</span>
+                            <h2 className="text-sm font-bold text-slate-800">Projetos</h2>
+                            <span className="text-xs text-slate-400">{filteredProjects.length}/{projects.length}</span>
                         </div>
-                        {projects.length === 0 ? (
-                            <EmptyState message="Nenhum projeto de area encontrado." />
+                        {/* §5.1 — busca desaninhada, h-9, persistida (§3) */}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar projeto de áreas..."
+                                value={projectSearchTerm}
+                                onChange={event => setProjectSearchTerm(event.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        {loading && projects.length === 0 ? (
+                            <LoadingState message="Carregando projetos..." />
+                        ) : filteredProjects.length === 0 ? (
+                            <EmptyState
+                                title={projects.length === 0 ? 'Nenhum projeto de áreas' : 'Nenhum projeto encontrado'}
+                                message={projects.length === 0 ? 'Crie um projeto ou importe de um Empreendimento.' : 'Tente ajustar sua busca.'}
+                                icon={<FolderOpen className="w-12 h-12" />}
+                            />
                         ) : (
                             <div className="space-y-2">
-                                {projects.map(project => (
+                                {filteredProjects.map(project => (
                                     <button
                                         key={project.id}
                                         onClick={() => setSelectedProjectId(project.id)}
-                                        className={`w-full text-left border rounded-lg px-3 py-2 transition ${selectedProjectId === project.id ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                                        className={`w-full text-left border rounded-[6px] px-3 py-2 transition ${selectedProjectId === project.id ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
                                     >
-                                        <div className="font-bold text-sm text-slate-800 truncate">{project.name}</div>
-                                        <div className="text-xs text-slate-500">{project.normative_reference}</div>
+                                        <div className="text-sm font-medium text-gray-800 truncate">{project.name}</div>
+                                        <div className="text-xs font-normal text-gray-500">{project.normative_reference}</div>
                                     </button>
                                 ))}
                             </div>
                         )}
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+                    <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Versoes</h2>
+                            <h2 className="text-sm font-bold text-slate-800">Versões</h2>
                             <span className="text-xs text-slate-400">{versions.length}</span>
                         </div>
-                        {versions.length === 0 ? (
-                            <EmptyState message="Nenhuma versao para o projeto selecionado." />
+                        {loading && versions.length === 0 ? (
+                            <LoadingState message="Carregando versões..." />
+                        ) : versions.length === 0 ? (
+                            <EmptyState
+                                title="Nenhuma versão"
+                                message="O projeto selecionado ainda não tem versão de cálculo."
+                                icon={<Layers className="w-12 h-12" />}
+                            />
                         ) : (
                             <div className="space-y-2">
                                 {versions.map(version => (
                                     <button
                                         key={version.id}
                                         onClick={() => setSelectedVersionId(version.id)}
-                                        className={`w-full text-left border rounded-lg px-3 py-2 transition ${selectedVersionId === version.id ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                                        className={`w-full text-left border rounded-[6px] px-3 py-2 transition ${selectedVersionId === version.id ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
                                     >
                                         <div className="flex items-center justify-between gap-2">
-                                            <span className="font-bold text-sm text-slate-800 truncate">v{version.version_number} - {version.version_label}</span>
+                                            <span className="text-sm font-medium text-gray-800 truncate">v{version.version_number} · {version.version_label}</span>
                                             <span className={`shrink-0 text-sm font-normal ${statusTone(version.status)}`}>
                                                 {statusLabel[version.status] || version.status}
                                             </span>
                                         </div>
-                                        <div className="text-xs text-slate-500 mt-1">Payload: {shortHash(version.version_payload_hash)}</div>
-                                        <div className="text-xs text-slate-500">Identidade: {shortHash(version.version_identity_hash)}</div>
+                                        <div className="text-xs font-normal text-gray-500 mt-1">Payload: {shortHash(version.version_payload_hash)}</div>
+                                        <div className="text-xs font-normal text-gray-500">Identidade: {shortHash(version.version_identity_hash)}</div>
                                     </button>
                                 ))}
                             </div>
@@ -1319,49 +1429,37 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     </div>
                 </aside>
 
-                <main className="space-y-5">
+                <main className="space-y-6">
                     <Tabs value={activeTable} onValueChange={value => setActiveTable(value as TableView)}>
-                        <TabsList className="flex-wrap">
-                            <TabsTrigger value="resumo">
-                                Resumo{structureChecklist.length > 0 ? ` (${structureChecklist.length})` : ''}
-                            </TabsTrigger>
-                            <TabsTrigger value="estrutura">Estrutura</TabsTrigger>
-                            <TabsTrigger value="quadro_i">Quadro I</TabsTrigger>
-                            <TabsTrigger value="quadro_ii">Quadro II</TabsTrigger>
-                            <TabsTrigger value="quadro_ivb">IV-B</TabsTrigger>
-                            <TabsTrigger value="aprovacoes">Aprovacoes</TabsTrigger>
-                        </TabsList>
+                        {/* §19.1 — barra de abas em card branco próprio, mb-3 pelo ritmo do §20.1 */}
+                        <div className="bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                            <TabsList className="flex-wrap">
+                                <TabsTrigger value="resumo">
+                                    Resumo{structureChecklist.length > 0 ? ` (${structureChecklist.length})` : ''}
+                                </TabsTrigger>
+                                <TabsTrigger value="estrutura">Estrutura</TabsTrigger>
+                                <TabsTrigger value="quadro_i">Quadro I</TabsTrigger>
+                                <TabsTrigger value="quadro_ii">Quadro II</TabsTrigger>
+                                <TabsTrigger value="quadro_ivb">Quadro IV-B</TabsTrigger>
+                                <TabsTrigger value="aprovacoes">Aprovações</TabsTrigger>
+                            </TabsList>
+                        </div>
 
-                        <TabsContent value="resumo" className="mt-5 space-y-5">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div className="bg-white border border-slate-200 rounded-lg p-4">
-                                    <p className="text-xs uppercase tracking-widest font-black text-slate-500">Coeficiente</p>
-                                    <p className="text-2xl font-black text-slate-900 mt-1">{formatNumber(coefficientSum, 12)}</p>
-                                </div>
-                                <div className="bg-white border border-slate-200 rounded-lg p-4">
-                                    <p className="text-xs uppercase tracking-widest font-black text-slate-500">Area real total</p>
-                                    <p className="text-2xl font-black text-slate-900 mt-1">{formatNumber(realTotal)} m2</p>
-                                </div>
-                                <div className="bg-white border border-slate-200 rounded-lg p-4">
-                                    <p className="text-xs uppercase tracking-widest font-black text-slate-500">Area equivalente</p>
-                                    <p className="text-2xl font-black text-slate-900 mt-1">{formatNumber(equivalentTotal)} m2</p>
-                                </div>
-                            </div>
-
+                        <TabsContent value="resumo" className="space-y-6">
                             {structureChecklist.length > 0 && (
-                                <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-2">
+                                <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm p-4 space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Checklist de pendencias</h2>
+                                        <h2 className="text-sm font-bold text-slate-800">Checklist de pendências</h2>
                                         <span className="text-xs text-slate-400">{structureChecklist.length} item(ns)</span>
                                     </div>
                                     <div className="space-y-1">
                                         {structureChecklist.map((item, idx) => (
-                                            <div key={`${item.kind}-${item.id}-${idx}`} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs font-semibold ${item.severity === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                                            <div key={`${item.kind}-${item.id}-${idx}`} className={`flex items-center justify-between gap-3 rounded-[6px] border px-3 py-2 text-sm font-normal ${item.severity === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
                                                 <span>{item.message}</span>
                                                 <button
                                                     type="button"
                                                     onClick={() => { setActiveTable('estrutura'); beginStructureEdit(item.kind, item.id); }}
-                                                    className="shrink-0 font-black uppercase tracking-widest underline hover:no-underline"
+                                                    className="shrink-0 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
                                                 >
                                                     Editar
                                                 </button>
@@ -1382,27 +1480,27 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             <RpcFeedback result={feedback} />
                         </TabsContent>
 
-                        <TabsContent value="aprovacoes" className="mt-5">
-                            <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
+                        <TabsContent value="aprovacoes">
+                            <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm p-4 space-y-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                     <div>
-                                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Ciclo de vida</h2>
-                                        <p className="text-xs text-slate-500 mt-1">Versao selecionada: {selectedVersion?.version_label || '-'}</p>
-                                        <p className="text-xs text-slate-500 mt-1">O botao Calcular executa validacao tecnica antes do calculo oficial.</p>
+                                        <h2 className="text-sm font-bold text-slate-800">Ciclo de vida</h2>
+                                        <p className="text-xs text-slate-500 mt-1">Versão selecionada: {selectedVersion?.version_label || '-'}</p>
+                                        <p className="text-xs text-slate-500 mt-1">O botão Calcular executa validação técnica antes do cálculo oficial.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                        <Button variant="secondary" onClick={() => selectedVersionId && runAction('validate', () => areaEngineService.validateVersion(selectedVersionId))} disabled={!selectedVersionId || !!actionLoading}>
+                                        <AreaButton variant="secondary" onClick={() => selectedVersionId && runAction('validate', () => areaEngineService.validateVersion(selectedVersionId))} disabled={!selectedVersionId || !!actionLoading}>
                                             <ShieldCheck className="w-4 h-4" /> Validar
-                                        </Button>
-                                        <Button variant="secondary" onClick={() => selectedVersionId && runAction('technical', () => areaEngineService.approveVersion(selectedVersionId, 'technical', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading || !canApproveTechnical}>
+                                        </AreaButton>
+                                        <AreaButton variant="secondary" onClick={() => selectedVersionId && runAction('technical', () => areaEngineService.approveVersion(selectedVersionId, 'technical', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading || !canApproveTechnical}>
                                             <CheckCircle2 className="w-4 h-4" /> Tecnica
-                                        </Button>
-                                        <Button variant="secondary" onClick={() => selectedVersionId && runAction('legal', () => areaEngineService.approveVersion(selectedVersionId, 'legal', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading || !canApproveLegal}>
+                                        </AreaButton>
+                                        <AreaButton variant="secondary" onClick={() => selectedVersionId && runAction('legal', () => areaEngineService.approveVersion(selectedVersionId, 'legal', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading || !canApproveLegal}>
                                             <CheckCircle2 className="w-4 h-4" /> Juridica
-                                        </Button>
-                                        <Button variant="secondary" onClick={() => selectedVersionId && runAction('lock', () => areaEngineService.lockVersion(selectedVersionId))} disabled={!selectedVersionId || !!actionLoading || !canLockVersion}>
+                                        </AreaButton>
+                                        <AreaButton variant="secondary" onClick={() => selectedVersionId && runAction('lock', () => areaEngineService.lockVersion(selectedVersionId))} disabled={!selectedVersionId || !!actionLoading || !canLockVersion}>
                                             <Lock className="w-4 h-4" /> Lock
-                                        </Button>
+                                        </AreaButton>
                                     </div>
                                 </div>
                                 <LifecycleAuditPanel
@@ -1414,18 +1512,18 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="estrutura" className="mt-5">
-                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                        <TabsContent value="estrutura">
+                            <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm overflow-hidden">
                             <div className="p-4 space-y-4">
-                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-4">
+                                <div className="rounded-[10px] border border-gray-200 bg-slate-50 p-4 space-y-4">
                                     <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                                         <div>
-                                            <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Editor granular</h3>
-                                            <p className="text-xs text-slate-500 mt-1">Cadastre blocos, pavimentos, unidades e espacos reais da versao.</p>
+                                            <h3 className="text-sm font-bold text-slate-800">Editor granular</h3>
+                                            <p className="text-xs text-slate-500 mt-1">Cadastre blocos, pavimentos, unidades e espaços reais da versão.</p>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2">
                                             {editingStructure && (
-                                                <Button type="button" variant="secondary" size="sm" onClick={cancelStructureEdit} disabled={!!actionLoading}>Cancelar edicao</Button>
+                                                <AreaButton type="button" variant="secondary" size="sm" onClick={cancelStructureEdit} disabled={!!actionLoading}>Cancelar edição</AreaButton>
                                             )}
                                             {selectedVersion && !structureIsEditable && (
                                                 <span className="text-sm font-normal text-amber-700">Somente leitura</span>
@@ -1438,60 +1536,60 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                             <TabsTrigger value="block">Blocos ({structure.blocks.length})</TabsTrigger>
                                             <TabsTrigger value="floor">Pavimentos ({structure.floors.length})</TabsTrigger>
                                             <TabsTrigger value="unit">Unidades ({structure.units.length})</TabsTrigger>
-                                            <TabsTrigger value="space">Espacos ({structure.spaces.length})</TabsTrigger>
+                                            <TabsTrigger value="space">Espaços ({structure.spaces.length})</TabsTrigger>
                                         </TabsList>
 
                                         <TabsContent value="block" className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                            <form onSubmit={addBlock} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Bloco</h4>
+                                            <form onSubmit={addBlock} className="rounded-[10px] border border-gray-200 bg-white p-3 space-y-3">
+                                                <h4 className="text-xs font-semibold text-slate-500">Bloco</h4>
                                                 <div className="grid grid-cols-[120px_1fr] gap-2">
-                                                    <input value={editorBlockCode} onChange={event => setEditorBlockCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <input value={editorBlockName} onChange={event => setEditorBlockName(event.target.value)} placeholder="Nome do bloco" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                    <input value={editorBlockCode} onChange={event => setEditorBlockCode(event.target.value)} placeholder="Código" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <input value={editorBlockName} onChange={event => setEditorBlockName(event.target.value)} placeholder="Nome do bloco" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
                                                 </div>
-                                                <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'block' ? 'Salvar bloco' : 'Adicionar bloco'}</Button>
+                                                <AreaButton type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'block' ? 'Salvar bloco' : 'Adicionar bloco'}</AreaButton>
                                             </form>
                                             <StructureAdminList title="Blocos cadastrados" empty="Nenhum bloco cadastrado." rows={structure.blocks.map(block => ({ id: block.id, label: `${block.code || '-'} - ${block.name}`, detail: `Ordem ${block.sort_order || 0}` }))} onEdit={id => beginStructureEdit('block', id)} onDelete={id => deleteStructureRecord('block', id)} disabled={!!actionLoading || !structureIsEditable} />
                                         </TabsContent>
 
                                         <TabsContent value="floor" className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                            <form onSubmit={addFloor} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Pavimento</h4>
+                                            <form onSubmit={addFloor} className="rounded-[10px] border border-gray-200 bg-white p-3 space-y-3">
+                                                <h4 className="text-xs font-semibold text-slate-500">Pavimento</h4>
                                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                                    <select value={editorFloorBlockId} onChange={event => setEditorFloorBlockId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <select value={editorFloorBlockId} onChange={event => setEditorFloorBlockId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm">
                                                         <option value="">Bloco</option>
                                                         {structure.blocks.map(block => <option key={block.id} value={block.id}>{block.code || block.name}</option>)}
                                                     </select>
-                                                    <input value={editorFloorCode} onChange={event => setEditorFloorCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <input value={editorFloorName} onChange={event => setEditorFloorName(event.target.value)} placeholder="Nome" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <select value={editorFloorType} onChange={event => setEditorFloorType(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
-                                                        <option value="ground">Terreo</option>
+                                                    <input value={editorFloorCode} onChange={event => setEditorFloorCode(event.target.value)} placeholder="Código" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <input value={editorFloorName} onChange={event => setEditorFloorName(event.target.value)} placeholder="Nome" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <select value={editorFloorType} onChange={event => setEditorFloorType(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm">
+                                                        <option value="ground">Térreo</option>
                                                         <option value="type">Tipo</option>
                                                         <option value="basement">Subsolo</option>
-                                                        <option value="technical">Tecnico</option>
+                                                        <option value="technical">Técnico</option>
                                                         <option value="roof">Cobertura</option>
                                                         <option value="other">Outro</option>
                                                     </select>
                                                 </div>
-                                                <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'floor' ? 'Salvar pavimento' : 'Adicionar pavimento'}</Button>
+                                                <AreaButton type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'floor' ? 'Salvar pavimento' : 'Adicionar pavimento'}</AreaButton>
                                             </form>
                                             <StructureAdminList title="Pavimentos cadastrados" empty="Nenhum pavimento cadastrado." rows={structure.floors.map(floor => ({ id: floor.id, label: `${floor.code || '-'} - ${floor.name}`, detail: floor.floor_type }))} onEdit={id => beginStructureEdit('floor', id)} onDelete={id => deleteStructureRecord('floor', id)} disabled={!!actionLoading || !structureIsEditable} />
                                         </TabsContent>
 
                                         <TabsContent value="unit" className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                            <form onSubmit={addUnit} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Unidade</h4>
+                                            <form onSubmit={addUnit} className="rounded-[10px] border border-gray-200 bg-white p-3 space-y-3">
+                                                <h4 className="text-xs font-semibold text-slate-500">Unidade</h4>
                                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                                                    <select value={editorUnitBlockId} onChange={event => setEditorUnitBlockId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <select value={editorUnitBlockId} onChange={event => setEditorUnitBlockId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm">
                                                         <option value="">Bloco</option>
                                                         {structure.blocks.map(block => <option key={block.id} value={block.id}>{block.code || block.name}</option>)}
                                                     </select>
-                                                    <select value={editorUnitFloorId} onChange={event => setEditorUnitFloorId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <select value={editorUnitFloorId} onChange={event => setEditorUnitFloorId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm">
                                                         <option value="">Pavimento</option>
                                                         {structure.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.code || floor.name}</option>)}
                                                     </select>
-                                                    <input value={editorUnitCode} onChange={event => setEditorUnitCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <input value={editorUnitTypology} onChange={event => setEditorUnitTypology(event.target.value)} placeholder="Tipologia" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <select value={editorUnitType} onChange={event => setEditorUnitType(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <input value={editorUnitCode} onChange={event => setEditorUnitCode(event.target.value)} placeholder="Código" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <input value={editorUnitTypology} onChange={event => setEditorUnitTypology(event.target.value)} placeholder="Tipologia" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <select value={editorUnitType} onChange={event => setEditorUnitType(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm">
                                                         <option value="apartment">Apartamento</option>
                                                         <option value="office">Sala</option>
                                                         <option value="store">Loja</option>
@@ -1499,30 +1597,30 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                         <option value="other">Outro</option>
                                                     </select>
                                                 </div>
-                                                <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'unit' ? 'Salvar unidade' : 'Adicionar unidade'}</Button>
+                                                <AreaButton type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'unit' ? 'Salvar unidade' : 'Adicionar unidade'}</AreaButton>
                                             </form>
                                             <StructureAdminList title="Unidades cadastradas" empty="Nenhuma unidade cadastrada." rows={structure.units.map(unit => ({ id: unit.id, label: unit.code, detail: `${unit.unit_type} ${unit.typology_code || ''}`.trim() }))} onEdit={id => beginStructureEdit('unit', id)} onDelete={id => deleteStructureRecord('unit', id)} disabled={!!actionLoading || !structureIsEditable} />
                                         </TabsContent>
 
                                         <TabsContent value="space" className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                            <form onSubmit={addSpace} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Espaco</h4>
+                                            <form onSubmit={addSpace} className="rounded-[10px] border border-gray-200 bg-white p-3 space-y-3">
+                                                <h4 className="text-xs font-semibold text-slate-500">Espaço</h4>
                                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                                                    <select value={editorSpaceUseClass} onChange={event => setEditorSpaceUseClass(event.target.value as 'private' | 'common')} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="private">Privativo</option><option value="common">Comum</option></select>
-                                                    <select value={editorSpaceBlockId} onChange={event => setEditorSpaceBlockId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Bloco</option>{structure.blocks.map(block => <option key={block.id} value={block.id}>{block.code || block.name}</option>)}</select>
-                                                    <select value={editorSpaceFloorId} onChange={event => setEditorSpaceFloorId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Pavimento</option>{structure.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.code || floor.name}</option>)}</select>
-                                                    <select value={editorSpaceUnitId} onChange={event => setEditorSpaceUnitId(event.target.value)} disabled={editorSpaceUseClass === 'common'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="">Unidade</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
-                                                    <input value={editorSpaceCode} onChange={event => setEditorSpaceCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <input value={editorSpaceName} onChange={event => setEditorSpaceName(event.target.value)} placeholder="Nome" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <input value={editorSpaceArea} onChange={event => setEditorSpaceArea(event.target.value)} placeholder="Area m2" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <input value={editorSpaceCoefficient} onChange={event => setEditorSpaceCoefficient(event.target.value)} placeholder="Coef." className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                    <select value={editorSpaceCoverage} onChange={event => setEditorSpaceCoverage(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="covered_standard">Coberta padrao</option><option value="covered_different">Coberta diferente</option><option value="uncovered">Descoberta</option></select>
-                                                    <select value={editorSpaceDivision} onChange={event => setEditorSpaceDivision(event.target.value as 'proportional' | 'non_proportional')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="proportional">Comum proporcional</option><option value="non_proportional">Comum nao proporcional</option></select>
-                                                    <select value={editorSpaceScope} onChange={event => setEditorSpaceScope(event.target.value as 'global' | 'block')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="global">Escopo global</option><option value="block">Escopo bloco</option></select>
+                                                    <select value={editorSpaceUseClass} onChange={event => setEditorSpaceUseClass(event.target.value as 'private' | 'common')} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="private">Privativo</option><option value="common">Comum</option></select>
+                                                    <select value={editorSpaceBlockId} onChange={event => setEditorSpaceBlockId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="">Bloco</option>{structure.blocks.map(block => <option key={block.id} value={block.id}>{block.code || block.name}</option>)}</select>
+                                                    <select value={editorSpaceFloorId} onChange={event => setEditorSpaceFloorId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="">Pavimento</option>{structure.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.code || floor.name}</option>)}</select>
+                                                    <select value={editorSpaceUnitId} onChange={event => setEditorSpaceUnitId(event.target.value)} disabled={editorSpaceUseClass === 'common'} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm disabled:bg-slate-100"><option value="">Unidade</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                    <input value={editorSpaceCode} onChange={event => setEditorSpaceCode(event.target.value)} placeholder="Código" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <input value={editorSpaceName} onChange={event => setEditorSpaceName(event.target.value)} placeholder="Nome" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <input value={editorSpaceArea} onChange={event => setEditorSpaceArea(event.target.value)} placeholder="Área m²" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <input value={editorSpaceCoefficient} onChange={event => setEditorSpaceCoefficient(event.target.value)} placeholder="Coef." className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                    <select value={editorSpaceCoverage} onChange={event => setEditorSpaceCoverage(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="covered_standard">Coberta padrão</option><option value="covered_different">Coberta diferente</option><option value="uncovered">Descoberta</option></select>
+                                                    <select value={editorSpaceDivision} onChange={event => setEditorSpaceDivision(event.target.value as 'proportional' | 'non_proportional')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm disabled:bg-slate-100"><option value="proportional">Comum proporcional</option><option value="non_proportional">Comum não proporcional</option></select>
+                                                    <select value={editorSpaceScope} onChange={event => setEditorSpaceScope(event.target.value as 'global' | 'block')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm disabled:bg-slate-100"><option value="global">Escopo global</option><option value="block">Escopo bloco</option></select>
                                                 </div>
-                                                <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'space' ? 'Salvar espaco' : 'Adicionar espaco'}</Button>
+                                                <AreaButton type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'space' ? 'Salvar espaço' : 'Adicionar espaço'}</AreaButton>
                                             </form>
-                                            <StructureAdminList title="Espacos cadastrados" empty="Nenhum espaco cadastrado." rows={structure.spaces.map(space => {
+                                            <StructureAdminList title="Espaços cadastrados" empty="Nenhum espaço cadastrado." rows={structure.spaces.map(space => {
                                                 const scope = structure.commonDistributionScopes.find(item => item.common_space_id === space.id);
                                                 const useLabel = space.use_class === 'private' ? 'Privativo' : `Comum ${scope?.distribution_scope === 'block' ? 'bloco' : 'global'}`;
                                                 return { id: space.id, label: `${space.code || '-'} - ${space.name}`, detail: `${useLabel} - ${formatNumber(space.real_area_m2_raw)} m2` };
@@ -1531,76 +1629,83 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                     </Tabs>
 
                                     {privateSpacesList.length > 0 && (
-                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                                        <div className="rounded-[10px] border border-gray-200 bg-white p-3 space-y-2">
                                             <div className="flex items-center justify-between">
-                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Edicao em lote — espacos privativos</h4>
+                                                <h4 className="text-xs font-semibold text-slate-500">Edição em lote — espaços privativos</h4>
                                                 <button type="button" onClick={toggleSelectAllPrivateSpaces} className="text-xs font-bold text-blue-600 hover:underline" disabled={!structureIsEditable}>
-                                                    {selectedSpaceIds.size === privateSpacesList.length ? 'Limpar selecao' : 'Selecionar todos'}
+                                                    {selectedSpaceIds.size === privateSpacesList.length ? 'Limpar seleção' : 'Selecionar todos'}
                                                 </button>
                                             </div>
-                                            <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-100 divide-y divide-slate-100">
-                                                {privateSpacesList.map(space => (
-                                                    <label key={space.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
-                                                        <input type="checkbox" checked={selectedSpaceIds.has(space.id)} onChange={() => toggleSpaceSelection(space.id)} disabled={!structureIsEditable} />
-                                                        <span className="truncate">{space.code || space.name} — {formatNumber(space.real_area_m2_raw)} m2, coef {formatNumber(space.coefficient_value ?? 1, 4)}</span>
+                                            <div className="max-h-40 overflow-y-auto rounded-[10px] border border-slate-100 divide-y divide-slate-100">
+                                                {privateSpacesList.map((space, spaceIdx) => (
+                                                    <label key={space.id} className="flex items-center gap-2 px-3 py-2.5 text-sm font-normal text-gray-700">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                                            title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                            checked={selectedSpaceIds.has(space.id)}
+                                                            onChange={event => handleSpaceCheck(space.id, spaceIdx, (event.nativeEvent as MouseEvent).shiftKey)}
+                                                            disabled={!structureIsEditable}
+                                                        />
+                                                        <span className="truncate">{space.code || space.name} — {formatNumber(space.real_area_m2_raw)} m², coef {formatNumber(space.coefficient_value ?? 1, 4)}</span>
                                                     </label>
                                                 ))}
                                             </div>
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                                                 <label className="space-y-1">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobertura</span>
-                                                    <select value={bulkCoverageClass} onChange={event => setBulkCoverageClass(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm">
-                                                        <option value="covered_standard">Coberta padrao</option>
+                                                    <span className="text-xs font-semibold text-slate-500">Cobertura</span>
+                                                    <select value={bulkCoverageClass} onChange={event => setBulkCoverageClass(event.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm">
+                                                        <option value="covered_standard">Coberta padrão</option>
                                                         <option value="covered_different">Coberta diferente</option>
                                                         <option value="uncovered">Descoberta</option>
                                                     </select>
                                                 </label>
                                                 <label className="space-y-1">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Coeficiente</span>
-                                                    <input value={bulkCoefficientValue} onChange={event => setBulkCoefficientValue(event.target.value)} placeholder="0,75" className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
+                                                    <span className="text-xs font-semibold text-slate-500">Coeficiente</span>
+                                                    <input value={bulkCoefficientValue} onChange={event => setBulkCoefficientValue(event.target.value)} placeholder="0,75" className="h-9 w-full rounded-[6px] border border-gray-200 px-3 text-sm" />
                                                 </label>
-                                                <Button type="button" size="sm" onClick={applyBulkSpaceEdit} disabled={selectedSpaceIds.size === 0 || !structureIsEditable || !!actionLoading}>
-                                                    Aplicar em {selectedSpaceIds.size || 0} espaco(s)
-                                                </Button>
+                                                <AreaButton type="button" size="sm" onClick={applyBulkSpaceEdit} disabled={selectedSpaceIds.size === 0 || !structureIsEditable || !!actionLoading}>
+                                                    Aplicar em {selectedSpaceIds.size || 0} espaço(s)
+                                                </AreaButton>
                                             </div>
                                         </div>
                                     )}
 
                                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                        <div className="rounded-[10px] border border-gray-200 bg-white p-3 space-y-3">
                                             <div className="flex items-center justify-between">
-                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Vinculos acessorios</h4>
-                                                <Button type="button" variant="secondary" size="sm" onClick={() => setIsVagaWizardOpen(true)} disabled={!structureIsEditable || !!actionLoading}>
-                                                    <Plus className="w-3 h-3" /> Assistente de vaga/deposito
-                                                </Button>
+                                                <h4 className="text-xs font-semibold text-slate-500">Vínculos acessórios</h4>
+                                                <AreaButton type="button" variant="secondary" size="sm" onClick={() => setIsVagaWizardOpen(true)} disabled={!structureIsEditable || !!actionLoading}>
+                                                    <Plus className="w-3 h-3" /> Assistente de vaga/depósito
+                                                </AreaButton>
                                             </div>
                                             <form onSubmit={addAccessoryLink} className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                <select value={accessoryParentUnitId} onChange={event => setAccessoryParentUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade principal</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
-                                                <select value={accessoryUnitId} onChange={event => setAccessoryUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade acessoria</option>{(accessoryCandidateUnits.length > 0 ? accessoryCandidateUnits : structure.units).map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
-                                                <select value={accessoryLinkType} onChange={event => setAccessoryLinkType(event.target.value as 'parking' | 'storage' | 'box' | 'exclusive_area' | 'other')} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="parking">Vaga</option><option value="storage">Deposito</option><option value="box">Box</option><option value="exclusive_area">Area exclusiva</option><option value="other">Outro</option></select>
-                                                <input value={accessoryLegalNote} onChange={event => setAccessoryLegalNote(event.target.value)} placeholder="Nota legal" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={accessoryAffectsPrivateArea} onChange={event => setAccessoryAffectsPrivateArea(event.target.checked)} /> Afeta area privativa</label>
-                                                <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={accessoryAffectsCoefficient} onChange={event => setAccessoryAffectsCoefficient(event.target.checked)} /> Afeta coeficiente</label>
-                                                <div className="md:col-span-2"><Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> Adicionar vinculo</Button></div>
+                                                <select value={accessoryParentUnitId} onChange={event => setAccessoryParentUnitId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="">Unidade principal</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                <select value={accessoryUnitId} onChange={event => setAccessoryUnitId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="">Unidade acessória</option>{(accessoryCandidateUnits.length > 0 ? accessoryCandidateUnits : structure.units).map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                <select value={accessoryLinkType} onChange={event => setAccessoryLinkType(event.target.value as 'parking' | 'storage' | 'box' | 'exclusive_area' | 'other')} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="parking">Vaga</option><option value="storage">Depósito</option><option value="box">Box</option><option value="exclusive_area">Área exclusiva</option><option value="other">Outro</option></select>
+                                                <input value={accessoryLegalNote} onChange={event => setAccessoryLegalNote(event.target.value)} placeholder="Nota legal" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                <label className="flex items-center gap-2 text-sm font-normal text-slate-600"><input type="checkbox" checked={accessoryAffectsPrivateArea} onChange={event => setAccessoryAffectsPrivateArea(event.target.checked)} /> Afeta area privativa</label>
+                                                <label className="flex items-center gap-2 text-sm font-normal text-slate-600"><input type="checkbox" checked={accessoryAffectsCoefficient} onChange={event => setAccessoryAffectsCoefficient(event.target.checked)} /> Afeta coeficiente</label>
+                                                <div className="md:col-span-2"><AreaButton type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> Adicionar vínculo</AreaButton></div>
                                             </form>
-                                            <StructureAdminList title="Vinculos cadastrados" empty="Nenhum vinculo acessorio." rows={structure.accessoryLinks.map(link => {
+                                            <StructureAdminList title="Vínculos cadastrados" empty="Nenhum vínculo acessório." rows={structure.accessoryLinks.map(link => {
                                                 const parent = structure.units.find(unit => unit.id === link.parent_unit_id);
                                                 const accessory = structure.units.find(unit => unit.id === link.accessory_unit_id);
                                                 return { id: link.id, label: `${parent?.code || '-'} -> ${accessory?.code || '-'}`, detail: `${link.link_type} | area ${link.affects_private_area ? 'sim' : 'nao'} | coef ${link.affects_coefficient ? 'sim' : 'nao'}` };
                                             })} onDelete={deleteAccessoryLink} disabled={!!actionLoading || !structureIsEditable} />
                                         </div>
 
-                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Alocacoes comuns nao proporcionais</h4>
+                                        <div className="rounded-[10px] border border-gray-200 bg-white p-3 space-y-3">
+                                            <h4 className="text-xs font-semibold text-slate-500">Alocações comuns não proporcionais</h4>
                                             <form onSubmit={addCommonAllocation} className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                <select value={allocationCommonSpaceId} onChange={event => setAllocationCommonSpaceId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Area comum</option>{commonNonProportionalSpaces.map(space => <option key={space.id} value={space.id}>{space.code || space.name}</option>)}</select>
-                                                <select value={allocationTargetUnitId} onChange={event => setAllocationTargetUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade alvo</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
-                                                <select value={allocationMethod} onChange={event => setAllocationMethod(event.target.value as 'fixed_area' | 'percentage')} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="fixed_area">Area fixa</option><option value="percentage">Percentual decimal</option></select>
-                                                <input value={allocationValue} onChange={event => setAllocationValue(event.target.value)} placeholder={allocationMethod === 'fixed_area' ? 'Area m2' : '0,25'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
-                                                <input value={allocationJustification} onChange={event => setAllocationJustification(event.target.value)} placeholder="Justificativa" className="h-9 rounded-lg border border-slate-200 px-3 text-sm md:col-span-2" />
-                                                <div className="md:col-span-2"><Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable || commonNonProportionalSpaces.length === 0}><Plus className="w-4 h-4" /> Adicionar alocacao</Button></div>
+                                                <select value={allocationCommonSpaceId} onChange={event => setAllocationCommonSpaceId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="">Área comum</option>{commonNonProportionalSpaces.map(space => <option key={space.id} value={space.id}>{space.code || space.name}</option>)}</select>
+                                                <select value={allocationTargetUnitId} onChange={event => setAllocationTargetUnitId(event.target.value)} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="">Unidade alvo</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                <select value={allocationMethod} onChange={event => setAllocationMethod(event.target.value as 'fixed_area' | 'percentage')} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm"><option value="fixed_area">Área fixa</option><option value="percentage">Percentual decimal</option></select>
+                                                <input value={allocationValue} onChange={event => setAllocationValue(event.target.value)} placeholder={allocationMethod === 'fixed_area' ? 'Área m²' : '0,25'} className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm" />
+                                                <input value={allocationJustification} onChange={event => setAllocationJustification(event.target.value)} placeholder="Justificativa" className="h-9 rounded-[6px] border border-gray-200 px-3 text-sm md:col-span-2" />
+                                                <div className="md:col-span-2"><AreaButton type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable || commonNonProportionalSpaces.length === 0}><Plus className="w-4 h-4" /> Adicionar alocação</AreaButton></div>
                                             </form>
-                                            <StructureAdminList title="Alocacoes cadastradas" empty="Nenhuma alocacao comum." rows={structure.commonAllocations.map(allocation => {
+                                            <StructureAdminList title="Alocações cadastradas" empty="Nenhuma alocação comum." rows={structure.commonAllocations.map(allocation => {
                                                 const space = structure.spaces.find(item => item.id === allocation.common_space_id);
                                                 const unit = structure.units.find(item => item.id === allocation.target_unit_id);
                                                 const value = allocation.allocation_method === 'percentage' ? formatNumber(allocation.percentage, 12) : `${formatNumber(allocation.allocated_real_area_m2_raw)} m2`;
@@ -1609,45 +1714,49 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                        <p className="text-xs font-black uppercase tracking-widest text-slate-500">Area privativa cadastrada</p>
-                                        <p className="text-lg font-black text-slate-900 mt-1">{formatNumber(privateAreaTotal)} m2</p>
-                                    </div>
-                                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                        <p className="text-xs font-black uppercase tracking-widest text-slate-500">Area comum cadastrada</p>
-                                        <p className="text-lg font-black text-slate-900 mt-1">{formatNumber(commonAreaTotal)} m2</p>
-                                    </div>
+                                {/* §4 — KPIs de apoio da aba, no componente canônico (size sm) */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <KpiCard shadow={false} size="sm" label="Área privativa cadastrada" value={`${formatNumber(privateAreaTotal)} m²`} icon={<Ruler className="w-4 h-4" />} color="emerald" />
+                                    <KpiCard shadow={false} size="sm" label="Área comum cadastrada" value={`${formatNumber(commonAreaTotal)} m²`} icon={<Layers className="w-4 h-4" />} color="violet" />
                                 </div>
                             </div>
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="quadro_i" className="mt-5">
-                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                                <ResultTable
-                                    empty="Calcule a versao para gerar o Quadro I."
-                                    headers={['Pavimento', 'Area real', 'Area equivalente']}
-                                    rows={quadroI.map(row => [row.floor_label, `${formatNumber(row.qi_17_floor_real_total_raw)} m2`, `${formatNumber(row.qi_18_floor_equivalent_total_raw)} m2`])}
-                                />
+                        <TabsContent value="quadro_i">
+                            <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm overflow-hidden">
+                                {loading ? <LoadingState /> : (
+                                    <ResultTable
+                                        empty="Calcule a versão para gerar o Quadro I."
+                                        headers={['Pavimento', 'Área real', 'Área equivalente']}
+                                        rows={quadroI.map(row => [row.floor_label, `${formatNumber(row.qi_17_floor_real_total_raw)} m²`, `${formatNumber(row.qi_18_floor_equivalent_total_raw)} m²`])}
+                                        sortKeys={quadroI.map(row => [row.floor_label, Number(row.qi_17_floor_real_total_raw || 0), Number(row.qi_18_floor_equivalent_total_raw || 0)])}
+                                    />
+                                )}
                             </div>
                         </TabsContent>
-                        <TabsContent value="quadro_ii" className="mt-5">
-                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                                <ResultTable
-                                    empty="Calcule a versao para gerar o Quadro II."
-                                    headers={['Unidade', 'Coeficiente', 'Area real', 'Area equivalente']}
-                                    rows={quadroII.map(row => [row.unit_label, formatNumber(row.qii_31_proportionality_coefficient_raw, 12), `${formatNumber(row.qii_37_unit_real_total_raw)} m2`, `${formatNumber(row.qii_38_unit_equivalent_total_raw)} m2`])}
-                                />
+                        <TabsContent value="quadro_ii">
+                            <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm overflow-hidden">
+                                {loading ? <LoadingState /> : (
+                                    <ResultTable
+                                        empty="Calcule a versão para gerar o Quadro II."
+                                        headers={['Unidade', 'Coeficiente', 'Área real', 'Área equivalente']}
+                                        rows={quadroII.map(row => [row.unit_label, formatNumber(row.qii_31_proportionality_coefficient_raw, 12), `${formatNumber(row.qii_37_unit_real_total_raw)} m²`, `${formatNumber(row.qii_38_unit_equivalent_total_raw)} m²`])}
+                                        sortKeys={quadroII.map(row => [row.unit_label, Number(row.qii_31_proportionality_coefficient_raw || 0), Number(row.qii_37_unit_real_total_raw || 0), Number(row.qii_38_unit_equivalent_total_raw || 0)])}
+                                    />
+                                )}
                             </div>
                         </TabsContent>
-                        <TabsContent value="quadro_ivb" className="mt-5">
-                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                                <ResultTable
-                                    empty="Calcule a versao para gerar o Quadro IV-B."
-                                    headers={['Unidade', 'Area real', 'Coeficiente', 'Fracao']}
-                                    rows={quadroIVB.map(row => [row.unit_label, `${formatNumber(row.qivb_f_real_total_area_raw)} m2`, formatNumber(row.qivb_g_proportionality_coefficient_raw, 12), formatNumber(row.fraction_decimal_raw, 12)])}
-                                />
+                        <TabsContent value="quadro_ivb">
+                            <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm overflow-hidden">
+                                {loading ? <LoadingState /> : (
+                                    <ResultTable
+                                        empty="Calcule a versão para gerar o Quadro IV-B."
+                                        headers={['Unidade', 'Área real', 'Coeficiente', 'Fração ideal']}
+                                        rows={quadroIVB.map(row => [row.unit_label, `${formatNumber(row.qivb_f_real_total_area_raw)} m²`, formatNumber(row.qivb_g_proportionality_coefficient_raw, 12), formatNumber(row.fraction_decimal_raw, 12)])}
+                                        sortKeys={quadroIVB.map(row => [row.unit_label, Number(row.qivb_f_real_total_area_raw || 0), Number(row.qivb_g_proportionality_coefficient_raw || 0), Number(row.fraction_decimal_raw || 0)])}
+                                    />
+                                )}
                             </div>
                         </TabsContent>
                     </Tabs>

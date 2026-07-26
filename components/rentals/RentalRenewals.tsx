@@ -4,6 +4,7 @@ import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
+import { useConfirm } from '../ui/confirm';
 import ContractReajusteDue from '../ContractReajusteDue';
 import RenewContractSheet from './RenewContractSheet';
 import { contractRenewalService, ExpiringRental } from '../../services/contractRenewalService';
@@ -12,6 +13,7 @@ import { Client, Contract } from '../../types';
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Contrato', sortable: true },
     { key: 'client', label: 'Locatário', sortable: true },
+    { key: 'status', label: 'Situação', sortable: true },
     { key: 'end_date', label: 'Fim da vigência', sortable: true },
     { key: 'days', label: 'Prazo', sortable: true },
     { key: 'value', label: 'Aluguel', sortable: true },
@@ -19,7 +21,7 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-type Faixa = 'all' | 'vencidos' | 'd30' | 'd60' | 'd90';
+type Faixa = 'all' | 'vencidos' | 'd30' | 'd60' | 'sem_vigencia';
 
 /** Data BR sem bug de fuso: em UTC-3, `new Date(iso)` retrocede um dia. */
 const fmtDate = (iso?: string) => {
@@ -30,28 +32,39 @@ const fmtDate = (iso?: string) => {
 const fmtCur = (n: number) =>
     (n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-const faixaOf = (days: number): Exclude<Faixa, 'all'> =>
-    days < 0 ? 'vencidos' : days <= 30 ? 'd30' : days <= 60 ? 'd60' : 'd90';
+const faixaOf = (days: number | null): Exclude<Faixa, 'all'> | 'longe' =>
+    days == null ? 'sem_vigencia' : days < 0 ? 'vencidos' : days <= 30 ? 'd30' : days <= 60 ? 'd60' : 'longe';
 
-const prazoLabel = (days: number) =>
-    days < 0 ? `Venceu há ${Math.abs(days)} dia(s)` : days === 0 ? 'Vence hoje' : `Vence em ${days} dia(s)`;
+const prazoLabel = (days: number | null) =>
+    days == null ? 'Vigência não informada'
+        : days < 0 ? `Venceu há ${Math.abs(days)} dia(s)`
+        : days === 0 ? 'Vence hoje'
+        : `Vence em ${days} dia(s)`;
 
-const prazoColor = (days: number) =>
-    days < 0 ? 'text-red-600' : days <= 30 ? 'text-amber-700' : days <= 60 ? 'text-amber-600' : 'text-gray-600';
+const prazoColor = (days: number | null) =>
+    days == null ? 'text-gray-400'
+        : days < 0 ? 'text-red-600'
+        : days <= 30 ? 'text-amber-700'
+        : days <= 60 ? 'text-amber-600'
+        : 'text-gray-600';
 
 interface Props {
     /** Pode vir vazio em "Todas as organizações" — a leitura NÃO é bloqueada (REGRA #5). */
     organizationId?: string;
     clients?: Client[];
     onRenewed?: (child: Contract) => void;
+    /** Avisa o módulo pai para recarregar (encerramento muda a lista de contratos). */
+    onChanged?: () => void;
 }
 
-const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenewed }) => {
+const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenewed, onChanged }) => {
     const [rows, setRows] = useState<ExpiringRental[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [faixa, setFaixa] = useState<Faixa>('all');
     const [renewingId, setRenewingId] = useState<string | null>(null);
+    const [closingId, setClosingId] = useState<string | null>(null);
+    const confirm = useConfirm();
     const [searchTerm, setSearchTerm] = usePersistedState('rentalRenewals:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'rentalRenewalsColumns');
 
@@ -64,9 +77,12 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
         setLoading(true);
         setError(null);
         try {
-            setRows(await contractRenewalService.listRentalsExpiring(organizationId, 90));
+            // null = TODOS os contratos de locação vigentes, não só os que vencem
+            // em 90 dias. Sem a lista completa não há como encerrar nem corrigir
+            // um contrato que está fora da janela ou sem vigência definida.
+            setRows(await contractRenewalService.listRentalsExpiring(organizationId, null));
         } catch (e) {
-            setError(e instanceof Error ? e.message : 'Erro ao carregar os contratos a vencer.');
+            setError(e instanceof Error ? e.message : 'Erro ao carregar os contratos de locação.');
         } finally {
             setLoading(false);
         }
@@ -75,10 +91,10 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
     useEffect(() => { loadData(); }, [loadData]);
 
     const stats = useMemo(() => ({
-        vencidos: rows.filter(r => r.days_until_end < 0).length,
-        d30: rows.filter(r => r.days_until_end >= 0 && r.days_until_end <= 30).length,
-        d60: rows.filter(r => r.days_until_end > 30 && r.days_until_end <= 60).length,
-        d90: rows.filter(r => r.days_until_end > 60).length,
+        vencidos: rows.filter(r => r.days_until_end != null && r.days_until_end < 0).length,
+        d30: rows.filter(r => r.days_until_end != null && r.days_until_end >= 0 && r.days_until_end <= 30).length,
+        d60: rows.filter(r => r.days_until_end != null && r.days_until_end > 30 && r.days_until_end <= 60).length,
+        semVigencia: rows.filter(r => r.days_until_end == null).length,
     }), [rows]);
 
     const filtered = useMemo(() => {
@@ -88,21 +104,46 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
             if (!term) return true;
             return `${r.number} ${r.title} ${clientName(r.client_id)}`.toLowerCase().includes(term);
         });
+        // Sem vigência vai para o fim da ordenação por prazo (não é "urgente", é incompleto).
+        const prazo = (d: number | null) => (d == null ? Number.MAX_SAFE_INTEGER : d);
         return result.sort((a, b) => {
             const dir = tableColumns.sortDirection === 'desc' ? -1 : 1;
             switch (tableColumns.sortColumn) {
                 case 'number': return a.number.localeCompare(b.number) * dir;
                 case 'client': return clientName(a.client_id).localeCompare(clientName(b.client_id)) * dir;
+                case 'status': return (a.status || '').localeCompare(b.status || '') * dir;
                 case 'value': return ((a.current_value || 0) - (b.current_value || 0)) * dir;
                 case 'index': return (a.reajuste_index || '').localeCompare(b.reajuste_index || '') * dir;
                 case 'days':
-                case 'end_date': return (a.days_until_end - b.days_until_end) * dir;
-                default: return a.days_until_end - b.days_until_end; // sem seleção: mais urgente primeiro
+                case 'end_date': return (prazo(a.days_until_end) - prazo(b.days_until_end)) * dir;
+                default: return prazo(a.days_until_end) - prazo(b.days_until_end); // sem seleção: mais urgente primeiro
             }
         });
     }, [rows, faixa, searchTerm, clientName, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const toggleFaixa = (f: Exclude<Faixa, 'all'>) => setFaixa(prev => (prev === f ? 'all' : f));
+
+    const handleClose = async (r: ExpiringRental) => {
+        const ok = await confirm({
+            title: `Encerrar o contrato ${r.number}?`,
+            message: 'O contrato sai da lista de vigentes e deixa de aparecer para renovação. '
+                + 'As parcelas já lançadas não são alteradas — cobranças pendentes continuam em Contas a Receber '
+                + 'e precisam ser baixadas ou canceladas separadamente.',
+            variant: 'warning',
+            confirmLabel: 'Encerrar',
+        });
+        if (!ok) return;
+        setClosingId(r.id);
+        try {
+            await contractRenewalService.closeContract(r.id);
+            await loadData();
+            onChanged?.();
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Erro ao encerrar o contrato.');
+        } finally {
+            setClosingId(null);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -116,8 +157,8 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                 <button onClick={() => toggleFaixa('d60')} className="text-left">
                     <KpiCard shadow={false} size="sm" label="Vencem em 60 dias" value={stats.d60} icon={<CalendarClock className="w-4 h-4" />} color="orange" />
                 </button>
-                <button onClick={() => toggleFaixa('d90')} className="text-left">
-                    <KpiCard shadow={false} size="sm" label="Vencem em 90 dias" value={stats.d90} icon={<CalendarCheck className="w-4 h-4" />} color="blue" />
+                <button onClick={() => toggleFaixa('sem_vigencia')} className="text-left">
+                    <KpiCard shadow={false} size="sm" label="Sem vigência" value={stats.semVigencia} icon={<CalendarCheck className="w-4 h-4" />} color="gray" />
                 </button>
             </div>
 
@@ -183,9 +224,10 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                 ) : filtered.length === 0 ? (
                     <div className="text-center py-12">
                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma locação a renovar</h3>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato de locação vigente</h3>
                         <p className="text-sm text-gray-500">
-                            Contratos aparecem aqui quando o fim da vigência entra nos próximos 90 dias.
+                            Contratos ativos ou assinados aparecem aqui — inclusive os sem vigência definida.
+                            Gere o contrato a partir da negociação, na aba Contratos.
                         </p>
                     </div>
                 ) : (
@@ -200,6 +242,11 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                     )}
                                     {tableColumns.visibleColumns.includes('client') && (
                                         <SortableHeader colKey="client" label="Locatário" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader colKey="status" label="Situação" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
@@ -242,6 +289,13 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                                 {clientName(r.client_id)}
                                             </td>
                                         )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
+                                                {r.renewed
+                                                    ? <span className="text-emerald-700">Renovado por {r.renewed_by}</span>
+                                                    : <span className="text-gray-700">{r.status}</span>}
+                                            </td>
+                                        )}
                                         {tableColumns.visibleColumns.includes('end_date') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                 {fmtDate(r.end_date)}
@@ -265,11 +319,27 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
+                                                    {/* Renovar exige vigência: sem fim definido não há de onde
+                                                        derivar o início do contrato-filho. Botão fica disabled
+                                                        com title explicando, nunca some nem morre em silêncio. */}
                                                     <button
                                                         onClick={() => setRenewingId(r.id)}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                        disabled={r.renewed || !r.end_date}
+                                                        title={
+                                                            r.renewed ? `Já renovado pelo contrato ${r.renewed_by}`
+                                                                : !r.end_date ? 'Informe o fim da vigência na negociação (aba Contrato) antes de renovar'
+                                                                : undefined
+                                                        }
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:text-gray-300 disabled:hover:bg-transparent"
                                                     >
                                                         Renovar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleClose(r)}
+                                                        disabled={closingId === r.id}
+                                                        className="text-gray-500 hover:text-red-600 text-sm font-medium p-1.5 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                                                    >
+                                                        {closingId === r.id ? 'Encerrando…' : 'Encerrar'}
                                                     </button>
                                                 </div>
                                             </td>

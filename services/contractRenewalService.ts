@@ -100,7 +100,12 @@ export interface RenewOptions {
 }
 
 export interface ExpiringRental extends Contract {
-    days_until_end: number;
+    /** Dias até o fim da vigência (negativo = vencido). null = contrato sem `end_date`. */
+    days_until_end: number | null;
+    /** Já foi renovado — tem contrato-filho. */
+    renewed: boolean;
+    /** Número do contrato-filho, quando existe. */
+    renewed_by?: string;
 }
 
 // ─── Interno ──────────────────────────────────────────────────────────────
@@ -429,38 +434,70 @@ export const contractRenewalService = {
      */
     listRentalsExpiring: async (
         organizationId: string | null | undefined,
-        daysAhead = 90,
+        daysAhead: number | null = 90,
     ): Promise<ExpiringRental[]> => {
         const today = todayISO();
         let q = supabase
             .from('contracts')
             .select('id, organization_id, number, title, client_id, status, end_date, start_date, ' +
                     'current_value, original_value, billing_cycle, due_day, reajuste_index, ' +
-                    'reajuste_proximo, parent_contract_id, renewal_seq, domain, is_recurring')
+                    'reajuste_proximo, parent_contract_id, renewal_seq, domain, is_recurring, deal_id')
             .eq('domain', 'LOCACAO')
-            .eq('is_recurring', true)
             .in('status', ['Ativo', 'Assinado'])
-            .not('end_date', 'is', null)
-            .lte('end_date', addDaysUTC(today, daysAhead))
-            .order('end_date', { ascending: true });
+            .order('end_date', { ascending: true, nullsFirst: false });
         if (organizationId) q = q.eq('organization_id', organizationId);
+        // daysAhead null = TODOS os contratos vigentes, inclusive os sem vigência
+        // definida e os que terminam longe. Sem isso, contrato fora da janela fica
+        // invisível na tela — e sem tela não há como encerrá-lo nem corrigi-lo.
+        if (daysAhead != null) q = q.not('end_date', 'is', null).lte('end_date', addDaysUTC(today, daysAhead));
 
         const { data, error } = await q;
         if (error) throw error;
         const rows = (data ?? []) as unknown as Contract[];
         if (rows.length === 0) return [];
 
-        // Contratos já renovados saem da fila.
+        // Contratos já renovados continuam na lista, mas marcados — some o botão
+        // Renovar e aparece o número do filho. Esconder confundia ("sumiu?").
         const { data: children } = await supabase
             .from('contracts')
-            .select('parent_contract_id')
+            .select('parent_contract_id, number')
             .in('parent_contract_id', rows.map(r => r.id));
-        const renewed = new Set((children ?? []).map(c => c.parent_contract_id as string));
+        const childByParent = new Map(
+            (children ?? []).map(c => [c.parent_contract_id as string, c.number as string]));
 
-        return rows
-            .filter(r => !renewed.has(r.id))
-            .map(r => ({ ...r, days_until_end: daysBetween(today, r.end_date!) }));
+        return rows.map(r => ({
+            ...r,
+            days_until_end: r.end_date ? daysBetween(today, r.end_date) : null,
+            renewed: childByParent.has(r.id),
+            renewed_by: childByParent.get(r.id),
+        }));
     },
+
+    /**
+     * Encerra um contrato de locação (fim natural da vigência ou rescisão).
+     *
+     * Só mexe no status e zera `reajuste_proximo` — parcelas ficam como estão.
+     * Encerrar um contrato antigo não pode apagar cobrança pendente do passado:
+     * aquilo é histórico financeiro e se resolve baixando ou cancelando parcela
+     * a parcela, com a data real, não por efeito colateral de mudança de status.
+     */
+    closeContract: async (contractId: string, notes?: string): Promise<Contract> => {
+        const contract = await fetchContract(contractId);
+        if (contract.domain !== 'LOCACAO') {
+            throw new Error('Esta ação encerra apenas contratos de locação.');
+        }
+        if (contract.status === 'Encerrado') return contract;
+        const hoje = todayISO();
+        return contractService.updateContract(contractId, {
+            status: 'Encerrado',
+            reajuste_proximo: undefined,
+            ...(notes ? { description: `[Encerrado ${hoje}] ${notes}\n${contract.description || ''}` } : {}),
+        });
+    },
+
+    /** Reabre um contrato encerrado por engano. */
+    reopenContract: async (contractId: string): Promise<Contract> =>
+        contractService.updateContract(contractId, { status: 'Ativo' }),
 
     /**
      * Desfaz uma renovação feita por engano. Só é permitido enquanto nenhuma

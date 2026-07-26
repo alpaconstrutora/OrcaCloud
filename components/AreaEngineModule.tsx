@@ -1065,32 +1065,43 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Quadros I, II e IV-B da NBR 12721 com rastreabilidade de cálculo, aprovação e lock.</p>
             </div>
 
-            {/* §4 — KPI cards com o componente canônico, cor semântica por métrica */}
+            {/* §4 — KPI cards no componente canônico, variante flat (shadow={false},
+                size="sm", ícone solto w-4 h-4) igual à tela de referência
+                BankReconciliation/Extrato. Grade simétrica (§4.2): as 4 métricas são
+                independentes, nenhuma é o total do qual as outras derivam. */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard
+                    shadow={false}
+                    size="sm"
                     label="Soma dos coeficientes"
                     value={formatNumber(coefficientSum, 6)}
                     sub={quadroII.length > 0 ? `${quadroII.length} unidade(s) no Quadro II` : undefined}
-                    icon={<Sigma className="w-5 h-5" />}
+                    icon={<Sigma className="w-4 h-4" />}
                     color="blue"
                 />
                 <KpiCard
+                    shadow={false}
+                    size="sm"
                     label="Área real total"
                     value={`${formatNumber(realTotal)} m²`}
-                    icon={<Ruler className="w-5 h-5" />}
+                    icon={<Ruler className="w-4 h-4" />}
                     color="emerald"
                 />
                 <KpiCard
+                    shadow={false}
+                    size="sm"
                     label="Área equivalente"
                     value={`${formatNumber(equivalentTotal)} m²`}
-                    icon={<Layers className="w-5 h-5" />}
+                    icon={<Layers className="w-4 h-4" />}
                     color="indigo"
                 />
                 <KpiCard
+                    shadow={false}
+                    size="sm"
                     label="Pendências da estrutura"
                     value={structureChecklist.length}
                     sub={structureChecklist.length > 0 ? 'Resolva antes de calcular' : 'Nenhuma pendência'}
-                    icon={<AlertTriangle className="w-5 h-5" />}
+                    icon={<AlertTriangle className="w-4 h-4" />}
                     color={structureChecklist.length > 0 ? 'amber' : 'gray'}
                 />
             </div>

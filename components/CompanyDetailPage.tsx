@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ArrowLeft, Save, Loader2, AlertCircle, CheckCircle2,
     Building2, Users, Landmark, UserCheck, TrendingUp, Receipt,
@@ -298,10 +298,20 @@ function buildTabs(company: Company): { id: Tab; label: string; icon: React.Reac
 
 // ─── Componente principal ─────────────────────────────────────
 
-const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSaved }) => {
+const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companies, onBack, onSaved }) => {
+    // ⚠️ O objeto que chega da lista é PARCIAL: companyService.list() faz um select
+    // estreito (sem endereco_fiscal, retencao_pis/cofins/csll, dupla_aprovacao_*,
+    // possui_*, cprb, sefaz_integrada, limites, responsáveis, certificado...).
+    // Montar o formulário em cima dele não só exibia campos vazios — o Salvar
+    // gravava `endereco_fiscal` zerado e os booleanos como false, APAGANDO dado
+    // real. Por isso o detalhe recarrega a empresa completa (companyService.get,
+    // select('*')) e só libera o formulário depois disso.
+    const [company, setCompany] = useState<Company>(companyFromList);
+    const [loadingFull, setLoadingFull] = useState(true);
+
     const TABS = buildTabs(company);
     const [tab, setTab] = useState<Tab>('identificacao');
-    const [form, setForm] = useState<FormData>(() => companyToForm(company));
+    const [form, setForm] = useState<FormData>(() => companyToForm(companyFromList));
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -309,7 +319,22 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
     // Certificado upload
     const certInputRef = useRef<HTMLInputElement>(null);
     const [uploadingCert, setUploadingCert] = useState(false);
-    const [certUrl, setCertUrl] = useState<string | null>(company.certificado_digital_url ?? null);
+    const [certUrl, setCertUrl] = useState<string | null>(companyFromList.certificado_digital_url ?? null);
+
+    useEffect(() => {
+        let alive = true;
+        setLoadingFull(true);
+        companyService.get(companyFromList.id)
+            .then(full => {
+                if (!alive) return;
+                setCompany(full);
+                setForm(companyToForm(full));
+                setCertUrl(full.certificado_digital_url ?? null);
+            })
+            .catch((e: unknown) => { if (alive) setError((e as Error).message); })
+            .finally(() => { if (alive) setLoadingFull(false); });
+        return () => { alive = false; };
+    }, [companyFromList.id]);
 
     const set = (field: keyof FormData, value: string | boolean) =>
         setForm(prev => ({ ...prev, [field]: value }));
@@ -326,11 +351,16 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        // Trava de segurança: salvar antes do carregamento completo gravaria o
+        // formulário montado sobre o objeto parcial da lista (ver comentário no
+        // topo do componente).
+        if (loadingFull) return;
         if (!form.razao_social.trim()) { setError('Razão social é obrigatória.'); return; }
         setSaving(true);
         setError(null);
         try {
             const updated = await companyService.update(company.id, formToPayload(form));
+            setCompany(updated);
             onSaved(updated);
             showSuccess('Empresa salva com sucesso.');
         } catch (e: unknown) {
@@ -384,7 +414,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
 
     const SaveButton: React.FC = () => (
         <div className="flex justify-end pt-2 border-t border-gray-100">
-            <Button type="submit" disabled={saving} size="lg" className="gap-2">
+            <Button type="submit" disabled={saving || loadingFull} size="lg" className="gap-2">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Salvar
             </Button>
@@ -405,7 +435,8 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                         <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">
                             {company.razao_social}
                         </h2>
-                        <span className="text-xs font-black uppercase px-3 py-1 rounded-full bg-gray-100 text-gray-500">
+                        {/* §8 — status/classificação é texto colorido simples, sem pílula/fundo/uppercase */}
+                        <span className="text-xs font-normal text-gray-500">
                             {COMPANY_TIPO_LABELS[company.tipo]}
                         </span>
                         {company.cnpj && <span className="text-xs text-gray-400">{company.cnpj}</span>}
@@ -436,6 +467,12 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
             {success && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
                     <CheckCircle2 className="w-4 h-4 flex-shrink-0" />{success}
+                </div>
+            )}
+            {loadingFull && (
+                <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm">
+                    <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
+                    Carregando dados completos da empresa... o botão Salvar fica bloqueado até terminar.
                 </div>
             )}
 

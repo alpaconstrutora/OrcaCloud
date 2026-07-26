@@ -82,6 +82,10 @@ interface OrganizationListProps {
     onExportProject: (id: string) => void;
 }
 
+// Abas cujo conteúdo é escopado por UMA organização (via activeOrganizationId
+// ou managingOrgId). Fora delas, o managingOrgId é descartado em contexto global.
+const ORG_SCOPED_TABS = ['users', 'settings'];
+
 const OrganizationList: React.FC<OrganizationListProps> = ({
     organizations,
     onCreate,
@@ -172,11 +176,17 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         }
     }, [activeTab, loadRegistries]);
 
-    // Reset managingOrgId whenever the user navigates away from the users tab
-    // while in global context (no active org). This ensures the consolidated
-    // view appears correctly when coming back to the users tab.
+    // Reset managingOrgId whenever the user navigates away das abas que dependem
+    // dele, estando em contexto global (nenhuma org ativa). Isso faz a visão
+    // consolidada reaparecer ao voltar para a aba de usuários.
+    //
+    // ⚠️ 'settings' PRECISA estar nesta lista: o botão "Detalhes" da lista de
+    // organizações faz setManagingOrgId(org.id) + onTabChange('settings'). Com
+    // "Todas as organizações" selecionado, este effect zerava o managingOrgId no
+    // render seguinte, currentOrg virava undefined e a aba renderizava NADA —
+    // tela branca (CLAUDE.md, REGRA OBRIGATÓRIA #5).
     React.useEffect(() => {
-        if (activeTab !== 'users' && !activeOrganizationId) {
+        if (!ORG_SCOPED_TABS.includes(activeTab) && !activeOrganizationId) {
             setManagingOrgId(null);
         }
     }, [activeTab, activeOrganizationId]);
@@ -207,7 +217,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         default: return 0;
                     }
                 }
-                // Sem coluna clicada, ordenação default é nome A-Z (ui_ux_standard_guide.md §6.4:
+                // Sem coluna clicada, ordenação default é nome A-Z (ui_ux_guia_unificado.md §6.4:
                 // toda coluna ordenável já ordena pelo próprio cabeçalho, sem dropdown redundante).
                 return a.name.localeCompare(b.name);
             });
@@ -261,7 +271,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             />
                         </div>
 
-                        {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_standard_guide.md §6.4) */}
+                        {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_guia_unificado.md §6.4) */}
                         <div className="flex items-center h-9">
                             <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                         </div>
@@ -671,13 +681,30 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     />
                 )}
 
-                {activeTab === 'settings' && currentOrg && (
-                    <OrganizationPage
-                        organization={currentOrg}
-                        onUpdate={(org) => {
-                            (onSave ?? onEdit)(org);
-                        }}
-                    />
+                {activeTab === 'settings' && (
+                    currentOrg ? (
+                        <OrganizationPage
+                            organization={currentOrg}
+                            onUpdate={(org) => {
+                                (onSave ?? onEdit)(org);
+                            }}
+                        />
+                    ) : (
+                        // Nunca renderizar vazio: detalhe de organização é inerentemente
+                        // por-empresa (REGRA #5, caso 3) — pede a seleção explicitamente.
+                        <div className="flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
+                            <Building2 className="w-10 h-10 opacity-30" />
+                            <p className="text-sm font-black uppercase tracking-wide">Nenhuma organização selecionada</p>
+                            <p className="text-xs text-center max-w-xs">
+                                O detalhe é de uma empresa específica. Volte para a aba{' '}
+                                <strong className="text-gray-600">Organização</strong> e use{' '}
+                                <strong className="text-gray-600">Detalhes</strong> na empresa desejada.
+                            </p>
+                            <Button onClick={() => onTabChange('organizations')} className="mt-2">
+                                Ir para Organização
+                            </Button>
+                        </div>
+                    )
                 )}
             </div>
         </div>

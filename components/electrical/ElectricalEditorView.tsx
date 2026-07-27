@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3, CornerDownRight, Trash2 } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3, CornerDownRight, Trash2, Plus, Minus } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -49,6 +49,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
   const [isOrthoMode, setIsOrthoMode] = useState(false);
+  const [gridSizeCm, setGridSizeCm] = useState<number>(0);
   const wallPreviewRef = useRef<any>(null);
   
   const stageRef = useRef<any>(null);
@@ -626,6 +627,23 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
               >
                 {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
                   <React.Fragment>
+                    <div className="absolute bottom-6 left-6 flex items-center gap-1 bg-white p-1.5 rounded-xl shadow-lg border border-slate-200 z-10 text-xs">
+                      <button 
+                        onClick={() => setGridSizeCm(prev => Math.max(0, prev - 1))}
+                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Diminuir Grid"
+                      ><Minus className="w-4 h-4" /></button>
+                      <button 
+                        onClick={() => setGridSizeCm(prev => prev + 1)}
+                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Aumentar Grid"
+                      ><Plus className="w-4 h-4" /></button>
+                      
+                      <div className="px-3 font-bold text-slate-700 min-w-[100px] text-center border-l border-slate-200 ml-1 pl-3">
+                        {gridSizeCm > 0 ? `Grid: ${gridSizeCm.toFixed(1)} cm` : 'Grid: Off'}
+                      </div>
+                    </div>
+
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white p-2 rounded-xl shadow-lg border border-slate-200 z-10">
                       <div className="flex bg-slate-100 p-1 rounded-xl">
                         <button
@@ -713,6 +731,23 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         <Layer>
                           {/* Imagem de Fundo */}
                           <KonvaImage image={imageObj} />
+                          
+                          {/* Grid Layer */}
+                          {(() => {
+                              if (!plan || gridSizeCm <= 0) return null;
+                              const ppm = plan.scaleFactor || 100;
+                              const gridPx = (gridSizeCm / 100) * ppm;
+                              if (gridPx < 10) return null; // Previne travamento com grid muito denso
+                              
+                              const lines = [];
+                              for (let i = 0; i <= stageSize.width / gridPx; i++) {
+                                  lines.push(<Line key={`gv-${i}`} points={[Math.round(i * gridPx), 0, Math.round(i * gridPx), stageSize.height]} stroke="rgba(0,0,0,0.15)" strokeWidth={1} listening={false} />);
+                              }
+                              for (let j = 0; j <= stageSize.height / gridPx; j++) {
+                                  lines.push(<Line key={`gh-${j}`} points={[0, Math.round(j * gridPx), stageSize.width, Math.round(j * gridPx)]} stroke="rgba(0,0,0,0.15)" strokeWidth={1} listening={false} />);
+                              }
+                              return lines;
+                          })()}
                           
                           {/* Walls */}
                           {walls.map(w => {

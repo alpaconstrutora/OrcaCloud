@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3 } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3, CornerDownRight } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -43,6 +43,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
+  const [isOrthoMode, setIsOrthoMode] = useState(false);
   const wallPreviewRef = useRef<any>(null);
   
   const stageRef = useRef<any>(null);
@@ -188,7 +189,20 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     const stage = e.target.getStage();
     const pointerPosition = stage.getRelativePointerPosition();
     if (pointerPosition && wallPreviewRef.current) {
-      const newPoints = [...currentWall, pointerPosition.x, pointerPosition.y];
+      let nextPos = pointerPosition;
+      if (isOrthoMode && currentWall.length >= 2) {
+        const lastX = currentWall[currentWall.length - 2];
+        const lastY = currentWall[currentWall.length - 1];
+        const dx = Math.abs(pointerPosition.x - lastX);
+        const dy = Math.abs(pointerPosition.y - lastY);
+        if (dx > dy) {
+          nextPos = { x: pointerPosition.x, y: lastY };
+        } else {
+          nextPos = { x: lastX, y: pointerPosition.y };
+        }
+      }
+
+      const newPoints = [...currentWall, nextPos.x, nextPos.y];
       
       if (typeof wallPreviewRef.current.points === 'function') {
         // Fallback for single line (just in case)
@@ -279,13 +293,28 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
 
+    let snappedPos = pointerPosition;
+    if (isOrthoMode) {
+      if (tool === 'draw_wall' && currentWall.length >= 2) {
+        const lastX = currentWall[currentWall.length - 2];
+        const lastY = currentWall[currentWall.length - 1];
+        snappedPos = Math.abs(pointerPosition.x - lastX) > Math.abs(pointerPosition.y - lastY) 
+          ? { x: pointerPosition.x, y: lastY } : { x: lastX, y: pointerPosition.y };
+      } else if (tool === 'draw_room' && currentPolygon.length >= 2) {
+        const lastX = currentPolygon[currentPolygon.length - 2];
+        const lastY = currentPolygon[currentPolygon.length - 1];
+        snappedPos = Math.abs(pointerPosition.x - lastX) > Math.abs(pointerPosition.y - lastY) 
+          ? { x: pointerPosition.x, y: lastY } : { x: lastX, y: pointerPosition.y };
+      }
+    }
+
     if (tool === 'draw_wall') {
-      setCurrentWall([...currentWall, pointerPosition.x, pointerPosition.y]);
+      setCurrentWall([...currentWall, snappedPos.x, snappedPos.y]);
       return;
     }
 
     if (tool === 'draw_room') {
-      setCurrentPolygon([...currentPolygon, pointerPosition.x, pointerPosition.y]);
+      setCurrentPolygon([...currentPolygon, snappedPos.x, snappedPos.y]);
       return;
     }
 
@@ -566,6 +595,18 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           Calibrar Escala
                         </button>
                       </div>
+                      
+                      <button
+                        onClick={() => setIsOrthoMode(!isOrthoMode)}
+                        className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                          isOrthoMode ? 'bg-blue-100 text-blue-700 shadow-sm border border-blue-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-transparent'
+                        }`}
+                        title="Modo Ortogonal (90 graus)"
+                      >
+                        <CornerDownRight className="w-5 h-5" />
+                      </button>
+                      <div className="w-px h-6 bg-slate-300 mx-1"></div>
+
                       <button 
                         onClick={() => zoomOut(0.2)} 
                         className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"

@@ -11,6 +11,7 @@ import PointPropertiesSidebar from './PointPropertiesSidebar';
 import LoadScheduleView from './LoadScheduleView';
 import { convertPdfToImage } from '../../utils/pdfToImage';
 import { ElectricalTakeoffView } from './ElectricalTakeoffView';
+import { useToast } from '../../hooks/useToast';
 import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint } from '../../types/electrical';
 
 interface ElectricalEditorViewProps {
@@ -42,6 +43,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
+  const { showToast } = useToast();
 
   useEffect(() => {
     loadData();

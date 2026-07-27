@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2, Plus, PencilLine,
+    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2, Plus, PencilLine, Search,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
@@ -117,6 +117,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     const [manualDescription, setManualDescription] = useState('');
     const [manualAmount, setManualAmount] = useState('');
     const [addingManual, setAddingManual] = useState(false);
+    const [searchTerm, setSearchTerm] = usePersistedState<string>('prolaboreReconciliation:search', '');
 
     const tableColumns = useTableColumns(COLUMNS, 'prolaboreReconciliationColumns');
 
@@ -215,8 +216,18 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         return { pendente, aprovado, total: pendente + aprovado, count: allRows.length };
     }, [allRows]);
 
+    const searchedRows = useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+        if (!term) return allRows;
+        return allRows.filter(r =>
+            (r.description || '').toLowerCase().includes(term) ||
+            (r.party_name || '').toLowerCase().includes(term) ||
+            (r.category || '').toLowerCase().includes(term)
+        );
+    }, [allRows, searchTerm]);
+
     const sortedRows = useMemo(() => {
-        const arr = [...allRows];
+        const arr = [...searchedRows];
         return arr.sort((a, b) => {
             if (tableColumns.sortColumn) {
                 const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -231,7 +242,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
             }
             return b.transaction_date.localeCompare(a.transaction_date);
         });
-    }, [allRows, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [searchedRows, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     /** Aprova um único lançamento sem toast/reload — reusado pela aprovação individual e em lote. */
     const approveOne = async (row: ProlaboreRow, approvedBy: string): Promise<void> => {
@@ -511,8 +522,30 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                 </div>
             )}
 
-            {/* Tabela — guia §6/§7 */}
+            {/* Tabela — guia §6/§7, toolbar de busca acoplada (§5.2) */}
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white">
+                    <div className="relative w-full md:w-80">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar por descrição, contraparte ou categoria..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                title="Limpar busca"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+                <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
@@ -625,32 +658,41 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                                 ) : row.source === 'internal' ? (
                                                     <>
                                                         {row.approval_status !== 'APROVADO' && (
-                                                            <button onClick={() => handleApprove(row)} disabled={actingId === row.id}
+                                                            <ActionIconButton
+                                                                kind="edit"
                                                                 title="Aprovar"
-                                                                className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                                                {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                                            </button>
+                                                                disabled={actingId === row.id}
+                                                                icon={actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                                                onClick={() => handleApprove(row)}
+                                                            />
                                                         )}
                                                         {row.approval_status !== 'REJEITADO' && (
-                                                            <button onClick={() => handleReject(row)} disabled={actingId === row.id}
+                                                            <ActionIconButton
+                                                                kind="delete"
                                                                 title="Rejeitar"
-                                                                className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                                                <X className="w-4 h-4" />
-                                                            </button>
+                                                                disabled={actingId === row.id}
+                                                                icon={<X className="w-4 h-4" />}
+                                                                onClick={() => handleReject(row)}
+                                                            />
                                                         )}
                                                     </>
                                                 ) : approved ? (
-                                                    <button onClick={() => handleUndoBankApproval(row)} disabled={actingId === row.id}
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        tone="attention"
                                                         title="Desfazer aprovação"
-                                                        className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-amber-600 hover:border-amber-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                                        {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
-                                                    </button>
+                                                        disabled={actingId === row.id}
+                                                        icon={actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                        onClick={() => handleUndoBankApproval(row)}
+                                                    />
                                                 ) : (
-                                                    <button onClick={() => handleApprove(row)} disabled={actingId === row.id}
+                                                    <ActionIconButton
+                                                        kind="edit"
                                                         title="Aprovar"
-                                                        className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                                        {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                                    </button>
+                                                        disabled={actingId === row.id}
+                                                        icon={actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                                        onClick={() => handleApprove(row)}
+                                                    />
                                                 )}
                                             </div>
                                         </td>
@@ -660,6 +702,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                         })}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {/* Barra de ações em lote — guia §10, fixa no rodapé, fora do fluxo normal */}

@@ -4024,22 +4024,25 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             estilo antigo rounded-[2.5rem]) não é tocada — o wrapper vira Fragment
                             nesse caso, sem alterar o layout existente. */}
                         {(() => {
-                            const StatementCardWrapper: React.ElementType = activeView === 'statement' ? 'div' : React.Fragment;
-                            const wrapperProps = activeView === 'statement'
+                            // Acoplada (§5.2): Extrato (sempre) e Pendentes em modo lista (era o gap
+                            // reportado pelo usuário — toolbar solta acima de um card de tabela à parte).
+                            const useAcoplada = activeView === 'statement' || (activeView === 'pending' && pendentesViewMode === 'list');
+                            const StatementCardWrapper: React.ElementType = useAcoplada ? 'div' : React.Fragment;
+                            const wrapperProps = useAcoplada
                                 ? { className: 'bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden' }
                                 : {};
                             return (
                         <StatementCardWrapper {...wrapperProps}>
-                        <div className={activeView === 'statement'
+                        <div className={useAcoplada
                             ? "flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white"
                             : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
-                            {activeView !== 'statement' && (
+                            {!useAcoplada && (
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                 <Download className="w-4 h-4" />
                                 Extrato Bancário
                             </h4>
                             )}
-                            {activeView === 'statement' && (
+                            {useAcoplada && (
                             <div className="flex-1 relative w-full order-1">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
@@ -4060,7 +4063,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 )}
                             </div>
                             )}
-                            <div className={activeView === 'statement' ? "flex items-center gap-2 order-2 shrink-0" : "flex flex-wrap items-center gap-2 gap-y-2"}>
+                            <div className={useAcoplada ? "flex items-center gap-2 order-2 shrink-0" : "flex flex-wrap items-center gap-2 gap-y-2"}>
                                 <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100 shrink-0">
                                     <button
                                         onClick={() => setFlowFilter('ALL')}
@@ -4154,7 +4157,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <RefreshCw className="w-4 h-4" />
                                     </button>
                                 )}
-                                {activeView !== 'statement' && (
+                                {!useAcoplada && (
                                 <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
                                     <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
                                     <select
@@ -4177,7 +4180,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     </button>
                                 </div>
                                 )}
-                                {activeView !== 'statement' && (
+                                {!useAcoplada && (
                                 <div className="relative">
                                     <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                     <input
@@ -4649,7 +4652,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     ))}
                                 </div>
                             ) : (
-                                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+                                <div className={useAcoplada ? "overflow-x-auto" : "bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto"}>
                                     <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                                         <table ref={pendingBankResize.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
                                             <colgroup>
@@ -4884,10 +4887,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         })()}
                     </div>
 
-                    {activeView === 'pending' && (
+                    {activeView === 'pending' && (() => {
+                        // Acoplada (§5.2), espelhando o Extrato Bancário ao lado — mesmo gap
+                        // reportado pelo usuário: toolbar solta acima de um card de tabela à parte.
+                        const internalAcoplada = pendentesViewMode === 'list';
+                        return (
                     <div className="space-y-4">
                         {/* Right: Internal Ledger */}
-                        <div className="flex flex-wrap justify-between items-center gap-y-2 px-4">
+                        <div className={internalAcoplada ? "bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden" : ""}>
+                        <div className={internalAcoplada
+                            ? "flex flex-wrap gap-3 items-center justify-between p-4 border-b border-gray-100 bg-white"
+                            : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
                             <div className="flex flex-wrap items-center gap-4 gap-y-2">
                                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                     <Check className="w-4 h-4" />
@@ -4996,22 +5006,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             {internalSortOrder === 'desc' ? '↓' : '↑'}
                                         </button>
                                     </div>
-                                    <div className="relative">
-                                        <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <div className={internalAcoplada ? "relative" : "relative"}>
+                                        <Search className={internalAcoplada ? "w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" : "w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"} />
                                         <input
                                             type="text"
-                                            placeholder="Filtro..."
+                                            placeholder={internalAcoplada ? "Buscar por descrição, categoria ou cliente/fornecedor..." : "Filtro..."}
                                             value={internalSearch}
                                             onChange={(e) => setInternalSearch(e.target.value)}
-                                            className="pl-8 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 w-24 focus:w-32 transition-all"
+                                            className={internalAcoplada
+                                                ? "h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all w-full md:w-64"
+                                                : "pl-8 pr-8 py-1.5 bg-gray-50 border border-gray-100 rounded-full text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/10 w-24 focus:w-32 transition-all"}
                                         />
                                         {internalSearch && (
                                             <button
                                                 onClick={() => setInternalSearch('')}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                                                 title="Limpar filtro"
                                             >
-                                                <X className="w-3 h-3" />
+                                                <X className="w-3.5 h-3.5" />
                                             </button>
                                         )}
                                     </div>
@@ -5172,7 +5184,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     ))}
                                 </div>
                             ) : (
-                                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+                                <div className={internalAcoplada ? "overflow-x-auto" : "bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto"}>
                                     <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
                                         <table ref={pendingInternalResize.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
                                             <colgroup>
@@ -5387,8 +5399,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                             )}
                         </div>
+                        </div>
                     </div>
-                    )}
+                        );
+                    })()}
                 </div>
             </div>
         ) : null}

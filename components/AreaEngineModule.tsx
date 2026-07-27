@@ -246,6 +246,31 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         }
     }
 
+    async function deleteAreaProject(project: AreaProject, event: React.MouseEvent) {
+        event.stopPropagation();
+        const ok = await confirm({
+            title: `Excluir "${project.name}"?`,
+            message: 'Todas as versões, estruturas, quadros e aprovações deste projeto de áreas são excluídos junto. Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        setActionLoading(`delete-project-${project.id}`);
+        setError(null);
+        try {
+            await areaEngineService.deleteProject(project.id);
+            if (selectedProjectId === project.id) {
+                setSelectedProjectId('');
+                if (screenMode === 'workspace') setScreenMode('list');
+            }
+            await loadProjects();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao excluir projeto de áreas.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
     const selectedVersion = versions.find(v => v.id === selectedVersionId) || null;
     const technicalApproval = approvals.find(approval => approval.approval_type === 'technical');
     const legalApproval = approvals.find(approval => approval.approval_type === 'legal');
@@ -1395,6 +1420,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                             title={project.status === 'archived' ? 'Reativar' : 'Arquivar'}
                                                             disabled={actionLoading === `archive-${project.id}`}
                                                             onClick={(event) => void toggleArchiveProject(project, event)}
+                                                        />
+                                                        <ActionIconButton
+                                                            kind="delete"
+                                                            disabled={actionLoading === `delete-project-${project.id}`}
+                                                            onClick={(event) => void deleteAreaProject(project, event)}
                                                         />
                                                     </div>
                                                 </td>

@@ -294,6 +294,15 @@ export const areaEngineService = {
         return data as AreaProject;
     },
 
+    async deleteProject(projectId: string): Promise<void> {
+        const { error } = await supabase
+            .from('area_projects')
+            .delete()
+            .eq('id', projectId);
+
+        if (error) raiseAreaEngineError('deleteProject', error);
+    },
+
     async listVersions(areaProjectId: string): Promise<AreaVersion[]> {
         const { data, error } = await supabase
             .from('area_versions')

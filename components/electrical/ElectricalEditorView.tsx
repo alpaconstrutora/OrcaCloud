@@ -9,6 +9,7 @@ import RoomSidebar from './RoomSidebar';
 import PointToolbox, { ElectricalPointType, POINT_TYPES } from './PointToolbox';
 import PointPropertiesSidebar from './PointPropertiesSidebar';
 import LoadScheduleView from './LoadScheduleView';
+import { convertPdfToImage } from '../../utils/pdfToImage';
 import { ElectricalTakeoffView } from './ElectricalTakeoffView';
 import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint } from '../../types/electrical';
 
@@ -91,11 +92,16 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    let file = e.target.files?.[0];
     if (!file || !version) return;
 
     setUploading(true);
     try {
+      if (file.type === 'application/pdf') {
+        showToast('Convertendo PDF para imagem de fundo...', 'info');
+        file = await convertPdfToImage(file);
+      }
+
       const url = await electricalProjectService.uploadPlanImage(file, organizationId);
       
       if (plan) {
@@ -272,7 +278,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           <label className="cursor-pointer inline-flex items-center justify-center rounded-xl font-black uppercase tracking-widest transition-all active:scale-95 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 h-9 px-4 text-sm gap-2">
             <Upload className="w-4 h-4 mr-2 text-slate-500" />
             Planta
-            <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+            <input type="file" className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
           </label>
           <Button variant="secondary" className="rounded-[1rem]" onClick={handleExportDXF}>
             <Download className="w-4 h-4 mr-2" />
@@ -320,7 +326,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 <div className="text-center p-8 bg-white/50 rounded-2xl border border-dashed border-slate-300">
                   <Upload className="w-8 h-8 text-slate-400 mx-auto mb-3" />
                   <p className="font-bold text-slate-600">Nenhuma planta carregada</p>
-                  <p className="text-sm text-slate-500">Faça o upload de uma imagem (PNG/JPG) no menu superior.</p>
+                  <p className="text-sm text-slate-500">Faça o upload de uma imagem (PNG/JPG) ou PDF no menu superior.</p>
                 </div>
               </div>
             )}

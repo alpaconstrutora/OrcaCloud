@@ -589,7 +589,14 @@ async function syncRecurringToFinance(contract: Contract) {
             await supabase.from('internal_transactions').insert(transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
-                reference_id: contract.id,
+                // ⚠️ Um reference_id POR PARCELA. A constraint
+                // internal_transactions_org_ref_key é UNIQUE(organization_id,
+                // reference_id, entry_type): repetir o id do contrato em todas as
+                // linhas fazia a 2ª estourar 23505. Mesmo padrão do lado da
+                // negociação (tx-{dealId}-custom-pN). Os filtros usam
+                // `like('{contractId}%')`, então as linhas legadas (reference_id =
+                // id puro) continuam sendo encontradas.
+                reference_id: `${contract.id}-p${tx.date.split('T')[0]}`,
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
                 // Vencimento da parcela — Contas a Receber exibe due_date e a view
@@ -698,7 +705,7 @@ export async function generateRecurringInstallmentsForPeriod(
         .select('due_date')
         .eq('organization_id', contract.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
-        .eq('reference_id', contract.id)
+        .like('reference_id', `${contract.id}%`)
         .gte('due_date', fromDate)
         .lte('due_date', toDate);
     const existing = new Set((jaExistem || []).map(r => (r.due_date as string).slice(0, 10)));
@@ -712,7 +719,8 @@ export async function generateRecurringInstallmentsForPeriod(
     const { error } = await supabase.from('internal_transactions').insert(novos.map((d, i) => ({
         organization_id: contract.organization_id,
         source_system: 'CONTRACT_RECURRING',
-        reference_id: contract.id,
+        // Um id por parcela — ver a nota em syncRecurringToFinance.
+        reference_id: `${contract.id}-p${d}`,
         project_id: contract.project_id ?? null,
         transaction_date: d,
         due_date: d,
@@ -2379,7 +2387,7 @@ export const contractService = {
                     .update({ amount: novoValor })
                     .eq('organization_id', updated.organization_id)
                     .eq('source_system', 'CONTRACT_RECURRING')
-                    .eq('reference_id', updated.id)
+                    .like('reference_id', `${updated.id}%`)
                     .eq('status', 'PENDING')
                     .gte('transaction_date', hoje);
             } catch (e) {

@@ -192,7 +192,7 @@ async function countPendingFrom(parent: Contract, fromDate: string): Promise<num
         .select('id', { count: 'exact', head: true })
         .eq('organization_id', parent.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
-        .eq('reference_id', parent.id)
+        .like('reference_id', `${parent.id}%`)
         .eq('status', 'PENDING')
         .gte('due_date', fromDate);
 
@@ -412,7 +412,7 @@ export const contractRenewalService = {
                 .select('id', { count: 'exact', head: true })
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
-                .eq('reference_id', contract.id)
+                .like('reference_id', `${contract.id}%`)
                 .gte('due_date', addendum.new_start_date)
                 .neq('status', 'PENDING');
             if ((count ?? 0) > 0) {
@@ -423,7 +423,7 @@ export const contractRenewalService = {
                 .delete()
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
-                .eq('reference_id', contract.id)
+                .like('reference_id', `${contract.id}%`)
                 .gte('due_date', addendum.new_start_date);
         }
 
@@ -583,7 +583,7 @@ export const contractRenewalService = {
             .delete()
             .eq('organization_id', parent.organization_id)
             .eq('source_system', 'CONTRACT_RECURRING')
-            .eq('reference_id', parent.id)
+            .like('reference_id', `${parent.id}%`)
             .eq('status', 'PENDING')
             .gte('due_date', fromDate);
         if (error) {
@@ -595,7 +595,7 @@ export const contractRenewalService = {
                 .update({ status: 'CANCELLED', business_status: 'CANCELADO' })
                 .eq('organization_id', parent.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
-                .eq('reference_id', parent.id)
+                .like('reference_id', `${parent.id}%`)
                 .eq('status', 'PENDING')
                 .gte('due_date', fromDate);
         }
@@ -736,7 +736,7 @@ export const contractRenewalService = {
                 .select('id', { count: 'exact', head: true })
                 .eq('organization_id', child.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
-                .eq('reference_id', child.id)
+                .like('reference_id', `${child.id}%`)
                 .neq('status', 'PENDING');
             if ((count ?? 0) > 0) {
                 throw new Error('A renovação já tem parcelas pagas ou conciliadas. Desfazer não é possível — use a rescisão do contrato.');
@@ -746,7 +746,7 @@ export const contractRenewalService = {
                 .delete()
                 .eq('organization_id', child.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
-                .eq('reference_id', child.id);
+                .like('reference_id', `${child.id}%`);
         }
 
         await supabase.from('contracts').delete().eq('id', child.id);
@@ -780,7 +780,7 @@ async function regenerateParentInstallments(parent: Contract): Promise<void> {
         .select('due_date, status')
         .eq('organization_id', parent.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
-        .eq('reference_id', parent.id);
+        .like('reference_id', `${parent.id}%`);
 
     const settled = (existing ?? []).filter(r => r.status !== 'PENDING');
     const keptMax = settled.reduce<string | null>(
@@ -790,7 +790,7 @@ async function regenerateParentInstallments(parent: Contract): Promise<void> {
         .delete()
         .eq('organization_id', parent.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
-        .eq('reference_id', parent.id)
+        .like('reference_id', `${parent.id}%`)
         .eq('status', 'PENDING');
 
     await contractService.syncContractToFinance(parent);
@@ -802,7 +802,7 @@ async function regenerateParentInstallments(parent: Contract): Promise<void> {
             .delete()
             .eq('organization_id', parent.organization_id)
             .eq('source_system', 'CONTRACT_RECURRING')
-            .eq('reference_id', parent.id)
+            .like('reference_id', `${parent.id}%`)
             .eq('status', 'PENDING')
             .lte('due_date', keptMax);
     }

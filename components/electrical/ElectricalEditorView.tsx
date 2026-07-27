@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -338,14 +338,15 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 initialScale={1}
                 minScale={0.1}
                 maxScale={5}
-                disabled={tool !== 'select'}
-                wheel={{ step: 0.1 }}
+                limitToBounds={false}
+                panning={{ disabled: tool !== 'select' }}
+                doubleClick={{ disabled: true }}
               >
                 {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
                   <React.Fragment>
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white p-2 rounded-xl shadow-lg border border-slate-200 z-10">
                       <button 
-                        onClick={() => zoomOut()} 
+                        onClick={() => zoomOut(0.2)} 
                         className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                         title="Reduzir Zoom"
                       >
@@ -359,7 +360,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         <Maximize className="w-5 h-5" />
                       </button>
                       <button 
-                        onClick={() => zoomIn()} 
+                        onClick={() => zoomIn(0.2)} 
                         className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                         title="Aumentar Zoom"
                       >
@@ -466,8 +467,31 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
             {/* Dica para fechar o polígono */}
             {tool === 'draw_room' && currentPolygon.length > 0 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm shadow-xl animate-fade-in-up">
-                Clique no ponto inicial (vermelho) para fechar o ambiente.
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white p-2 rounded-xl shadow-lg border border-slate-200 z-10">
+                <div className="px-3 text-sm font-medium text-slate-600 border-r border-slate-200">
+                  Desenhando Sala...
+                </div>
+                <button
+                  onClick={() => {
+                    const newPolygon = [...currentPolygon];
+                    newPolygon.splice(-2, 2); // Remove last x,y pair
+                    setCurrentPolygon(newPolygon);
+                  }}
+                  className="px-3 py-1.5 flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Desfazer último ponto"
+                >
+                  <Undo className="w-4 h-4" /> Desfazer
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentPolygon([]);
+                    setTool('select');
+                  }}
+                  className="px-3 py-1.5 flex items-center gap-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Cancelar"
+                >
+                  <X className="w-4 h-4" /> Cancelar
+                </button>
               </div>
             )}
           </div>

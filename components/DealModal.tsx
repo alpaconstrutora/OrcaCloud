@@ -709,6 +709,23 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewTarget, generateTargets]);
 
+    /** Exclui uma parcela lançada pelo contrato. Paga/conciliada é recusada pelo serviço. */
+    const handleRemoveContractEntry = async (entryId: string) => {
+        const ok = await confirm({
+            title: 'Excluir esta parcela?',
+            message: 'A cobrança sai de Contas a Receber. Parcela já paga ou conciliada não pode ser excluída.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            await contractService.removeFinancialEntry(entryId);
+            setContractEntries(prev => prev.filter(e => e.id !== entryId));
+        } catch (e) {
+            setContractError(e instanceof Error ? e.message : 'Erro ao excluir a parcela.');
+        }
+    };
+
     const handleOpenGenerateModal = () => {
         setGenerateInstallmentType('MENSAL');
         setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
@@ -1949,35 +1966,69 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         ) : (
                                             <div className="overflow-auto max-h-[60vh]">
+                                                {/* MESMAS colunas do plano de pagamento acima, para as duas
+                                                    séries lerem igual. O que a parcela de contrato não tem
+                                                    — desconto, tipo e forma de pagamento — aparece como "—"
+                                                    em vez de sumir a coluna: coluna que muda de lugar
+                                                    conforme a origem obriga a reaprender a tabela. */}
                                                 <table className="w-full text-left border-collapse">
                                                     <thead>
                                                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                            <th className="w-10 px-4 py-2 border-r border-gray-100"></th>
+                                                            <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
                                                             <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
                                                             <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
-                                                            <th className="px-6 py-2 text-table-header font-semibold">Situação</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
+                                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200">
-                                                        {contractEntries.map(e => (
-                                                            <tr key={e.id} className="hover:bg-blue-50/50 transition-colors">
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                                                                    {fmtDateBR(e.transaction_date)}
-                                                                </td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                                                                    {e.description || '—'}
-                                                                </td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
-                                                                </td>
-                                                                <td className={`px-6 py-2.5 text-sm font-normal ${
-                                                                    e.status === 'PAID' || e.status === 'CONCILIATED' ? 'text-emerald-600' : 'text-gray-600'}`}>
-                                                                    {e.status === 'PENDING' ? 'Previsto'
-                                                                        : e.status === 'PAID' ? 'Pago'
-                                                                        : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
-                                                                </td>
-                                                            </tr>
-                                                        ))}
+                                                        {[...contractEntries]
+                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
+                                                            .map((e, i) => {
+                                                                const pago = e.status !== 'PENDING';
+                                                                return (
+                                                                    <tr key={e.id} className="hover:bg-blue-50/50 transition-colors">
+                                                                        <td className="px-4 py-2.5 border-r border-gray-100"></td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                                            {fmtDateBR(e.transaction_date)}
+                                                                        </td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                                                                        </td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                                                                        </td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                                            {e.description || '—'}
+                                                                            <span className={`ml-2 text-sm font-normal ${pago ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                                                {e.status === 'PENDING' ? 'Previsto'
+                                                                                    : e.status === 'PAID' ? 'Pago'
+                                                                                        : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-6 py-2.5 text-right">
+                                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                                <ActionIconButton
+                                                                                    kind="delete"
+                                                                                    title={pago
+                                                                                        ? 'Parcela paga/conciliada — estorne no financeiro antes de excluir'
+                                                                                        : 'Excluir esta parcela'}
+                                                                                    onClick={() => handleRemoveContractEntry(e.id)}
+                                                                                />
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
                                                     </tbody>
                                                 </table>
                                             </div>

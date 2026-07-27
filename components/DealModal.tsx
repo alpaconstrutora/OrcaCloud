@@ -438,6 +438,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         installment_type?: string | null; payment_type?: string | null;
     }[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
+    // Selecao em lote da serie do CONTRATO — espelha selectedInstallmentIds do
+    // plano de pagamento, inclusive o Shift+clique (guia §10.1).
+    const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
+    const [lastEntryIndex, setLastEntryIndex] = useState<number | null>(null);
+    const [showEntryLoteModal, setShowEntryLoteModal] = useState(false);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [contractError, setContractError] = useState<string | null>(null);
 
@@ -698,6 +703,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     }, [activeTab, linkedContract]);
 
     useEffect(() => {
+        // Trocar de série zera a seleção: manter ids de outra lista deixaria a
+        // barra de lote contando parcelas que não estão mais na tela.
+        setSelectedEntryIds(new Set());
+        setLastEntryIndex(null);
         if (viewTarget === 'DEAL') { setContractEntries([]); return; }
         const alvo = generateTargets.find(t => t.id === viewTarget);
         if (!alvo) return;
@@ -748,6 +757,52 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 const alvo = generateTargets.find(t => t.id === viewTarget);
                 if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
             });
+    };
+
+    /** Seleção com intervalo por Shift+clique — mesmo comportamento do plano. */
+    const handleEntryRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean, visiveis: string[]) => {
+        setSelectedEntryIds(prev => {
+            const next = new Set(prev);
+            if (shiftKey && lastEntryIndex !== null) {
+                const [ini, fim] = lastEntryIndex < index ? [lastEntryIndex, index] : [index, lastEntryIndex];
+                visiveis.slice(ini, fim + 1).forEach(v => next.add(v));
+                return next;
+            }
+            if (checked) next.add(id); else next.delete(id);
+            return next;
+        });
+        if (!shiftKey) setLastEntryIndex(index);
+    };
+
+    /**
+     * Aplica desconto / tipo / forma de pagamento às parcelas selecionadas do
+     * contrato. Usa o MESMO modal do plano de pagamento; a diferença é que aqui
+     * cada linha é gravada no banco (uma por vez, para o servidor recalcular o
+     * líquido pela mesma regra) e a série é relida no fim.
+     */
+    const applyBulkEntryEdit = async (patch: {
+        discountType: 'VALUE' | 'PERCENT' | null;
+        discountAmount: number;
+        paymentType?: PaymentInstallment['paymentType'];
+        installmentType?: PaymentInstallment['installmentType'];
+    }) => {
+        const alvos = contractEntries.filter(e => selectedEntryIds.has(e.id) && e.status === 'PENDING');
+        setShowEntryLoteModal(false);
+        try {
+            for (const e of alvos) {
+                await contractService.updateFinancialEntry(e.id, {
+                    discount_type: patch.discountType,
+                    discount_amount: patch.discountType ? patch.discountAmount : null,
+                    ...(patch.paymentType !== undefined ? { payment_type: patch.paymentType || null } : {}),
+                    ...(patch.installmentType !== undefined ? { installment_type: patch.installmentType || null } : {}),
+                });
+            }
+            const alvo = generateTargets.find(t => t.id === viewTarget);
+            if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
+            setSelectedEntryIds(new Set());
+        } catch (err) {
+            setContractError(err instanceof Error ? err.message : 'Erro ao editar as parcelas em lote.');
+        }
     };
 
     /** Exclui uma parcela lançada pelo contrato. Paga/conciliada é recusada pelo serviço. */
@@ -2018,7 +2073,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 <table className="w-full text-left border-collapse">
                                                     <thead>
                                                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                            <th className="w-10 px-4 py-2 border-r border-gray-100"></th>
+                                                            <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                                                {(() => {
+                                                                    const editaveis = contractEntries.filter(e => e.status === 'PENDING');
+                                                                    const todas = editaveis.length > 0 && editaveis.every(e => selectedEntryIds.has(e.id));
+                                                                    return (
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            title="Selecionar todas"
+                                                                            checked={todas}
+                                                                            disabled={editaveis.length === 0}
+                                                                            onChange={() => setSelectedEntryIds(todas ? new Set() : new Set(editaveis.map(e => e.id)))}
+                                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                                                        />
+                                                                    );
+                                                                })()}
+                                                            </th>
                                                             <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
                                                             <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
                                                             <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
@@ -2036,8 +2106,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             .map((e, i) => {
                                                                 const pago = e.status !== 'PENDING';
                                                                 return (
-                                                                    <tr key={e.id} className="hover:bg-blue-50/50 transition-colors">
-                                                                        <td className="px-4 py-2.5 border-r border-gray-100"></td>
+                                                                    <tr key={e.id} className={`hover:bg-blue-50/50 transition-colors ${selectedEntryIds.has(e.id) ? 'bg-blue-50/60' : ''}`}>
+                                                                        <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                                                            {/* Só parcela PENDENTE entra no lote: paga/conciliada
+                                                                                nao pode ser alterada (§10 — checkbox so' onde a
+                                                                                acao em lote e' valida). */}
+                                                                            {!pago && (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                                                    checked={selectedEntryIds.has(e.id)}
+                                                                                    onChange={(ev) => handleEntryRowCheck(
+                                                                                        e.id, i, ev.target.checked,
+                                                                                        (ev.nativeEvent as MouseEvent).shiftKey,
+                                                                                        [...contractEntries]
+                                                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
+                                                                                            .map(x => x.id),
+                                                                                    )}
+                                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                                />
+                                                                            )}
+                                                                        </td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100">
                                                                             <input
@@ -2954,6 +3043,62 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             Desmarcar
                         </button>
                     </div>
+                )}
+
+                {/* Mesma barra, para a série do CONTRATO (§10). As duas nunca
+                    aparecem juntas: o seletor mostra uma série de cada vez. */}
+                {activeTab === 'parcelas' && selectedEntryIds.size > 0 && (
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                        <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                            {selectedEntryIds.size} parcela{selectedEntryIds.size !== 1 ? 's' : ''} selecionada{selectedEntryIds.size !== 1 ? 's' : ''}
+                            <span className="ml-2 font-normal opacity-75">
+                                · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                    contractEntries
+                                        .filter(e => selectedEntryIds.has(e.id))
+                                        .reduce((acc, e) => acc + (e.original_amount ?? e.amount), 0)
+                                )}
+                            </span>
+                        </span>
+                        <button
+                            onClick={() => setShowEntryLoteModal(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-white text-blue-700 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-50 transition-colors"
+                        >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar em Lote
+                        </button>
+                        <button
+                            onClick={() => setSelectedEntryIds(new Set())}
+                            className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                            Desmarcar
+                        </button>
+                    </div>
+                )}
+
+                {showEntryLoteModal && (
+                    <InstallmentLoteDiscountModal
+                        installments={contractEntries
+                            .filter(e => selectedEntryIds.has(e.id))
+                            .map(e => ({
+                                // O modal só lê id/valor/desconto para montar a prévia —
+                                // mapear a parcela do contrato para o formato dele evita
+                                // duplicar um modal idêntico só por causa do tipo.
+                                id: e.id,
+                                dueDate: e.transaction_date.slice(0, 10),
+                                value: e.amount,
+                                originalValue: e.original_amount ?? e.amount,
+                                discountType: (e.discount_type as 'VALUE' | 'PERCENT' | undefined) ?? undefined,
+                                discountAmount: e.discount_amount ?? undefined,
+                                installmentType: (e.installment_type as PaymentInstallment['installmentType']) ?? undefined,
+                                paymentType: (e.payment_type as PaymentInstallment['paymentType']) ?? undefined,
+                                status: 'PENDING',
+                                description: e.description ?? '',
+                            } as PaymentInstallment))}
+                        installmentTypes={installmentTypeOptions}
+                        onClose={() => setShowEntryLoteModal(false)}
+                        onSave={applyBulkEntryEdit}
+                    />
                 )}
 
                 {showInstallmentLoteModal && (

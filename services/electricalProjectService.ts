@@ -77,13 +77,6 @@ export const electricalProjectService = {
     },
 
     // PLANS
-    async getPlanByVersion(versionId: string): Promise<OpuraElectricalPlan | null> {
-        const { data, error } = await supabase.from('opura_electrical_plans')
-            .select('*').eq('version_id', versionId).maybeSingle();
-        if (error) throw new Error(`Erro ao buscar planta: ${error.message}`);
-        return data ? mapPlanToCamelCase(data) : null;
-    },
-
     async createPlan(item: Partial<OpuraElectricalPlan>): Promise<OpuraElectricalPlan> {
         const dbItem = mapPlanToSnakeCase(item);
         const { data, error } = await supabase.from('opura_electrical_plans')
@@ -92,12 +85,34 @@ export const electricalProjectService = {
         return mapPlanToCamelCase(data);
     },
 
+    async getPlanByVersion(versionId: string): Promise<OpuraElectricalPlan | null> {
+        const { data, error } = await supabase.from('opura_electrical_plans')
+            .select('*').eq('version_id', versionId).maybeSingle();
+        if (error) throw new Error(`Erro ao buscar planta: ${error.message}`);
+        return data ? mapPlanToCamelCase(data) : null;
+    },
+
+
+
+    async listPlansByVersion(versionId: string): Promise<OpuraElectricalPlan[]> {
+        const { data, error } = await supabase.from('opura_electrical_plans')
+            .select('*').eq('version_id', versionId).order('created_at', { ascending: true });
+        if (error) throw new Error(`Erro ao listar plantas: ${error.message}`);
+        return (data || []).map(mapPlanToCamelCase);
+    },
+
     async updatePlan(id: string, updates: Partial<OpuraElectricalPlan>): Promise<OpuraElectricalPlan> {
         const dbUpdates = mapPlanToSnakeCase(updates);
         const { data, error } = await supabase.from('opura_electrical_plans')
             .update(dbUpdates).eq('id', id).select().single();
         if (error) throw new Error(`Erro ao atualizar planta: ${error.message}`);
         return mapPlanToCamelCase(data);
+    },
+
+    async deletePlan(id: string): Promise<void> {
+        const { error } = await supabase.from('opura_electrical_plans')
+            .delete().eq('id', id);
+        if (error) throw new Error(`Erro ao excluir planta: ${error.message}`);
     },
 
     async uploadPlanImage(file: File, organizationId: string): Promise<string> {

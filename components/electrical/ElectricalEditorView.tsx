@@ -6,6 +6,7 @@ import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { electricalProjectService } from '../../services/electricalProjectService';
 import { exportElectricalService } from '../../services/exportElectricalService';
 import RoomSidebar from './RoomSidebar';
+import PlanSidebar from './PlanSidebar';
 import PointToolbox, { ElectricalPointType, POINT_TYPES } from './PointToolbox';
 import PointPropertiesSidebar from './PointPropertiesSidebar';
 import LoadScheduleView from './LoadScheduleView';
@@ -24,7 +25,10 @@ interface ElectricalEditorViewProps {
 const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizationId, projectId, electricalProjectId, onBack }) => {
   const [project, setProject] = useState<OpuraElectricalProject | null>(null);
   const [version, setVersion] = useState<OpuraElectricalVersion | null>(null);
-  const [plan, setPlan] = useState<OpuraElectricalPlan | null>(null);
+  const [plans, setPlans] = useState<OpuraElectricalPlan[]>([]);
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  
+  const plan = plans.find(p => p.id === activePlanId) || null;
   const [rooms, setRooms] = useState<OpuraElectricalRoom[]>([]);
   const [walls, setWalls] = useState<OpuraElectricalWall[]>([]);
   const [points, setPoints] = useState<OpuraElectricalPoint[]>([]);
@@ -89,11 +93,35 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
       const versions = await electricalProjectService.listVersions(electricalProjectId);
       if (versions.length > 0) {
-        setVersion(versions[0]); // Pega a mais recente
+        setVersion(versions[0]);
         
-        const p = await electricalProjectService.getPlanByVersion(versions[0].id);
-        setPlan(p);
+        const fetchedPlans = await electricalProjectService.listPlansByVersion(versions[0].id);
+        setPlans(fetchedPlans);
         
+        if (fetchedPlans.length > 0) {
+          setActivePlanId(fetchedPlans[0].id);
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activePlanId) {
+      setWalls([]);
+      setRooms([]);
+      setPoints([]);
+      setImageObj(null);
+      return;
+    }
+
+    const loadActiveLayerData = async () => {
+      setLoading(true);
+      try {
+        const p = plans.find(p => p.id === activePlanId);
         if (p) {
           const w = await electricalProjectService.listWallsByPlan(p.id);
           setWalls(w);
@@ -104,19 +132,25 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           if (r.length > 0) {
             const pts = await electricalProjectService.listPointsByRooms(r.map(room => room.id));
             setPoints(pts);
+          } else {
+            setPoints([]);
           }
 
           if (p.fileUrl) {
             loadImage(p.fileUrl);
+          } else {
+            setImageObj(null);
           }
         }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    loadActiveLayerData();
+  }, [activePlanId]);
 
   const loadImage = (url: string) => {
     const img = new window.Image();
@@ -140,23 +174,21 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       }
 
       const url = await electricalProjectService.uploadPlanImage(file, organizationId);
+      const newPlan = await electricalProjectService.createPlan({
+        organizationId,
+        versionId: version.id,
+        fileUrl: url,
+        floorName: `Planta ${plans.length + 1}`,
+        scaleFactor: 100
+      });
       
-      if (plan) {
-        const updatedPlan = await electricalProjectService.updatePlan(plan.id, { fileUrl: url });
-        setPlan(updatedPlan);
-      } else {
-        const newPlan = await electricalProjectService.createPlan({
-          organizationId: organizationId,
-          versionId: version.id,
-          fileUrl: url,
-          floorName: 'Térreo'
-        });
-        setPlan(newPlan);
-      }
-      loadImage(url);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao fazer upload da planta.');
+      setPlans([...plans, newPlan]);
+      setActivePlanId(newPlan.id);
+      showToast('Nova planta importada com sucesso!');
+
+    } catch (error) {
+      console.error(error);
+      showToast('Erro ao fazer upload da planta', 'error');
     } finally {
       setUploading(false);
     }
@@ -249,7 +281,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
               try {
                 // Update Plan
                 const updatedPlan = await electricalProjectService.updatePlan(plan.id, { scaleFactor: newScaleFactor });
-                setPlan(updatedPlan);
+                setPlans(plans.map(p => p.id === plan.id ? updatedPlan : p));
                 
                 // Recalculate Rooms
                 const updatedRooms = [];
@@ -898,17 +930,44 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 onClose={() => setSelectedPointId(null)}
               />
             ) : (
-              <RoomSidebar 
-                rooms={rooms}
-                onDeleteRoom={async (id) => {
-                  try {
-                    await electricalProjectService.deleteRoom(id);
-                    setRooms(rooms.filter(r => r.id !== id));
-                  } catch (e) {
-                    alert('Erro ao deletar.');
-                  }
-                }}
-              />
+              <div className="flex flex-col h-full overflow-hidden">
+                <PlanSidebar
+                  plans={plans}
+                  activePlanId={activePlanId}
+                  onSelectPlan={setActivePlanId}
+                  onDeletePlan={async (id) => {
+                    try {
+                      await electricalProjectService.deletePlan(id);
+                      const newPlans = plans.filter(p => p.id !== id);
+                      setPlans(newPlans);
+                      if (activePlanId === id) setActivePlanId(newPlans[0]?.id || null);
+                    } catch (error) {
+                       alert('Erro ao excluir plano.');
+                    }
+                  }}
+                  onRenamePlan={async (id, newName) => {
+                    try {
+                       const updated = await electricalProjectService.updatePlan(id, { floorName: newName });
+                       setPlans(plans.map(p => p.id === id ? updated : p));
+                    } catch(e) {
+                       alert('Erro ao renomear.');
+                    }
+                  }}
+                />
+                <div className="flex-1 overflow-hidden">
+                  <RoomSidebar 
+                    rooms={rooms}
+                    onDeleteRoom={async (id) => {
+                      try {
+                        await electricalProjectService.deleteRoom(id);
+                        setRooms(rooms.filter(r => r.id !== id));
+                      } catch (e) {
+                        alert('Erro ao deletar.');
+                      }
+                    }}
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>

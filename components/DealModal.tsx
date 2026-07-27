@@ -428,6 +428,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [generateTargets, setGenerateTargets] = useState<GenerateTarget[]>([]);
     const alvoSelecionado = generateTargets.find(t => t.id === generateTarget);
     const [generateResult, setGenerateResult] = useState<{ ok: boolean; msg: string } | null>(null);
+    // Aba Parcelas: qual série está sendo exibida — 'DEAL' (plano de pagamento
+    // da negociação) ou um contrato (parcelas em Contas a Receber). São origens
+    // diferentes, e antes só a primeira tinha tela.
+    const [viewTarget, setViewTarget] = useState<string>('DEAL');
+    const [contractEntries, setContractEntries] = useState<{
+        id: string; transaction_date: string; amount: number; status: string; description: string | null;
+    }[]>([]);
+    const [loadingEntries, setLoadingEntries] = useState(false);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [contractError, setContractError] = useState<string | null>(null);
 
@@ -679,6 +687,28 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * "Data do 1º Pagamento" da aba já usa hoje (ou a Data Efetiva, se aquele
      * campo nunca foi preenchido) — ambos só são atualizados de fato ao
      * confirmar a geração. */
+    // Alvos disponíveis também na aba Parcelas (para o seletor de visualização).
+    useEffect(() => {
+        if (activeTab === 'parcelas' && linkedContract && generateTargets.length === 0) {
+            void carregarAlvosDeGeracao();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, linkedContract]);
+
+    useEffect(() => {
+        if (viewTarget === 'DEAL') { setContractEntries([]); return; }
+        const alvo = generateTargets.find(t => t.id === viewTarget);
+        if (!alvo) return;
+        let ativo = true;
+        setLoadingEntries(true);
+        contractService.listFinancialEntries(alvo.contract)
+            .then(rows => { if (ativo) setContractEntries(rows); })
+            .catch(e => console.error('[DealModal] Erro ao listar parcelas do contrato:', e))
+            .finally(() => { if (ativo) setLoadingEntries(false); });
+        return () => { ativo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewTarget, generateTargets]);
+
     const handleOpenGenerateModal = () => {
         setGenerateInstallmentType('MENSAL');
         setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
@@ -1876,8 +1906,85 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         // Célula editável dentro de TD: mesma tipografia do texto (§7.1).
                         const CELL = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-50 focus:bg-white focus:border-blue-400 outline-none transition-all';
 
+                        const alvoVisualizado = generateTargets.find(t => t.id === viewTarget);
+
                         return (
                             <div className="space-y-6">
+                                {/* Seletor de série. O plano de pagamento da negociação e as
+                                    parcelas do contrato são origens DIFERENTES (a segunda vive
+                                    em Contas a Receber) — sem este seletor, as parcelas de uma
+                                    renovação eram geradas e não apareciam em lugar nenhum. */}
+                                {generateTargets.length > 0 && (
+                                    <div className="flex flex-col md:flex-row md:items-center gap-2.5">
+                                        <label className="text-xs font-semibold text-slate-500 shrink-0">Ver parcelas de</label>
+                                        <select
+                                            value={viewTarget}
+                                            onChange={(e) => setViewTarget(e.target.value)}
+                                            className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
+                                        >
+                                            <option value="DEAL">Negociação — plano de pagamento</option>
+                                            {generateTargets.filter(t => t.kind === 'CONTRACT').map(t => (
+                                                <option key={t.id} value={t.id}>{t.label} — Contas a Receber</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {alvoVisualizado ? (
+                                    /* Parcelas do CONTRATO — somente leitura: quem edita valor e
+                                       vencimento aqui é o financeiro, não a negociação. */
+                                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                                        {loadingEntries ? (
+                                            <div className="text-center py-12">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                                <p className="mt-2 text-gray-500">Carregando...</p>
+                                            </div>
+                                        ) : contractEntries.length === 0 ? (
+                                            <div className="text-center py-12">
+                                                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma parcela lançada</h3>
+                                                <p className="text-sm text-gray-500">
+                                                    Use "Gerar parcelas" e escolha este contrato (ou um aditivo dele) para lançá-las.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="overflow-auto max-h-[60vh]">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
+                                                            <th className="px-6 py-2 text-table-header font-semibold">Situação</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-200">
+                                                        {contractEntries.map(e => (
+                                                            <tr key={e.id} className="hover:bg-blue-50/50 transition-colors">
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                                    {fmtDateBR(e.transaction_date)}
+                                                                </td>
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                                    {e.description || '—'}
+                                                                </td>
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                                                                </td>
+                                                                <td className={`px-6 py-2.5 text-sm font-normal ${
+                                                                    e.status === 'PAID' || e.status === 'CONCILIATED' ? 'text-emerald-600' : 'text-gray-600'}`}>
+                                                                    {e.status === 'PENDING' ? 'Previsto'
+                                                                        : e.status === 'PAID' ? 'Pago'
+                                                                        : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                <>
                                 {/* KPIs — §4: cor semântica por métrica, componente único */}
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                                     <KpiCard shadow={false} size="sm" label="Parcelas" value={parcelas.length}
@@ -2149,6 +2256,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             Use "Recalcular" ou ajuste as parcelas.
                                         </span>
                                     </div>
+                                )}
+                                </>
                                 )}
                             </div>
                         );

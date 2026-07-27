@@ -4,7 +4,7 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil
+    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import {
@@ -158,9 +158,8 @@ const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
     date: 110,
     amount: 130,
     status: 150,
+    actions: 90,
 };
-const STATEMENT_COL_MIN = 80;
-const STATEMENT_COL_MAX = 500;
 
 // Status simples colorido (guia UI/UX seção 8) — sem pílula/fundo/uppercase.
 const STATEMENT_STATUS_LABELS: Partial<Record<BankTransactionStatus, string>> = {
@@ -326,88 +325,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const pendingBankResize = useResizableColumns(DEFAULT_PENDING_BANK_COL_WIDTHS, 'conciliacaoPendentesBankColWidths');
     const pendingInternalResize = useResizableColumns(DEFAULT_PENDING_INTERNAL_COL_WIDTHS, 'conciliacaoPendentesInternalColWidths');
 
-    // ── Redimensionamento de colunas da tabela de Extrato (arrastar borda do cabeçalho) ──
-    const [statementColWidths, setStatementColWidths] = useState<Record<string, number>>(() => {
-        try {
-            const saved = localStorage.getItem('extratoBancarioColWidths');
-            return saved ? JSON.parse(saved) : {};
-        } catch { return {}; }
-    });
-    const statementColResizeRef = useRef<{ colKey: string; startX: number; startW: number } | null>(null);
-    const statementTableRef = useRef<HTMLTableElement>(null);
-    const getStatementColWidth = (key: string) => statementColWidths[key] ?? DEFAULT_STATEMENT_COL_WIDTHS[key] ?? 150;
-    // Largura explícita da tabela = soma das colunas visíveis — nunca w-full com
+    // Redimensionamento de colunas da tabela de Extrato — migrado para o hook
+    // compartilhado em 2026-07-27 (mesma localStorage key 'extratoBancarioColWidths'
+    // do mecanismo próprio anterior, formato idêntico Record<string,number>, então
+    // larguras já salvas pelos usuários continuam válidas). Ganha de graça o que o
+    // mecanismo próprio não tinha: minWidth 100%, "Ações" redimensionável, e o
+    // espaçador ANTES de "Ações" (§6.1.1) — sem ele a borda de "Ações" andaria a
+    // cada redimensionamento, como já corrigido em Clientes/Fornecedores/etc.
+    const statementResize = useResizableColumns(DEFAULT_STATEMENT_COL_WIDTHS, 'extratoBancarioColWidths');
+    // Largura explícita da tabela = soma das colunas visíveis. NUNCA w-full com
     // table-layout:fixed, senão o navegador redistribui espaço entre colunas ao
     // arrastar (bug real documentado em ui_ux_guia_unificado.md §6.1).
     const statementTableTotalWidth = 40 // checkbox
         + STATEMENT_COLUMNS.filter(c => c.key !== 'actions')
-            .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? getStatementColWidth(c.key) : 0), 0)
-        + (tableColumns.visibleColumns.includes('actions') ? 90 : 0);
-
-    const handleStatementColResizeStart = (colKey: string, e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        statementColResizeRef.current = { colKey, startX: e.clientX, startW: getStatementColWidth(colKey) };
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-    };
-
-    const handleStatementColDblClick = (colKey: string) => {
-        setStatementColWidths(prev => {
-            const next = { ...prev };
-            delete next[colKey];
-            localStorage.setItem('extratoBancarioColWidths', JSON.stringify(next));
-            return next;
-        });
-    };
-
-    useEffect(() => {
-        const onMouseMove = (e: MouseEvent) => {
-            const ref = statementColResizeRef.current;
-            if (!ref) return;
-            const delta = e.clientX - ref.startX;
-            const newW = Math.max(STATEMENT_COL_MIN, Math.min(STATEMENT_COL_MAX, ref.startW + delta));
-            if (statementTableRef.current) {
-                const col = statementTableRef.current.querySelector(`col[data-col-key="${ref.colKey}"]`) as HTMLElement | null;
-                if (col) col.style.width = `${newW}px`;
-            }
-        };
-        const onMouseUp = () => {
-            const ref = statementColResizeRef.current;
-            if (!ref) return;
-            let finalW = ref.startW;
-            if (statementTableRef.current) {
-                const col = statementTableRef.current.querySelector(`col[data-col-key="${ref.colKey}"]`) as HTMLElement | null;
-                if (col) finalW = parseInt(col.style.width) || ref.startW;
-            }
-            statementColResizeRef.current = null;
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-            setStatementColWidths(prev => {
-                const next = { ...prev, [ref.colKey]: finalW };
-                localStorage.setItem('extratoBancarioColWidths', JSON.stringify(next));
-                return next;
-            });
-        };
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-        return () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-    }, []);
-
-    const StatementResizeHandle = ({ colKey }: { colKey: string }) => (
-        <div
-            onMouseDown={(e) => handleStatementColResizeStart(colKey, e)}
-            onDoubleClick={() => handleStatementColDblClick(colKey)}
-            onClick={(e) => e.stopPropagation()}
-            className="absolute right-0 top-0 bottom-0 w-[7px] cursor-col-resize z-20 group/resize hover:bg-blue-400/40 active:bg-blue-500/60 transition-colors"
-            title="Arraste para redimensionar (duplo clique para restaurar o padrão)"
-        >
-            <div className="absolute right-0 top-1/4 bottom-1/4 w-px bg-gray-200 group-hover/resize:bg-blue-400" />
-        </div>
-    );
+            .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? statementResize.getWidth(c.key) : 0), 0)
+        + statementResize.getWidth('actions');
 
     const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
         (localStorage.getItem('reconciliation_rules_view_mode') as 'grid' | 'list') || 'list'
@@ -4276,6 +4208,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             onToggleColumn={tableColumns.toggleColumn}
                                             onReset={tableColumns.resetColumns}
                                         />
+                                        {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                            Duplo clique no divisor segue "restaurar padrão". */}
+                                        <button
+                                            onClick={() => statementResize.autoFit()}
+                                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                            title="Ajustar largura das colunas ao conteúdo"
+                                        >
+                                            <MoveHorizontal className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 )}
                                 {activeView === 'pending' && pendentesViewMode === 'list' && (
@@ -4309,15 +4250,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 ) : (
                                     <div>
                                         <div className="overflow-auto max-h-[70vh]">
-                                        <table ref={statementTableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: statementTableTotalWidth }}>
+                                        <table ref={statementResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: statementTableTotalWidth, minWidth: '100%' }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
                                                 {STATEMENT_COLUMNS.filter(c => c.key !== 'actions').map(c => (
                                                     tableColumns.visibleColumns.includes(c.key) && (
-                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${getStatementColWidth(c.key)}px` }} />
+                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${statementResize.getWidth(c.key)}px` }} />
                                                     )
                                                 ))}
-                                                {tableColumns.visibleColumns.includes('actions') && <col style={{ width: '90px' }} />}
+                                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                                <col />
+                                                {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${statementResize.getWidth('actions')}px` }} />}
                                             </colgroup>
                                             <thead>
                                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
@@ -4344,7 +4288,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             onSort={() => bankSortField === 'description' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('description'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
-                                                            <StatementResizeHandle colKey="description" />
+                                                            <statementResize.ResizeHandle colKey="description" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('counterparty') && (
@@ -4354,7 +4298,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
-                                                            <StatementResizeHandle colKey="counterparty" />
+                                                            <statementResize.ResizeHandle colKey="counterparty" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('category') && (
@@ -4364,7 +4308,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
-                                                            <StatementResizeHandle colKey="category" />
+                                                            <statementResize.ResizeHandle colKey="category" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('project') && (
@@ -4374,7 +4318,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             onSort={() => bankSortField === 'project' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('project'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
-                                                            <StatementResizeHandle colKey="project" />
+                                                            <statementResize.ResizeHandle colKey="project" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('costCenter') && (
@@ -4384,7 +4328,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             onSort={() => bankSortField === 'costCenter' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('costCenter'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
-                                                            <StatementResizeHandle colKey="costCenter" />
+                                                            <statementResize.ResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('date') && (
@@ -4394,7 +4338,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
                                                         >
-                                                            <StatementResizeHandle colKey="date" />
+                                                            <statementResize.ResizeHandle colKey="date" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('amount') && (
@@ -4404,16 +4348,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
                                                         >
-                                                            <StatementResizeHandle colKey="amount" />
+                                                            <statementResize.ResizeHandle colKey="amount" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('status') && (
                                                         <SortableHeader colKey="status" label="Status" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
-                                                            <StatementResizeHandle colKey="status" />
+                                                            <statementResize.ResizeHandle colKey="status" />
                                                         </SortableHeader>
                                                     )}
+                                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {tableColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                        <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                            Ações
+                                                            <statementResize.ResizeHandle colKey="actions" />
+                                                        </th>
                                                     )}
                                                 </tr>
                                             </thead>
@@ -4536,6 +4485,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     )}
                                                                 </td>
                                                             )}
+                                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {tableColumns.visibleColumns.includes('actions') && (
                                                                 <td className="px-6 py-2.5 text-right">
                                                                     <ActionIconButton kind="delete" title="Excluir extrato" onClick={() => handleDeleteBankTransactions([tx.id])} />

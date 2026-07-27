@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown,
     Clock, ExternalLink, FileText, Landmark, Loader2, RefreshCw,
-    Search, X, DollarSign, AlertTriangle,
+    Search, X, DollarSign, AlertTriangle, MoveHorizontal,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
 import type { Organization } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
@@ -37,6 +37,11 @@ const CONTAS_COLUMNS: ColumnConfig[] = [
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
 ];
+
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    supplier: 260, origem: 120, valor: 140, vencimento: 150, status: 140, actions: 220,
+};
 
 // F6.2 (piloto do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
 // chips rápidos/campos de período já existentes, não os substitui.
@@ -117,6 +122,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [vencDe, setVencDe] = usePersistedState('contasPagarManagerFilters:vencDe', '');
     const [vencAte, setVencAte] = usePersistedState('contasPagarManagerFilters:vencAte', '');
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarManagerColWidths');
+    // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
+    // w-full/100% junto com table-layout:fixed (§6.1).
+    const tableTotalWidth = 40
+        + (['supplier', 'origem', 'valor', 'vencimento', 'status'] as const)
+            .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'contasPagarManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
@@ -486,6 +498,15 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                     onToggleColumn={tableColumns.toggleColumn}
                                     onReset={tableColumns.resetColumns}
                                 />
+                                {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                    Duplo clique no divisor segue "restaurar padrão". */}
+                                <button
+                                    onClick={() => cols.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
                             </div>
                         </div>
 
@@ -493,8 +514,9 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
                     {/* Tabela — sem bg/border/rounded/overflow-hidden próprios: já está
                         dentro do card acoplado toolbar+conteúdo (§5.2, ver abertura acima).
-                        Sem redimensionamento de colunas (§6.1, opcional): só 5 colunas de
-                        dado, e a mais variável (Fornecedor/Documento) já usa truncate. */}
+                        Redimensionamento de colunas (§6.1) aplicado — decisão revertida em
+                        2026-07-27 a pedido do usuário; a nota antiga ("só 5 colunas, a mais
+                        variável já usa truncate") documentava a justificativa da época. */}
                     <div>
                         {loading ? (
                             <div className="text-center py-12">
@@ -516,7 +538,19 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             /* §6.5 — lista pode crescer (todas as contas em aberto, multi-org):
                                container rola em altura própria e o thead fica fixo no topo. */
                             <div className="overflow-auto max-h-[70vh]">
-                            <table className="w-full text-sm text-left border-collapse">
+                            <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                                <colgroup>
+                                    <col style={{ width: '40px' }} /> {/* checkbox */}
+                                    {tableColumns.visibleColumns.includes('supplier') && <col data-col-key="supplier" style={{ width: `${cols.getWidth('supplier')}px` }} />}
+                                    {tableColumns.visibleColumns.includes('origem') && <col data-col-key="origem" style={{ width: `${cols.getWidth('origem')}px` }} />}
+                                    {tableColumns.visibleColumns.includes('valor') && <col data-col-key="valor" style={{ width: `${cols.getWidth('valor')}px` }} />}
+                                    {tableColumns.visibleColumns.includes('vencimento') && <col data-col-key="vencimento" style={{ width: `${cols.getWidth('vencimento')}px` }} />}
+                                    {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                    {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                        borda de "Ações" não andar a cada redimensionamento. */}
+                                    <col />
+                                    <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                </colgroup>
                                 {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
                                     força uppercase internamente por padrão. */}
                                 <thead>
@@ -540,8 +574,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-6 py-2 border-r border-gray-100"
-                                            />
+                                                className="text-left px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <cols.ResizeHandle colKey="supplier" />
+                                            </SortableHeader>
                                         )}
                                         {tableColumns.visibleColumns.includes('origem') && (
                                             <SortableHeader
@@ -552,8 +588,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-6 py-2 border-r border-gray-100"
-                                            />
+                                                className="text-left px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <cols.ResizeHandle colKey="origem" />
+                                            </SortableHeader>
                                         )}
                                         {tableColumns.visibleColumns.includes('valor') && (
                                             <SortableHeader
@@ -564,8 +602,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-right px-6 py-2 border-r border-gray-100"
-                                            />
+                                                className="text-right px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <cols.ResizeHandle colKey="valor" />
+                                            </SortableHeader>
                                         )}
                                         {tableColumns.visibleColumns.includes('vencimento') && (
                                             <SortableHeader
@@ -576,8 +616,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-6 py-2 border-r border-gray-100"
-                                            />
+                                                className="text-center px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <cols.ResizeHandle colKey="vencimento" />
+                                            </SortableHeader>
                                         )}
                                         {tableColumns.visibleColumns.includes('status') && (
                                             <SortableHeader
@@ -588,10 +630,17 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-6 py-2 border-r border-gray-100"
-                                            />
+                                                className="text-center px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <cols.ResizeHandle colKey="status" />
+                                            </SortableHeader>
                                         )}
-                                        <th className="text-right px-6 py-2 text-sm font-semibold text-gray-500">Ações</th>
+                                        {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                        <th aria-hidden="true" className="border-r border-gray-100" />
+                                        <th className="text-right px-6 py-2 relative overflow-hidden text-sm font-semibold text-gray-500">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -646,6 +695,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                         <StatusBadge inv={inv} />
                                                     </td>
                                                 )}
+                                                {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 <td className="px-6 py-2.5">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                         {/* Ver documento — botão-ícone padrão §9.2 (<ActionIconButton>) */}
@@ -705,7 +756,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                         <td className="px-6 py-2 text-right text-sm font-medium text-gray-900">
                                             {formatMoney(filtered.filter(i => !['paid', 'rejected'].includes(i.status)).reduce((s, i) => s + (i.amount ?? 0), 0))}
                                         </td>
-                                        <td colSpan={3} className="px-6 py-2 text-sm text-gray-400 text-right">total a pagar (filtrado)</td>
+                                        {/* colSpan 4: vencimento + status + espaçador + ações */}
+                                        <td colSpan={4} className="px-6 py-2 text-sm text-gray-400 text-right">total a pagar (filtrado)</td>
                                     </tr>
                                 </tfoot>
                             </table>

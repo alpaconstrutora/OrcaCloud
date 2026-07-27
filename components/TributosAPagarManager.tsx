@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown,
     Loader2, Plus, RefreshCw, Search, X, Filter,
-    DollarSign, AlertTriangle, Landmark,
+    DollarSign, AlertTriangle, Landmark, MoveHorizontal,
 } from 'lucide-react';
 import { taxPayableService } from '../services/taxPayableService';
 import { taxSettingsService } from '../services/taxSettingsService';
 import type { TaxPayable, TaxPayableEffectiveStatus } from '../types/financial';
 import type { Organization } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
@@ -43,6 +43,12 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    party_name: 160, category: 130, client_name: 160, empreendimento_name: 180,
+    description: 200, due_date: 140, amount: 130, status: 130, actions: 220,
+};
 
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'party_name', label: 'Tributo', type: 'text' },
@@ -286,6 +292,13 @@ export default function TributosAPagarManager({ organizationId, organizations, o
     // Regime de reconhecimento da org — define o rótulo do seletor (competência × recebimento)
     const [regime, setRegime] = useState<'CAIXA' | 'COMPETENCIA'>('CAIXA');
     const tableColumns = useTableColumns(TRIBUTO_COLUMNS, 'tributosPagarManagerColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'tributosPagarManagerColWidths');
+    // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
+    // w-full/100% junto com table-layout:fixed (§6.1).
+    const tableTotalWidth = 40
+        + (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'due_date', 'amount', 'status'] as const)
+            .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tributosPagarManagerFilters:advanced');
 
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -736,6 +749,15 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                Duplo clique no divisor segue "restaurar padrão". */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
 
@@ -776,7 +798,22 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                         </div>
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-sm text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                <col style={{ width: '40px' }} /> {/* checkbox */}
+                                {tableColumns.visibleColumns.includes('party_name') && <col data-col-key="party_name" style={{ width: `${cols.getWidth('party_name')}px` }} />}
+                                {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
+                                {tableColumns.visibleColumns.includes('client_name') && <col data-col-key="client_name" style={{ width: `${cols.getWidth('client_name')}px` }} />}
+                                {tableColumns.visibleColumns.includes('empreendimento_name') && <col data-col-key="empreendimento_name" style={{ width: `${cols.getWidth('empreendimento_name')}px` }} />}
+                                {tableColumns.visibleColumns.includes('description') && <col data-col-key="description" style={{ width: `${cols.getWidth('description')}px` }} />}
+                                {tableColumns.visibleColumns.includes('due_date') && <col data-col-key="due_date" style={{ width: `${cols.getWidth('due_date')}px` }} />}
+                                {tableColumns.visibleColumns.includes('amount') && <col data-col-key="amount" style={{ width: `${cols.getWidth('amount')}px` }} />}
+                                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                <col />
+                                {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                            </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -792,45 +829,66 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                     {tableColumns.visibleColumns.includes('party_name') && (
                                         <SortableHeader label="Tributo" colKey="party_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="party_name" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('category') && (
                                         <SortableHeader label="Origem" colKey="category" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="category" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('client_name') && (
                                         <SortableHeader label="Cliente" colKey="client_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="client_name" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('empreendimento_name') && (
                                         <SortableHeader label="Empreendimento" colKey="empreendimento_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="empreendimento_name" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('description') && (
                                         <SortableHeader label="Descrição" colKey="description" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="description" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('due_date') && (
                                         <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="due_date" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('amount') && (
                                         <SortableHeader label="Valor" colKey="amount" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="amount" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
                                         <SortableHeader label="Status" colKey="status" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="status" />
+                                        </SortableHeader>
                                     )}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-2 text-left text-table-header font-semibold text-gray-500">Ações</th>
+                                        <th className="px-6 py-2 text-left relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
                                     )}
                                 </tr>
                             </thead>
@@ -894,6 +952,8 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                                                     <StatusBadge status={r.effective_status} />
                                                 </td>
                                             )}
+                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 last:border-r-0">
                                                 <div className="flex items-center gap-1.5">

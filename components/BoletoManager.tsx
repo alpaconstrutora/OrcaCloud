@@ -3,7 +3,7 @@ import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
-    Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2,
+    Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2, MoveHorizontal,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { useConfirm } from './ui/confirm';
@@ -16,7 +16,7 @@ import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import { useStore } from '../store/useStore';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatDateBR, formatDateTimeBR } from './ui/Format';
 import Button from './ui/Button';
@@ -71,6 +71,12 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     // única relevante nesta lista) — guia §9.1. Um botão "Ver Detalhes" extra
     // seria um segundo controle para a mesma ação do clique na linha.
 ];
+
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    numero: 100, beneficiario: 220, obra: 160, centro_custo: 160, valor: 130,
+    vencimento: 130, status: 130, capturado_em: 150, capturado_por: 160,
+};
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
 // filtros rápidos/campos de período já existentes, não os substitui.
@@ -274,6 +280,8 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     <p className="truncate">{b.created_by_email ?? '—'}</p>
                 </td>
             )}
+            {/* espaçador — casa com o <col /> sem largura, no final (ver colgroup) */}
+            <td aria-hidden="true"></td>
         </tr>
     );
 });
@@ -296,6 +304,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [excluindoLote, setExcluindoLote] = useState(false);
     const confirm = useConfirm();
     const tableColumns = useTableColumns(BOLETO_COLUMNS, 'boletoManagerColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'boletoManagerColWidths');
+    // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
+    // w-full/100% junto com table-layout:fixed (§6.1). Sem coluna "Ações" (§9.1) —
+    // o espaçador vai no FINAL, não antes de nada (não há coluna fixa pra ancorar).
+    const tableTotalWidth = 40
+        + (['numero', 'beneficiario', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por'] as const)
+            .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0);
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'boletoManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
@@ -824,6 +839,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                Duplo clique no divisor segue "restaurar padrão". */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                             <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         </>
                     )}
@@ -992,7 +1016,23 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     horizontal (§15). Sem bg/border/rounded/shadow própria: já está
                     dentro do card acoplado toolbar+conteúdo (ver abertura acima). */
                 <div className="overflow-auto max-h-[70vh]">
-                    <table className="w-full text-left border-collapse">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                        <colgroup>
+                            <col style={{ width: '40px' }} /> {/* checkbox */}
+                            {tableColumns.visibleColumns.includes('numero') && <col data-col-key="numero" style={{ width: `${cols.getWidth('numero')}px` }} />}
+                            {tableColumns.visibleColumns.includes('beneficiario') && <col data-col-key="beneficiario" style={{ width: `${cols.getWidth('beneficiario')}px` }} />}
+                            {tableColumns.visibleColumns.includes('obra') && <col data-col-key="obra" style={{ width: `${cols.getWidth('obra')}px` }} />}
+                            {tableColumns.visibleColumns.includes('centro_custo') && <col data-col-key="centro_custo" style={{ width: `${cols.getWidth('centro_custo')}px` }} />}
+                            {tableColumns.visibleColumns.includes('valor') && <col data-col-key="valor" style={{ width: `${cols.getWidth('valor')}px` }} />}
+                            {tableColumns.visibleColumns.includes('vencimento') && <col data-col-key="vencimento" style={{ width: `${cols.getWidth('vencimento')}px` }} />}
+                            {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                            {tableColumns.visibleColumns.includes('capturado_em') && <col data-col-key="capturado_em" style={{ width: `${cols.getWidth('capturado_em')}px` }} />}
+                            {tableColumns.visibleColumns.includes('capturado_por') && <col data-col-key="capturado_por" style={{ width: `${cols.getWidth('capturado_por')}px` }} />}
+                            {/* espaçador NO FINAL (§6.1.1 não se aplica: sem coluna "Ações" fixa
+                                pra ancorar — §9.1, o clique na linha já é a ação). Absorve a folga
+                                quando a soma das colunas é menor que o container. */}
+                            <col />
+                        </colgroup>
                         {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
                             força uppercase internamente por padrão; classes de estilo no <tr>. */}
                         <thead>
@@ -1015,8 +1055,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 w-20"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="numero" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('beneficiario') && (
                                     <SortableHeader
@@ -1027,8 +1069,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="beneficiario" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('obra') && (
                                     <SortableHeader
@@ -1039,8 +1083,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="obra" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('centro_custo') && (
                                     <SortableHeader
@@ -1051,8 +1097,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="centro_custo" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('valor') && (
                                     <SortableHeader
@@ -1063,8 +1111,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="valor" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('vencimento') && (
                                     <SortableHeader
@@ -1075,8 +1125,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-center"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="vencimento" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('status') && (
                                     <SortableHeader
@@ -1087,8 +1139,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-center"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="status" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('capturado_em') && (
                                     <SortableHeader
@@ -1099,8 +1153,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="capturado_em" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('capturado_por') && (
                                     <SortableHeader
@@ -1111,9 +1167,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100"
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey="capturado_por" />
+                                    </SortableHeader>
                                 )}
+                                {/* espaçador — casa com o <col /> sem largura, no final */}
+                                <th aria-hidden="true" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -1145,7 +1205,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
-                                <td colSpan={4} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
+                                {/* colSpan 5: vencimento + status + capturado_em + capturado_por + espaçador final */}
+                                <td colSpan={5} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
                             </tr>
                         </tfoot>
                     </table>

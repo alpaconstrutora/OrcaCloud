@@ -79,9 +79,13 @@ export const electricalProjectService = {
     // PLANS
     async createPlan(item: Partial<OpuraElectricalPlan>): Promise<OpuraElectricalPlan> {
         const dbItem = mapPlanToSnakeCase(item);
+        console.log('[electricalProjectService] createPlan payload:', dbItem);
         const { data, error } = await supabase.from('opura_electrical_plans')
             .insert(dbItem).select().single();
-        if (error) throw new Error(`Erro ao criar planta: ${error.message}`);
+        if (error) {
+            console.error('[electricalProjectService] createPlan error:', error);
+            throw new Error(`Erro ao criar planta: ${error.message}`);
+        }
         return mapPlanToCamelCase(data);
     },
 

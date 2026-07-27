@@ -7,12 +7,14 @@ import { electricalProjectService } from '../../services/electricalProjectServic
 interface ElectricalProjectsViewProps {
   organizationId?: string;
   projectId?: string;
+  obras?: { id: string; name: string }[];
+  setProjectId?: (id: string | null) => void;
   onChangeView: (view: string) => void;
   // This helps to pass the selected electrical project ID to the editor
   onSelectProject: (id: string) => void;
 }
 
-const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organizationId, projectId, onChangeView, onSelectProject }) => {
+const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organizationId, projectId, obras, setProjectId, onChangeView, onSelectProject }) => {
   const [projects, setProjects] = useState<OpuraElectricalProject[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -86,6 +88,18 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {(!projectId && obras && obras.length > 0) && (
+            <select
+              className="h-10 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={projectId || ''}
+              onChange={(e) => setProjectId?.(e.target.value)}
+            >
+              <option value="">Selecione uma Obra...</option>
+              {obras.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
           <Button variant="primary" onClick={handleCreate} className="flex items-center gap-2 rounded-[1rem]">
             <Plus className="w-4 h-4" />
             Novo Projeto Elétrico

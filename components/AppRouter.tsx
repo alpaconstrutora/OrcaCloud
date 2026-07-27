@@ -411,6 +411,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <ElectricalProjectsView
             organizationId={activeOrganizationId || undefined}
             projectId={projectId || undefined}
+            obras={typedProjects}
+            setProjectId={setProjectId}
             onChangeView={setActiveView}
             onSelectProject={setActiveElectricalProjectId}
           />

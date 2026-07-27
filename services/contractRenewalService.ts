@@ -134,6 +134,10 @@ export interface ExpiringRental extends Contract {
     renewed: boolean;
     /** Número do contrato-filho, quando existe. */
     renewed_by?: string;
+    /** Id do contrato-filho — alimenta o "excluir renovação" da fila. */
+    renewed_child_id?: string;
+    /** Última prorrogação por aditivo deste contrato, se houver. */
+    last_addendum?: { id: string; number: string };
 }
 
 // ─── Interno ──────────────────────────────────────────────────────────────
@@ -658,18 +662,37 @@ export const contractRenewalService = {
 
         // Contratos já renovados continuam na lista, mas marcados — some o botão
         // Renovar e aparece o número do filho. Esconder confundia ("sumiu?").
+        const ids = rows.map(r => r.id);
         const { data: children } = await supabase
             .from('contracts')
-            .select('parent_contract_id, number')
-            .in('parent_contract_id', rows.map(r => r.id));
+            .select('id, parent_contract_id, number')
+            .in('parent_contract_id', ids);
         const childByParent = new Map(
-            (children ?? []).map(c => [c.parent_contract_id as string, c.number as string]));
+            (children ?? []).map(c => [c.parent_contract_id as string, c]));
+
+        // Última prorrogação por aditivo de cada contrato — é o que o botão
+        // "excluir renovação" da fila desfaz quando a renovação foi por aditivo
+        // (aí não há contrato-filho, o próprio contrato foi estendido).
+        const { data: adds } = await supabase
+            .from('contract_addendums')
+            .select('id, number, contract_id, status, created_at')
+            .in('contract_id', ids)
+            .not('new_start_date', 'is', null)
+            .neq('status', 'Cancelado')
+            .order('created_at', { ascending: false });
+        const lastAddendum = new Map<string, { id: string; number: string }>();
+        (adds ?? []).forEach(a => {
+            const k = a.contract_id as string;
+            if (!lastAddendum.has(k)) lastAddendum.set(k, { id: a.id as string, number: a.number as string });
+        });
 
         return rows.map(r => ({
             ...r,
             days_until_end: r.end_date ? daysBetween(today, r.end_date) : null,
             renewed: childByParent.has(r.id),
-            renewed_by: childByParent.get(r.id),
+            renewed_by: childByParent.get(r.id)?.number as string | undefined,
+            renewed_child_id: childByParent.get(r.id)?.id as string | undefined,
+            last_addendum: lastAddendum.get(r.id),
         }));
     },
 

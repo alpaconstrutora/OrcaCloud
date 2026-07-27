@@ -5,6 +5,7 @@ import {
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { useConfirm } from '../ui/confirm';
+import ActionIconButton from '../ui/ActionIconButton';
 import ContractReajusteDue from '../ContractReajusteDue';
 import { contractRenewalService, ExpiringRental } from '../../services/contractRenewalService';
 import { Client } from '../../types';
@@ -139,6 +140,43 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
             onChanged?.('Contrato reaberto.');
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao reabrir o contrato.');
+        } finally {
+            setClosingId(null);
+        }
+    };
+
+    /**
+     * Exclui a renovação errada direto da fila — sem precisar abrir a negociação.
+     *
+     * Duas formas de renovação, dois jeitos de desfazer:
+     *  • por ADITIVO  → o próprio contrato foi estendido: apaga as parcelas do
+     *    período novo e devolve vigência e valor anteriores;
+     *  • por CONTRATO NOVO → exclui o contrato-filho e reabre este.
+     * Em ambos, parcela já paga ou conciliada bloqueia (o serviço recusa).
+     */
+    const handleExcluirRenovacao = async (r: ExpiringRental) => {
+        const porAditivo = !r.renewed && !!r.last_addendum;
+        const alvo = porAditivo ? `o aditivo ${r.last_addendum!.number}` : `a renovação ${r.renewed_by}`;
+        const ok = await confirm({
+            title: `Excluir ${alvo}?`,
+            message: porAditivo
+                ? 'A vigência do contrato volta ao que era antes da prorrogação e as parcelas do período novo são apagadas.'
+                : 'O contrato criado pela renovação é excluído com as parcelas dele, e este volta a ficar Ativo com as parcelas restauradas.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        setClosingId(r.id);
+        try {
+            if (porAditivo) {
+                await contractRenewalService.undoAddendumRenewal(r.last_addendum!.id);
+            } else if (r.renewed_child_id) {
+                await contractRenewalService.undoRenewal(r.renewed_child_id);
+            }
+            await loadData();
+            onChanged?.('Renovação excluída.');
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Erro ao excluir a renovação.');
         } finally {
             setClosingId(null);
         }
@@ -388,6 +426,19 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                                     >
                                                         Renovar
                                                     </button>
+                                                    {/* Excluir renovação — aparece só quando existe
+                                                        renovação a desfazer neste contrato: um aditivo
+                                                        de prorrogação, ou um contrato-filho criado por
+                                                        "novo contrato". */}
+                                                    {(r.renewed || r.last_addendum) && (
+                                                        <ActionIconButton
+                                                            kind="delete"
+                                                            title={r.renewed
+                                                                ? `Excluir a renovação ${r.renewed_by}`
+                                                                : `Excluir o aditivo ${r.last_addendum!.number}`}
+                                                            onClick={() => handleExcluirRenovacao(r)}
+                                                        />
+                                                    )}
                                                     <button
                                                         onClick={() => handleClose(r)}
                                                         disabled={closingId === r.id}

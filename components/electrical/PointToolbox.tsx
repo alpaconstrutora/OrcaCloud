@@ -69,11 +69,37 @@ export default function PointToolbox({
             <div className="p-4 border-b border-slate-100">
                 <h2 className="font-bold text-slate-800 flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-500" />
-                    Biblioteca de Pontos
+                    Biblioteca
                 </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                    Selecione um ponto e clique no ambiente para inserir.
+                <p className="text-xs text-slate-500 mt-1 mb-4">
+                    Ferramentas e Pontos Elétricos.
                 </p>
+
+                <div className="space-y-1 mb-4 pb-4 border-b border-slate-100">
+                    <button
+                        onClick={() => { setTool('select'); onSelectToolboxItem(null); }}
+                        className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 transition-colors ${
+                            tool === 'select' ? 'bg-slate-100 text-slate-900 ring-1 ring-slate-200 font-medium' : 'hover:bg-slate-50 text-slate-700'
+                        }`}
+                    >
+                        <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 bg-slate-100 text-slate-600">
+                            <span className="text-sm">👆</span>
+                        </div>
+                        <span className="text-sm">Selecionar / Mover</span>
+                    </button>
+                    <button
+                        onClick={() => { setTool('draw_room'); onSelectToolboxItem(null); }}
+                        className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 transition-colors ${
+                            tool === 'draw_room' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 font-medium' : 'hover:bg-slate-50 text-slate-700'
+                        }`}
+                    >
+                        <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
+                            <span className="text-sm">📐</span>
+                        </div>
+                        <span className="text-sm">Desenhar Sala</span>
+                    </button>
+                </div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pontos Elétricos</h3>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2">

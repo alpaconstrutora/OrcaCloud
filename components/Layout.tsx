@@ -465,7 +465,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
   const commandInputRef = React.useRef<HTMLInputElement>(null);
-  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates','area-engine'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates','area-engine','electrical-projects','electrical-editor'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const [isOrganizacaoOpen, setIsOrganizacaoOpen] = React.useState(() => activeView === 'organization');
@@ -949,6 +949,7 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="reports" label="Relatórios" icon={FileText} />
                     <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />
                     <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
+                    <DropdownItem id="electrical-projects" label="Projetos Elétricos" icon={Zap} />
                     <DropdownItem id="project-settings" label="Dados Técnicos" icon={Calculator} />
                     <DropdownItem id="eng-obra-types" label="Tipos de Obra" icon={Layers} />
                     <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, AlertTriangle, History } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
+import { useConfirm } from '../ui/confirm';
 import { contractRenewalService, RenewalMode, RenewalPreview } from '../../services/contractRenewalService';
 import { contractService } from '../../services/contractService';
 import { Contract, ContractAddendum } from '../../types';
@@ -53,6 +55,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [preview, setPreview] = useState<RenewalPreview | null>(null);
+    const confirm = useConfirm();
 
     // Formulário do período novo
     const [mode, setMode] = useState<RenewalMode>('ADITIVO');
@@ -114,6 +117,60 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
     }, [vigente.id, vigente.end_date, endDate, mode]);
 
     useEffect(() => { if (!loading) carregarPreview(); }, [loading, carregarPreview]);
+
+    /**
+     * Desfaz uma prorrogação por aditivo: apaga as parcelas do período novo,
+     * devolve `end_date` e valor anteriores e marca o aditivo como Cancelado.
+     */
+    const handleDesfazerAditivo = async (ad: ContractAddendum) => {
+        const ok = await confirm({
+            title: `Desfazer o aditivo ${ad.number}?`,
+            message: `A vigência volta para ${fmtDate(ad.previous_end_date)} e as `
+                + `${ad.installments_generated ?? 0} parcela(s) do período prorrogado são apagadas. `
+                + 'Se alguma já tiver sido paga ou conciliada, a operação é recusada.',
+            variant: 'danger',
+            confirmLabel: 'Desfazer',
+        });
+        if (!ok) return;
+        setSaving(true);
+        try {
+            await contractRenewalService.undoAddendumRenewal(ad.id);
+            await load();
+            onChanged?.();
+            onNotify(`Aditivo ${ad.number} desfeito.`, 'success');
+        } catch (e) {
+            onNotify(e instanceof Error ? e.message : 'Erro ao desfazer o aditivo.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    /**
+     * Desfaz uma renovação por contrato novo: exclui o contrato-filho e as
+     * parcelas dele, e reabre o anterior regenerando o que havia sido cortado.
+     */
+    const handleDesfazerContrato = async (filho: Contract) => {
+        const ok = await confirm({
+            title: `Desfazer a renovação ${filho.number}?`,
+            message: 'O contrato criado pela renovação é excluído com as parcelas dele, e o contrato '
+                + 'anterior volta a ficar Ativo com as parcelas restauradas. '
+                + 'Se alguma parcela do contrato novo já tiver sido paga, a operação é recusada.',
+            variant: 'danger',
+            confirmLabel: 'Desfazer',
+        });
+        if (!ok) return;
+        setSaving(true);
+        try {
+            await contractRenewalService.undoRenewal(filho.id);
+            await load();
+            onChanged?.();
+            onNotify(`Renovação ${filho.number} desfeita.`, 'success');
+        } catch (e) {
+            onNotify(e instanceof Error ? e.message : 'Erro ao desfazer a renovação.', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const handleRenovar = async () => {
         if (!preview) return;
@@ -341,7 +398,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                     {addendums.map(ad => (
                         <div key={ad.id} className="flex items-start gap-3 p-4 rounded-2xl border border-gray-100">
                             <History className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <p className="text-sm font-bold text-gray-800">
                                     Aditivo {ad.number}
                                     <span className={`ml-2 text-sm font-normal ${
@@ -357,12 +414,23 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                                     {ad.installments_generated ? ` · ${ad.installments_generated} parcela(s) geradas` : ''}
                                 </p>
                             </div>
+                            {/* Desfazer só faz sentido enquanto a renovação não virou
+                                dinheiro: o serviço recusa se alguma parcela do período
+                                novo já foi paga ou conciliada, e a mensagem dele é
+                                mostrada como está. */}
+                            {ad.status !== 'Cancelado' && (
+                                <ActionIconButton
+                                    kind="delete"
+                                    title="Desfazer esta prorrogação"
+                                    onClick={() => handleDesfazerAditivo(ad)}
+                                />
+                            )}
                         </div>
                     ))}
                     {chain.filter(c => c.id !== contract.id).map(c => (
                         <div key={c.id} className="flex items-start gap-3 p-4 rounded-2xl border border-gray-100">
                             <RefreshCw className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <p className="text-sm font-bold text-gray-800">
                                     Contrato {c.number}
                                     <span className="ml-2 text-sm font-normal text-gray-500">{c.status}</span>
@@ -371,6 +439,15 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                                     {fmtDate(c.start_date)} a {fmtDate(c.end_date)} · {fmtCur(c.current_value)}
                                 </p>
                             </div>
+                            {/* Só o ÚLTIMO da cadeia pode ser desfeito: excluir um do meio
+                                deixaria o seguinte apontando para um pai inexistente. */}
+                            {c.id === vigente.id && c.parent_contract_id && (
+                                <ActionIconButton
+                                    kind="delete"
+                                    title="Desfazer esta renovação e reabrir o contrato anterior"
+                                    onClick={() => handleDesfazerContrato(c)}
+                                />
+                            )}
                         </div>
                     ))}
                 </div>

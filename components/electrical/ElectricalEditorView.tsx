@@ -269,6 +269,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         </div>
 
         <div className="flex items-center gap-3">
+          <label className="cursor-pointer inline-flex items-center justify-center rounded-xl font-black uppercase tracking-widest transition-all active:scale-95 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 h-9 px-4 text-sm gap-2">
+            <Upload className="w-4 h-4 mr-2 text-slate-500" />
+            Planta
+            <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+          </label>
           <Button variant="secondary" className="rounded-[1rem]" onClick={handleExportDXF}>
             <Download className="w-4 h-4 mr-2" />
             DXF

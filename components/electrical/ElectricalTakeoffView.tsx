@@ -4,8 +4,8 @@ import { electricalProjectService } from '../../services/electricalProjectServic
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { RefreshCw, Download, Calculator } from 'lucide-react';
-import { useToast } from '../../hooks/use-toast';
-import { formatCurrency } from '../../lib/utils';
+import { useToast } from '../../hooks/useToast';
+import { formatCurrency } from '../../utils/financialMath';
 
 interface ElectricalTakeoffViewProps {
   version: OpuraElectricalVersion;
@@ -16,7 +16,7 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
   const [takeoffs, setTakeoffs] = useState<OpuraElectricalTakeoff[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const { toast } = useToast();
+  const { showToast } = useToast();
 
   const loadTakeoffs = async () => {
     setLoading(true);
@@ -24,11 +24,7 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
       const data = await electricalProjectService.listTakeoffs(version.id);
       setTakeoffs(data);
     } catch (error: any) {
-      toast({
-        title: 'Erro',
-        description: error.message,
-        variant: 'destructive',
-      });
+      showToast(`Erro ao carregar: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -43,16 +39,9 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
     try {
       const data = await electricalProjectService.generateTakeoffs(version.id, organizationId);
       setTakeoffs(data);
-      toast({
-        title: 'Sucesso',
-        description: 'Quantitativos extraídos e orçados com sucesso!',
-      });
+      showToast('Quantitativos extraídos e orçados com sucesso!', 'success');
     } catch (error: any) {
-      toast({
-        title: 'Erro ao gerar',
-        description: error.message,
-        variant: 'destructive',
-      });
+      showToast(`Erro ao extrair: ${error.message}`, 'error');
     } finally {
       setGenerating(false);
     }

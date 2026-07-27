@@ -6,7 +6,8 @@ import {
   OpuraElectricalRoom,
   OpuraElectricalPoint,
   OpuraElectricalBoard,
-  OpuraElectricalCircuit
+  OpuraElectricalCircuit,
+  OpuraElectricalTakeoff
 } from '../types/electrical';
 
 export const electricalProjectService = {
@@ -204,6 +205,101 @@ export const electricalProjectService = {
             .insert(dbItem).select().single();
         if (error) throw new Error(`Erro ao criar circuito: ${error.message}`);
         return mapCircuitToCamelCase(data);
+    },
+
+    // TAKEOFFS (Quantitativos e Orçamento)
+    async listTakeoffs(versionId: string): Promise<OpuraElectricalTakeoff[]> {
+        const { data, error } = await supabase.from('opura_electrical_takeoffs')
+            .select('*').eq('version_id', versionId).order('created_at', { ascending: true });
+        if (error) throw new Error(`Erro ao listar quantitativos: ${error.message}`);
+        return (data || []).map(mapTakeoffToCamelCase);
+    },
+
+    async generateTakeoffs(versionId: string, organizationId: string): Promise<OpuraElectricalTakeoff[]> {
+        // 1. Fetch all project entities
+        const boards = await this.listBoards(versionId);
+        
+        let allCircuits: OpuraElectricalCircuit[] = [];
+        for (const bd of boards) {
+            const cts = await this.listCircuits(bd.id);
+            allCircuits = [...allCircuits, ...cts];
+        }
+
+        const plans = await supabase.from('opura_electrical_plans').select('id').eq('version_id', versionId);
+        let allRooms: OpuraElectricalRoom[] = [];
+        if (plans.data && plans.data.length > 0) {
+            for (const plan of plans.data) {
+                const rms = await this.listRoomsByPlan(plan.id);
+                allRooms = [...allRooms, ...rms];
+            }
+        }
+
+        let allPoints: OpuraElectricalPoint[] = [];
+        if (allRooms.length > 0) {
+            allPoints = await this.listPointsByRooms(allRooms.map(r => r.id));
+        }
+
+        // 2. Count items
+        const takeoffMap: Record<string, { desc: string; type: string; qty: number; unit: string; cost: number }> = {};
+
+        // Boards
+        boards.forEach(b => {
+            const key = `board_${b.boardType || 'QDC'}`;
+            if (!takeoffMap[key]) takeoffMap[key] = { desc: `Quadro de Distribuição (${b.boardType || 'QDC'})`, type: 'quadro', qty: 0, unit: 'un', cost: 150.00 };
+            takeoffMap[key].qty += 1;
+            
+            if (b.mainBreakerCapacity) {
+                const bkKey = `breaker_main_${b.mainBreakerCapacity}`;
+                if (!takeoffMap[bkKey]) takeoffMap[bkKey] = { desc: `Disjuntor Geral DIN ${b.mainBreakerCapacity}A`, type: 'disjuntor', qty: 0, unit: 'un', cost: 45.00 };
+                takeoffMap[bkKey].qty += 1;
+            }
+        });
+
+        // Circuits (Breakers)
+        allCircuits.forEach(c => {
+            const cap = c.breakerCapacity || 20;
+            const bkKey = `breaker_${cap}`;
+            if (!takeoffMap[bkKey]) takeoffMap[bkKey] = { desc: `Disjuntor DIN ${cap}A (Circuito)`, type: 'disjuntor', qty: 0, unit: 'un', cost: 18.50 };
+            takeoffMap[bkKey].qty += 1;
+        });
+
+        // Points (Outlets, Switches, Light fixtures)
+        allPoints.forEach(p => {
+            const type = p.pointType || 'tomada_baixa';
+            if (!takeoffMap[type]) {
+                let desc = type.replace(/_/g, ' ');
+                desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+                let cost = 15.00;
+                if (type.includes('interruptor')) cost = 12.00;
+                if (type.includes('iluminacao')) cost = 35.00;
+                
+                takeoffMap[type] = { desc: `Ponto de ${desc}`, type: 'ponto', qty: 0, unit: 'un', cost };
+            }
+            takeoffMap[type].qty += 1;
+        });
+
+        // 3. Clear existing takeoffs for this version
+        await supabase.from('opura_electrical_takeoffs').delete().eq('version_id', versionId);
+
+        // 4. Save new takeoffs
+        const takeoffsToInsert = Object.values(takeoffMap).map(t => mapTakeoffToSnakeCase({
+            organizationId,
+            versionId,
+            itemType: t.type,
+            description: t.desc,
+            quantity: t.qty,
+            unit: t.unit,
+            unitCost: t.cost,
+            wasteFactor: 0.05
+        }));
+
+        if (takeoffsToInsert.length > 0) {
+            const { data, error } = await supabase.from('opura_electrical_takeoffs').insert(takeoffsToInsert).select();
+            if (error) throw new Error(`Erro ao salvar quantitativos: ${error.message}`);
+            return (data || []).map(mapTakeoffToCamelCase);
+        }
+
+        return [];
     }
 };
 
@@ -243,4 +339,6 @@ const mapBoardToSnakeCase = toSnakeCaseObject;
 const mapBoardToCamelCase = toCamelCaseObject;
 const mapCircuitToSnakeCase = toSnakeCaseObject;
 const mapCircuitToCamelCase = toCamelCaseObject;
+const mapTakeoffToSnakeCase = toSnakeCaseObject;
+const mapTakeoffToCamelCase = toCamelCaseObject;
 

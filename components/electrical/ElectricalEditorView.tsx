@@ -8,6 +8,7 @@ import RoomSidebar from './RoomSidebar';
 import PointToolbox, { ElectricalPointType, POINT_TYPES } from './PointToolbox';
 import PointPropertiesSidebar from './PointPropertiesSidebar';
 import LoadScheduleView from './LoadScheduleView';
+import { ElectricalTakeoffView } from './ElectricalTakeoffView';
 import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint } from '../../types/electrical';
 
 interface ElectricalEditorViewProps {
@@ -29,7 +30,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
 
   // Editor State
-  const [activeTab, setActiveTab] = useState<'planta' | 'cargas'>('planta');
+  const [viewMode, setViewMode] = useState<'drawing' | 'schedule' | 'takeoff'>('drawing');
   const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point'>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -225,18 +226,30 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           </div>
         </div>
         
-        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-lg">
-          <button 
-            onClick={() => setActiveTab('planta')}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'planta' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          <button
+            onClick={() => setViewMode('drawing')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              viewMode === 'drawing' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
             Planta
           </button>
-          <button 
-            onClick={() => setActiveTab('cargas')}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'cargas' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          <button
+            onClick={() => setViewMode('schedule')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              viewMode === 'schedule' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
             Quadro de Cargas
+          </button>
+          <button
+            onClick={() => setViewMode('takeoff')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              viewMode === 'takeoff' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Orçamento
           </button>
         </div>
 
@@ -248,12 +261,18 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         </div>
       </div>
 
-      {activeTab === 'cargas' ? (
+      {viewMode === 'schedule' && (
         <LoadScheduleView 
           versionId={version!.id} 
           points={points} 
         />
-      ) : (
+      )}
+
+      {viewMode === 'takeoff' && (
+        <ElectricalTakeoffView version={version!} organizationId={project!.organizationId} />
+      )}
+
+      {viewMode === 'drawing' && (
         /* Workspace area */
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar (Toolbox) */}

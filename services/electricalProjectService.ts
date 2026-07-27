@@ -128,6 +128,14 @@ export const electricalProjectService = {
     },
     
     // POINTS
+    async listPointsByRooms(roomIds: string[]): Promise<OpuraElectricalPoint[]> {
+        if (!roomIds.length) return [];
+        const { data, error } = await supabase.from('opura_electrical_points')
+            .select('*').in('room_id', roomIds);
+        if (error) throw new Error(`Erro ao listar pontos: ${error.message}`);
+        return data || [];
+    },
+
     async listPointsByRoom(roomId: string): Promise<OpuraElectricalPoint[]> {
         const { data, error } = await supabase.from('opura_electrical_points')
             .select('*').eq('room_id', roomId);

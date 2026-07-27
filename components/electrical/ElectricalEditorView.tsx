@@ -5,7 +5,9 @@ import { Stage, Layer, Image as KonvaImage, Line, Circle } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { electricalProjectService } from '../../services/electricalProjectService';
 import RoomSidebar from './RoomSidebar';
-import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom } from '../../types/electrical';
+import PointToolbox, { ElectricalPointType, POINT_TYPES } from './PointToolbox';
+import PointPropertiesSidebar from './PointPropertiesSidebar';
+import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint } from '../../types/electrical';
 
 interface ElectricalEditorViewProps {
   organizationId: string;
@@ -19,14 +21,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [version, setVersion] = useState<OpuraElectricalVersion | null>(null);
   const [plan, setPlan] = useState<OpuraElectricalPlan | null>(null);
   const [rooms, setRooms] = useState<OpuraElectricalRoom[]>([]);
+  const [points, setPoints] = useState<OpuraElectricalPoint[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
 
   // Editor State
-  const [tool, setTool] = useState<'select' | 'draw_room'>('select');
+  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point'>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
+  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+  const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
 
@@ -51,6 +56,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           const r = await electricalProjectService.listRoomsByPlan(p.id);
           setRooms(r);
           
+          if (r.length > 0) {
+            const pts = await electricalProjectService.listPointsByRooms(r.map(room => room.id));
+            setPoints(pts);
+          }
+
           if (p.fileUrl) {
             loadImage(p.fileUrl);
           }
@@ -102,16 +112,66 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
   };
 
-  const handleStageClick = (e: any) => {
-    if (tool !== 'draw_room') return;
+  const isPointInPolygon = (point: {x: number, y: number}, polygon: number[]) => {
+    let isInside = false;
+    for (let i = 0, j = polygon.length - 2; i < polygon.length; j = i, i += 2) {
+      const xi = polygon[i], yi = polygon[i+1];
+      const xj = polygon[j], yj = polygon[j+1];
+      const intersect = ((yi > point.y) !== (yj > point.y))
+          && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+      if (intersect) isInside = !isInside;
+    }
+    return isInside;
+  };
 
+  const handleStageClick = async (e: any) => {
     // Get click position relative to stage
     const stage = e.target.getStage();
     const pointerPosition = stage.getRelativePointerPosition();
     if (!pointerPosition) return;
 
-    // Adiciona x e y ao array atual do polígono
-    setCurrentPolygon([...currentPolygon, pointerPosition.x, pointerPosition.y]);
+    if (tool === 'draw_room') {
+      setCurrentPolygon([...currentPolygon, pointerPosition.x, pointerPosition.y]);
+      return;
+    }
+
+    if (tool === 'add_point' && selectedToolboxItem) {
+      const clickedRoom = rooms.find(r => r.polygonPoints && isPointInPolygon(pointerPosition, r.polygonPoints));
+      if (!clickedRoom) {
+          alert('Você deve clicar dentro de um ambiente demarcado para inserir o ponto.');
+          return;
+      }
+
+      const pointDef = POINT_TYPES.find(p => p.id === selectedToolboxItem);
+      if (!pointDef) return;
+
+      try {
+          const newPoint = await electricalProjectService.createPoint({
+              organizationId: organizationId,
+              roomId: clickedRoom.id,
+              pointType: selectedToolboxItem,
+              powerW: pointDef.defaultPower,
+              heightM: pointDef.defaultHeight,
+              voltage: 0,
+              canvasX: pointerPosition.x,
+              canvasY: pointerPosition.y
+          });
+          setPoints([...points, newPoint]);
+          setTool('select');
+          setSelectedToolboxItem(null);
+          setSelectedPointId(newPoint.id);
+      } catch (error) {
+          console.error(error);
+          alert('Erro ao inserir ponto.');
+      }
+      return;
+    }
+
+    if (tool === 'select') {
+      if (e.target === stage || e.target.getClassName() === 'Image') {
+         setSelectedPointId(null);
+      }
+    }
   };
 
   const finishPolygon = async () => {
@@ -197,6 +257,16 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       </div>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* LEFT SIDEBAR (TOOLBOX) */}
+        {plan?.fileUrl && (
+          <PointToolbox 
+            selectedToolboxItem={selectedToolboxItem}
+            onSelectToolboxItem={setSelectedToolboxItem}
+            tool={tool}
+            setTool={setTool}
+          />
+        )}
+
         {/* CANVAS AREA */}
         <div className="flex-1 bg-slate-100 relative overflow-hidden" ref={containerRef}>
           {!plan?.fileUrl && !uploading && (
@@ -224,7 +294,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                       width={stageSize.width} 
                       height={stageSize.height}
                       onClick={handleStageClick}
-                      className={tool === 'draw_room' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                      className={tool === 'draw_room' || tool === 'add_point' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
                     >
                       <Layer>
                         {/* Imagem de Fundo */}
@@ -274,6 +344,40 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             }}
                            />
                         )}
+
+                        {/* Pontos Elétricos */}
+                        {points.map(pt => {
+                          const def = POINT_TYPES.find(d => d.id === pt.pointType);
+                          const isSelected = selectedPointId === pt.id;
+                          return (
+                            <Circle
+                               key={pt.id}
+                               x={pt.canvasX || 0}
+                               y={pt.canvasY || 0}
+                               radius={isSelected ? 10 : 8}
+                               fill={def?.color || '#94a3b8'}
+                               stroke={isSelected ? '#2563eb' : 'white'}
+                               strokeWidth={2}
+                               shadowColor="black"
+                               shadowBlur={5}
+                               shadowOpacity={0.2}
+                               onMouseEnter={(e) => {
+                                 const container = e.target.getStage()?.container();
+                                 if (container) container.style.cursor = 'pointer';
+                               }}
+                               onMouseLeave={(e) => {
+                                 const container = e.target.getStage()?.container();
+                                 if (container) container.style.cursor = (tool === 'draw_room' || tool === 'add_point') ? 'crosshair' : 'grab';
+                               }}
+                               onClick={(e) => {
+                                 e.cancelBubble = true;
+                                 if (tool === 'select') {
+                                   setSelectedPointId(pt.id);
+                                 }
+                               }}
+                            />
+                          );
+                        })}
                       </Layer>
                     </Stage>
                   </TransformComponent>
@@ -290,19 +394,43 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           )}
         </div>
 
-        {/* RIGHT SIDEBAR (ROOMS) */}
-        <div className="w-80 bg-white border-l border-slate-200 shadow-xl z-10">
-          <RoomSidebar 
-            rooms={rooms}
-            onDeleteRoom={async (id) => {
-              try {
-                await electricalProjectService.deleteRoom(id);
-                setRooms(rooms.filter(r => r.id !== id));
-              } catch (e) {
-                alert('Erro ao deletar.');
-              }
-            }}
-          />
+        {/* RIGHT SIDEBAR (ROOMS OR PROPERTIES) */}
+        <div className="w-80 bg-white border-l border-slate-200 shadow-xl z-10 flex flex-col">
+          {selectedPointId && points.find(p => p.id === selectedPointId) ? (
+            <PointPropertiesSidebar
+              point={points.find(p => p.id === selectedPointId)!}
+              onUpdate={async (updates) => {
+                try {
+                    const updated = await electricalProjectService.updatePoint(selectedPointId, updates);
+                    setPoints(points.map(p => p.id === selectedPointId ? updated : p));
+                } catch (err) {
+                    alert('Erro ao atualizar ponto.');
+                }
+              }}
+              onDelete={async () => {
+                try {
+                    await electricalProjectService.deletePoint(selectedPointId);
+                    setPoints(points.filter(p => p.id !== selectedPointId));
+                    setSelectedPointId(null);
+                } catch (err) {
+                    alert('Erro ao deletar ponto.');
+                }
+              }}
+              onClose={() => setSelectedPointId(null)}
+            />
+          ) : (
+            <RoomSidebar 
+              rooms={rooms}
+              onDeleteRoom={async (id) => {
+                try {
+                  await electricalProjectService.deleteRoom(id);
+                  setRooms(rooms.filter(r => r.id !== id));
+                } catch (e) {
+                  alert('Erro ao deletar.');
+                }
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

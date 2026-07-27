@@ -33,7 +33,14 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
   };
 
   const handleCreate = async () => {
-    if (!organizationId || !projectId) return;
+    if (!organizationId) {
+      alert('Você precisa selecionar uma organização.');
+      return;
+    }
+    if (!projectId) {
+      alert('Você precisa selecionar uma obra/projeto no topo da tela antes de criar um projeto elétrico.');
+      return;
+    }
     
     const name = prompt('Nome do projeto elétrico (ex: Elétrica Torre A):');
     if (!name) return;

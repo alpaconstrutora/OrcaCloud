@@ -56,7 +56,12 @@ const PlanSidebar: React.FC<PlanSidebarProps> = ({
           Plantas / Páginas
         </h2>
         <button 
-          onClick={onCreateEmptyPlan}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onCreateEmptyPlan();
+          }}
           className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
           title="Nova Camada Vazia"
         >

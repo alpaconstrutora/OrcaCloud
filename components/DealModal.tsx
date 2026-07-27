@@ -389,6 +389,39 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * partir da própria base) e, se informados, Forma de Pagamento e/ou Tipo
      * de Pagamento (só quando o usuário escolheu algo além de "Não alterar"
      * no modal — `undefined` aqui significa "não mexe nesse campo"). */
+    /**
+     * Pergunta se o Valor do Fechamento deve acompanhar o desconto.
+     *
+     * O desconto muda o que será COBRADO, não o preço combinado — por isso a
+     * decisão é do usuário: desconto comercial (o fechamento cai) × condição de
+     * pagamento (o preço fica, e a soma das parcelas passa a divergir de
+     * propósito, o que a faixa âmbar da aba Parcelas já sinaliza).
+     *
+     * ⚠️ O Valor do Fechamento é a SOMA DAS UNIDADES (aba Unidade, campo
+     * read-only). Aceitar aqui desacopla os dois: o total do negócio deixa de
+     * bater com o rateio por unidade. Por isso a pergunta diz isso.
+     */
+    const perguntarCorrigirFechamento = async (liquido: number) => {
+        const atual = formData.value || 0;
+        if (Math.abs(liquido - atual) < 0.01) return;
+        const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+        const ok = await confirm({
+            title: 'Corrigir o Valor do Fechamento?',
+            message: `Com o desconto, a soma das parcelas passa a ser ${fmt(liquido)}, e o Valor do Fechamento é ${fmt(atual)}. `
+                + `Atualizar o fechamento para ${fmt(liquido)}? `
+                + 'O total deixa de ser a soma das unidades — mantenha como está se o desconto for só condição de pagamento.',
+            variant: 'default',
+            confirmLabel: 'Atualizar fechamento',
+            cancelLabel: 'Manter valor',
+        });
+        if (ok) setFormData(prev => ({ ...prev, value: Number(liquido.toFixed(2)) }));
+    };
+
+    /** Soma líquida do plano (parcelas com desconto aplicado + entrada). */
+    const somaLiquidaPlano = (insts?: PaymentInstallment[]) =>
+        (insts ?? formData.custom_installments ?? []).reduce((acc, i) => acc + i.value, 0)
+        + (formData.down_payment || 0);
+
     const applyBulkInstallmentEdit = (patch: {
         discountType: 'VALUE' | 'PERCENT' | null;
         discountAmount: number;
@@ -418,6 +451,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         });
         setShowInstallmentLoteModal(false);
         setSelectedInstallmentIds(new Set());
+        // setFormData acima é assíncrono; o cálculo aqui reproduz o resultado
+        // para não perguntar com o valor antigo.
+        const liquido = (formData.custom_installments || []).reduce((acc, i) => {
+            if (!selectedInstallmentIds.has(i.id)) return acc + i.value;
+            const base = i.originalValue ?? i.value;
+            const desc = patch.discountType === 'PERCENT' ? (base * patch.discountAmount) / 100
+                : patch.discountType === 'VALUE' ? patch.discountAmount : 0;
+            return acc + Math.max(0, base - desc);
+        }, 0) + (formData.down_payment || 0);
+        void perguntarCorrigirFechamento(liquido);
     };
 
     // Ponte Negociação → Contrato formal. Venda (domain='VENDAS') gera um contrato
@@ -2426,17 +2469,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                                 discountType: type || undefined,
                                                                                 discountAmount: type ? inst.discountAmount : undefined
                                                                             });
+                                                                            // Tirar o desconto também mexe no líquido — mesma pergunta.
+                                                                            if (!type) {
+                                                                                const base = inst.originalValue ?? inst.value;
+                                                                                void perguntarCorrigirFechamento(
+                                                                                    somaLiquidaPlano() - inst.value + base);
+                                                                            }
                                                                         }}
                                                                         className={`${CELL} cursor-pointer`}>
                                                                         <option value="">Sem desconto</option>
                                                                         <option value="VALUE">R$</option>
                                                                         <option value="PERCENT">%</option>
                                                                     </select>
+                                                                    {/* A pergunta sobre corrigir o fechamento sai no BLUR, não a
+                                                                        cada tecla — perguntar a cada dígito abriria o modal no
+                                                                        meio da digitação. */}
                                                                     {inst.discountType && (
                                                                         <input
                                                                             type="number" min="0" step="0.01"
                                                                             value={inst.discountAmount ?? ''}
                                                                             onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
+                                                                            onBlur={() => void perguntarCorrigirFechamento(somaLiquidaPlano())}
                                                                             placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
                                                                             className={`${CELL} w-24`}
                                                                         />

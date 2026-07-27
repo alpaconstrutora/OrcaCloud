@@ -53,8 +53,8 @@ export const POINT_TYPES: PointToolboxItem[] = [
 interface PointToolboxProps {
     selectedToolboxItem: ElectricalPointType | null;
     onSelectToolboxItem: (type: ElectricalPointType | null) => void;
-    tool: 'select' | 'draw_room' | 'add_point';
-    setTool: (tool: 'select' | 'draw_room' | 'add_point') => void;
+    tool: 'select' | 'draw_room' | 'add_point' | 'calibrate';
+    setTool: (tool: 'select' | 'draw_room' | 'add_point' | 'calibrate') => void;
 }
 
 export default function PointToolbox({

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -34,8 +34,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   // Editor State
   const [viewMode, setViewMode] = useState<'drawing' | 'schedule' | 'takeoff'>('drawing');
-  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point'>('select');
+  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate'>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
+  const [calibrationPoints, setCalibrationPoints] = useState<number[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
@@ -172,6 +173,71 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     const stage = e.target.getStage();
     const pointerPosition = stage.getRelativePointerPosition();
     if (!pointerPosition) return;
+
+    if (tool === 'calibrate') {
+      const newPoints = [...calibrationPoints, pointerPosition.x, pointerPosition.y];
+      setCalibrationPoints(newPoints);
+      
+      if (newPoints.length === 4) {
+        // Two points collected
+        const dx = newPoints[2] - newPoints[0];
+        const dy = newPoints[3] - newPoints[1];
+        const pxDistance = Math.sqrt(dx * dx + dy * dy);
+        
+        setTimeout(async () => {
+          const realDistanceStr = prompt('Qual a distância real em metros entre esses dois pontos? (ex: 0.80)');
+          if (realDistanceStr) {
+            const realDistance = parseFloat(realDistanceStr.replace(',', '.'));
+            if (!isNaN(realDistance) && realDistance > 0 && plan) {
+              const newScaleFactor = pxDistance / realDistance;
+              
+              try {
+                // Update Plan
+                const updatedPlan = await electricalProjectService.updatePlan(plan.id, { scaleFactor: newScaleFactor });
+                setPlan(updatedPlan);
+                
+                // Recalculate Rooms
+                const updatedRooms = [];
+                for (const room of rooms) {
+                  const pts = room.polygonPoints as number[];
+                  if (!pts || pts.length < 6) {
+                    updatedRooms.push(room);
+                    continue;
+                  }
+                  
+                  let areaPx = 0;
+                  let perimeterPx = 0;
+                  for (let i = 0; i < pts.length; i += 2) {
+                    const x1 = pts[i];
+                    const y1 = pts[i + 1];
+                    const x2 = pts[(i + 2) % pts.length];
+                    const y2 = pts[(i + 3) % pts.length];
+                    areaPx += (x1 * y2 - x2 * y1);
+                    perimeterPx += Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+                  }
+                  areaPx = Math.abs(areaPx / 2);
+                  
+                  const areaSqm = Number((areaPx / (newScaleFactor * newScaleFactor)).toFixed(2));
+                  const perimeterM = Number((perimeterPx / newScaleFactor).toFixed(2));
+                  
+                  const updatedRoom = await electricalProjectService.updateRoom(room.id, { areaSqm, perimeterM });
+                  updatedRooms.push(updatedRoom);
+                }
+                
+                setRooms(updatedRooms);
+                showToast('Escala calibrada e ambientes recalculados com sucesso!', 'success');
+              } catch (err) {
+                console.error(err);
+                showToast('Erro ao calibrar escala.', 'error');
+              }
+            }
+          }
+          setCalibrationPoints([]);
+          setTool('select');
+        }, 100);
+      }
+      return;
+    }
 
     if (tool === 'draw_room') {
       setCurrentPolygon([...currentPolygon, pointerPosition.x, pointerPosition.y]);
@@ -385,6 +451,36 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
                   <React.Fragment>
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white p-2 rounded-xl shadow-lg border border-slate-200 z-10">
+                      <div className="flex bg-slate-100 p-1 rounded-xl">
+                        <button
+                          onClick={() => { setTool('select'); setCurrentPolygon([]); setCalibrationPoints([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'select' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          <MousePointer2 className="w-4 h-4" />
+                          Mover
+                        </button>
+                        <button
+                          onClick={() => { setTool('draw_room'); setCurrentPolygon([]); setCalibrationPoints([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'draw_room' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          <Square className="w-4 h-4" />
+                          Desenhar Ambiente
+                        </button>
+                        <button
+                          onClick={() => { setTool('calibrate'); setCurrentPolygon([]); setCalibrationPoints([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'calibrate' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title="Calibrar escala da planta"
+                        >
+                          <Ruler className="w-4 h-4" />
+                          Calibrar Escala
+                        </button>
+                      </div>
                       <button 
                         onClick={() => zoomOut(0.2)} 
                         className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
@@ -413,7 +509,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         width={stageSize.width} 
                         height={stageSize.height}
                         onClick={handleStageClick}
-                        className={tool === 'draw_room' || tool === 'add_point' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                        className={tool === 'draw_room' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
                       >
                         <Layer>
                           {/* Imagem de Fundo */}
@@ -519,6 +615,33 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                               />
                             );
                           })}
+                          {/* Pontos de calibração */}
+                          {calibrationPoints.length >= 2 && (
+                            <Group>
+                              <Circle
+                                x={calibrationPoints[0]}
+                                y={calibrationPoints[1]}
+                                radius={4}
+                                fill="#f59e0b"
+                              />
+                              {calibrationPoints.length === 4 && (
+                                <>
+                                  <Circle
+                                    x={calibrationPoints[2]}
+                                    y={calibrationPoints[3]}
+                                    radius={4}
+                                    fill="#f59e0b"
+                                  />
+                                  <Line
+                                    points={calibrationPoints}
+                                    stroke="#f59e0b"
+                                    strokeWidth={2}
+                                    dash={[5, 5]}
+                                  />
+                                </>
+                              )}
+                            </Group>
+                          )}
                         </Layer>
                       </Stage>
                     </TransformComponent>

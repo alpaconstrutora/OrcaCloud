@@ -603,18 +603,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             );
                           })}
                           
-                          {/* Current Wall Preview */}
-                          {tool === 'draw_wall' && currentWall.length > 0 && (
-                             <Line 
-                                ref={wallPreviewRef}
-                                points={currentWall} 
-                                stroke="#3b82f6" 
-                                strokeWidth={plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10} 
-                                opacity={0.6} 
-                                lineCap="square" 
-                                lineJoin="miter" 
-                             />
-                          )}
+                          {/* Removed preview from here to separate layer */}
                           
                           {rooms.map((room) => {
                             const pts = room.polygonPoints as number[];
@@ -742,6 +731,21 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                 </>
                               )}
                             </Group>
+                          )}
+                        </Layer>
+                        <Layer>
+                          {/* Current Wall Preview */}
+                          {tool === 'draw_wall' && currentWall.length > 0 && (
+                             <Line 
+                                ref={wallPreviewRef}
+                                points={currentWall} 
+                                stroke="#3b82f6" 
+                                strokeWidth={plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10} 
+                                opacity={0.6} 
+                                lineCap="square" 
+                                lineJoin="miter" 
+                                listening={false}
+                             />
                           )}
                         </Layer>
                       </Stage>

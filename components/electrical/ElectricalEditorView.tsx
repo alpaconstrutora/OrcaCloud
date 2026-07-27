@@ -43,7 +43,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
-  const [mousePos, setMousePos] = useState<{x: number, y: number} | null>(null);
+  const wallPreviewRef = useRef<any>(null);
   
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -184,10 +184,12 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   };
 
   const handleStageMouseMove = (e: any) => {
+    if (tool !== 'draw_wall' || currentWall.length === 0) return;
     const stage = e.target.getStage();
     const pointerPosition = stage.getRelativePointerPosition();
-    if (pointerPosition) {
-      setMousePos(pointerPosition);
+    if (pointerPosition && wallPreviewRef.current) {
+      wallPreviewRef.current.points([...currentWall, pointerPosition.x, pointerPosition.y]);
+      wallPreviewRef.current.getLayer().batchDraw();
     }
   };
 
@@ -604,7 +606,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           {/* Current Wall Preview */}
                           {tool === 'draw_wall' && currentWall.length > 0 && (
                              <Line 
-                                points={mousePos ? [...currentWall, mousePos.x, mousePos.y] : currentWall} 
+                                ref={wallPreviewRef}
+                                points={currentWall} 
                                 stroke="#3b82f6" 
                                 strokeWidth={plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10} 
                                 opacity={0.6} 

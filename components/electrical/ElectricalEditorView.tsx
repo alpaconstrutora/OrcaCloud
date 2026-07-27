@@ -76,14 +76,31 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   }, []);
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
+    const handleKey = async (e: KeyboardEvent) => {
+      // Prevent deleting if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedWallId) {
+          e.preventDefault();
+          try {
+            await electricalProjectService.deleteWall(selectedWallId);
+            setWalls(prev => prev.filter(w => w.id !== selectedWallId));
+            setSelectedWallId(null);
+            showToast('Parede excluída');
+          } catch(err) {
+            showToast('Erro ao excluir parede', 'error');
+          }
+        }
+      }
+
       if (tool === 'draw_wall' && (e.key === 'Enter' || e.key === 'Escape')) {
         finishWall();
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [tool, currentWall, plan, organizationId]);
+  }, [tool, currentWall, plan, organizationId, selectedWallId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -523,6 +540,24 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         </div>
 
         <div className="flex items-center gap-3">
+          {selectedWallId && (
+            <button
+              onClick={async () => {
+                try {
+                  await electricalProjectService.deleteWall(selectedWallId);
+                  setWalls(walls.filter(w => w.id !== selectedWallId));
+                  setSelectedWallId(null);
+                  showToast('Parede excluída com sucesso');
+                } catch (e) {
+                  showToast('Erro ao excluir parede', 'error');
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
+            >
+              <Trash2 className="w-4 h-4" />
+              Excluir Parede
+            </button>
+          )}
           <label className="cursor-pointer inline-flex items-center justify-center rounded-xl font-black uppercase tracking-widest transition-all active:scale-95 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 h-9 px-4 text-sm gap-2">
             <Upload className="w-4 h-4 mr-2 text-slate-500" />
             Planta

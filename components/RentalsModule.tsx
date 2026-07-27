@@ -1416,7 +1416,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 <RentalRenewals
                     organizationId={effectiveOrganizationId}
                     clients={clients}
-                    onRenewed={() => { loadData(); notify('Contrato renovado com sucesso.'); }}
                     onChanged={(message) => { loadData(); notify(message); }}
                     onOpenContract={openDealForContract}
                 />

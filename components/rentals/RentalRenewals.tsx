@@ -6,9 +6,8 @@ import {
 import { KpiCard } from '../ui/KpiCard';
 import { useConfirm } from '../ui/confirm';
 import ContractReajusteDue from '../ContractReajusteDue';
-import RenewContractSheet from './RenewContractSheet';
 import { contractRenewalService, ExpiringRental } from '../../services/contractRenewalService';
-import { Client, Contract } from '../../types';
+import { Client } from '../../types';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Contrato', sortable: true },
@@ -52,19 +51,17 @@ interface Props {
     /** Pode vir vazio em "Todas as organizações" — a leitura NÃO é bloqueada (REGRA #5). */
     organizationId?: string;
     clients?: Client[];
-    onRenewed?: (child: Contract) => void;
     /** Avisa o módulo pai para recarregar, com a mensagem do que aconteceu. */
     onChanged?: (message: string) => void;
     /** Abre o detalhe do contrato (aditivos, documentos, assinatura). */
     onOpenContract?: (contractId: string) => void;
 }
 
-const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenewed, onChanged, onOpenContract }) => {
+const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract }) => {
     const [rows, setRows] = useState<ExpiringRental[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [faixa, setFaixa] = useState<Faixa>('all');
-    const [renewingId, setRenewingId] = useState<string | null>(null);
     const [closingId, setClosingId] = useState<string | null>(null);
     const confirm = useConfirm();
     const [searchTerm, setSearchTerm] = usePersistedState('rentalRenewals:search', '');
@@ -380,7 +377,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                                                         lugar onde se mexe no contrato. A fila aqui
                                                         só mostra o que está vencendo. */}
                                                     <button
-                                                        onClick={() => (onOpenContract ? onOpenContract(r.id) : setRenewingId(r.id))}
+                                                        onClick={() => onOpenContract?.(r.id)}
                                                         disabled={r.renewed || !r.end_date}
                                                         title={
                                                             r.renewed ? `Já renovado pelo contrato ${r.renewed_by}`
@@ -415,19 +412,6 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onRenew
                 Um contrato pode precisar de reajuste sem estar perto do fim da vigência. */}
             <ContractReajusteDue organizationId={organizationId || ''} />
 
-            <RenewContractSheet
-                open={Boolean(renewingId)}
-                contractId={renewingId}
-                onClose={() => setRenewingId(null)}
-                onRenewed={(r) => {
-                    loadData();
-                    if (r.mode === 'ADITIVO') {
-                        onChanged?.('Aditivo de prorrogação gerado. Abra o contrato para emitir e assinar o documento.');
-                    } else if (r.child) {
-                        onRenewed?.(r.child);
-                    }
-                }}
-            />
         </div>
     );
 };

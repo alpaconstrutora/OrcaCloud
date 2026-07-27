@@ -331,6 +331,20 @@ export const contractRenewalService = {
         const number = preview.nextAddendumNumber ?? await contractService.nextAddendumNumber(parent.id);
         const mesmoValor = Math.abs(preview.newValue - preview.currentValue) < 0.01;
 
+        // Mudanças de condição no período renovado (periodicidade, dia de
+        // vencimento, índice). Precisam entrar no CONTRATO antes da aprovação:
+        // é o contrato que o gerador de parcelas lê para montar os vencimentos.
+        const mudancas: Record<string, unknown> = {};
+        if (opts.overrides?.billing_cycle && opts.overrides.billing_cycle !== parent.billing_cycle) {
+            mudancas.billing_cycle = opts.overrides.billing_cycle;
+        }
+        if (opts.overrides?.due_day != null && opts.overrides.due_day !== parent.due_day) {
+            mudancas.due_day = opts.overrides.due_day;
+        }
+        if (opts.overrides?.reajuste_index && opts.overrides.reajuste_index !== parent.reajuste_index) {
+            mudancas.reajuste_index = opts.overrides.reajuste_index;
+        }
+
         const addendum = await contractService.createAddendum({
             contract_id: parent.id,
             organization_id: parent.organization_id,
@@ -353,6 +367,13 @@ export const contractRenewalService = {
             reajuste_fator: preview.fator,
             notes: opts.notes,
         } as Omit<ContractAddendum, 'id' | 'created_at' | 'status' | 'approved_at'>);
+
+        // Aplica as mudanças de condição ANTES de aprovar — o gerador de
+        // parcelas lê ciclo e dia de vencimento do contrato.
+        if (Object.keys(mudancas).length > 0) {
+            const { error: errMud } = await supabase.from('contracts').update(mudancas).eq('id', parent.id);
+            if (errMud) throw errMud;
+        }
 
         if (opts.autoApprove !== false) {
             await contractService.approveAddendum(addendum.id, 'Renovação');

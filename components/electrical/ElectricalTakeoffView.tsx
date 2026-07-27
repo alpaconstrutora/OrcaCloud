@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OpuraElectricalVersion, OpuraElectricalTakeoff } from '../../types/electrical';
 import { electricalProjectService } from '../../services/electricalProjectService';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
-import { Button } from '../ui/button';
+import { Button } from '../ui/Button';
 import { RefreshCw, Download, Calculator } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
 import { formatCurrency } from '../../utils/financialMath';
@@ -76,12 +75,12 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
         </div>
 
         <div className="grid grid-cols-3 gap-6">
-          <Card className="rounded-[1.5rem] shadow-sm border-slate-200/60 bg-white col-span-2">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">Lista de Materiais</CardTitle>
-              <CardDescription>Itens quantificados automaticamente pelo sistema.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div className="rounded-[1.5rem] shadow-sm border border-slate-200/60 bg-white col-span-2 overflow-hidden">
+            <div className="p-6 pb-4">
+              <h3 className="text-lg font-semibold leading-none tracking-tight">Lista de Materiais</h3>
+              <p className="text-sm text-slate-500 mt-1">Itens quantificados automaticamente pelo sistema.</p>
+            </div>
+            <div className="p-6 pt-0">
               {takeoffs.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <Calculator className="w-12 h-12 mx-auto text-slate-300 mb-3" />
@@ -117,27 +116,27 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
                   </table>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           <div className="space-y-6">
-            <Card className="rounded-[1.5rem] shadow-sm border-slate-200/60 bg-gradient-to-br from-indigo-50 to-white">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-indigo-600 font-medium uppercase tracking-wider">Custo Total Estimado</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="rounded-[1.5rem] shadow-sm border border-slate-200/60 bg-gradient-to-br from-indigo-50 to-white overflow-hidden">
+              <div className="p-6 pb-2">
+                <h3 className="text-sm text-indigo-600 font-medium uppercase tracking-wider">Custo Total Estimado</h3>
+              </div>
+              <div className="p-6 pt-0">
                 <div className="text-4xl font-bold text-slate-900 tracking-tight">
                   {formatCurrency(totalCost)}
                 </div>
                 <p className="text-sm text-slate-500 mt-2">Custo direto de materiais sem BDI. Fiação e infraestrutura não inclusos nesta versão.</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="rounded-[1.5rem] shadow-sm border-slate-200/60">
-              <CardHeader>
-                <CardTitle className="text-lg">Ações</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <div className="rounded-[1.5rem] shadow-sm border border-slate-200/60 bg-white overflow-hidden">
+              <div className="p-6 pb-4">
+                <h3 className="text-lg font-semibold leading-none tracking-tight">Ações</h3>
+              </div>
+              <div className="p-6 pt-0 space-y-3">
                 <Button variant="outline" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
                   <Download className="w-4 h-4 mr-2 text-slate-500" />
                   Exportar Planilha
@@ -145,8 +144,8 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
                 <Button variant="outline" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
                   Enviar para Suprimentos
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
 

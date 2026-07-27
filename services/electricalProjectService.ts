@@ -247,7 +247,7 @@ function mapPlanToSnakeCase(item: Partial<OpuraElectricalPlan>): any {
     return {
         ...item,
         ...(item.versionId !== undefined && { version_id: item.versionId }),
-        ...(item.imageUrl !== undefined && { image_url: item.imageUrl }),
+        ...(item.fileUrl !== undefined && { file_url: item.fileUrl }),
         ...(item.createdAt !== undefined && { created_at: item.createdAt }),
     };
 }
@@ -256,7 +256,7 @@ function mapPlanToCamelCase(row: any): OpuraElectricalPlan {
     return {
         ...row,
         versionId: row.version_id,
-        imageUrl: row.image_url,
+        fileUrl: row.file_url,
         createdAt: row.created_at,
     };
 }

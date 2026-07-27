@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X } from 'lucide-react';
 import Button from '../ui/Button';
-import { Stage, Layer, Image as KonvaImage, Line, Circle } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { electricalProjectService } from '../../services/electricalProjectService';
 import { exportElectricalService } from '../../services/exportElectricalService';
@@ -419,20 +419,42 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           {/* Imagem de Fundo */}
                           <KonvaImage image={imageObj} />
                           
-                          {/* Ambientes já criados */}
                           {rooms.map((room) => {
                             const pts = room.polygonPoints as number[];
                             if (!pts || pts.length < 6) return null;
+                            
+                            // Calcula centro da bounding box para colocar o texto
+                            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                            for (let i = 0; i < pts.length; i += 2) {
+                              if (pts[i] < minX) minX = pts[i];
+                              if (pts[i] > maxX) maxX = pts[i];
+                              if (pts[i + 1] < minY) minY = pts[i + 1];
+                              if (pts[i + 1] > maxY) maxY = pts[i + 1];
+                            }
+                            const centerX = minX + (maxX - minX) / 2;
+                            const centerY = minY + (maxY - minY) / 2;
+
                             return (
-                              <Line
-                                key={room.id}
-                                points={pts}
-                                fill="rgba(59, 130, 246, 0.2)"
-                                stroke="#3b82f6"
-                                strokeWidth={2}
-                                closed
-                                tension={0}
-                              />
+                              <Group key={room.id}>
+                                <Line
+                                  points={pts}
+                                  fill="rgba(59, 130, 246, 0.2)"
+                                  stroke="#3b82f6"
+                                  strokeWidth={2}
+                                  closed
+                                  tension={0}
+                                />
+                                <Text
+                                  x={centerX - 50}
+                                  y={centerY - 20}
+                                  text={`${room.name}\n${room.areaSqm || 0} m² | ${room.perimeterM || 0} m`}
+                                  fontSize={14}
+                                  fill="#1e40af"
+                                  fontStyle="bold"
+                                  align="center"
+                                  width={100}
+                                />
+                              </Group>
                             );
                           })}
 

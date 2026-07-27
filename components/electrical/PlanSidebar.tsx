@@ -8,6 +8,7 @@ interface PlanSidebarProps {
   onSelectPlan: (id: string) => void;
   onDeletePlan: (id: string) => void;
   onRenamePlan: (id: string, newName: string) => void;
+  onCreateEmptyPlan: () => void;
 }
 
 const PlanSidebar: React.FC<PlanSidebarProps> = ({ 
@@ -15,7 +16,8 @@ const PlanSidebar: React.FC<PlanSidebarProps> = ({
   activePlanId, 
   onSelectPlan, 
   onDeletePlan, 
-  onRenamePlan 
+  onRenamePlan,
+  onCreateEmptyPlan 
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -53,6 +55,13 @@ const PlanSidebar: React.FC<PlanSidebarProps> = ({
           <Layers className="w-5 h-5 text-blue-600" />
           Plantas / Páginas
         </h2>
+        <button 
+          onClick={onCreateEmptyPlan}
+          className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+          title="Nova Camada Vazia"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
       </div>
       
       <div className="flex-1 overflow-y-auto p-2">

@@ -970,6 +970,23 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                   plans={plans}
                   activePlanId={activePlanId}
                   onSelectPlan={setActivePlanId}
+                  onCreateEmptyPlan={async () => {
+                    try {
+                      if (!version) return;
+                      const newPlan = await electricalProjectService.createPlan({
+                        organizationId,
+                        versionId: version.id,
+                        fileUrl: null, // empty layer
+                        floorName: `Camada Vazia ${plans.length + 1}`,
+                        scaleFactor: 100
+                      });
+                      setPlans([...plans, newPlan]);
+                      setActivePlanId(newPlan.id);
+                      showToast('Camada vazia criada com sucesso!');
+                    } catch (e) {
+                      showToast('Erro ao criar camada', 'error');
+                    }
+                  }}
                   onDeletePlan={async (id) => {
                     try {
                       await electricalProjectService.deletePlan(id);

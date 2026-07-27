@@ -17,7 +17,8 @@ import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
-import { contractService } from '../services/contractService';
+import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
+import { contractRenewalService } from '../services/contractRenewalService';
 import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
@@ -29,6 +30,25 @@ import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato';
+
+/** Data BR por split — `new Date(iso)` retrocede um dia em UTC-3. */
+const fmtDateBR = (iso?: string) => {
+    if (!iso) return '—';
+    const [y, m, d] = iso.slice(0, 10).split('-');
+    return `${d}/${m}/${y}`;
+};
+
+/** Alvo da geração de parcelas: a negociação, um contrato da cadeia ou um aditivo. */
+interface GenerateTarget {
+    id: string;
+    kind: 'CONTRACT' | 'ADDENDUM';
+    label: string;
+    periodo: string;
+    fromDate: string;
+    toDate: string;
+    amount: number;
+    contract: Contract;
+}
 
 /** Checklist de documentos exigidos do cliente/comprador, por tipo de pessoa.
  * As chaves (`key`) são o que fica gravado em commercial_deals.doc_checklist —
@@ -403,6 +423,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // Ponte Negociação → Contrato formal. Venda (domain='VENDAS') gera um contrato
     // de compra e venda; Locação (domain='LOCACAO') gera um contrato recorrente.
     const [linkedContract, setLinkedContract] = useState<Contract | null>(null);
+    // Gerar Parcelas: alvo escolhido ('DEAL' = plano de pagamento da negociação)
+    const [generateTarget, setGenerateTarget] = useState<string>('DEAL');
+    const [generateTargets, setGenerateTargets] = useState<GenerateTarget[]>([]);
+    const alvoSelecionado = generateTargets.find(t => t.id === generateTarget);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [contractError, setContractError] = useState<string | null>(null);
 
@@ -658,7 +682,89 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setGenerateInstallmentType('MENSAL');
         setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
         setGenerateFirstDueDate(formData.payment_due_date || formData.date || new Date().toISOString().split('T')[0]);
+        setGenerateTarget('DEAL');
+        void carregarAlvosDeGeracao();
         setShowGenerateModal(true);
+    };
+
+    /**
+     * Alvos possíveis da geração: a própria negociação (plano de pagamento) ou
+     * um CONTRATO da cadeia de renovação / o período de um ADITIVO.
+     *
+     * Locação tem duas origens de parcela — a série da negociação
+     * (`tx-{dealId}-…`) e a do contrato (`CONTRACT_RECURRING`). Sem escolher o
+     * alvo, não havia como gerar as parcelas de uma prorrogação por aqui.
+     */
+    const carregarAlvosDeGeracao = async () => {
+        if (!linkedContract) { setGenerateTargets([]); return; }
+        try {
+            const cadeia = await contractRenewalService.getRenewalChain(linkedContract.id);
+            const contratos = cadeia.length > 0 ? cadeia : [linkedContract];
+            const listas = await Promise.all(contratos.map(c => contractService.listAddendums(c.id)));
+
+            const alvos: GenerateTarget[] = contratos.map(c => ({
+                id: c.id,
+                kind: 'CONTRACT' as const,
+                label: `Contrato ${c.number}`,
+                periodo: `${c.start_date ?? ''} a ${c.end_date ?? ''}`,
+                fromDate: c.start_date,
+                toDate: c.end_date ?? '',
+                amount: c.current_value ?? c.original_value ?? 0,
+                contract: c,
+            }));
+
+            listas.flat()
+                .filter(a => a.new_start_date && a.new_end_date && a.status !== 'Cancelado')
+                .forEach(a => {
+                    const dono = contratos.find(c => c.id === a.contract_id);
+                    if (!dono) return;
+                    alvos.push({
+                        id: `ad:${a.id}`,
+                        kind: 'ADDENDUM',
+                        label: `Aditivo ${a.number} (${dono.number})`,
+                        periodo: `${a.new_start_date} a ${a.new_end_date}`,
+                        fromDate: a.new_start_date!,
+                        toDate: a.new_end_date!,
+                        amount: a.new_value ?? dono.current_value ?? 0,
+                        contract: dono,
+                    });
+                });
+
+            setGenerateTargets(alvos);
+        } catch (e) {
+            console.error('[DealModal] Erro ao carregar alvos de geração:', e);
+            setGenerateTargets([]);
+        }
+    };
+
+    /**
+     * Gera as parcelas de um CONTRATO ou de um ADITIVO — cadência (ciclo, dia de
+     * vencimento) vem do contrato; janela e valor, do alvo escolhido.
+     * Idempotente por data: repetir não duplica.
+     */
+    const handleGenerateForContract = async (target: GenerateTarget) => {
+        setLoading(true);
+        try {
+            const r = await generateRecurringInstallmentsForPeriod(target.contract, {
+                fromDate: target.fromDate,
+                toDate: target.toDate,
+                amount: target.amount,
+                label: target.label,
+            });
+            setShowGenerateModal(false);
+            setSavedNotice(true);
+            setTimeout(() => setSavedNotice(false), 4000);
+            setContractError(r.inserted === 0
+                ? `Nenhuma parcela nova: as ${r.skipped} do período já existiam.`
+                : null);
+            if (r.inserted > 0) {
+                console.log(`[DealModal] ${r.inserted} parcela(s) geradas para ${target.label}`);
+            }
+        } catch (e) {
+            setContractError(e instanceof Error ? e.message : 'Erro ao gerar as parcelas do contrato.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>, installmentCount: number, firstDueDate: string) => {
@@ -2583,6 +2689,35 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             </div>
 
                             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+                                {/* Alvo da geração. Locação tem DUAS origens de parcela — a
+                                    série da negociação e a do contrato — e a prorrogação por
+                                    aditivo cria um período novo que não existe na negociação.
+                                    Sem escolher aqui, não havia como gerar aquelas parcelas. */}
+                                {generateTargets.length > 0 && (
+                                    <div>
+                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Gerar parcelas para</label>
+                                        <select
+                                            value={generateTarget}
+                                            onChange={(e) => setGenerateTarget(e.target.value)}
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400 cursor-pointer"
+                                        >
+                                            <option value="DEAL">Negociação — plano de pagamento</option>
+                                            {generateTargets.map(t => (
+                                                <option key={t.id} value={t.id}>
+                                                    {t.label} · {fmtDateBR(t.fromDate)} a {fmtDateBR(t.toDate)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            {alvoSelecionado
+                                                ? `Usa a vigência e a cadência do contrato (${alvoSelecionado.contract.billing_cycle ?? 'Mensal'}, dia ${alvoSelecionado.contract.due_day ?? '—'}), no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(alvoSelecionado.amount)}. Repetir não duplica: vencimentos já lançados são pulados.`
+                                                : 'As parcelas entram no plano de pagamento desta negociação.'}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!alvoSelecionado && (
+                                <>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Nº de Parcelas</label>
@@ -2642,6 +2777,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     );
                                 })()}
+                                </>
+                                )}
                             </div>
 
                             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
@@ -2655,10 +2792,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <button
                                     type="button"
                                     disabled={loading}
-                                    onClick={() => handleConfirmGenerateInstallments(generateInstallmentType, generateInstallmentCount, generateFirstDueDate)}
+                                    onClick={() => (alvoSelecionado
+                                        ? handleGenerateForContract(alvoSelecionado)
+                                        : handleConfirmGenerateInstallments(generateInstallmentType, generateInstallmentCount, generateFirstDueDate))}
                                     className={`px-5 py-2.5 rounded-xl text-sm font-black text-white transition-colors ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                                 >
-                                    {loading ? 'Verificando...' : 'Gerar Parcelas'}
+                                    {loading ? 'Gerando...' : alvoSelecionado ? 'Gerar no contrato' : 'Gerar Parcelas'}
                                 </button>
                             </div>
                         </div>

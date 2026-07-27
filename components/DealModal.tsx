@@ -427,6 +427,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [generateTarget, setGenerateTarget] = useState<string>('DEAL');
     const [generateTargets, setGenerateTargets] = useState<GenerateTarget[]>([]);
     const alvoSelecionado = generateTargets.find(t => t.id === generateTarget);
+    const [generateResult, setGenerateResult] = useState<{ ok: boolean; msg: string } | null>(null);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [contractError, setContractError] = useState<string | null>(null);
 
@@ -683,6 +684,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
         setGenerateFirstDueDate(formData.payment_due_date || formData.date || new Date().toISOString().split('T')[0]);
         setGenerateTarget('DEAL');
+        setGenerateResult(null);
         void carregarAlvosDeGeracao();
         setShowGenerateModal(true);
     };
@@ -751,17 +753,28 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 amount: target.amount,
                 label: target.label,
             });
-            setShowGenerateModal(false);
-            setSavedNotice(true);
-            setTimeout(() => setSavedNotice(false), 4000);
-            setContractError(r.inserted === 0
-                ? `Nenhuma parcela nova: as ${r.skipped} do período já existiam.`
-                : null);
-            if (r.inserted > 0) {
-                console.log(`[DealModal] ${r.inserted} parcela(s) geradas para ${target.label}`);
-            }
+            // O modal continua ABERTO com o resultado: as parcelas de contrato vão
+            // para Contas a Receber (internal_transactions), NÃO para o plano de
+            // pagamento desta negociação — fechar em silêncio dava a impressão de
+            // que nada tinha sido gerado.
+            setGenerateResult(r.inserted > 0
+                ? { ok: true, msg: `${r.inserted} parcela(s) geradas em Contas a Receber para ${target.label}, de ${fmtDateBR(target.fromDate)} a ${fmtDateBR(target.toDate)}. Elas não aparecem na aba Parcelas: lá fica o plano de pagamento da negociação.` }
+                : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(target.fromDate)} a ${fmtDateBR(target.toDate)}) já existiam em Contas a Receber.` });
         } catch (e) {
-            setContractError(e instanceof Error ? e.message : 'Erro ao gerar as parcelas do contrato.');
+            // Log detalhado: o erro do PostgREST traz code/details/hint que a
+            // mensagem sozinha esconde — sem isso, "não gerou" fica indepurável.
+            console.error('[DealModal] Falha ao gerar parcelas do contrato:', {
+                alvo: target.label, contrato: target.contract.number,
+                janela: [target.fromDate, target.toDate], valor: target.amount,
+                ciclo: target.contract.billing_cycle, dia: target.contract.due_day,
+                erro: e,
+            });
+            const det = (e as { message?: string; details?: string; hint?: string; code?: string });
+            setGenerateResult({
+                ok: false,
+                msg: [det?.message, det?.details, det?.hint, det?.code && `(${det.code})`]
+                    .filter(Boolean).join(' · ') || 'Erro ao gerar as parcelas do contrato.',
+            });
         } finally {
             setLoading(false);
         }
@@ -2781,13 +2794,26 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 )}
                             </div>
 
+                            {generateResult && (
+                                <div className={`mx-6 mb-4 flex items-start gap-2 rounded-xl p-3 text-sm ${
+                                    generateResult.ok
+                                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                                        : 'bg-amber-50 border border-amber-200 text-amber-800'
+                                }`}>
+                                    {generateResult.ok
+                                        ? <Check className="w-4 h-4 shrink-0 mt-0.5" />
+                                        : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+                                    <span>{generateResult.msg}</span>
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
                                 <button
                                     type="button"
                                     onClick={() => setShowGenerateModal(false)}
                                     className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
                                 >
-                                    Cancelar
+                                    {generateResult?.ok ? 'Fechar' : 'Cancelar'}
                                 </button>
                                 <button
                                     type="button"

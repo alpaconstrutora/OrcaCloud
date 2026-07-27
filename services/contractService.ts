@@ -648,7 +648,15 @@ export async function generateRecurringInstallmentsForPeriod(
         billingCycle: contract.billing_cycle,
         paymentDays: contract.payment_days,
     });
-    if (dueDates.length === 0) return { inserted: 0, skipped: 0, dueDates: [] };
+    // Janela sem nenhum vencimento é quase sempre erro de cadastro (ciclo ou dia
+    // de vencimento ausente, janela invertida) — retornar 0 calado deixava a tela
+    // dizendo "nada gerado" sem dizer por quê.
+    if (dueDates.length === 0) {
+        throw new Error(
+            `Nenhum vencimento cai entre ${fromDate} e ${toDate} com a cadência do contrato `
+            + `(${contract.billing_cycle ?? 'sem periodicidade'}, dia ${contract.due_day ?? 'não definido'}). `
+            + 'Confira periodicidade, dia de vencimento e o período informado.');
+    }
 
     const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
     const label = opts.label || `Contrato ${contract.number || ''}`.trim();
@@ -680,7 +688,9 @@ export async function generateRecurringInstallmentsForPeriod(
         return { inserted: novos.length, skipped: dueDates.length - novos.length, dueDates };
     }
 
-    if (!contract.organization_id) return { inserted: 0, skipped: 0, dueDates };
+    if (!contract.organization_id) {
+        throw new Error('Contrato sem organização — não é possível lançar as parcelas.');
+    }
 
     // ── Contrato org-level: internal_transactions
     const { data: jaExistem } = await supabase

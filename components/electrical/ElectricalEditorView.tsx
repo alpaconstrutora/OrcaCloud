@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -343,6 +343,29 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
               >
                 {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
                   <React.Fragment>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white p-2 rounded-xl shadow-lg border border-slate-200 z-10">
+                      <button 
+                        onClick={() => zoomOut()} 
+                        className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Reduzir Zoom"
+                      >
+                        <ZoomOut className="w-5 h-5" />
+                      </button>
+                      <button 
+                        onClick={() => resetTransform()} 
+                        className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Ajustar à Tela"
+                      >
+                        <Maximize className="w-5 h-5" />
+                      </button>
+                      <button 
+                        onClick={() => zoomIn()} 
+                        className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Aumentar Zoom"
+                      >
+                        <ZoomIn className="w-5 h-5" />
+                      </button>
+                    </div>
                     <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
                       <Stage 
                         ref={stageRef}

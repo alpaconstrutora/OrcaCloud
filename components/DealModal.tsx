@@ -434,6 +434,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [viewTarget, setViewTarget] = useState<string>('DEAL');
     const [contractEntries, setContractEntries] = useState<{
         id: string; transaction_date: string; amount: number; status: string; description: string | null;
+        original_amount?: number | null; discount_type?: string | null; discount_amount?: number | null;
+        installment_type?: string | null; payment_type?: string | null;
     }[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
     const [generatingContract, setGeneratingContract] = useState(false);
@@ -714,20 +716,38 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * se o banco recusar (parcela paga), recarrega a série e mostra o motivo —
      * é o mesmo comportamento das células do plano de pagamento.
      */
-    const patchContractEntry = (entryId: string, patch: { due_date?: string; amount?: number; description?: string }) => {
+    const patchContractEntry = (entryId: string, patch: {
+        due_date?: string; amount?: number; description?: string;
+        discount_type?: string | null; discount_amount?: number | null;
+        installment_type?: string | null; payment_type?: string | null;
+    }) => {
         setContractEntries(prev => prev.map(e => e.id === entryId
             ? {
                 ...e,
                 ...(patch.due_date ? { transaction_date: patch.due_date } : {}),
                 ...(patch.amount != null ? { amount: patch.amount } : {}),
                 ...(patch.description != null ? { description: patch.description } : {}),
+                ...(patch.discount_type !== undefined ? { discount_type: patch.discount_type } : {}),
+                ...(patch.discount_amount !== undefined ? { discount_amount: patch.discount_amount } : {}),
+                ...(patch.installment_type !== undefined ? { installment_type: patch.installment_type } : {}),
+                ...(patch.payment_type !== undefined ? { payment_type: patch.payment_type } : {}),
             }
             : e));
-        void contractService.updateFinancialEntry(entryId, patch).catch(async (err) => {
-            setContractError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
-            const alvo = generateTargets.find(t => t.id === viewTarget);
-            if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
-        });
+        // Valor e desconto são recalculados no servidor (bruto → líquido), então
+        // a linha é relida depois; os demais campos ficam com o estado otimista.
+        const recalcula = patch.amount != null
+            || patch.discount_type !== undefined || patch.discount_amount !== undefined;
+        void contractService.updateFinancialEntry(entryId, patch)
+            .then(async () => {
+                if (!recalcula) return;
+                const alvo = generateTargets.find(t => t.id === viewTarget);
+                if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
+            })
+            .catch(async (err) => {
+                setContractError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
+                const alvo = generateTargets.find(t => t.id === viewTarget);
+                if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
+            });
     };
 
     /** Exclui uma parcela lançada pelo contrato. Paga/conciliada é recusada pelo serviço. */
@@ -2031,21 +2051,74 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         <td className="px-6 py-2.5 border-r border-gray-100">
                                                                             <input
                                                                                 type="number"
-                                                                                value={e.amount}
+                                                                                value={e.original_amount ?? e.amount}
                                                                                 disabled={pago}
                                                                                 onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
                                                                                 className={pago ? CELL_RO : CELL}
                                                                             />
                                                                         </td>
-                                                                        {/* Desconto, Tipo e Forma de pagamento são campos do PLANO da
-                                                                            negociação; a parcela do contrato não os tem. A coluna fica
-                                                                            no lugar, com "—", para as duas tabelas lerem igual. */}
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
+                                                                        {/* Mesmos dropdowns do plano de pagamento — os campos passaram
+                                                                            a existir em internal_transactions (migration 20270828000005).
+                                                                            "Valor" e' o bruto; "Valor final" e' o liquido cobrado. */}
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <select
+                                                                                    value={e.discount_type ?? ''}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, {
+                                                                                        discount_type: ev.target.value || null,
+                                                                                        discount_amount: ev.target.value ? (e.discount_amount ?? 0) : null,
+                                                                                    })}
+                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                                >
+                                                                                    <option value="">Sem desconto</option>
+                                                                                    <option value="VALUE">R$</option>
+                                                                                    <option value="PERCENT">%</option>
+                                                                                </select>
+                                                                                {e.discount_type && (
+                                                                                    <input
+                                                                                        type="number" min="0" step="0.01"
+                                                                                        value={e.discount_amount ?? ''}
+                                                                                        disabled={pago}
+                                                                                        placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
+                                                                                        onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
+                                                                                        className={`${pago ? CELL_RO : CELL} w-24`}
+                                                                                    />
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
                                                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
                                                                         </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                            <select
+                                                                                value={e.installment_type ?? ''}
+                                                                                disabled={pago}
+                                                                                onChange={(ev) => patchContractEntry(e.id, { installment_type: ev.target.value || null })}
+                                                                                className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                            >
+                                                                                <option value="">Tipo Pagto.</option>
+                                                                                {installmentTypeOptions.map(t => (
+                                                                                    <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                            <select
+                                                                                value={e.payment_type ?? ''}
+                                                                                disabled={pago}
+                                                                                onChange={(ev) => patchContractEntry(e.id, { payment_type: ev.target.value || null })}
+                                                                                className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                            >
+                                                                                <option value="">Forma Pagto.</option>
+                                                                                <option value="PIX">PIX</option>
+                                                                                <option value="TED">TED</option>
+                                                                                <option value="DOC">DOC</option>
+                                                                                <option value="DINHEIRO">Dinheiro</option>
+                                                                                <option value="CHEQUE">Cheque</option>
+                                                                                <option value="PERMUTA">Permuta</option>
+                                                                            </select>
+                                                                        </td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100">
                                                                             <input
                                                                                 type="text"

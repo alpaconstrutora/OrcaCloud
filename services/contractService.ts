@@ -1780,7 +1780,11 @@ export const contractService = {
      */
     updateFinancialEntry: async (
         entryId: string,
-        patch: { due_date?: string; amount?: number; description?: string },
+        patch: {
+            due_date?: string; amount?: number; description?: string;
+            discount_type?: string | null; discount_amount?: number | null;
+            installment_type?: string | null; payment_type?: string | null;
+        },
     ): Promise<void> => {
         const { data } = await supabase
             .from('internal_transactions')
@@ -1795,8 +1799,39 @@ export const contractService = {
         }
         const payload: Record<string, unknown> = {};
         if (patch.due_date) { payload.due_date = patch.due_date; payload.transaction_date = patch.due_date; }
-        if (patch.amount != null) payload.amount = patch.amount;
         if (patch.description != null) payload.description = patch.description;
+        if (patch.installment_type !== undefined) payload.installment_type = patch.installment_type || null;
+        if (patch.payment_type !== undefined) payload.payment_type = patch.payment_type || null;
+
+        // Desconto: `original_amount` guarda o bruto e `amount` passa a ser o
+        // LÍQUIDO — é ele que Contas a Receber cobra. Mesma regra do plano de
+        // pagamento da negociação (updateInstallmentDiscount no DealModal).
+        const mexeuValor = patch.amount != null
+            || patch.discount_type !== undefined || patch.discount_amount !== undefined;
+        if (mexeuValor) {
+            const { data: atual } = await supabase
+                .from('internal_transactions')
+                .select('amount, original_amount, discount_type, discount_amount')
+                .eq('id', entryId)
+                .maybeSingle();
+
+            const bruto = patch.amount ?? (atual?.original_amount as number | null) ?? (atual?.amount as number) ?? 0;
+            const tipo = patch.discount_type !== undefined
+                ? patch.discount_type
+                : (atual?.discount_type as string | null);
+            const valorDesc = patch.discount_amount !== undefined
+                ? patch.discount_amount
+                : (atual?.discount_amount as number | null);
+
+            const desconto = !tipo || !valorDesc ? 0
+                : tipo === 'PERCENT' ? (bruto * valorDesc) / 100
+                : valorDesc;
+
+            payload.original_amount = bruto;
+            payload.discount_type = tipo || null;
+            payload.discount_amount = tipo ? (valorDesc ?? 0) : null;
+            payload.amount = Math.max(0, parseFloat((bruto - desconto).toFixed(2)));
+        }
         if (Object.keys(payload).length === 0) return;
 
         const { error } = await supabase.from('internal_transactions').update(payload).eq('id', entryId);
@@ -1830,13 +1865,15 @@ export const contractService = {
         id: string; source_system: string; reference_id: string | null;
         transaction_date: string; amount: number; direction: 'CREDIT' | 'DEBIT';
         description: string | null; category: string | null; status: string;
+        original_amount?: number | null; discount_type?: string | null; discount_amount?: number | null;
+        installment_type?: string | null; payment_type?: string | null;
     }[]> => {
         if (!contract.organization_id) return [];
 
         const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING'];
         const { data: byContract, error: e1 } = await supabase
             .from('internal_transactions')
-            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status')
+            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, original_amount, discount_type, discount_amount, installment_type, payment_type')
             .eq('organization_id', contract.organization_id)
             .in('source_system', measurementSources)
             .like('reference_id', `${contract.id}%`);
@@ -1852,7 +1889,7 @@ export const contractService = {
         if (measurementIds.length > 0) {
             const { data, error: e2 } = await supabase
                 .from('internal_transactions')
-                .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status')
+                .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, original_amount, discount_type, discount_amount, installment_type, payment_type')
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_MEASUREMENT')
                 .in('reference_id', measurementIds);

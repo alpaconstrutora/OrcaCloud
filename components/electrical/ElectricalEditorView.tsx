@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3, CornerDownRight } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3, CornerDownRight, Trash2 } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -42,6 +42,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
+  const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
   const [isOrthoMode, setIsOrthoMode] = useState(false);
   const wallPreviewRef = useRef<any>(null);
@@ -352,8 +353,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     if (tool === 'select') {
       if (e.target === stage || e.target.getClassName() === 'Image') {
-         setSelectedPointId(null);
+        setSelectedPointId(null);
+        setSelectedPoint(null);
+        setSelectedWallId(null);
       }
+      return;
     }
   };
 
@@ -647,10 +651,20 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           {walls.map(w => {
                             const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
                             return (
-                              <Group key={w.id}>
+                              <Group 
+                                key={w.id}
+                                onClick={(e) => {
+                                  if (tool === 'select') {
+                                    e.cancelBubble = true;
+                                    setSelectedWallId(w.id);
+                                    setSelectedPointId(null);
+                                    setSelectedPoint(null);
+                                  }
+                                }}
+                              >
                                 <Line 
                                   points={w.points} 
-                                  stroke="#1e293b" 
+                                  stroke={selectedWallId === w.id ? "#ef4444" : "#1e293b"} 
                                   strokeWidth={widthPx} 
                                   lineCap="square" 
                                   lineJoin="miter" 

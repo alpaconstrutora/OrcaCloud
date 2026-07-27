@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OpuraElectricalVersion, OpuraElectricalTakeoff } from '../../types/electrical';
 import { electricalProjectService } from '../../services/electricalProjectService';
-import { Button } from '../ui/Button';
+import Button from '../ui/Button';
 import { RefreshCw, Download, Calculator } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
 import { formatCurrency } from '../../utils/financialMath';

@@ -357,7 +357,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 maxScale={5}
                 limitToBounds={false}
                 panning={{ disabled: tool !== 'select' && !isShiftDown }}
-                wheel={{ step: 0.2 }}
+                wheel={{ step: 0.05 }}
                 doubleClick={{ disabled: true }}
               >
                 {({ zoomIn, zoomOut, resetTransform, ...rest }) => (

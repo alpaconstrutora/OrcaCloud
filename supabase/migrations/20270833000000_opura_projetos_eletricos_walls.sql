@@ -31,6 +31,15 @@ CREATE POLICY "Enable delete for organization users on opura_electrical_walls"
     ON public.opura_electrical_walls FOR DELETE
     USING (public.is_org_member(organization_id));
 
+-- Create a custom function to update the updated_at column if it doesn't exist
+CREATE OR REPLACE FUNCTION public.set_opura_electrical_walls_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Trigger for updated_at
 CREATE TRIGGER handle_updated_at BEFORE UPDATE ON public.opura_electrical_walls
-  FOR EACH ROW EXECUTE PROCEDURE moddatetime (updated_at);
+  FOR EACH ROW EXECUTE PROCEDURE public.set_opura_electrical_walls_updated_at();

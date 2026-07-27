@@ -1,8 +1,8 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, FileCheck, X, RefreshCw } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, FileCheck, X, RefreshCw, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
@@ -19,6 +19,11 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'items', label: 'Itens', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    number: 120, obra: 160, orcamento: 140, supplier: 200, status: 140, date: 140, value: 140, items: 100, actions: 220,
+};
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/filtro "Sem NF-e" já existentes, não os substitui.
@@ -66,6 +71,14 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const [searchTerm, setSearchTerm] = usePersistedState<string>('supplyChainOrderFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainOrderFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainOrderColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplyChainOrderColWidths');
+    // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
+    // table-layout:fixed (§6.1). Checkbox de 40px é largura fixa, não redimensionável
+    // — autoFit() já desconta colunas sem data-col-key da distribuição de folga.
+    const tableTotalWidth = 40
+        + (['number', 'obra', 'orcamento', 'supplier', 'status', 'date', 'value', 'items'] as const)
+            .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainOrderFilters:advanced');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const confirm = useConfirm();
@@ -452,6 +465,18 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
+                    {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                        Duplo clique no divisor segue "restaurar padrão". Só em modo
+                        lista: no modo blocos não há coluna para ajustar. */}
+                    {viewMode === 'list' && (
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                    )}
                     <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
@@ -514,7 +539,22 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 viewMode === 'list' ? (
                     <div>
                         <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                <col style={{ width: '40px' }} /> {/* checkbox */}
+                                {tableColumns.visibleColumns.includes('number') && <col data-col-key="number" style={{ width: `${cols.getWidth('number')}px` }} />}
+                                {tableColumns.visibleColumns.includes('obra') && <col data-col-key="obra" style={{ width: `${cols.getWidth('obra')}px` }} />}
+                                {tableColumns.visibleColumns.includes('orcamento') && <col data-col-key="orcamento" style={{ width: `${cols.getWidth('orcamento')}px` }} />}
+                                {tableColumns.visibleColumns.includes('supplier') && <col data-col-key="supplier" style={{ width: `${cols.getWidth('supplier')}px` }} />}
+                                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                {tableColumns.visibleColumns.includes('date') && <col data-col-key="date" style={{ width: `${cols.getWidth('date')}px` }} />}
+                                {tableColumns.visibleColumns.includes('value') && <col data-col-key="value" style={{ width: `${cols.getWidth('value')}px` }} />}
+                                {tableColumns.visibleColumns.includes('items') && <col data-col-key="items" style={{ width: `${cols.getWidth('items')}px` }} />}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                <col />
+                                {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                            </colgroup>
                             {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
                                 SortableHeader força uppercase internamente por padrão. */}
                             <thead>
@@ -530,31 +570,52 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         />
                                     </th>
                                     {tableColumns.visibleColumns.includes('number') && (
-                                        <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="number" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('obra') && (
-                                        <SortableHeader colKey="obra" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader colKey="obra" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="obra" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('orcamento') && (
-                                        <SortableHeader colKey="orcamento" label="Orçamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader colKey="orcamento" label="Orçamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="orcamento" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('supplier') && (
-                                        <SortableHeader colKey="supplier" label="Fornecedor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="supplier" label="Fornecedor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="supplier" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="status" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('date') && (
-                                        <SortableHeader colKey="date" label="Data do Pedido" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="date" label="Data do Pedido" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="date" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('value') && (
-                                        <SortableHeader colKey="value" label="Valor Total" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="value" label="Valor Total" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="value" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('items') && (
-                                        <SortableHeader colKey="items" label="Itens" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="items" label="Itens" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="items" />
+                                        </SortableHeader>
                                     )}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
                                     )}
                                 </tr>
                             </thead>
@@ -625,12 +686,14 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                                 {order.items?.length || 0} itens
                                             </td>
                                         )}
+                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
-                                                <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); onViewDetails(order.id); }}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
                                                     >
                                                         Ver Detalhes
                                                     </button>

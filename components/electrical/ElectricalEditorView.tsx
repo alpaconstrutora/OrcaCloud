@@ -166,7 +166,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return isInside;
   };
 
-  const handleStageClick = (e: any) => {
+  const handleStageClick = async (e: any) => {
     if (isShiftDown) return; // Prevent clicks while panning
 
     const stage = e.target.getStage();

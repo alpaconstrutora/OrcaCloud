@@ -1772,6 +1772,29 @@ export const contractService = {
     },
 
     // Lançamentos financeiros gerados a partir deste contrato (Conciliação / internal_transactions)
+    /**
+     * Exclui UMA parcela lançada pelo contrato (Contas a Receber).
+     *
+     * Só PENDING/PREVISTO: parcela paga ou conciliada é dinheiro reconhecido —
+     * some daqui e o extrato deixa de fechar. Nesse caso o caminho é estorno no
+     * financeiro, não exclusão pela negociação.
+     */
+    removeFinancialEntry: async (entryId: string): Promise<void> => {
+        const { data } = await supabase
+            .from('internal_transactions')
+            .select('id, status, business_status')
+            .eq('id', entryId)
+            .maybeSingle();
+        if (!data) return;
+        const pago = data.status !== 'PENDING'
+            || ['RECEBIDO', 'PAGO'].includes((data.business_status as string) ?? '');
+        if (pago) {
+            throw new Error('Parcela já paga ou conciliada — estorne no financeiro antes de excluir.');
+        }
+        const { error } = await supabase.from('internal_transactions').delete().eq('id', entryId);
+        if (error) throw error;
+    },
+
     listFinancialEntries: async (contract: Contract): Promise<{
         id: string; source_system: string; reference_id: string | null;
         transaction_date: string; amount: number; direction: 'CREDIT' | 'DEBIT';

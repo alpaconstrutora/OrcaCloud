@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, FileSpreadsheet, TrendingUp, FileText } from 'lucide-react';
+import { Plus, FileSpreadsheet, FileText } from 'lucide-react';
 import Button from './ui/Button';
 import { ProfileGroup, UserProfile, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
 import { Session } from '@supabase/supabase-js';
@@ -28,7 +28,7 @@ const PlanningDashboard     = React.lazy(() => import('./PlanningDashboard'));
 const ExcelImportModal      = React.lazy(() => import('./ExcelImportModal'));
 const ProjectDiaryManager   = React.lazy(() => import('./ProjectDiaryManager'));
 const DiaryReportViewer     = React.lazy(() => import('./DiaryReportViewer'));
-const DiaryDashboard        = React.lazy(() => import('./DiaryDashboard'));
+const DiaryProjectsList     = React.lazy(() => import('./DiaryProjectsList'));
 const LaborDashboard        = React.lazy(() => import('./LaborDashboard'));
 const LaborModule           = React.lazy(() => import('./LaborModule'));
 const ProjectFinancialManager = React.lazy(() => import('./ProjectFinancialManager'));
@@ -234,7 +234,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   const typedProjects = projects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
   // Lista completa (obra + orçamento + planejamento + diário). Passe esta APENAS
   // para telas que são explicitamente sobre os outros tipos — ProjectList (que
-  // filtra por `classificationFilter`), PlanningDashboard, DiaryDashboard,
+  // filtra por `classificationFilter`), PlanningDashboard, DiaryProjectsList,
   // LaborDashboard, ProjectOverview. Todo o resto usa `typedProjects` (só obras).
   const typedAllProjects = allProjects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
 
@@ -728,47 +728,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'project-diary':
       if (!projectId) {
         return (
-          <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Diário de Obras</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Acompanhe e registre o dia a dia das suas obras com precisão.</p>
-              </div>
-            </div>
-            <DiaryDashboard projects={typedAllProjects} />
-            <div className="flex justify-end gap-4 pr-4">
-              <button
-                onClick={() => setActiveView('labor-analytics')}
-                className="flex items-center gap-3 px-6 py-3 bg-white text-blue-600 border-2 border-blue-50 rounded-[1.25rem] hover:bg-blue-50 font-black text-button uppercase tracking-widest transition-all shadow-lg active:scale-95"
-              >
-                <TrendingUp className="w-4 h-4" />
-                Análise de Equipes
-              </button>
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => handleNewProject('DIARIO')}
-                className="rounded-[1.25rem] shadow-xl shadow-blue-900/20 active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                Novo Diário
-              </Button>
-            </div>
-            <ProjectList
-              projects={typedAllProjects}
-              onLoadProject={handleLoadProject}
-              onEditProject={handleLoadAndEditProject}
-              onNewProject={handleNewProject}
-              onDuplicateProject={handleDuplicateProject}
-              onImportProject={handleImportProject}
-              onExportProject={handleExportProject}
-              onRowClick={(id) => handleLoadProject(id, 'project-diary')}
-              organizationId={activeOrganizationId || undefined}
-              classificationFilter="DIARIO"
-              hideHeader={true}
-              isDiaryView={true}
-            />
-          </div>
+          <DiaryProjectsList
+            projects={typedAllProjects}
+            organizations={organizations}
+            onOpenDiary={(id) => handleLoadProject(id, 'project-diary')}
+            onEditProject={handleLoadAndEditProject}
+            onNewProject={() => handleNewProject('DIARIO')}
+            onDuplicateProject={handleDuplicateProject}
+            onExportProject={handleExportProject}
+            onOpenLaborAnalytics={() => setActiveView('labor-analytics')}
+          />
         );
       }
       return (

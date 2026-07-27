@@ -209,142 +209,38 @@ export const electricalProjectService = {
 
 // Helper mappers for snake_case vs camelCase
 
-function mapProjectToSnakeCase(item: Partial<OpuraElectricalProject>): any {
-    const { organizationId, projectId, createdAt, ...rest } = item as any;
-    return {
-        ...rest,
-        ...(organizationId !== undefined && { organization_id: organizationId }),
-        ...(projectId !== undefined && { project_id: projectId }),
-        ...(createdAt !== undefined && { created_at: createdAt }),
-    };
+function toSnakeCaseObject(obj: any): any {
+    if (!obj || typeof obj !== 'object') return obj;
+    const snakeObj: any = {};
+    for (const key of Object.keys(obj)) {
+        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+        snakeObj[snakeKey] = obj[key];
+    }
+    return snakeObj;
 }
 
-function mapProjectToCamelCase(row: any): OpuraElectricalProject {
-    return {
-        ...row,
-        organizationId: row.organization_id,
-        projectId: row.project_id,
-        createdAt: row.created_at,
-    };
+function toCamelCaseObject(obj: any): any {
+    if (!obj || typeof obj !== 'object') return obj;
+    const camelObj: any = {};
+    for (const key of Object.keys(obj)) {
+        const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        camelObj[camelKey] = obj[key];
+    }
+    return camelObj;
 }
 
-function mapVersionToSnakeCase(item: Partial<OpuraElectricalVersion>): any {
-    const { electricalProjectId, versionNumber, createdAt, ...rest } = item as any;
-    return {
-        ...rest,
-        ...(electricalProjectId !== undefined && { electrical_project_id: electricalProjectId }),
-        ...(versionNumber !== undefined && { version_number: versionNumber }),
-        ...(createdAt !== undefined && { created_at: createdAt }),
-    };
-}
-
-function mapVersionToCamelCase(row: any): OpuraElectricalVersion {
-    return {
-        ...row,
-        electricalProjectId: row.electrical_project_id,
-        versionNumber: row.version_number,
-        createdAt: row.created_at,
-    };
-}
-
-function mapPlanToSnakeCase(item: Partial<OpuraElectricalPlan>): any {
-    const { versionId, fileUrl, createdAt, ...rest } = item as any;
-    return {
-        ...rest,
-        ...(versionId !== undefined && { version_id: versionId }),
-        ...(fileUrl !== undefined && { file_url: fileUrl }),
-        ...(createdAt !== undefined && { created_at: createdAt }),
-    };
-}
-
-function mapPlanToCamelCase(row: any): OpuraElectricalPlan {
-    return {
-        ...row,
-        versionId: row.version_id,
-        fileUrl: row.file_url,
-        createdAt: row.created_at,
-    };
-}
-
-function mapRoomToSnakeCase(item: Partial<OpuraElectricalRoom>): any {
-    const { planId, createdAt, ...rest } = item as any;
-    return {
-        ...rest,
-        ...(planId !== undefined && { plan_id: planId }),
-        ...(createdAt !== undefined && { created_at: createdAt }),
-    };
-}
-
-function mapRoomToCamelCase(row: any): OpuraElectricalRoom {
-    return {
-        ...row,
-        planId: row.plan_id,
-        createdAt: row.created_at,
-    };
-}
-
-function mapPointToSnakeCase(item: Partial<OpuraElectricalPoint>): any {
-    const { roomId, circuitId, createdAt, ...rest } = item as any;
-    return {
-        ...rest,
-        ...(roomId !== undefined && { room_id: roomId }),
-        ...(circuitId !== undefined && { circuit_id: circuitId }),
-        ...(createdAt !== undefined && { created_at: createdAt }),
-    };
-}
-
-function mapPointToCamelCase(row: any): OpuraElectricalPoint {
-    return {
-        ...row,
-        roomId: row.room_id,
-        circuitId: row.circuit_id,
-        createdAt: row.created_at,
-    };
-}
-
-function mapBoardToSnakeCase(item: Partial<OpuraElectricalBoard>): any {
-    const { versionId, mainBreakerCapacity, createdAt, ...rest } = item as any;
-    return {
-        ...rest,
-        ...(versionId !== undefined && { version_id: versionId }),
-        ...(mainBreakerCapacity !== undefined && { main_breaker_capacity: mainBreakerCapacity }),
-        ...(createdAt !== undefined && { created_at: createdAt }),
-    };
-}
-
-function mapBoardToCamelCase(row: any): OpuraElectricalBoard {
-    return {
-        ...row,
-        versionId: row.version_id,
-        mainBreakerCapacity: row.main_breaker_capacity,
-        createdAt: row.created_at,
-    };
-}
-
-function mapCircuitToSnakeCase(item: Partial<OpuraElectricalCircuit>): any {
-    const { boardId, circuitType, installedPowerW, demandFactor, breakerCapacity, wireSectionMm2, createdAt, ...rest } = item as any;
-    return {
-        ...rest,
-        ...(boardId !== undefined && { board_id: boardId }),
-        ...(circuitType !== undefined && { circuit_type: circuitType }),
-        ...(installedPowerW !== undefined && { installed_power_w: installedPowerW }),
-        ...(demandFactor !== undefined && { demand_factor: demandFactor }),
-        ...(breakerCapacity !== undefined && { breaker_capacity: breakerCapacity }),
-        ...(wireSectionMm2 !== undefined && { wire_section_mm2: wireSectionMm2 }),
-        ...(createdAt !== undefined && { created_at: createdAt }),
-    };
-}
-
-function mapCircuitToCamelCase(row: any): OpuraElectricalCircuit {
-    return {
-        ...row,
-        boardId: row.board_id,
-        circuitType: row.circuit_type,
-        installedPowerW: row.installed_power_w,
-        demandFactor: row.demand_factor,
-        breakerCapacity: row.breaker_capacity,
-        wireSectionMm2: row.wire_section_mm2,
-        createdAt: row.created_at,
-    };
-}
+const mapProjectToSnakeCase = toSnakeCaseObject;
+const mapProjectToCamelCase = toCamelCaseObject;
+const mapVersionToSnakeCase = toSnakeCaseObject;
+const mapVersionToCamelCase = toCamelCaseObject;
+const mapPlanToSnakeCase = toSnakeCaseObject;
+const mapPlanToCamelCase = toCamelCaseObject;
+const mapRoomToSnakeCase = toSnakeCaseObject;
+const mapRoomToCamelCase = toCamelCaseObject;
+const mapPointToSnakeCase = toSnakeCaseObject;
+const mapPointToCamelCase = toCamelCaseObject;
+const mapBoardToSnakeCase = toSnakeCaseObject;
+const mapBoardToCamelCase = toCamelCaseObject;
+const mapCircuitToSnakeCase = toSnakeCaseObject;
+const mapCircuitToCamelCase = toCamelCaseObject;
 

@@ -1482,6 +1482,21 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             {/* §5.3 — toolbar de botões: escopo/ações à esquerda, ação primária à direita */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
+                    {/* Escopo: qual versão de cálculo esta workspace está olhando (era o card lateral "Versões") */}
+                    <select
+                        value={selectedVersionId}
+                        onChange={event => setSelectedVersionId(event.target.value)}
+                        disabled={versions.length === 0}
+                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 max-w-[260px]"
+                    >
+                        {versions.length === 0 && <option value="">Nenhuma versão</option>}
+                        {versions.map(version => (
+                            <option key={version.id} value={version.id}>
+                                v{version.version_number} · {version.version_label} — {statusLabel[version.status] || version.status}
+                            </option>
+                        ))}
+                    </select>
+                    <div className="hidden lg:block w-px h-6 bg-gray-200 shrink-0"></div>
                     <AreaButton variant="secondary" onClick={() => setIsStructureOpen(true)} disabled={!selectedVersionId || !!actionLoading}>
                         <Plus className="w-[15px] h-[15px]" /> Estrutura
                     </AreaButton>
@@ -1649,85 +1664,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 </SheetFooter>
             </Sheet>
 
-            <section className="grid grid-cols-1 xl:grid-cols-[320px_1fr] gap-5">
-                <aside className="space-y-4">
-                    <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-slate-800">Projetos</h2>
-                            <span className="text-xs text-slate-400">{filteredProjects.length}/{projects.length}</span>
-                        </div>
-                        {/* §5.1 — busca desaninhada, h-9, persistida (§3) */}
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Buscar projeto de áreas..."
-                                value={projectSearchTerm}
-                                onChange={event => setProjectSearchTerm(event.target.value)}
-                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                            />
-                        </div>
-                        {loading && projects.length === 0 ? (
-                            <LoadingState message="Carregando projetos..." />
-                        ) : filteredProjects.length === 0 ? (
-                            <EmptyState
-                                title={projects.length === 0 ? 'Nenhum projeto de áreas' : 'Nenhum projeto encontrado'}
-                                message={projects.length === 0 ? 'Crie um projeto ou importe de um Empreendimento.' : 'Tente ajustar sua busca.'}
-                                icon={<FolderOpen className="w-12 h-12" />}
-                            />
-                        ) : (
-                            <div className="space-y-2">
-                                {filteredProjects.map(project => (
-                                    <button
-                                        key={project.id}
-                                        onClick={() => setSelectedProjectId(project.id)}
-                                        className={`w-full text-left border rounded-[6px] px-3 py-2 transition ${selectedProjectId === project.id ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                                    >
-                                        <div className="text-sm font-medium text-gray-800 truncate">{project.name}</div>
-                                        <div className="text-xs font-normal text-gray-500">{project.normative_reference}</div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-bold text-slate-800">Versões</h2>
-                            <span className="text-xs text-slate-400">{versions.length}</span>
-                        </div>
-                        {loading && versions.length === 0 ? (
-                            <LoadingState message="Carregando versões..." />
-                        ) : versions.length === 0 ? (
-                            <EmptyState
-                                title="Nenhuma versão"
-                                message="O projeto selecionado ainda não tem versão de cálculo."
-                                icon={<Layers className="w-12 h-12" />}
-                            />
-                        ) : (
-                            <div className="space-y-2">
-                                {versions.map(version => (
-                                    <button
-                                        key={version.id}
-                                        onClick={() => setSelectedVersionId(version.id)}
-                                        className={`w-full text-left border rounded-[6px] px-3 py-2 transition ${selectedVersionId === version.id ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                                    >
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="text-sm font-medium text-gray-800 truncate">v{version.version_number} · {version.version_label}</span>
-                                            <span className={`shrink-0 text-sm font-normal ${statusTone(version.status)}`}>
-                                                {statusLabel[version.status] || version.status}
-                                            </span>
-                                        </div>
-                                        <div className="text-xs font-normal text-gray-500 mt-1">Payload: {shortHash(version.version_payload_hash)}</div>
-                                        <div className="text-xs font-normal text-gray-500">Identidade: {shortHash(version.version_identity_hash)}</div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </aside>
-
-                <main className="space-y-6">
+            <main className="space-y-6">
                     <Tabs value={activeTable} onValueChange={value => setActiveTable(value as TableView)}>
                         {/* §19.1 — barra de abas em card branco próprio, mb-3 pelo ritmo do §20.1 */}
                         <div className="bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
@@ -2058,8 +1995,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             </div>
                         </TabsContent>
                     </Tabs>
-                </main>
-            </section>
+            </main>
             </>
             )}
         </div>

@@ -188,7 +188,21 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     const stage = e.target.getStage();
     const pointerPosition = stage.getRelativePointerPosition();
     if (pointerPosition && wallPreviewRef.current) {
-      wallPreviewRef.current.points([...currentWall, pointerPosition.x, pointerPosition.y]);
+      const newPoints = [...currentWall, pointerPosition.x, pointerPosition.y];
+      
+      if (typeof wallPreviewRef.current.points === 'function') {
+        // Fallback for single line (just in case)
+        wallPreviewRef.current.points(newPoints);
+      } else {
+        // Group of lines
+        const children = wallPreviewRef.current.getChildren();
+        children.forEach((child: any) => {
+          if (child.getClassName() === 'Line') {
+            child.points(newPoints);
+          }
+        });
+      }
+      
       wallPreviewRef.current.getLayer().batchDraw();
     }
   };
@@ -592,14 +606,22 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           {walls.map(w => {
                             const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
                             return (
-                              <Line 
-                                key={w.id} 
-                                points={w.points} 
-                                stroke="#1e293b" 
-                                strokeWidth={widthPx} 
-                                lineCap="square" 
-                                lineJoin="miter" 
-                              />
+                              <Group key={w.id}>
+                                <Line 
+                                  points={w.points} 
+                                  stroke="#1e293b" 
+                                  strokeWidth={widthPx} 
+                                  lineCap="square" 
+                                  lineJoin="miter" 
+                                />
+                                <Line 
+                                  points={w.points} 
+                                  stroke="#ffffff" 
+                                  strokeWidth={Math.max(1, widthPx - 2)} 
+                                  lineCap="square" 
+                                  lineJoin="miter" 
+                                />
+                              </Group>
                             );
                           })}
                           
@@ -736,16 +758,24 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         <Layer>
                           {/* Current Wall Preview */}
                           {tool === 'draw_wall' && currentWall.length > 0 && (
-                             <Line 
-                                ref={wallPreviewRef}
-                                points={currentWall} 
-                                stroke="#3b82f6" 
-                                strokeWidth={plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10} 
-                                opacity={0.6} 
-                                lineCap="square" 
-                                lineJoin="miter" 
-                                listening={false}
-                             />
+                             <Group ref={wallPreviewRef} listening={false}>
+                               <Line 
+                                  points={currentWall} 
+                                  stroke="#3b82f6" 
+                                  strokeWidth={plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10} 
+                                  opacity={0.6} 
+                                  lineCap="square" 
+                                  lineJoin="miter" 
+                               />
+                               <Line 
+                                  points={currentWall} 
+                                  stroke="#ffffff" 
+                                  strokeWidth={Math.max(1, (plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10) - 2)} 
+                                  opacity={0.6} 
+                                  lineCap="square" 
+                                  lineJoin="miter" 
+                               />
+                             </Group>
                           )}
                         </Layer>
                       </Stage>

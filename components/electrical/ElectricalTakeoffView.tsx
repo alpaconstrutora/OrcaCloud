@@ -86,7 +86,7 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
                   <Calculator className="w-12 h-12 mx-auto text-slate-300 mb-3" />
                   <p className="text-slate-600 font-medium">Nenhum item orçado ainda.</p>
                   <p className="text-sm text-slate-500 mt-1 mb-4">Clique em "Extrair do Projeto" para gerar a lista.</p>
-                  <Button variant="outline" onClick={handleGenerateTakeoffs} disabled={generating}>Extrair Agora</Button>
+                  <Button variant="secondary" onClick={handleGenerateTakeoffs} disabled={generating}>Extrair Agora</Button>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -137,11 +137,11 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
                 <h3 className="text-lg font-semibold leading-none tracking-tight">Ações</h3>
               </div>
               <div className="p-6 pt-0 space-y-3">
-                <Button variant="outline" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
+                <Button variant="secondary" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
                   <Download className="w-4 h-4 mr-2 text-slate-500" />
                   Exportar Planilha
                 </Button>
-                <Button variant="outline" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
+                <Button variant="secondary" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
                   Enviar para Suprimentos
                 </Button>
               </div>

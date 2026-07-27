@@ -215,7 +215,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       {/* Top Bar */}
       <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={onBack} className="text-slate-500 rounded-[1rem]">
+          <Button variant="secondary" size="sm" onClick={onBack} className="text-slate-500 rounded-[1rem]">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Voltar
           </Button>

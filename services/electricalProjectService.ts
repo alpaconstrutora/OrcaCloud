@@ -4,8 +4,10 @@ import {
   OpuraElectricalVersion, 
   OpuraElectricalPlan, 
   OpuraElectricalRoom,
-  OpuraElectricalPoint
-} from '../types';
+  OpuraElectricalPoint,
+  OpuraElectricalBoard,
+  OpuraElectricalCircuit
+} from '../types/electrical';
 
 export const electricalProjectService = {
     async listProjects(organizationId?: string, projectId?: string): Promise<OpuraElectricalProject[]> {

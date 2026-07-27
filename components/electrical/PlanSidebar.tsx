@@ -53,7 +53,7 @@ const PlanSidebar: React.FC<PlanSidebarProps> = ({
       <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
         <h2 className="font-bold text-slate-800 flex items-center gap-2">
           <Layers className="w-5 h-5 text-blue-600" />
-          Plantas / Páginas
+          Pavimentos
         </h2>
         <button 
           type="button"

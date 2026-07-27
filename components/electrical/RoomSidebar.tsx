@@ -38,8 +38,14 @@ const RoomSidebar: React.FC<RoomSidebarProps> = ({ rooms, onDeleteRoom }) => {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              <div className="text-xs text-slate-400 mt-1">
-                {(room.polygonPoints?.length || 0) / 2} vértices
+              <div className="text-xs text-slate-400 mt-1 flex flex-col gap-1">
+                <span>{(room.polygonPoints?.length || 0) / 2} vértices</span>
+                {(room.areaSqm !== undefined || room.perimeterM !== undefined) && (
+                  <div className="flex items-center gap-3 text-slate-500">
+                    <span>Área: <strong className="text-slate-700">{room.areaSqm || 0}</strong> m²</span>
+                    <span>Perímetro: <strong className="text-slate-700">{room.perimeterM || 0}</strong> m</span>
+                  </div>
+                )}
               </div>
             </div>
           ))

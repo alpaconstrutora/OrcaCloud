@@ -210,11 +210,12 @@ export const electricalProjectService = {
 // Helper mappers for snake_case vs camelCase
 
 function mapProjectToSnakeCase(item: Partial<OpuraElectricalProject>): any {
+    const { organizationId, projectId, createdAt, ...rest } = item as any;
     return {
-        ...item,
-        ...(item.organizationId !== undefined && { organization_id: item.organizationId }),
-        ...(item.projectId !== undefined && { project_id: item.projectId }),
-        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+        ...rest,
+        ...(organizationId !== undefined && { organization_id: organizationId }),
+        ...(projectId !== undefined && { project_id: projectId }),
+        ...(createdAt !== undefined && { created_at: createdAt }),
     };
 }
 
@@ -228,11 +229,12 @@ function mapProjectToCamelCase(row: any): OpuraElectricalProject {
 }
 
 function mapVersionToSnakeCase(item: Partial<OpuraElectricalVersion>): any {
+    const { electricalProjectId, versionNumber, createdAt, ...rest } = item as any;
     return {
-        ...item,
-        ...(item.electricalProjectId !== undefined && { electrical_project_id: item.electricalProjectId }),
-        ...(item.versionNumber !== undefined && { version_number: item.versionNumber }),
-        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+        ...rest,
+        ...(electricalProjectId !== undefined && { electrical_project_id: electricalProjectId }),
+        ...(versionNumber !== undefined && { version_number: versionNumber }),
+        ...(createdAt !== undefined && { created_at: createdAt }),
     };
 }
 
@@ -246,11 +248,12 @@ function mapVersionToCamelCase(row: any): OpuraElectricalVersion {
 }
 
 function mapPlanToSnakeCase(item: Partial<OpuraElectricalPlan>): any {
+    const { versionId, fileUrl, createdAt, ...rest } = item as any;
     return {
-        ...item,
-        ...(item.versionId !== undefined && { version_id: item.versionId }),
-        ...(item.fileUrl !== undefined && { file_url: item.fileUrl }),
-        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+        ...rest,
+        ...(versionId !== undefined && { version_id: versionId }),
+        ...(fileUrl !== undefined && { file_url: fileUrl }),
+        ...(createdAt !== undefined && { created_at: createdAt }),
     };
 }
 
@@ -264,10 +267,11 @@ function mapPlanToCamelCase(row: any): OpuraElectricalPlan {
 }
 
 function mapRoomToSnakeCase(item: Partial<OpuraElectricalRoom>): any {
+    const { planId, createdAt, ...rest } = item as any;
     return {
-        ...item,
-        ...(item.planId !== undefined && { plan_id: item.planId }),
-        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+        ...rest,
+        ...(planId !== undefined && { plan_id: planId }),
+        ...(createdAt !== undefined && { created_at: createdAt }),
     };
 }
 
@@ -280,11 +284,12 @@ function mapRoomToCamelCase(row: any): OpuraElectricalRoom {
 }
 
 function mapPointToSnakeCase(item: Partial<OpuraElectricalPoint>): any {
+    const { roomId, circuitId, createdAt, ...rest } = item as any;
     return {
-        ...item,
-        ...(item.roomId !== undefined && { room_id: item.roomId }),
-        ...(item.circuitId !== undefined && { circuit_id: item.circuitId }),
-        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+        ...rest,
+        ...(roomId !== undefined && { room_id: roomId }),
+        ...(circuitId !== undefined && { circuit_id: circuitId }),
+        ...(createdAt !== undefined && { created_at: createdAt }),
     };
 }
 
@@ -298,11 +303,12 @@ function mapPointToCamelCase(row: any): OpuraElectricalPoint {
 }
 
 function mapBoardToSnakeCase(item: Partial<OpuraElectricalBoard>): any {
+    const { versionId, mainBreakerCapacity, createdAt, ...rest } = item as any;
     return {
-        ...item,
-        ...(item.versionId !== undefined && { version_id: item.versionId }),
-        ...(item.mainBreakerCapacity !== undefined && { main_breaker_capacity: item.mainBreakerCapacity }),
-        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+        ...rest,
+        ...(versionId !== undefined && { version_id: versionId }),
+        ...(mainBreakerCapacity !== undefined && { main_breaker_capacity: mainBreakerCapacity }),
+        ...(createdAt !== undefined && { created_at: createdAt }),
     };
 }
 
@@ -316,15 +322,16 @@ function mapBoardToCamelCase(row: any): OpuraElectricalBoard {
 }
 
 function mapCircuitToSnakeCase(item: Partial<OpuraElectricalCircuit>): any {
+    const { boardId, circuitType, installedPowerW, demandFactor, breakerCapacity, wireSectionMm2, createdAt, ...rest } = item as any;
     return {
-        ...item,
-        ...(item.boardId !== undefined && { board_id: item.boardId }),
-        ...(item.circuitType !== undefined && { circuit_type: item.circuitType }),
-        ...(item.installedPowerW !== undefined && { installed_power_w: item.installedPowerW }),
-        ...(item.demandFactor !== undefined && { demand_factor: item.demandFactor }),
-        ...(item.breakerCapacity !== undefined && { breaker_capacity: item.breakerCapacity }),
-        ...(item.wireSectionMm2 !== undefined && { wire_section_mm2: item.wireSectionMm2 }),
-        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+        ...rest,
+        ...(boardId !== undefined && { board_id: boardId }),
+        ...(circuitType !== undefined && { circuit_type: circuitType }),
+        ...(installedPowerW !== undefined && { installed_power_w: installedPowerW }),
+        ...(demandFactor !== undefined && { demand_factor: demandFactor }),
+        ...(breakerCapacity !== undefined && { breaker_capacity: breakerCapacity }),
+        ...(wireSectionMm2 !== undefined && { wire_section_mm2: wireSectionMm2 }),
+        ...(createdAt !== undefined && { created_at: createdAt }),
     };
 }
 

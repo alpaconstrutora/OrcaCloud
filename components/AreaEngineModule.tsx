@@ -21,7 +21,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
-import { usePersistedState } from './ui/TableUtils';
+import ActionIconButton from './ui/ActionIconButton';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import {
     statusLabel,
     formatNumber,
@@ -60,11 +61,53 @@ interface AreaEngineModuleProps {
 
 type TableView = 'resumo' | 'estrutura' | 'quadro_i' | 'quadro_ii' | 'quadro_ivb' | 'aprovacoes';
 type StructureEditKind = 'block' | 'floor' | 'unit' | 'space';
+type ScreenMode = 'list' | 'workspace';
+
+// §2 — Tela de gestão de projetos de área (guia UI/UX)
+const PROJECT_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Nome', sortable: true },
+    { key: 'project_type', label: 'Tipo', sortable: true },
+    { key: 'normative_reference', label: 'Referência normativa', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'updated_at', label: 'Atualizado em', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const PROJECT_TYPE_LABEL: Record<string, string> = {
+    vertical: 'Vertical',
+    mixed: 'Misto',
+    commercial: 'Comercial',
+    residential: 'Residencial',
+    horizontal: 'Horizontal',
+    other: 'Outro',
+};
+
+const PROJECT_STATUS_LABEL: Record<string, string> = {
+    draft: 'Rascunho',
+    active: 'Ativo',
+    archived: 'Arquivado',
+};
+
+function projectStatusTone(status: string): string {
+    if (status === 'active') return 'text-blue-700';
+    if (status === 'archived') return 'text-slate-500';
+    return 'text-amber-700';
+}
+
+function formatDateShort(value?: string | null): string {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date);
+}
 
 export default function AreaEngineModule({ organizationId }: AreaEngineModuleProps) {
     const confirm = useConfirm();
     // §3 — busca persistida (sobrevive a navegação/reload)
     const [projectSearchTerm, setProjectSearchTerm] = usePersistedState<string>('areaEngine:projectSearch', '');
+    // Tela de gestão de projetos (lista) × workspace de cálculo de um projeto
+    const [screenMode, setScreenMode] = usePersistedState<ScreenMode>('areaEngine:screenMode', 'list');
+    const projectTableColumns = useTableColumns(PROJECT_COLUMNS, 'areaEngine:projectsColumns');
     const [projects, setProjects] = React.useState<AreaProject[]>([]);
     const [versions, setVersions] = React.useState<AreaVersion[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
@@ -155,6 +198,53 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             (project.normative_reference || '').toLowerCase().includes(term)
         );
     }, [projects, projectSearchTerm]);
+
+    // §6.3 — ordenação por cabeçalho, com fallback "atualizado em" desc (§6.4)
+    const sortedProjects = React.useMemo(() => {
+        const list = [...filteredProjects];
+        const { sortColumn, sortDirection } = projectTableColumns;
+        const dir = sortDirection === 'asc' ? 1 : -1;
+        list.sort((a, b) => {
+            if (sortColumn === 'name') return a.name.localeCompare(b.name) * dir;
+            if (sortColumn === 'project_type') return (PROJECT_TYPE_LABEL[a.project_type] || a.project_type).localeCompare(PROJECT_TYPE_LABEL[b.project_type] || b.project_type) * dir;
+            if (sortColumn === 'normative_reference') return (a.normative_reference || '').localeCompare(b.normative_reference || '') * dir;
+            if (sortColumn === 'status') return (PROJECT_STATUS_LABEL[a.status] || a.status).localeCompare(PROJECT_STATUS_LABEL[b.status] || b.status) * dir;
+            if (sortColumn === 'updated_at') return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * dir;
+            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        });
+        return list;
+    }, [filteredProjects, projectTableColumns.sortColumn, projectTableColumns.sortDirection]);
+
+    const projectKpis = React.useMemo(() => ({
+        total: projects.length,
+        active: projects.filter(p => p.status === 'active').length,
+        draft: projects.filter(p => p.status === 'draft').length,
+        archived: projects.filter(p => p.status === 'archived').length,
+    }), [projects]);
+
+    function openProjectWorkspace(projectId: string) {
+        setSelectedProjectId(projectId);
+        setActiveTable('estrutura');
+        setScreenMode('workspace');
+    }
+
+    function backToProjectsList() {
+        setScreenMode('list');
+    }
+
+    async function toggleArchiveProject(project: AreaProject, event: React.MouseEvent) {
+        event.stopPropagation();
+        setActionLoading(`archive-${project.id}`);
+        setError(null);
+        try {
+            await areaEngineService.updateProject(project.id, { status: project.status === 'archived' ? 'active' : 'archived' });
+            await loadProjects();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao atualizar status do projeto.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
 
     const selectedVersion = versions.find(v => v.id === selectedVersionId) || null;
     const technicalApproval = approvals.find(approval => approval.approval_type === 'technical');
@@ -400,6 +490,8 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             setNewProjectType('vertical');
             setIsCreateOpen(false);
             setIsStructureOpen(true);
+            setActiveTable('estrutura');
+            setScreenMode('workspace');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao criar projeto de area.');
         } finally {
@@ -441,6 +533,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             setVersions(versionRows);
             setSelectedVersionId(report.versionId);
             setActiveTable('estrutura');
+            setScreenMode('workspace');
             await loadResults(report.versionId);
             setImportReport(report);
             setIsImportOpen(false);

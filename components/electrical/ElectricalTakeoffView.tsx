@@ -63,7 +63,7 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
           </div>
           
           <div className="flex gap-3">
-            <Button variant="outline" className="rounded-[1rem]" onClick={loadTakeoffs} disabled={generating}>
+            <Button variant="secondary" className="rounded-[1rem]" onClick={loadTakeoffs} disabled={generating}>
               <RefreshCw className={`w-4 h-4 mr-2 ${generating ? 'animate-spin' : ''}`} />
               Recarregar
             </Button>

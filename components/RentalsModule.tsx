@@ -85,6 +85,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const handleDealSort = (key: string) => {
         setDealSortConfig(prev => prev?.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
     };
+    const [brokerSortConfig, setBrokerSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+    const handleBrokerSort = (key: string) => {
+        setBrokerSortConfig(prev => prev?.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
+    };
 
     // Modals Control
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -468,7 +472,28 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // Contratos ordenáveis (§6.3) — Imóvel/Cliente não são campos diretos do
     // negócio, então resolvemos o nome uma vez antes de comparar.
     const sortedDeals = useMemo(() => {
-        const withLookup = deals.map(d => {
+        // Dentro de "Gestão de Unidades" a aba Contratos mostra SÓ os contratos
+        // deste edifício — antes listava todos os contratos de locação da
+        // organização, misturando unidades de imóveis diferentes. O vínculo é
+        // pela unidade: qualquer unidade do contrato (units[] ou property_id)
+        // que seja filha do edifício aberto — ou o próprio edifício, quando ele
+        // é alugado inteiro.
+        const pertenceAoEdificio = (id?: string | null) => {
+            if (!id) return false;
+            if (String(id).toLowerCase() === String(selectedBuildingId).toLowerCase()) return true;
+            const unidade = properties.find(p => p.id === id);
+            return !!unidade && String(unidade.parent_id ?? '').toLowerCase() === String(selectedBuildingId).toLowerCase();
+        };
+        const escopo = selectedBuildingId
+            ? deals.filter(d => {
+                const ids = (d.units && d.units.length > 0)
+                    ? d.units.map(u => u.property_id)
+                    : [d.property_id];
+                return ids.some(pertenceAoEdificio);
+            })
+            : deals;
+
+        const withLookup = escopo.map(d => {
             // Um contrato pode reunir várias unidades — o rótulo mostra a
             // principal + a contagem das demais; o title lista todas.
             const unitIds = (d.units && d.units.length > 0)
@@ -497,7 +522,25 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             if (aValue > bValue) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [deals, properties, clients, dealSortConfig]);
+    }, [deals, properties, clients, dealSortConfig, selectedBuildingId]);
+
+    // Corretores ordenáveis (§6.3) — filtro reaproveita o searchTerm global da régua do módulo.
+    const sortedBrokers = useMemo(() => {
+        const filtered = brokers.filter(b =>
+            b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        if (!brokerSortConfig) return filtered;
+        const { key, direction } = brokerSortConfig;
+        return [...filtered].sort((a: any, b: any) => {
+            let aValue = a[key];
+            let bValue = b[key];
+            if (aValue === null || aValue === undefined) aValue = direction === 'asc' ? Infinity : -Infinity;
+            if (bValue === null || bValue === undefined) bValue = direction === 'asc' ? Infinity : -Infinity;
+            if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+            if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [brokers, searchTerm, brokerSortConfig]);
 
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
@@ -1436,67 +1479,77 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {brokers.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase())).map(broker => (
-                            <div key={broker.id} className="bg-white p-5 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-all">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-12 h-12 bg-gray-100 rounded-[10px] flex items-center justify-center text-gray-400 font-bold text-lg shrink-0">
-                                        {broker.name.charAt(0)}
-                                    </div>
-                                    <div className="flex flex-col min-w-0">
-                                        <span className={`text-xs font-normal mb-0.5 ${broker.is_active ? 'text-emerald-600' : 'text-red-600'}`}>
-                                            {broker.is_active ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                        <h4 className="text-sm font-bold text-gray-900 truncate">{broker.name}</h4>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-gray-500">
-                                        <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                        <span className="text-sm font-normal truncate">{broker.email}</span>
-                                    </div>
-                                    {broker.phone && (
-                                        <div className="flex items-center gap-2 text-gray-500">
-                                            <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                            <span className="text-sm font-normal">{broker.phone}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-2 text-gray-500">
-                                        <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                        <span className="text-sm font-normal text-blue-600">{broker.agency_name || 'Autônomo'}</span>
-                                    </div>
-                                </div>
-
-                                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs text-gray-400">Comissão padrão</span>
-                                        <span className="text-lg font-bold text-gray-900">{broker.commission_rate}%</span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-xs text-gray-400">CRECI</span>
-                                        <span className="text-sm font-medium text-gray-600">{broker.creci || '---'}</span>
-                                    </div>
-                                </div>
-
-                                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        id={`rental-broker-access-${broker.id}`}
-                                        checked={!!brokerAccess[broker.id]}
-                                        onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
-                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                    />
-                                    <label htmlFor={`rental-broker-access-${broker.id}`} className="text-xs font-medium text-gray-600 cursor-pointer">
-                                        Habilitado para ver este empreendimento no Portal
-                                    </label>
-                                </div>
-                            </div>
-                        ))}
-                        <div className="bg-amber-50/40 border-2 border-dashed border-amber-100 rounded-[10px] p-6 flex flex-col items-center justify-center min-h-[200px]">
-                            <span className="text-sm font-bold text-amber-700">Cadastro centralizado</span>
-                            <p className="text-xs text-amber-600 text-center mt-1 px-4">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
+                    {sortedBrokers.length > 0 ? (
+                        <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <SortableHeader colKey="name" label="Corretor" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                        <SortableHeader colKey="email" label="E-mail" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                        <SortableHeader colKey="phone" label="Telefone" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                        <SortableHeader colKey="agency_name" label="Imobiliária" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                        <SortableHeader colKey="commission_rate" label="Comissão" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right" />
+                                        <SortableHeader colKey="creci" label="CRECI" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-table-header font-semibold text-gray-500">Status</th>
+                                        <th className="px-6 py-2 text-table-header font-semibold text-gray-500">Acesso ao Portal</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {sortedBrokers.map(broker => (
+                                        <tr key={broker.id} className="hover:bg-blue-50/50 transition-colors">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">
+                                                {broker.name}
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                {broker.email}
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                {broker.phone || '---'}
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
+                                                {broker.agency_name || 'Autônomo'}
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
+                                                {broker.commission_rate}%
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                {broker.creci || '---'}
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <span className={`text-sm font-normal ${broker.is_active ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                    {broker.is_active ? 'Ativo' : 'Inativo'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-2.5">
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        id={`rental-broker-access-${broker.id}`}
+                                                        checked={!!brokerAccess[broker.id]}
+                                                        onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    />
+                                                    <label htmlFor={`rental-broker-access-${broker.id}`} className="text-sm font-normal text-gray-600 cursor-pointer">
+                                                        Habilitado neste empreendimento
+                                                    </label>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
+                    ) : (
+                        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                            <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum corretor encontrado</h3>
+                            <p className="text-sm text-gray-500">Tente ajustar sua busca ou cadastre um corretor em Minha Organização &gt; Fornecedores.</p>
+                        </div>
+                    )}
+
+                    <div className="bg-amber-50/40 border border-dashed border-amber-100 rounded-[10px] p-4 flex items-center gap-3">
+                        <span className="text-sm font-bold text-amber-700 shrink-0">Cadastro centralizado:</span>
+                        <p className="text-xs text-amber-600">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
                     </div>
                 </div>
             )}

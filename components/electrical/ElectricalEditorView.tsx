@@ -50,6 +50,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [isShiftDown, setIsShiftDown] = useState(false);
   const [isOrthoMode, setIsOrthoMode] = useState(false);
   const [gridSizeCm, setGridSizeCm] = useState<number>(0);
+  const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
   const wallPreviewRef = useRef<any>(null);
   
   const stageRef = useRef<any>(null);
@@ -490,6 +491,111 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     // Do not set tool to 'select', allow continuous drawing unless they hit Esc
   };
 
+  const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
+    const newLengthM = parseFloat(newLengthStr.replace(',', '.'));
+    if (isNaN(newLengthM) || newLengthM <= 0) {
+        setEditingSegment(null);
+        return;
+    }
+    const wall = walls.find(w => w.id === wallId);
+    if (!wall || !plan) return;
+
+    const pts = [...(wall.points as number[])];
+    const x1 = pts[startIndex];
+    const y1 = pts[startIndex + 1];
+    const x2 = pts[startIndex + 2];
+    const y2 = pts[startIndex + 3];
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const currentLengthPx = Math.sqrt(dx*dx + dy*dy);
+    if (currentLengthPx === 0) {
+        setEditingSegment(null);
+        return;
+    }
+
+    const newLengthPx = newLengthM * (plan.scaleFactor || 100);
+    const ratio = newLengthPx / currentLengthPx;
+
+    const newDx = dx * ratio;
+    const newDy = dy * ratio;
+
+    const newX2 = x1 + newDx;
+    const newY2 = y1 + newDy;
+
+    const diffX = newX2 - x2;
+    const diffY = newY2 - y2;
+
+    for (let i = startIndex + 2; i < pts.length; i += 2) {
+        pts[i] += diffX;
+        pts[i+1] += diffY;
+    }
+
+    try {
+        const updatedWall = await electricalProjectService.updateWall(wall.id, { points: pts });
+        setWalls(walls.map(w => w.id === wall.id ? updatedWall : w));
+        showToast('Tamanho ajustado', 'success');
+    } catch (err) {
+        showToast('Erro ao atualizar parede', 'error');
+    }
+    setEditingSegment(null);
+  };
+
+  const renderWallLabels = () => {
+    if (!selectedWallId || !plan) return null;
+    const wall = walls.find(w => w.id === selectedWallId);
+    if (!wall) return null;
+    const pts = wall.points as number[];
+    if (!pts || pts.length < 4) return null;
+
+    const segments = [];
+    for (let i = 0; i < pts.length - 2; i += 2) {
+        const x1 = pts[i], y1 = pts[i+1];
+        const x2 = pts[i+2], y2 = pts[i+3];
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        
+        const lengthPx = Math.sqrt(Math.pow(x2-x1,2) + Math.pow(y2-y1,2));
+        const lengthM = lengthPx / (plan.scaleFactor || 100);
+
+        const isEditing = editingSegment?.wallId === wall.id && editingSegment?.index === i;
+
+        segments.push(
+            <div 
+                key={i}
+                className="absolute z-50 flex items-center justify-center pointer-events-auto"
+                style={{ left: midX, top: midY, transform: 'translate(-50%, -50%)' }}
+            >
+                {isEditing ? (
+                    <div className="bg-white border-2 border-blue-500 rounded p-1 shadow-lg flex items-center" onClick={e => e.stopPropagation()}>
+                        <input 
+                            autoFocus
+                            type="text"
+                            value={editingSegment.lengthM}
+                            onChange={e => setEditingSegment({...editingSegment, lengthM: e.target.value})}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') handleSegmentLengthSave(wall.id, i, editingSegment.lengthM);
+                                if (e.key === 'Escape') setEditingSegment(null);
+                            }}
+                            onBlur={() => handleSegmentLengthSave(wall.id, i, editingSegment.lengthM)}
+                            className="w-16 outline-none text-center text-sm font-bold"
+                        />
+                        <span className="text-xs text-slate-500 ml-1">m</span>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setEditingSegment({ wallId: wall.id, index: i, lengthM: lengthM.toFixed(2) }); }}
+                        className="bg-blue-600 text-white px-2 py-0.5 rounded shadow text-xs font-bold hover:bg-blue-700 transition-colors"
+                    >
+                        {lengthM.toFixed(2)}m
+                    </button>
+                )}
+            </div>
+        );
+    }
+    return segments;
+  };
+
   const handleStageDblClick = (e: any) => {
     if (tool === 'draw_wall') {
       finishWall();
@@ -719,15 +825,16 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                       </button>
                     </div>
                     <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-                      <Stage 
-                        ref={stageRef}
-                        width={stageSize.width} 
-                        height={stageSize.height}
-                        onClick={handleStageClick}
-                        onMouseMove={handleStageMouseMove}
-                        onDblClick={handleStageDblClick}
-                        className={tool === 'draw_room' || tool === 'draw_wall' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
-                      >
+                      <div className="relative" style={{ width: stageSize.width, height: stageSize.height }}>
+                        <Stage 
+                          ref={stageRef}
+                          width={stageSize.width} 
+                          height={stageSize.height}
+                          onClick={handleStageClick}
+                          onMouseMove={handleStageMouseMove}
+                          onDblClick={handleStageDblClick}
+                          className={tool === 'draw_room' || tool === 'draw_wall' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                        >
                         <Layer>
                           {/* Imagem de Fundo */}
                           <KonvaImage image={imageObj} />
@@ -936,7 +1043,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           )}
                         </Layer>
                       </Stage>
-                    </TransformComponent>
+                      {renderWallLabels()}
+                    </div>
+                  </TransformComponent>
                   </React.Fragment>
                 )}
               </TransformWrapper>

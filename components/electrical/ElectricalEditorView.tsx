@@ -39,6 +39,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
+  const [isShiftDown, setIsShiftDown] = useState(false);
   
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,6 +49,21 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   useEffect(() => {
     loadData();
   }, [electricalProjectId]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') setIsShiftDown(true);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') setIsShiftDown(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -150,8 +166,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return isInside;
   };
 
-  const handleStageClick = async (e: any) => {
-    // Get click position relative to stage
+  const handleStageClick = (e: any) => {
+    if (isShiftDown) return; // Prevent clicks while panning
+
     const stage = e.target.getStage();
     const pointerPosition = stage.getRelativePointerPosition();
     if (!pointerPosition) return;
@@ -339,7 +356,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 minScale={0.1}
                 maxScale={5}
                 limitToBounds={false}
-                panning={{ disabled: tool !== 'select' }}
+                panning={{ disabled: tool !== 'select' && !isShiftDown }}
+                wheel={{ step: 0.2 }}
                 doubleClick={{ disabled: true }}
               >
                 {({ zoomIn, zoomOut, resetTransform, ...rest }) => (

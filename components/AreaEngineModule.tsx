@@ -1154,91 +1154,23 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         <div className="p-2 space-y-6">
             {/* §20 — título solto (sem card/hero), subtítulo mt-1.5 */}
             <div>
+                {screenMode === 'workspace' && (
+                    <button
+                        onClick={backToProjectsList}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700 mb-2 inline-flex items-center gap-1"
+                    >
+                        ← Projetos de áreas
+                    </button>
+                )}
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Motor de Áreas</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Quadros I, II e IV-B da NBR 12721 com rastreabilidade de cálculo, aprovação e lock.</p>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    {screenMode === 'list'
+                        ? 'Gestão de projetos de área — Quadros I, II e IV-B da NBR 12721.'
+                        : 'Quadros I, II e IV-B da NBR 12721 com rastreabilidade de cálculo, aprovação e lock.'}
+                </p>
             </div>
 
-            {/* §4 — KPI cards no componente canônico, variante flat (shadow={false},
-                size="sm", ícone solto w-4 h-4) igual à tela de referência
-                BankReconciliation/Extrato. Grade simétrica (§4.2): as 4 métricas são
-                independentes, nenhuma é o total do qual as outras derivam. */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard
-                    shadow={false}
-                    size="sm"
-                    label="Soma dos coeficientes"
-                    value={formatNumber(coefficientSum, 6)}
-                    sub={quadroII.length > 0 ? `${quadroII.length} unidade(s) no Quadro II` : undefined}
-                    icon={<Sigma className="w-4 h-4" />}
-                    color="blue"
-                />
-                <KpiCard
-                    shadow={false}
-                    size="sm"
-                    label="Área real total"
-                    value={`${formatNumber(realTotal)} m²`}
-                    icon={<Ruler className="w-4 h-4" />}
-                    color="emerald"
-                />
-                <KpiCard
-                    shadow={false}
-                    size="sm"
-                    label="Área equivalente"
-                    value={`${formatNumber(equivalentTotal)} m²`}
-                    icon={<Layers className="w-4 h-4" />}
-                    color="indigo"
-                />
-                <KpiCard
-                    shadow={false}
-                    size="sm"
-                    label="Pendências da estrutura"
-                    value={structureChecklist.length}
-                    sub={structureChecklist.length > 0 ? 'Resolva antes de calcular' : 'Nenhuma pendência'}
-                    icon={<AlertTriangle className="w-4 h-4" />}
-                    color={structureChecklist.length > 0 ? 'amber' : 'gray'}
-                />
-            </div>
-
-            {/* §5.3 — toolbar de botões: escopo/ações à esquerda, ação primária à direita */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    <AreaButton variant="secondary" onClick={() => setIsCreateOpen(true)} disabled={!!actionLoading}>
-                        <Plus className="w-[15px] h-[15px]" /> Novo projeto
-                    </AreaButton>
-                    <AreaButton variant="secondary" onClick={openImport} disabled={!!actionLoading}>
-                        <Building2 className="w-[15px] h-[15px]" /> Importar de Empreendimento
-                    </AreaButton>
-                    <AreaButton variant="secondary" onClick={() => setIsStructureOpen(true)} disabled={!selectedVersionId || !!actionLoading}>
-                        <Plus className="w-[15px] h-[15px]" /> Estrutura
-                    </AreaButton>
-                    <AreaButton variant="secondary" onClick={createRevisionFromSelectedVersion} disabled={!selectedVersionId || !!actionLoading}>
-                        <Plus className="w-[15px] h-[15px]" /> Nova revisão
-                    </AreaButton>
-                    <AreaButton variant="secondary" onClick={loadProjects} disabled={loading}>
-                        <RefreshCw className="w-[15px] h-[15px]" /> Atualizar
-                    </AreaButton>
-                    <AreaButton variant="secondary" onClick={() => void exportAreaPackage('xlsx')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
-                        <FileSpreadsheet className="w-[15px] h-[15px]" /> XLSX
-                    </AreaButton>
-                    <AreaButton variant="secondary" onClick={() => void exportAreaPackage('pdf')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
-                        <FileText className="w-[15px] h-[15px]" /> PDF
-                    </AreaButton>
-                    <AreaButton variant="secondary" onClick={runWriteBack} disabled={!canWriteBack || actionLoading === 'write-back'}>
-                        <ArrowLeftRight className="w-[15px] h-[15px]" /> Fração ideal → Empreendimento
-                    </AreaButton>
-                </div>
-                {/* §17 — ação primária, única azul sólida da tela */}
-                <AreaButton onClick={runValidatedCalculation} disabled={!selectedVersionId || !!actionLoading} className="shrink-0">
-                    <Calculator className="w-[15px] h-[15px]" /> Calcular
-                </AreaButton>
-            </div>
-
-            {error && (
-                <div className="border border-red-200 bg-red-50 text-red-700 rounded-[10px] px-4 py-3 text-sm font-medium">
-                    {error}
-                </div>
-            )}
-
+            {/* Sheets compartilhados entre a lista de projetos e o workspace de cálculo */}
             <Sheet open={isCreateOpen} onClose={() => setIsCreateOpen(false)} size="md">
                 <SheetHeader onClose={() => setIsCreateOpen(false)}>
                     <SheetTitle>Novo projeto de areas</SheetTitle>
@@ -1318,6 +1250,238 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     </AreaButton>
                 </SheetFooter>
             </Sheet>
+
+            {screenMode === 'list' ? (
+                <>
+                    {/* §4 — KPI cards da tela de gestão de projetos. Grade simétrica
+                        (§4.2 não se aplica: as 4 métricas são independentes). */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                        <KpiCard shadow={false} size="sm" label="Total de projetos" value={projectKpis.total} icon={<FolderOpen className="w-4 h-4" />} color="blue" />
+                        <KpiCard shadow={false} size="sm" label="Ativos" value={projectKpis.active} icon={<CheckCircle2 className="w-4 h-4" />} color="emerald" />
+                        <KpiCard shadow={false} size="sm" label="Rascunho" value={projectKpis.draft} icon={<Building2 className="w-4 h-4" />} color="amber" />
+                        <KpiCard shadow={false} size="sm" label="Arquivados" value={projectKpis.archived} icon={<Lock className="w-4 h-4" />} color="gray" />
+                    </div>
+
+                    {/* §5.3 — toolbar de botões: escopo/ações à esquerda, ação primária à direita */}
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <AreaButton variant="secondary" onClick={openImport} disabled={!!actionLoading}>
+                                <Building2 className="w-[15px] h-[15px]" /> Importar de Empreendimento
+                            </AreaButton>
+                            <AreaButton variant="secondary" onClick={loadProjects} disabled={loading}>
+                                <RefreshCw className="w-[15px] h-[15px]" /> Atualizar
+                            </AreaButton>
+                        </div>
+                        {/* §17 — ação primária, única azul sólida da tela */}
+                        <AreaButton onClick={() => setIsCreateOpen(true)} disabled={!!actionLoading} className="shrink-0">
+                            <Plus className="w-[15px] h-[15px]" /> Novo projeto
+                        </AreaButton>
+                    </div>
+
+                    {error && (
+                        <div className="border border-red-200 bg-red-50 text-red-700 rounded-[10px] px-4 py-3 text-sm font-medium">
+                            {error}
+                        </div>
+                    )}
+
+                    {/* §5.1 — toolbar de busca desaninhada, direto sobre o fundo */}
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center mb-3">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome ou referência normativa..."
+                                value={projectSearchTerm}
+                                onChange={event => setProjectSearchTerm(event.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={PROJECT_COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={projectTableColumns.visibleColumns}
+                                showColumnConfig={projectTableColumns.showColumnConfig}
+                                onToggleShow={() => projectTableColumns.setShowColumnConfig(!projectTableColumns.showColumnConfig)}
+                                onToggleColumn={projectTableColumns.toggleColumn}
+                                onReset={projectTableColumns.resetColumns}
+                            />
+                        </div>
+                    </div>
+
+                    {/* §6 — tabela: esta lista não usa redimensionamento de colunas (§6.1)
+                        nem cabeçalho fixo (§6.5) — poucas colunas, poucas linhas por
+                        organização (um projeto de áreas por empreendimento/torre). */}
+                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                        {loading && projects.length === 0 ? (
+                            <div className="py-12"><LoadingState message="Carregando projetos..." /></div>
+                        ) : sortedProjects.length === 0 ? (
+                            <div className="py-12">
+                                <EmptyState
+                                    title={projects.length === 0 ? 'Nenhum projeto de áreas' : 'Nenhum projeto encontrado'}
+                                    message={projects.length === 0 ? 'Crie um projeto ou importe de um Empreendimento.' : 'Tente ajustar sua busca.'}
+                                    icon={<FolderOpen className="w-12 h-12" />}
+                                />
+                            </div>
+                        ) : (
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr>
+                                        {projectTableColumns.visibleColumns.includes('name') && (
+                                            <SortableHeader colKey="name" label="Nome" uppercase={false}
+                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        )}
+                                        {projectTableColumns.visibleColumns.includes('project_type') && (
+                                            <SortableHeader colKey="project_type" label="Tipo" uppercase={false}
+                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        )}
+                                        {projectTableColumns.visibleColumns.includes('normative_reference') && (
+                                            <SortableHeader colKey="normative_reference" label="Referência normativa" uppercase={false}
+                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        )}
+                                        {projectTableColumns.visibleColumns.includes('status') && (
+                                            <SortableHeader colKey="status" label="Status" uppercase={false}
+                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        )}
+                                        {projectTableColumns.visibleColumns.includes('updated_at') && (
+                                            <SortableHeader colKey="updated_at" label="Atualizado em" uppercase={false}
+                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        )}
+                                        {projectTableColumns.visibleColumns.includes('actions') && (
+                                            <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {sortedProjects.map(project => (
+                                        <tr
+                                            key={project.id}
+                                            className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedProjectId === project.id ? 'bg-blue-50/60' : ''}`}
+                                            onClick={() => openProjectWorkspace(project.id)}
+                                        >
+                                            {projectTableColumns.visibleColumns.includes('name') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{project.name}</td>
+                                            )}
+                                            {projectTableColumns.visibleColumns.includes('project_type') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{PROJECT_TYPE_LABEL[project.project_type] || project.project_type}</td>
+                                            )}
+                                            {projectTableColumns.visibleColumns.includes('normative_reference') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{project.normative_reference}</td>
+                                            )}
+                                            {projectTableColumns.visibleColumns.includes('status') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <span className={`text-sm font-normal ${projectStatusTone(project.status)}`}>{PROJECT_STATUS_LABEL[project.status] || project.status}</span>
+                                                </td>
+                                            )}
+                                            {projectTableColumns.visibleColumns.includes('updated_at') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatDateShort(project.updated_at)}</td>
+                                            )}
+                                            {projectTableColumns.visibleColumns.includes('actions') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={(event) => { event.stopPropagation(); openProjectWorkspace(project.id); }}
+                                                            className="text-sm font-normal text-blue-600 hover:underline"
+                                                        >
+                                                            Ver detalhes
+                                                        </button>
+                                                        <ActionIconButton
+                                                            kind={project.status === 'archived' ? 'unlock' : 'lock'}
+                                                            title={project.status === 'archived' ? 'Reativar' : 'Arquivar'}
+                                                            disabled={actionLoading === `archive-${project.id}`}
+                                                            onClick={(event) => void toggleArchiveProject(project, event)}
+                                                        />
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </>
+            ) : (
+            <>
+            {/* §4 — KPI cards no componente canônico, variante flat (shadow={false},
+                size="sm", ícone solto w-4 h-4) igual à tela de referência
+                BankReconciliation/Extrato. Grade simétrica (§4.2): as 4 métricas são
+                independentes, nenhuma é o total do qual as outras derivam. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard
+                    shadow={false}
+                    size="sm"
+                    label="Soma dos coeficientes"
+                    value={formatNumber(coefficientSum, 6)}
+                    sub={quadroII.length > 0 ? `${quadroII.length} unidade(s) no Quadro II` : undefined}
+                    icon={<Sigma className="w-4 h-4" />}
+                    color="blue"
+                />
+                <KpiCard
+                    shadow={false}
+                    size="sm"
+                    label="Área real total"
+                    value={`${formatNumber(realTotal)} m²`}
+                    icon={<Ruler className="w-4 h-4" />}
+                    color="emerald"
+                />
+                <KpiCard
+                    shadow={false}
+                    size="sm"
+                    label="Área equivalente"
+                    value={`${formatNumber(equivalentTotal)} m²`}
+                    icon={<Layers className="w-4 h-4" />}
+                    color="indigo"
+                />
+                <KpiCard
+                    shadow={false}
+                    size="sm"
+                    label="Pendências da estrutura"
+                    value={structureChecklist.length}
+                    sub={structureChecklist.length > 0 ? 'Resolva antes de calcular' : 'Nenhuma pendência'}
+                    icon={<AlertTriangle className="w-4 h-4" />}
+                    color={structureChecklist.length > 0 ? 'amber' : 'gray'}
+                />
+            </div>
+
+            {/* §5.3 — toolbar de botões: escopo/ações à esquerda, ação primária à direita */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    <AreaButton variant="secondary" onClick={() => setIsStructureOpen(true)} disabled={!selectedVersionId || !!actionLoading}>
+                        <Plus className="w-[15px] h-[15px]" /> Estrutura
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={createRevisionFromSelectedVersion} disabled={!selectedVersionId || !!actionLoading}>
+                        <Plus className="w-[15px] h-[15px]" /> Nova revisão
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={loadProjects} disabled={loading}>
+                        <RefreshCw className="w-[15px] h-[15px]" /> Atualizar
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={() => void exportAreaPackage('xlsx')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
+                        <FileSpreadsheet className="w-[15px] h-[15px]" /> XLSX
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={() => void exportAreaPackage('pdf')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
+                        <FileText className="w-[15px] h-[15px]" /> PDF
+                    </AreaButton>
+                    <AreaButton variant="secondary" onClick={runWriteBack} disabled={!canWriteBack || actionLoading === 'write-back'}>
+                        <ArrowLeftRight className="w-[15px] h-[15px]" /> Fração ideal → Empreendimento
+                    </AreaButton>
+                </div>
+                {/* §17 — ação primária, única azul sólida da tela */}
+                <AreaButton onClick={runValidatedCalculation} disabled={!selectedVersionId || !!actionLoading} className="shrink-0">
+                    <Calculator className="w-[15px] h-[15px]" /> Calcular
+                </AreaButton>
+            </div>
+
+            {error && (
+                <div className="border border-red-200 bg-red-50 text-red-700 rounded-[10px] px-4 py-3 text-sm font-medium">
+                    {error}
+                </div>
+            )}
 
             {importReport && (
                 <div className="border border-emerald-200 bg-emerald-50 text-emerald-800 rounded-[10px] px-4 py-3 text-sm">
@@ -1866,6 +2030,8 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     </Tabs>
                 </main>
             </section>
+            </>
+            )}
         </div>
     );
 }

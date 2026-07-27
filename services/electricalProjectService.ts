@@ -4,6 +4,7 @@ import {
   OpuraElectricalVersion, 
   OpuraElectricalPlan, 
   OpuraElectricalRoom,
+  OpuraElectricalWall,
   OpuraElectricalPoint,
   OpuraElectricalBoard,
   OpuraElectricalCircuit,
@@ -138,6 +139,36 @@ export const electricalProjectService = {
         if (error) throw new Error(`Erro ao deletar ambiente: ${error.message}`);
     },
     
+    // WALLS
+    async listWallsByPlan(planId: string): Promise<OpuraElectricalWall[]> {
+        const { data, error } = await supabase.from('opura_electrical_walls')
+            .select('*').eq('plan_id', planId).order('created_at', { ascending: true });
+        if (error) throw new Error(`Erro ao listar paredes: ${error.message}`);
+        return (data || []).map(mapWallToCamelCase);
+    },
+
+    async createWall(item: Partial<OpuraElectricalWall>): Promise<OpuraElectricalWall> {
+        const dbItem = mapWallToSnakeCase(item);
+        const { data, error } = await supabase.from('opura_electrical_walls')
+            .insert(dbItem).select().single();
+        if (error) throw new Error(`Erro ao criar parede: ${error.message}`);
+        return mapWallToCamelCase(data);
+    },
+
+    async updateWall(id: string, updates: Partial<OpuraElectricalWall>): Promise<OpuraElectricalWall> {
+        const dbUpdates = mapWallToSnakeCase(updates);
+        const { data, error } = await supabase.from('opura_electrical_walls')
+            .update(dbUpdates).eq('id', id).select().single();
+        if (error) throw new Error(`Erro ao atualizar parede: ${error.message}`);
+        return mapWallToCamelCase(data);
+    },
+
+    async deleteWall(id: string): Promise<void> {
+        const { error } = await supabase.from('opura_electrical_walls')
+            .delete().eq('id', id);
+        if (error) throw new Error(`Erro ao deletar parede: ${error.message}`);
+    },
+
     // POINTS
     async listPointsByRooms(roomIds: string[]): Promise<OpuraElectricalPoint[]> {
         if (!roomIds.length) return [];
@@ -334,6 +365,8 @@ const mapPlanToSnakeCase = toSnakeCaseObject;
 const mapPlanToCamelCase = toCamelCaseObject;
 const mapRoomToSnakeCase = toSnakeCaseObject;
 const mapRoomToCamelCase = toCamelCaseObject;
+const mapWallToSnakeCase = toSnakeCaseObject;
+const mapWallToCamelCase = toCamelCaseObject;
 const mapPointToSnakeCase = toSnakeCaseObject;
 const mapPointToCamelCase = toCamelCaseObject;
 const mapBoardToSnakeCase = toSnakeCaseObject;

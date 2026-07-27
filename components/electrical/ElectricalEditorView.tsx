@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3 } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -12,7 +12,7 @@ import LoadScheduleView from './LoadScheduleView';
 import { convertPdfToImage } from '../../utils/pdfToImage';
 import { ElectricalTakeoffView } from './ElectricalTakeoffView';
 import { useToast } from '../../hooks/useToast';
-import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint } from '../../types/electrical';
+import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint, OpuraElectricalWall } from '../../types/electrical';
 
 interface ElectricalEditorViewProps {
   organizationId: string;
@@ -26,6 +26,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [version, setVersion] = useState<OpuraElectricalVersion | null>(null);
   const [plan, setPlan] = useState<OpuraElectricalPlan | null>(null);
   const [rooms, setRooms] = useState<OpuraElectricalRoom[]>([]);
+  const [walls, setWalls] = useState<OpuraElectricalWall[]>([]);
   const [points, setPoints] = useState<OpuraElectricalPoint[]>([]);
   
   const [loading, setLoading] = useState(true);
@@ -34,13 +35,15 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   // Editor State
   const [viewMode, setViewMode] = useState<'drawing' | 'schedule' | 'takeoff'>('drawing');
-  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate'>('select');
+  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate' | 'draw_wall'>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
+  const [currentWall, setCurrentWall] = useState<number[]>([]);
   const [calibrationPoints, setCalibrationPoints] = useState<number[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
+  const [mousePos, setMousePos] = useState<{x: number, y: number} | null>(null);
   
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,6 +69,16 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     };
   }, []);
 
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (tool === 'draw_wall' && (e.key === 'Enter' || e.key === 'Escape')) {
+        finishWall();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [tool, currentWall, plan, organizationId]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -80,6 +93,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         setPlan(p);
         
         if (p) {
+          const w = await electricalProjectService.listWallsByPlan(p.id);
+          setWalls(w);
+
           const r = await electricalProjectService.listRoomsByPlan(p.id);
           setRooms(r);
           
@@ -167,6 +183,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return isInside;
   };
 
+  const handleStageMouseMove = (e: any) => {
+    const stage = e.target.getStage();
+    const pointerPosition = stage.getRelativePointerPosition();
+    if (pointerPosition) {
+      setMousePos(pointerPosition);
+    }
+  };
+
   const handleStageClick = async (e: any) => {
     if (isShiftDown) return; // Prevent clicks while panning
 
@@ -236,6 +260,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           setTool('select');
         }, 100);
       }
+      return;
+    }
+
+    if (tool === 'draw_wall') {
+      setCurrentWall([...currentWall, pointerPosition.x, pointerPosition.y]);
       return;
     }
 
@@ -335,6 +364,37 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     
     setCurrentPolygon([]);
     setTool('select');
+  };
+
+  const finishWall = async () => {
+    if (currentWall.length < 4) {
+      setCurrentWall([]);
+      setTool('select');
+      return;
+    }
+    if (!plan) return;
+
+    try {
+      const newWall = await electricalProjectService.createWall({
+        organizationId: organizationId,
+        planId: plan.id,
+        points: currentWall,
+        thicknessM: 0.15
+      });
+      setWalls([...walls, newWall]);
+    } catch (error) {
+      console.error(error);
+      showToast('Erro ao salvar parede', 'error');
+    }
+    
+    setCurrentWall([]);
+    // Do not set tool to 'select', allow continuous drawing unless they hit Esc
+  };
+
+  const handleStageDblClick = (e: any) => {
+    if (tool === 'draw_wall') {
+      finishWall();
+    }
   };
 
   if (loading) return <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
@@ -471,7 +531,16 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           Desenhar Ambiente
                         </button>
                         <button
-                          onClick={() => { setTool('calibrate'); setCurrentPolygon([]); setCalibrationPoints([]); }}
+                          onClick={() => { setTool('draw_wall'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'draw_wall' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          Desenhar Parede
+                        </button>
+                        <button
+                          onClick={() => { setTool('calibrate'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
                           className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
                             tool === 'calibrate' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
                           }`}
@@ -509,11 +578,40 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         width={stageSize.width} 
                         height={stageSize.height}
                         onClick={handleStageClick}
-                        className={tool === 'draw_room' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                        onMouseMove={handleStageMouseMove}
+                        onDblClick={handleStageDblClick}
+                        className={tool === 'draw_room' || tool === 'draw_wall' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
                       >
                         <Layer>
                           {/* Imagem de Fundo */}
                           <KonvaImage image={imageObj} />
+                          
+                          {/* Walls */}
+                          {walls.map(w => {
+                            const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
+                            return (
+                              <Line 
+                                key={w.id} 
+                                points={w.points} 
+                                stroke="#1e293b" 
+                                strokeWidth={widthPx} 
+                                lineCap="square" 
+                                lineJoin="miter" 
+                              />
+                            );
+                          })}
+                          
+                          {/* Current Wall Preview */}
+                          {tool === 'draw_wall' && currentWall.length > 0 && (
+                             <Line 
+                                points={mousePos ? [...currentWall, mousePos.x, mousePos.y] : currentWall} 
+                                stroke="#3b82f6" 
+                                strokeWidth={plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10} 
+                                opacity={0.6} 
+                                lineCap="square" 
+                                lineJoin="miter" 
+                             />
+                          )}
                           
                           {rooms.map((room) => {
                             const pts = room.polygonPoints as number[];

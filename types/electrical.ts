@@ -49,6 +49,16 @@ export interface OpuraElectricalRoom {
     updatedAt: string;
 }
 
+export interface OpuraElectricalWall {
+    id: string;
+    organizationId: string;
+    planId: string;
+    points: any;
+    thicknessM?: number | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface OpuraElectricalBoard {
     id: string;
     organizationId: string;

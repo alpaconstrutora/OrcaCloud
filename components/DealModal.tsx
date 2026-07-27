@@ -1429,20 +1429,23 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // barra superior sticky (irmã do main, não ancestral) — absolute preenche só a
     // área de conteúdo, deixando a barra visível. `fixed` ignora esse container e
     // cobre a janela inteira, escondendo a navegação do app.
+    // Em tela cheia o fundo é o mesmo `bg-gray-50` do shell do app (Layout.tsx),
+    // para os cards brancos terem o contraste de Gestão de Unidades. Em modal, o
+    // card continua branco sobre o backdrop escuro.
     return (
-        <div className={isEditMode ? 'absolute inset-0 z-[110] bg-white flex flex-col' : 'absolute inset-0 z-[110] flex items-center justify-center p-8'}>
+        <div className={isEditMode ? 'absolute inset-0 z-[110] bg-gray-50 flex flex-col' : 'absolute inset-0 z-[110] flex items-center justify-center p-8'}>
             {!isEditMode && (
                 <div className="absolute inset-0 bg-[#0B1727]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
             )}
 
             <div className={isEditMode
-                ? 'relative bg-white w-full h-full overflow-hidden flex flex-col animate-in fade-in duration-300'
+                ? 'relative w-full h-full overflow-hidden flex flex-col animate-in fade-in duration-300'
                 : 'relative bg-white w-full h-full overflow-hidden rounded-[10px] shadow-2xl border border-white/20 animate-in zoom-in-95 duration-300 flex flex-col'
             }>
 
                 {/* Cabeçalho — §20: h1 solto + subtítulo mt-1.5, sem card/banda colorida.
                     Os blocos de métrica que moravam à direita do título viraram KpiCard (§4). */}
-                <div className="px-8 pt-6 pb-3 bg-white shrink-0">
+                <div className="px-8 pt-6 pb-3 shrink-0">
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                             <h1 className="text-3xl font-black text-gray-900 tracking-tight">
@@ -1559,7 +1562,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 edita o cadastro aqui (evita duas fontes de verdade); qualquer
                                 correção é feita em Meus Clientes. */}
                             {selectedClient && (
-                                <div className="p-6 bg-gray-50 rounded-[10px] border border-gray-100 space-y-4 animate-in slide-in-from-left-4 duration-500 shadow-sm">
+                                <div className="p-6 bg-white rounded-[10px] border border-gray-100 space-y-4 animate-in slide-in-from-left-4 duration-500 shadow-sm">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-blue-600">
                                             <UserCheck className="w-4 h-4" />
@@ -1685,7 +1688,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-[10px] border text-left transition-all ${
                                                             isChecked
                                                                 ? 'bg-emerald-50 border-emerald-200'
-                                                                : 'bg-gray-50 border-transparent hover:border-blue-200'
+                                                                : 'bg-white border-gray-200 hover:border-blue-300'
                                                         }`}
                                                     >
                                                         <span className={`w-6 h-6 rounded-[6px] flex items-center justify-center shrink-0 border transition-all ${
@@ -1728,7 +1731,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 {/* Lista das unidades do contrato */}
                                 <div className="space-y-2">
                                     {dealUnits.length === 0 && (
-                                        <div className="p-6 bg-gray-50 rounded-[10px] border border-dashed border-gray-200 text-center text-sm text-gray-400">
+                                        <div className="p-6 bg-white rounded-[10px] border border-dashed border-gray-200 text-center text-sm text-gray-400">
                                             Nenhuma unidade adicionada. Selecione abaixo.
                                         </div>
                                     )}
@@ -1738,7 +1741,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         return (
                                             <div
                                                 key={u.property_id}
-                                                className={`flex items-center gap-3 p-3 rounded-[10px] border transition-all ${isExpanded ? 'bg-white border-blue-200 shadow-sm' : 'bg-gray-50 border-gray-100'}`}
+                                                className={`flex items-center gap-3 p-3 rounded-[10px] border transition-all ${isExpanded ? 'bg-white border-blue-200 shadow-sm' : 'bg-white border-gray-100'}`}
                                             >
                                                 <button
                                                     type="button"
@@ -1822,7 +1825,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 )}
 
                                 {expandedProperty && (
-                                    <div className="p-6 bg-gray-50 rounded-[10px] border border-gray-100 flex items-center gap-6 animate-in slide-in-from-left-4 duration-500 shadow-sm">
+                                    <div className="p-6 bg-white rounded-[10px] border border-gray-100 flex items-center gap-6 animate-in slide-in-from-left-4 duration-500 shadow-sm">
                                         <div className="w-20 h-20 rounded-[6px] border-2 border-white shadow-lg overflow-hidden bg-white shrink-0">
                                             {expandedProperty.images?.[0] ?
                                                 <img src={expandedProperty.images[0]} className="w-full h-full object-cover" alt="Preview" /> :
@@ -1875,7 +1878,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     return (
                                         <div className="grid grid-cols-4 gap-3 animate-in slide-in-from-left-4 duration-500">
                                             {specs.map((s) => (
-                                                <div key={s.label} className="p-3 bg-gray-50 rounded-[10px] border border-gray-100 flex flex-col gap-1">
+                                                <div key={s.label} className="p-3 bg-white rounded-[10px] border border-gray-100 flex flex-col gap-1">
                                                     <div className="flex items-center gap-1.5 text-gray-400">
                                                         {s.icon}
                                                         <label className="text-xs font-semibold text-slate-500">{s.label}</label>
@@ -1910,13 +1913,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
 
                                 {/* Tipo */}
-                                <div className={`flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit ${(initialData?.type || defaultType) ? 'hidden' : ''}`}>
+                                <div className={`flex items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit ${(initialData?.type || defaultType) ? 'hidden' : ''}`}>
                                     {(['SALE', 'RENTAL', 'SERVICE'] as const).map((t) => (
                                         <button
                                             key={t}
                                             type="button"
                                             onClick={() => setFormData({ ...formData, type: t })}
-                                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${formData.type === t ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${formData.type === t ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                                         >
                                             {t === 'SALE' ? 'Venda' : t === 'RENTAL' ? 'Aluguel' : 'Serviço'}
                                         </button>
@@ -2720,8 +2723,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 sempre: a fila em Locações › Renovações apenas aponta
                                 para cá, para não existirem dois lugares que mexem no
                                 mesmo contrato. */}
+                            {/* Trilho em card branco (§19.1) — sobre o fundo cinza da
+                                página um trilho bg-gray-50 solto perderia definição. */}
                             {formData.type === 'RENTAL' && linkedContract && (
-                                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
+                                <div className="flex flex-wrap items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit">
                                     {([
                                         { id: 'dados', label: 'Dados do contrato' },
                                         { id: 'renovacoes', label: 'Renovações' },
@@ -2733,7 +2738,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             onClick={() => setContratoSubTab(sub.id)}
                                             className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                                 contratoSubTab === sub.id
-                                                    ? 'bg-white text-blue-600 shadow-sm'
+                                                    ? 'bg-blue-50 text-blue-600'
                                                     : 'text-gray-400 hover:text-gray-600'
                                             }`}
                                         >

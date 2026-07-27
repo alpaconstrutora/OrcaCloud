@@ -100,7 +100,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     setUploading(true);
     try {
       if (file.type === 'application/pdf') {
-        showToast('Convertendo PDF para imagem de fundo...', 'info');
+        showToast('Convertendo PDF para imagem de fundo...');
         file = await convertPdfToImage(file);
       }
 

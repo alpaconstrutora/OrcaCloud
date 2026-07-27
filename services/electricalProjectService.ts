@@ -100,7 +100,8 @@ export const electricalProjectService = {
     },
 
     async uploadPlanImage(file: File, organizationId: string): Promise<string> {
-        const fileName = `${organizationId}/${Date.now()}_${file.name}`;
+        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const fileName = `${organizationId}/${Date.now()}_${safeName}`;
         const { data, error } = await supabase.storage.from('electrical_plans').upload(fileName, file);
         if (error) throw new Error(`Erro no upload da planta: ${error.message}`);
         const { data: publicUrlData } = supabase.storage.from('electrical_plans').getPublicUrl(data.path);

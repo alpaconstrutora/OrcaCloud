@@ -7,6 +7,7 @@ import { electricalProjectService } from '../../services/electricalProjectServic
 import RoomSidebar from './RoomSidebar';
 import PointToolbox, { ElectricalPointType, POINT_TYPES } from './PointToolbox';
 import PointPropertiesSidebar from './PointPropertiesSidebar';
+import LoadScheduleView from './LoadScheduleView';
 import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint } from '../../types/electrical';
 
 interface ElectricalEditorViewProps {
@@ -28,6 +29,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
 
   // Editor State
+  const [activeTab, setActiveTab] = useState<'planta' | 'cargas'>('planta');
   const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point'>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -209,230 +211,230 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   if (loading) return <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
   return (
-    <div className="h-full flex flex-col bg-slate-50">
-      {/* HEADER */}
-      <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 shrink-0">
+    <div className="flex flex-col h-full bg-slate-50">
+      {/* Top Bar */}
+      <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+          <Button variant="outline" size="sm" onClick={onBack} className="text-slate-500 rounded-[1rem]">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar
+          </Button>
           <div>
-            <h1 className="font-bold text-slate-800">{project?.name || 'Projeto Sem Nome'}</h1>
-            <p className="text-xs text-slate-500">Versão {version?.versionNumber} • {plan?.floorName || 'Sem pavimento definido'}</p>
+            <h1 className="text-lg font-semibold text-slate-800">{project?.name || 'Projeto Elétrico'}</h1>
+            <p className="text-xs text-slate-500">Versão {version?.versionNumber || 1} • {plan?.floorName || 'Planta sem nome'}</p>
           </div>
         </div>
+        
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-lg">
+          <button 
+            onClick={() => setActiveTab('planta')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'planta' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Planta
+          </button>
+          <button 
+            onClick={() => setActiveTab('cargas')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'cargas' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Quadro de Cargas
+          </button>
+        </div>
 
-        <div className="flex items-center gap-2">
-          {plan?.fileUrl && (
-            <div className="bg-slate-100 p-1 rounded-lg flex gap-1 mr-4">
-              <button 
-                onClick={() => setTool('select')}
-                className={`p-2 rounded-md flex items-center gap-2 text-sm font-medium transition-colors ${tool === 'select' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}
-              >
-                <MousePointer2 className="w-4 h-4" /> Navegar
-              </button>
-              <button 
-                onClick={() => setTool('draw_room')}
-                className={`p-2 rounded-md flex items-center gap-2 text-sm font-medium transition-colors ${tool === 'draw_room' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}
-              >
-                <Square className="w-4 h-4" /> Marcar Ambiente
-              </button>
-            </div>
-          )}
-          
-          <div className="relative">
-            <Button variant="secondary" className="flex items-center gap-2">
-              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {plan?.fileUrl ? 'Trocar Planta' : 'Upload Planta'}
-            </Button>
-            <input 
-              type="file" 
-              accept="image/png, image/jpeg" 
-              className="absolute inset-0 opacity-0 cursor-pointer" 
-              onChange={handleFileUpload}
-              disabled={uploading}
-            />
-          </div>
+        <div className="flex items-center gap-3">
+          <Button variant="primary" className="rounded-[1rem]">
+            <Save className="w-4 h-4 mr-2" />
+            Salvar
+          </Button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* LEFT SIDEBAR (TOOLBOX) */}
-        {plan?.fileUrl && (
-          <PointToolbox 
-            selectedToolboxItem={selectedToolboxItem}
-            onSelectToolboxItem={setSelectedToolboxItem}
-            tool={tool}
-            setTool={setTool}
-          />
-        )}
-
-        {/* CANVAS AREA */}
-        <div className="flex-1 bg-slate-100 relative overflow-hidden" ref={containerRef}>
-          {!plan?.fileUrl && !uploading && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center p-8 bg-white/50 rounded-2xl border border-dashed border-slate-300">
-                <Upload className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-                <p className="font-bold text-slate-600">Nenhuma planta carregada</p>
-                <p className="text-sm text-slate-500">Faça o upload de uma imagem (PNG/JPG) no menu superior.</p>
-              </div>
-            </div>
+      {activeTab === 'cargas' ? (
+        <LoadScheduleView 
+          versionId={version!.id} 
+          points={points} 
+        />
+      ) : (
+        /* Workspace area */
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Sidebar (Toolbox) */}
+          {plan?.fileUrl && (
+            <PointToolbox 
+              selectedToolboxItem={selectedToolboxItem}
+              onSelectToolboxItem={setSelectedToolboxItem}
+              tool={tool}
+              setTool={setTool}
+            />
           )}
 
-          {plan?.fileUrl && imageObj && (
-            <TransformWrapper
-              initialScale={1}
-              minScale={0.1}
-              maxScale={5}
-              disabled={tool !== 'select'}
-              wheel={{ step: 0.1 }}
-            >
-              {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
-                <React.Fragment>
-                  <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-                    <Stage 
-                      width={stageSize.width} 
-                      height={stageSize.height}
-                      onClick={handleStageClick}
-                      className={tool === 'draw_room' || tool === 'add_point' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
-                    >
-                      <Layer>
-                        {/* Imagem de Fundo */}
-                        <KonvaImage image={imageObj} />
-                        
-                        {/* Ambientes já criados */}
-                        {rooms.map((room) => {
-                          const pts = room.polygonPoints as number[];
-                          if (!pts || pts.length < 6) return null;
-                          return (
+          {/* CANVAS AREA */}
+          <div className="flex-1 bg-slate-100 relative overflow-hidden" ref={containerRef}>
+            {!plan?.fileUrl && !uploading && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center p-8 bg-white/50 rounded-2xl border border-dashed border-slate-300">
+                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-3" />
+                  <p className="font-bold text-slate-600">Nenhuma planta carregada</p>
+                  <p className="text-sm text-slate-500">Faça o upload de uma imagem (PNG/JPG) no menu superior.</p>
+                </div>
+              </div>
+            )}
+
+            {plan?.fileUrl && imageObj && (
+              <TransformWrapper
+                initialScale={1}
+                minScale={0.1}
+                maxScale={5}
+                disabled={tool !== 'select'}
+                wheel={{ step: 0.1 }}
+              >
+                {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
+                  <React.Fragment>
+                    <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
+                      <Stage 
+                        width={stageSize.width} 
+                        height={stageSize.height}
+                        onClick={handleStageClick}
+                        className={tool === 'draw_room' || tool === 'add_point' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                      >
+                        <Layer>
+                          {/* Imagem de Fundo */}
+                          <KonvaImage image={imageObj} />
+                          
+                          {/* Ambientes já criados */}
+                          {rooms.map((room) => {
+                            const pts = room.polygonPoints as number[];
+                            if (!pts || pts.length < 6) return null;
+                            return (
+                              <Line
+                                key={room.id}
+                                points={pts}
+                                fill="rgba(59, 130, 246, 0.2)"
+                                stroke="#3b82f6"
+                                strokeWidth={2}
+                                closed
+                                tension={0}
+                              />
+                            );
+                          })}
+
+                          {/* Polígono atual (em desenho) */}
+                          {currentPolygon.length > 0 && (
                             <Line
-                              key={room.id}
-                              points={pts}
-                              fill="rgba(59, 130, 246, 0.2)"
-                              stroke="#3b82f6"
-                              strokeWidth={2}
-                              closed
+                              points={currentPolygon}
+                              stroke="#ef4444"
+                              strokeWidth={3}
+                              closed={false}
                               tension={0}
                             />
-                          );
-                        })}
+                          )}
+                          {currentPolygon.length > 0 && (
+                             <Circle 
+                              x={currentPolygon[0]} 
+                              y={currentPolygon[1]} 
+                              radius={6} 
+                              fill="#ef4444" 
+                              onClick={finishPolygon}
+                              onMouseEnter={(e) => {
+                                const container = e.target.getStage()?.container();
+                                if (container) container.style.cursor = 'pointer';
+                              }}
+                              onMouseLeave={(e) => {
+                                const container = e.target.getStage()?.container();
+                                if (container) container.style.cursor = 'crosshair';
+                              }}
+                             />
+                          )}
 
-                        {/* Polígono atual (em desenho) */}
-                        {currentPolygon.length > 0 && (
-                          <Line
-                            points={currentPolygon}
-                            stroke="#ef4444"
-                            strokeWidth={3}
-                            closed={false}
-                            tension={0}
-                          />
-                        )}
-                        {currentPolygon.length > 0 && (
-                           <Circle 
-                            x={currentPolygon[0]} 
-                            y={currentPolygon[1]} 
-                            radius={6} 
-                            fill="#ef4444" 
-                            onClick={finishPolygon}
-                            onMouseEnter={(e) => {
-                              const container = e.target.getStage()?.container();
-                              if (container) container.style.cursor = 'pointer';
-                            }}
-                            onMouseLeave={(e) => {
-                              const container = e.target.getStage()?.container();
-                              if (container) container.style.cursor = 'crosshair';
-                            }}
-                           />
-                        )}
+                          {/* Pontos Elétricos */}
+                          {points.map(pt => {
+                            const def = POINT_TYPES.find(d => d.id === pt.pointType);
+                            const isSelected = selectedPointId === pt.id;
+                            return (
+                              <Circle
+                                 key={pt.id}
+                                 x={pt.canvasX || 0}
+                                 y={pt.canvasY || 0}
+                                 radius={isSelected ? 10 : 8}
+                                 fill={def?.color || '#94a3b8'}
+                                 stroke={isSelected ? '#2563eb' : 'white'}
+                                 strokeWidth={2}
+                                 shadowColor="black"
+                                 shadowBlur={5}
+                                 shadowOpacity={0.2}
+                                 onMouseEnter={(e) => {
+                                   const container = e.target.getStage()?.container();
+                                   if (container) container.style.cursor = 'pointer';
+                                 }}
+                                 onMouseLeave={(e) => {
+                                   const container = e.target.getStage()?.container();
+                                   if (container) container.style.cursor = (tool === 'draw_room' || tool === 'add_point') ? 'crosshair' : 'grab';
+                                 }}
+                                 onClick={(e) => {
+                                   e.cancelBubble = true;
+                                   if (tool === 'select') {
+                                     setSelectedPointId(pt.id);
+                                   }
+                                 }}
+                              />
+                            );
+                          })}
+                        </Layer>
+                      </Stage>
+                    </TransformComponent>
+                  </React.Fragment>
+                )}
+              </TransformWrapper>
+            )}
 
-                        {/* Pontos Elétricos */}
-                        {points.map(pt => {
-                          const def = POINT_TYPES.find(d => d.id === pt.pointType);
-                          const isSelected = selectedPointId === pt.id;
-                          return (
-                            <Circle
-                               key={pt.id}
-                               x={pt.canvasX || 0}
-                               y={pt.canvasY || 0}
-                               radius={isSelected ? 10 : 8}
-                               fill={def?.color || '#94a3b8'}
-                               stroke={isSelected ? '#2563eb' : 'white'}
-                               strokeWidth={2}
-                               shadowColor="black"
-                               shadowBlur={5}
-                               shadowOpacity={0.2}
-                               onMouseEnter={(e) => {
-                                 const container = e.target.getStage()?.container();
-                                 if (container) container.style.cursor = 'pointer';
-                               }}
-                               onMouseLeave={(e) => {
-                                 const container = e.target.getStage()?.container();
-                                 if (container) container.style.cursor = (tool === 'draw_room' || tool === 'add_point') ? 'crosshair' : 'grab';
-                               }}
-                               onClick={(e) => {
-                                 e.cancelBubble = true;
-                                 if (tool === 'select') {
-                                   setSelectedPointId(pt.id);
-                                 }
-                               }}
-                            />
-                          );
-                        })}
-                      </Layer>
-                    </Stage>
-                  </TransformComponent>
-                </React.Fragment>
-              )}
-            </TransformWrapper>
-          )}
+            {/* Dica para fechar o polígono */}
+            {tool === 'draw_room' && currentPolygon.length > 0 && (
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm shadow-xl animate-fade-in-up">
+                Clique no ponto inicial (vermelho) para fechar o ambiente.
+              </div>
+            )}
+          </div>
 
-          {/* Dica para fechar o polígono */}
-          {tool === 'draw_room' && currentPolygon.length > 0 && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm shadow-xl animate-fade-in-up">
-              Clique no ponto inicial (vermelho) para fechar o ambiente.
-            </div>
-          )}
+          {/* RIGHT SIDEBAR (ROOMS OR PROPERTIES) */}
+          <div className="w-80 bg-white border-l border-slate-200 shadow-xl z-10 flex flex-col">
+            {selectedPointId && points.find(p => p.id === selectedPointId) ? (
+              <PointPropertiesSidebar
+                point={points.find(p => p.id === selectedPointId)!}
+                versionId={version!.id}
+                organizationId={organizationId}
+                onUpdate={async (updates) => {
+                  try {
+                      const updated = await electricalProjectService.updatePoint(selectedPointId, updates);
+                      setPoints(points.map(p => p.id === selectedPointId ? updated : p));
+                  } catch (err) {
+                      alert('Erro ao atualizar ponto.');
+                  }
+                }}
+                onDelete={async () => {
+                  try {
+                      await electricalProjectService.deletePoint(selectedPointId);
+                      setPoints(points.filter(p => p.id !== selectedPointId));
+                      setSelectedPointId(null);
+                  } catch (err) {
+                      alert('Erro ao deletar ponto.');
+                  }
+                }}
+                onClose={() => setSelectedPointId(null)}
+              />
+            ) : (
+              <RoomSidebar 
+                rooms={rooms}
+                onDeleteRoom={async (id) => {
+                  try {
+                    await electricalProjectService.deleteRoom(id);
+                    setRooms(rooms.filter(r => r.id !== id));
+                  } catch (e) {
+                    alert('Erro ao deletar.');
+                  }
+                }}
+              />
+            )}
+          </div>
         </div>
-
-        {/* RIGHT SIDEBAR (ROOMS OR PROPERTIES) */}
-        <div className="w-80 bg-white border-l border-slate-200 shadow-xl z-10 flex flex-col">
-          {selectedPointId && points.find(p => p.id === selectedPointId) ? (
-            <PointPropertiesSidebar
-              point={points.find(p => p.id === selectedPointId)!}
-              onUpdate={async (updates) => {
-                try {
-                    const updated = await electricalProjectService.updatePoint(selectedPointId, updates);
-                    setPoints(points.map(p => p.id === selectedPointId ? updated : p));
-                } catch (err) {
-                    alert('Erro ao atualizar ponto.');
-                }
-              }}
-              onDelete={async () => {
-                try {
-                    await electricalProjectService.deletePoint(selectedPointId);
-                    setPoints(points.filter(p => p.id !== selectedPointId));
-                    setSelectedPointId(null);
-                } catch (err) {
-                    alert('Erro ao deletar ponto.');
-                }
-              }}
-              onClose={() => setSelectedPointId(null)}
-            />
-          ) : (
-            <RoomSidebar 
-              rooms={rooms}
-              onDeleteRoom={async (id) => {
-                try {
-                  await electricalProjectService.deleteRoom(id);
-                  setRooms(rooms.filter(r => r.id !== id));
-                } catch (e) {
-                  alert('Erro ao deletar.');
-                }
-              }}
-            />
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

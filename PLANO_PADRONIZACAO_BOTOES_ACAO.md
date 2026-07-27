@@ -16,7 +16,7 @@
    `p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95`.
    Destrutivo: `border-red-100 text-red-500 hover:bg-red-50`.
    Atenção (Compartilhar): `hover:text-orange-600 hover:border-orange-200`.
-   → O guia `docs/ui_ux_standard_guide.md` §9.2 (que hoje descreve `p-2.5 rounded-xl slate-200`) **será atualizado para este estilo**.
+   → O guia `docs/ui_ux_guia_unificado.md` §9.2 (que hoje descreve `p-2.5 rounded-xl slate-200`) **será atualizado para este estilo**.
 
 2. **Abordagem = componente compartilhado + migração incremental** (não big-bang,
    não find-replace cru). Espelha o que já foi feito com `TableUtils`, `useConfirm`,
@@ -93,7 +93,7 @@ do print sem regressão visual. Serve de "golden sample".
 
 ## Fase 1 — Atualizar o guia (fonte da verdade)
 
-- Reescrever **§9.2** do `docs/ui_ux_standard_guide.md`:
+- Reescrever **§9.2** do `docs/ui_ux_guia_unificado.md`:
   - estilo canônico = o compacto do print (substitui o `p-2.5 rounded-xl`);
   - apontar `ActionIconButton` como **forma oficial** (className manual passa a
     ser exceção documentada, não regra);

@@ -119,7 +119,7 @@ export const clientService = {
         } else {
             await assertDocumentNotDuplicated('client', payload.document as string);
 
-            // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+            // Código sequencial 001/002/003... único por organização (§ui_ux_guia_unificado.md).
             if (!payload.code) {
                 const { data: nextCode } = await supabase.rpc('get_next_client_code', { p_org_id: (client.organization_id as string) ?? null });
                 if (nextCode) payload.code = nextCode;

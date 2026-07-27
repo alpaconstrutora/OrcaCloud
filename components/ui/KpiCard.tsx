@@ -2,7 +2,7 @@ import React from 'react';
 
 /**
  * KpiCard — Padrão Global OrçaCloud
- * Fonte: docs/ui_ux_standard_guide.md § 4. KPI CARDS
+ * Fonte: docs/ui_ux_guia_unificado.md § 4. KPI CARDS
  *
  * Uso:
  *   <KpiCard
@@ -65,7 +65,7 @@ const SIZE_MAP: Record<'sm' | 'md' | 'lg', { value: string; padding: string; rad
 /**
  * Componente canônico de KPI Card.
  * Layout: ícone esquerda + label/valor/legenda direita.
- * Segue exatamente o snippet de docs/ui_ux_standard_guide.md § 4.
+ * Segue exatamente o snippet de docs/ui_ux_guia_unificado.md § 4.
  */
 export function KpiCard({
     label,

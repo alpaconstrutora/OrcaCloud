@@ -25,7 +25,7 @@ const TIPO_OPTIONS: { value: FloorTipo; label: string }[] = [
   { value: 'OUTRO',     label: 'Outro' },
 ];
 
-// Texto colorido, sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+// Texto colorido, sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
 const TIPO_STYLE: Record<FloorTipo, string> = {
   SUBSOLO:   'text-slate-600',
   TERREO:    'text-emerald-600',

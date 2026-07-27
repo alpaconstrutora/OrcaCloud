@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'Encerrado',
 };
 
-// Texto colorido, sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+// Texto colorido, sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
 const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   PLANEJAMENTO: 'text-gray-600',
   LANCAMENTO: 'text-amber-600',
@@ -184,9 +184,9 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   // ── Lista ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Header flat — h1 solto + subtítulo mt-1.5 (UI UX tabela.md §1). O contexto de
+      {/* Header flat — h1 solto + subtítulo mt-1.5 (ui_ux_guia_unificado.md §20). O contexto de
           módulo (Comercial/Incorporação) já está na sidebar — não duplicar (§18 do
-          ui_ux_standard_guide.md). */}
+          ui_ux_guia_unificado.md). */}
       <div>
         <h1 className="text-3xl font-black text-gray-900 tracking-tight">Empreendimentos</h1>
         <p className="text-gray-400 text-sm mt-1.5 font-medium">Incorporações e desenvolvimentos imobiliários da organização.</p>
@@ -221,14 +221,14 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
       )}
 
       {/* KPIs — mesmo nível de importância (contagem × contagem × soma financeira), grade simétrica.
-          mb-3: ritmo de 12px até a toolbar acoplada (UI UX tabela.md §6). */}
+          mb-3: ritmo de 12px até a toolbar acoplada (ui_ux_guia_unificado.md §20.1). */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
         <KpiCard shadow={false} label="Total de Empreendimentos" value={kpis.total} icon={<Building2 className="w-5 h-5" />} color="blue" />
         <KpiCard shadow={false} label="Em Obras" value={kpis.emObras} icon={<Building2 className="w-5 h-5" />} color="amber" />
         <KpiCard shadow={false} label="VGV Total" value={`R$ ${kpis.vgvTotal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={<Building2 className="w-5 h-5" />} color="emerald" />
       </div>
 
-      {/* Tabela com toolbar de busca acoplada (UI UX tabela.md §5) — busca, refresh, colunas
+      {/* Tabela com toolbar de busca acoplada (ui_ux_guia_unificado.md §5.2) — busca, refresh, colunas
           e o botão primário (sem barra de escopo/§4: não há controles de conta/competência
           aqui) dentro do MESMO card da tabela, separados só pelo border-b da toolbar. */}
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

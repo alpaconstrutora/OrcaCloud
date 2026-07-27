@@ -8,7 +8,7 @@
 // As pontes com Comercial (Venda de Ativos) e Locações NÃO moram mais aqui: elas viviam
 // duplicadas com as abas Espelho de Vendas / Espelho de Locações, que fazem o mesmo
 // publish/pull de forma mais rica (unidade a unidade, órfãos, endereço, KPIs). Aqui ficou
-// só o que não existe em nenhum outro lugar: o sync dos estudos (ui_ux_standard_guide.md §6.4).
+// só o que não existe em nenhum outro lugar: o sync dos estudos (ui_ux_guia_unificado.md §6.4).
 //
 // Os botões vivem nos cards do diagrama (2 por aresta, um por sentido); os cards de
 // detalhe abaixo ficam só com os números que justificam a ação.

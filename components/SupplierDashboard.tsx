@@ -1076,7 +1076,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         </div>
     );
 
-    // Título único por aba (UI UX tabela.md §1) — nada de h1 duplicado dentro de cada render*
+    // Título único por aba (ui_ux_guia_unificado.md §20) — nada de h1 duplicado dentro de cada render*
     const TAB_META: Record<typeof activeTab, { title: string; subtitle: string }> = {
         overview: {
             title: effectiveSupplier?.name ? `Olá, ${effectiveSupplier.name.split(' ')[0]}` : 'Portal Prime',

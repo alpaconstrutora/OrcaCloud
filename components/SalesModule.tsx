@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
@@ -47,7 +47,7 @@ interface SalesModuleProps {
     organizationId?: string;
 }
 
-// ui_ux_standard_guide.md §2 — colunas fora do componente.
+// ui_ux_guia_unificado.md §2 — colunas fora do componente.
 // `context: 'building'` só aparece na visão de detalhe de um edifício (selectedBuildingId);
 // `context: 'all'` aparece nas duas visões (mestre e detalhe).
 const INVENTORY_COLUMNS: (ColumnConfig & { context: 'all' | 'building' })[] = [
@@ -65,6 +65,7 @@ const INVENTORY_COLUMNS: (ColumnConfig & { context: 'all' | 'building' })[] = [
 ];
 
 const DEALS_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
     { key: 'property', label: 'Imóvel', sortable: true },
     { key: 'block', label: 'Bloco', sortable: true },
     { key: 'private_area', label: 'Á. priv.', sortable: true },
@@ -106,7 +107,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         const saved = localStorage.getItem('sales_selected_building_id');
         return (saved && saved !== 'undefined') ? saved : null;
     });
-    // ui_ux_standard_guide.md §3 — colunas + ordenação persistidas via useTableColumns.
+    // ui_ux_guia_unificado.md §3 — colunas + ordenação persistidas via useTableColumns.
     const inventoryColumns = useTableColumns(INVENTORY_COLUMNS, 'salesModuleInventoryColumns');
     const dealsColumns = useTableColumns(DEALS_COLUMNS, 'salesModuleDealsColumns');
 
@@ -508,7 +509,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     };
 
 
-    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
     const getStatusColor = (status: PropertyStatus) => {
         switch (status) {
             case PropertyStatus.AVAILABLE: return 'text-emerald-600';
@@ -531,7 +532,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         }
     };
 
-    // ui_ux_standard_guide.md §6.3 — valor de ordenação de cada coluna de propriedade.
+    // ui_ux_guia_unificado.md §6.3 — valor de ordenação de cada coluna de propriedade.
     const getInventorySortValue = (p: Property, key: string): string | number => {
         switch (key) {
             case 'name': return (p.name || '').toLowerCase();
@@ -602,32 +603,72 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             .catch(err => console.error('[Commercial] Error loading brokers:', err));
     }, [effectiveOrganizationId]);
 
+    // ─────────────────────────────────────────────────────────────────────
+    // UNIDADES DA NEGOCIAÇÃO
+    // Uma venda pode reunir mais de uma unidade. `deal.value` é a SOMA, então
+    // toda métrica de R$/m² tem que dividir pela ÁREA SOMADA — usar só a área
+    // da unidade principal infla o indicador proporcionalmente ao nº de
+    // unidades. Contratos de 1 unidade caem no mesmo caminho, sem mudança.
+    // ─────────────────────────────────────────────────────────────────────
+    const unitPropertiesOf = useCallback((deal: PropertyDeal): Property[] => {
+        const ids = (deal.units && deal.units.length > 0)
+            ? deal.units.map(u => u.property_id)
+            : (deal.property_id ? [deal.property_id] : []);
+        return ids.map(id => properties.find(p => p.id === id)).filter(Boolean) as Property[];
+    }, [properties]);
+
+    /** Área privativa somada das unidades (nunca 0, para não dividir por zero). */
+    const dealAreaOf = useCallback((deal: PropertyDeal): number => {
+        const total = unitPropertiesOf(deal)
+            .reduce((s, p) => s + (p.private_area || p.area || 0), 0);
+        return total > 0 ? total : 1;
+    }, [unitPropertiesOf]);
+
+    /** Preço de tabela somado das unidades — base da variação por m². */
+    const dealBasePriceOf = useCallback((deal: PropertyDeal): number =>
+        unitPropertiesOf(deal).reduce((s, p) => s + (p.price || 0), 0), [unitPropertiesOf]);
+
+    /** Rótulo "Apto 101 +2" e o title com todas as unidades. */
+    const dealUnitLabelOf = useCallback((deal: PropertyDeal) => {
+        const units = unitPropertiesOf(deal);
+        const primary = properties.find(p => p.id === deal.property_id) || units[0];
+        return {
+            name: primary?.name || '',
+            extra: Math.max(0, units.length - 1),
+            all: units.map(u => u.name).filter(Boolean).join(' + '),
+        };
+    }, [unitPropertiesOf, properties]);
+
+    // Um contrato aparece no edifício se QUALQUER uma de suas unidades pertence
+    // a ele — não só a principal.
     const buildingDeals = selectedBuildingId ? deals.filter(deal => {
-        const property = properties.find(p => p.id === deal.property_id);
-        if (!property) return false;
-        
-        const isChild = String(property.parent_id).toLowerCase() === String(selectedBuildingId).toLowerCase();
-        const isSelf = String(property.id).toLowerCase() === String(selectedBuildingId).toLowerCase();
-        
-        return isChild || isSelf;
+        const units = unitPropertiesOf(deal);
+        if (units.length === 0) return false;
+        return units.some(property => {
+            const isChild = String(property.parent_id).toLowerCase() === String(selectedBuildingId).toLowerCase();
+            const isSelf = String(property.id).toLowerCase() === String(selectedBuildingId).toLowerCase();
+            return isChild || isSelf;
+        });
     }) : deals;
 
-    // ui_ux_standard_guide.md §6.3 — valor de ordenação de cada coluna de negociação.
+    // ui_ux_guia_unificado.md §6.3 — valor de ordenação de cada coluna de negociação.
     const getDealSortValue = (deal: PropertyDeal, key: string): string | number => {
         const property = properties.find(p => p.id === deal.property_id);
-        const m2 = property?.private_area || property?.area || 1;
+        const m2 = dealAreaOf(deal);
+        const basePrice = dealBasePriceOf(deal);
         switch (key) {
+            case 'code': return deal.code || '';
             case 'property': return (property?.name || '').toLowerCase();
             case 'block': return (property?.block || '').toLowerCase();
-            case 'private_area': return property?.private_area || property?.area || 0;
-            case 'price_base': return property?.price || 0;
-            case 'price_per_m2_base': return (property?.price || 0) / m2;
+            case 'private_area': return dealAreaOf(deal);
+            case 'price_base': return basePrice;
+            case 'price_per_m2_base': return basePrice / m2;
             case 'floor': return property?.floor ?? -1;
             case 'sale_value': return deal.value || 0;
             case 'sale_value_per_m2': return (deal.value || 0) / m2;
-            case 'variance': return (deal.value || 0) / m2 - (property?.price || 0) / m2;
+            case 'variance': return (deal.value || 0) / m2 - basePrice / m2;
             case 'variance_pct': {
-                const base = (property?.price || 0) / m2;
+                const base = basePrice / m2;
                 const venda = (deal.value || 0) / m2;
                 return base > 0 ? ((venda - base) / base) * 100 : 0;
             }
@@ -698,7 +739,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         );
     };
 
-    // ui_ux_standard_guide.md §10.1 — Shift+clique seleciona o intervalo entre a última linha marcada e a atual.
+    // ui_ux_guia_unificado.md §10.1 — Shift+clique seleciona o intervalo entre a última linha marcada e a atual.
     const handleRowCheck = (propertyId: string, index: number, shiftKey: boolean) => {
         if (shiftKey && lastCheckedIndex !== null) {
             const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
@@ -1055,7 +1096,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                         onEdit={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }}
                                                         onDelete={() => handleDeleteProperty(property.id)}
                                                         onRegisterDeal={() => {
-                                                            setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                            setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING', units: [{ property_id: property.id, value: property.price, is_primary: true }] });
                                                             setIsDealModalOpen(true);
                                                         }}
                                                         getStatusColor={getStatusColor}
@@ -1080,7 +1121,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                         onEdit={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }}
                                                         onDelete={() => handleDeleteProperty(property.id)}
                                                         onRegisterDeal={() => {
-                                                            setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                            setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING', units: [{ property_id: property.id, value: property.price, is_primary: true }] });
                                                             setIsDealModalOpen(true);
                                                         }}
                                                         getStatusColor={getStatusColor}
@@ -1209,7 +1250,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                 <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                                                                     <button
                                                                         onClick={() => {
-                                                                            setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                                            setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING', units: [{ property_id: property.id, value: property.price, is_primary: true }] });
                                                                             setIsDealModalOpen(true);
                                                                         }}
                                                                         className="text-emerald-600 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-lg transition-all"
@@ -1274,7 +1315,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         if (!selectedBuildingId && (unit.type === 'BUILDING' || !unit.parent_id)) {
                                             setSelectedBuildingId(unit.id);
                                         } else {
-                                            setEditingDeal({ id: '', property_id: unit.id, client_id: '', type: 'SALE', value: unit.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                            setEditingDeal({ id: '', property_id: unit.id, client_id: '', type: 'SALE', value: unit.price, date: new Date().toISOString().split('T')[0], status: 'PENDING', units: [{ property_id: unit.id, value: unit.price, is_primary: true }] });
                                             setIsDealModalOpen(true);
                                         }
                                     }}
@@ -1567,7 +1608,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                 <span className="text-xs font-medium text-blue-600 mb-1 inline-block">
                                                     Venda direta
                                                 </span>
-                                                <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || 'Imóvel em referência'}</h4>
+                                                <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors"
+                                                    title={dealUnitLabelOf(deal).all || undefined}>
+                                                    {dealUnitLabelOf(deal).name || property?.name || 'Imóvel em referência'}
+                                                    {dealUnitLabelOf(deal).extra > 0 && (
+                                                        <span className="ml-1.5 text-sm font-normal text-gray-400">+{dealUnitLabelOf(deal).extra}</span>
+                                                    )}
+                                                </h4>
                                                 <div className="flex items-center gap-2 mt-2 text-gray-500">
                                                     <User className="w-4 h-4" />
                                                     <span className="text-sm font-normal">
@@ -1623,6 +1670,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3) */}
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            {dv.includes('code') && <SortableHeader colKey="code" label="Código" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
                                             {dv.includes('property') && <SortableHeader colKey="property" label="Imóvel" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
                                             {dv.includes('block') && <SortableHeader colKey="block" label="Bloco" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />}
                                             {dv.includes('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap" />}
@@ -1641,17 +1689,30 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         {sortedBuildingDeals.map(deal => {
                                             const property = properties.find(p => p.id === deal.property_id);
                                             const client = clients.find(c => c.id === deal.client_id);
-                                            const m2 = property?.private_area || property?.area || 1;
-                                            const m2Base = (property?.price || 0) / m2;
+                                            // Área e preço de tabela SOMADOS das unidades do contrato.
+                                            const unitLabel = dealUnitLabelOf(deal);
+                                            const m2 = dealAreaOf(deal);
+                                            const basePrice = dealBasePriceOf(deal);
+                                            const m2Base = basePrice / m2;
                                             const m2Venda = deal.value / m2;
                                             const variancia = m2Venda - m2Base;
                                             const varianciaPct = m2Base > 0 ? (variancia / m2Base) * 100 : 0;
                                             return (
                                                 <tr key={deal.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
+                                                    {dv.includes('code') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                            {deal.code || '—'}
+                                                        </td>
+                                                    )}
                                                     {dv.includes('property') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" title={unitLabel.all || undefined}>
                                                             <div className="flex flex-col">
-                                                                <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>
+                                                                <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
+                                                                    {unitLabel.name || property?.name || '---'}
+                                                                    {unitLabel.extra > 0 && (
+                                                                        <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
+                                                                    )}
+                                                                </span>
                                                                 <span className="text-xs font-normal text-gray-400">
                                                                     {client?.name || 'Não vinculado'}
                                                                 </span>
@@ -1665,12 +1726,12 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     )}
                                                     {dv.includes('private_area') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
-                                                            {property?.private_area || property?.area || 0}m²
+                                                            {dealAreaOf(deal)}m²
                                                         </td>
                                                     )}
                                                     {dv.includes('price_base') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600 text-right">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property?.price || 0)}
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(basePrice)}
                                                         </td>
                                                     )}
                                                     {dv.includes('price_per_m2_base') && (
@@ -1898,7 +1959,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             <DealModal
                 isOpen={isDealModalOpen}
                 onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); }}
-                onSave={() => loadData()}
+                onSave={() => { loadData(); /* aviso de salvamento agora é emitido dentro do próprio DealModal */ }}
                 initialData={editingDeal}
                 organizationId={effectiveOrganizationId}
                 buildingId={selectedBuildingId || undefined}

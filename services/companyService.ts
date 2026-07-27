@@ -37,7 +37,7 @@ export const companyService = {
 
     async create(payload: CompanyInsert): Promise<Company> {
         const insertPayload: Record<string, unknown> = { ...payload };
-        // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+        // Código sequencial 001/002/003... único por organização (§ui_ux_guia_unificado.md).
         if (!insertPayload.code) {
             const { data: nextCode } = await supabase.rpc('get_next_company_code', { p_org_id: payload.org_id });
             if (nextCode) insertPayload.code = nextCode;

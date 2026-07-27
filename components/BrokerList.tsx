@@ -34,7 +34,7 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     ] },
 ];
 
-// Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+// Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
 const StatusLabel: React.FC<{ active: boolean }> = ({ active }) => (
     <span className={`text-sm font-normal ${active ? 'text-emerald-700' : 'text-gray-400'}`}>
         {active ? 'Ativo' : 'Inativo'}
@@ -254,7 +254,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                 <KpiCard shadow={false} size="sm" label="Inativos" value={kpis.inactive} icon={<UserX className="w-4 h-4" />} color="gray" />
             </div>
 
-            {/* Tabela com toolbar de busca acoplada (UI UX tabela.md §5) — busca dentro do mesmo card da tabela. */}
+            {/* Tabela com toolbar de busca acoplada (ui_ux_guia_unificado.md §5.2) — busca dentro do mesmo card da tabela. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">

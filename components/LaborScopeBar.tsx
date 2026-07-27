@@ -13,7 +13,7 @@ interface LaborScopeBarProps {
 
 /**
  * Barra de escopo compartilhada pelas telas do módulo Gestão de Mão de Obra
- * (§4 de UI UX tabela.md): seletor de organização (contexto do módulo inteiro)
+ * (§5.3 de ui_ux_guia_unificado.md): seletor de organização (contexto do módulo inteiro)
  * + Atualizar à esquerda, ação primária da tela (se houver) à direita.
  */
 const LaborScopeBar: React.FC<LaborScopeBarProps> = ({

@@ -170,6 +170,38 @@ export const electricalProjectService = {
         const { error } = await supabase.from('opura_electrical_points')
             .delete().eq('id', id);
         if (error) throw new Error(`Erro ao deletar ponto: ${error.message}`);
+    },
+
+    // BOARDS
+    async listBoards(versionId: string): Promise<OpuraElectricalBoard[]> {
+        const { data, error } = await supabase.from('opura_electrical_boards')
+            .select('*').eq('version_id', versionId).order('created_at', { ascending: true });
+        if (error) throw new Error(`Erro ao listar quadros: ${error.message}`);
+        return (data || []).map(mapBoardToCamelCase);
+    },
+
+    async createBoard(item: Partial<OpuraElectricalBoard>): Promise<OpuraElectricalBoard> {
+        const dbItem = mapBoardToSnakeCase(item);
+        const { data, error } = await supabase.from('opura_electrical_boards')
+            .insert(dbItem).select().single();
+        if (error) throw new Error(`Erro ao criar quadro: ${error.message}`);
+        return mapBoardToCamelCase(data);
+    },
+
+    // CIRCUITS
+    async listCircuits(boardId: string): Promise<OpuraElectricalCircuit[]> {
+        const { data, error } = await supabase.from('opura_electrical_circuits')
+            .select('*').eq('board_id', boardId).order('created_at', { ascending: true });
+        if (error) throw new Error(`Erro ao listar circuitos: ${error.message}`);
+        return (data || []).map(mapCircuitToCamelCase);
+    },
+
+    async createCircuit(item: Partial<OpuraElectricalCircuit>): Promise<OpuraElectricalCircuit> {
+        const dbItem = mapCircuitToSnakeCase(item);
+        const { data, error } = await supabase.from('opura_electrical_circuits')
+            .insert(dbItem).select().single();
+        if (error) throw new Error(`Erro ao criar circuito: ${error.message}`);
+        return mapCircuitToCamelCase(data);
     }
 };
 
@@ -262,3 +294,48 @@ function mapPointToCamelCase(row: any): OpuraElectricalPoint {
         createdAt: row.created_at,
     };
 }
+
+function mapBoardToSnakeCase(item: Partial<OpuraElectricalBoard>): any {
+    return {
+        ...item,
+        ...(item.versionId !== undefined && { version_id: item.versionId }),
+        ...(item.mainBreakerCapacity !== undefined && { main_breaker_capacity: item.mainBreakerCapacity }),
+        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+    };
+}
+
+function mapBoardToCamelCase(row: any): OpuraElectricalBoard {
+    return {
+        ...row,
+        versionId: row.version_id,
+        mainBreakerCapacity: row.main_breaker_capacity,
+        createdAt: row.created_at,
+    };
+}
+
+function mapCircuitToSnakeCase(item: Partial<OpuraElectricalCircuit>): any {
+    return {
+        ...item,
+        ...(item.boardId !== undefined && { board_id: item.boardId }),
+        ...(item.circuitType !== undefined && { circuit_type: item.circuitType }),
+        ...(item.installedPowerW !== undefined && { installed_power_w: item.installedPowerW }),
+        ...(item.demandFactor !== undefined && { demand_factor: item.demandFactor }),
+        ...(item.breakerCapacity !== undefined && { breaker_capacity: item.breakerCapacity }),
+        ...(item.wireSectionMm2 !== undefined && { wire_section_mm2: item.wireSectionMm2 }),
+        ...(item.createdAt !== undefined && { created_at: item.createdAt }),
+    };
+}
+
+function mapCircuitToCamelCase(row: any): OpuraElectricalCircuit {
+    return {
+        ...row,
+        boardId: row.board_id,
+        circuitType: row.circuit_type,
+        installedPowerW: row.installed_power_w,
+        demandFactor: row.demand_factor,
+        breakerCapacity: row.breaker_capacity,
+        wireSectionMm2: row.wire_section_mm2,
+        createdAt: row.created_at,
+    };
+}
+

@@ -403,7 +403,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
         occupancyRate: filteredProperties.length > 0 ? ((filteredProperties.filter(p => p.status === PropertyStatus.SOLD || p.status === PropertyStatus.RENTED).length / filteredProperties.length) * 100).toFixed(1) : '0.0'
     };
 
-    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
     const getStatusColor = (status: PropertyStatus) => {
         switch (status) {
             case PropertyStatus.AVAILABLE: return 'text-emerald-600';

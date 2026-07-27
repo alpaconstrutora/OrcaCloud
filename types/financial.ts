@@ -12,6 +12,12 @@ export interface PaymentInstallment {
     clientName?: string;
     propertyId?: string;
     propertyName?: string;
+    /** Todas as unidades do contrato, quando ele reúne mais de uma (apto + vaga
+     *  + box no mesmo aluguel). `propertyId`/`propertyName` continuam apontando
+     *  para a unidade principal, por compatibilidade. */
+    propertyIds?: string[];
+    /** Rótulo concatenado das unidades ("Apto 101 + Vaga 12"). */
+    propertyNames?: string;
     linkedProjectId?: string;
     commissionRate?: number;
     brokerName?: string;

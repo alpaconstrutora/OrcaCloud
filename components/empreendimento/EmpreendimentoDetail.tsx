@@ -42,7 +42,7 @@ const FALLBACK_TIPO_LABELS: Record<string, string> = {
   COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
-// Texto colorido, sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+// Texto colorido, sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
 const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   PLANEJAMENTO: 'text-gray-600',
   LANCAMENTO: 'text-amber-600',
@@ -167,7 +167,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 Sincronização, onde ela tem contexto (divergências, última sync) e desabilita
                 sozinha quando não há o que sincronizar. Ter as duas era o mesmo controle em
                 dois lugares com estados diferentes — o do header ficava sempre aceso, mesmo
-                sem divergência nenhuma (ui_ux_standard_guide.md §6.4/§18). */}
+                sem divergência nenhuma (ui_ux_guia_unificado.md §6.4/§18). */}
             {e.imovib_study_id && onGoToStudy && (
               <button
                 onClick={onGoToStudy}

@@ -32,7 +32,7 @@ const STATUS_OPTIONS: { value: OpuraDocumentStatus; label: string }[] = [
 const ALERTA_OPTIONS = [90, 60, 30, 15, 7];
 
 /**
- * Edição em lote do GED — modal dedicado (não Sheet: `docs/ui_ux_standard_guide.md`
+ * Edição em lote do GED — modal dedicado (não Sheet: `docs/ui_ux_guia_unificado.md`
  * §10 já prescreve modal para isso). Campo vazio = não altera aquele campo, exceto
  * Tags, que sempre mescla com o que cada documento já tinha (nunca sobrescreve).
  */

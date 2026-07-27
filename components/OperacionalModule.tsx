@@ -3,7 +3,7 @@ import { isObra } from '../utils/projectClassification'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
   ChevronRight, Building2, Loader2, LayoutGrid, List,
-  Kanban, Library,
+  Kanban, Library, FolderCog,
 } from 'lucide-react'
 import OperacionalList from './OperacionalList'
 import OperacionalDetail from './OperacionalDetail'
@@ -12,9 +12,13 @@ import OperacionalDashboard from './OperacionalDashboard'
 import OperacionalDiary from './OperacionalDiary'
 import OperacionalKanban from './OperacionalKanban'
 import OperacionalTemplateManager from './OperacionalTemplateManager'
+import ProjectList from './ProjectList'
 import { supabase } from '../lib/supabase'
+import { BudgetEntry, ProjectSettings } from '../types'
 
 type OpsView = 'list' | 'detail' | 'form' | 'dashboard' | 'diary' | 'kanban' | 'templates'
+// Tela pré-seleção de obra: escolher uma obra p/ operar, ou gerenciar (CRUD) as obras.
+type PreOpsView = 'select' | 'manage'
 
 interface Props {
   activeOrganizationId?: string
@@ -22,6 +26,15 @@ interface Props {
   projects?: Array<{ id: string; name: string; settings?: { organizationId?: string } }>
   activeSection?: string
   onChangeView?: (view: string) => void
+  // ── Gestão de Projetos (CRUD de Obras) — mesmo contrato usado por ProjectList/AppRouter ──
+  organizations?: { id: string; name: string }[]
+  isProjectsLoading?: boolean
+  onLoadProject?: (id: string, targetView?: string | null) => Promise<void> | void
+  onEditProject?: (id: string) => Promise<void> | void
+  onNewProject?: (classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO') => void
+  onDuplicateProject?: (id: string) => Promise<void> | void
+  onImportProject?: (data: { name: string; budget: BudgetEntry[]; settings?: Partial<ProjectSettings> }) => Promise<void> | void
+  onExportProject?: (id: string) => Promise<void> | void
 }
 
 // ── Tab bar ──────────────────────────────────────────────────────────────────
@@ -169,8 +182,17 @@ const OperacionalModule: React.FC<Props> = ({
   projects = [],
   activeSection,
   onChangeView,
+  organizations = [],
+  isProjectsLoading = false,
+  onLoadProject,
+  onEditProject,
+  onNewProject,
+  onDuplicateProject,
+  onImportProject,
+  onExportProject,
 }) => {
   const [view, setView] = useState<OpsView>('list')
+  const [preView, setPreView] = useState<PreOpsView>('select')
 
   // Só usar propProjectId se o projeto for uma OBRA — evita mostrar lista
   // vazia quando o usuário chega aqui com um projeto ORÇAMENTO/PLANEJAMENTO ativo.
@@ -203,24 +225,70 @@ const OperacionalModule: React.FC<Props> = ({
     }
   }, [selectedProjectId, activeOrganizationId, projects])
 
-  // ── Sem projeto selecionado: mostrar seletor ──────────────────────────────
+  // ── Sem projeto selecionado: mostrar seletor OU gestão de projetos ────────
   if (!selectedProjectId) {
+    const canManageProjects = !!(onNewProject && onEditProject && onDuplicateProject && onImportProject && onExportProject)
+    const headerCopy = preView === 'manage'
+      ? { title: 'Gestão de Projetos', subtitle: 'Cadastre, edite e organize as obras do Controle Operacional' }
+      : { title: 'Controle Operacional', subtitle: 'Ordens de execução, apontamentos e diário de obra' }
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Controle Operacional</h1>
-            <p className="text-slate-400 text-sm mt-1 font-medium">
-              Ordens de execução, apontamentos e diário de obra
-            </p>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">{headerCopy.title}</h1>
+            <p className="text-slate-400 text-sm mt-1 font-medium">{headerCopy.subtitle}</p>
           </div>
         </div>
-        <ProjectSelector
-          projects={projects}
-          selectedId={selectedProjectId}
-          orgId={activeOrganizationId}
-          onSelect={setSelectedProjectId}
-        />
+
+        {/* Toolbar de abas — anatomia canônica ui_ux_guia_unificado.md §19.1 */}
+        {canManageProjects && (
+          <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+              <button
+                onClick={() => setPreView('select')}
+                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                  preView === 'select' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                Selecionar Obra
+              </button>
+              <button
+                onClick={() => setPreView('manage')}
+                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                  preView === 'manage' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <FolderCog className="w-3.5 h-3.5" />
+                Gestão de Projetos
+              </button>
+            </div>
+          </div>
+        )}
+
+        {preView === 'manage' && canManageProjects ? (
+          <ProjectList
+            projects={projects}
+            organizationId={activeOrganizationId}
+            organizations={organizations}
+            classificationFilter="OBRA"
+            isExternalLoading={isProjectsLoading}
+            onLoadProject={onLoadProject!}
+            onEditProject={onEditProject!}
+            onNewProject={onNewProject!}
+            onDuplicateProject={onDuplicateProject!}
+            onImportProject={onImportProject!}
+            onExportProject={onExportProject!}
+          />
+        ) : (
+          <ProjectSelector
+            projects={projects}
+            selectedId={selectedProjectId}
+            orgId={activeOrganizationId}
+            onSelect={setSelectedProjectId}
+          />
+        )}
       </div>
     )
   }

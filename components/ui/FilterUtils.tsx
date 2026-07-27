@@ -172,7 +172,7 @@ export function useAdvancedFilters(fields: FilterFieldConfig[], storageKey: stri
 interface AdvancedFilterPanelProps {
   fields: FilterFieldConfig[];
   state: ReturnType<typeof useAdvancedFilters>;
-  /** Escala de radius do botão-gatilho (ui_ux_standard_guide.md §16). 'compact' (default,
+  /** Escala de radius do botão-gatilho (ui_ux_guia_unificado.md §16). 'compact' (default,
    *  inalterado) para telas na escala compacta (h-9/rounded-[6px]). 'padrão' para telas que
    *  ainda usam a escala grande (rounded-[2.5rem]/py-4) — ver SupplyChainOrderList.tsx. */
   triggerSize?: 'compact' | 'padrão';

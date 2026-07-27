@@ -126,7 +126,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     };
 
     // Excluir direto (sem diálogo) — usado pelo InlineDisclosureMenu, que já tem
-    // confirmação de 2 passos embutida (ui_ux_standard_guide.md §9).
+    // confirmação de 2 passos embutida (ui_ux_guia_unificado.md §9).
     const performDelete = async (id: string) => {
         try {
             setLoading(true);

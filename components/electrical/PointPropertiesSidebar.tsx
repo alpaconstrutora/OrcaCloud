@@ -1,10 +1,13 @@
 import React from 'react';
 import { Settings2, Zap, Save, Trash2, X } from 'lucide-react';
-import { OpuraElectricalPoint } from '../../types';
+import { electricalProjectService } from '../../services/electricalProjectService';
+import { OpuraElectricalPoint, OpuraElectricalBoard, OpuraElectricalCircuit } from '../../types/electrical';
 import { POINT_TYPES } from './PointToolbox';
 
 interface PointPropertiesSidebarProps {
     point: OpuraElectricalPoint;
+    versionId: string;
+    organizationId: string;
     onUpdate: (updates: Partial<OpuraElectricalPoint>) => void;
     onDelete: () => void;
     onClose: () => void;
@@ -12,6 +15,8 @@ interface PointPropertiesSidebarProps {
 
 export default function PointPropertiesSidebar({
     point,
+    versionId,
+    organizationId,
     onUpdate,
     onDelete,
     onClose
@@ -21,15 +26,80 @@ export default function PointPropertiesSidebar({
         powerW: point.powerW || 0,
         voltage: point.voltage || 0,
         heightM: point.heightM || 0,
+        circuitId: point.circuitId || '',
     });
+
+    const [boards, setBoards] = React.useState<OpuraElectricalBoard[]>([]);
+    const [circuits, setCircuits] = React.useState<OpuraElectricalCircuit[]>([]);
+    const [loadingCircuits, setLoadingCircuits] = React.useState(false);
+    const [isCreatingCircuit, setIsCreatingCircuit] = React.useState(false);
+    const [newCircuitName, setNewCircuitName] = React.useState('');
 
     React.useEffect(() => {
         setLocalState({
             powerW: point.powerW || 0,
             voltage: point.voltage || 0,
             heightM: point.heightM || 0,
+            circuitId: point.circuitId || '',
         });
     }, [point]);
+
+    React.useEffect(() => {
+        loadCircuits();
+    }, [versionId]);
+
+    const loadCircuits = async () => {
+        setLoadingCircuits(true);
+        try {
+            const bds = await electricalProjectService.listBoards(versionId);
+            setBoards(bds);
+            
+            let allCircuits: OpuraElectricalCircuit[] = [];
+            for (const bd of bds) {
+                const cts = await electricalProjectService.listCircuits(bd.id);
+                allCircuits = [...allCircuits, ...cts];
+            }
+            setCircuits(allCircuits);
+        } catch (e) {
+            console.error('Erro ao carregar circuitos:', e);
+        } finally {
+            setLoadingCircuits(false);
+        }
+    };
+
+    const handleCreateCircuit = async () => {
+        if (!newCircuitName.trim()) return;
+        
+        try {
+            // Check if there is a board, if not create a default one
+            let defaultBoard = boards[0];
+            if (!defaultBoard) {
+                defaultBoard = await electricalProjectService.createBoard({
+                    organizationId,
+                    versionId,
+                    name: 'QDC Principal',
+                    boardType: 'QDC',
+                    mainBreakerCapacity: 40
+                });
+                setBoards([defaultBoard]);
+            }
+            
+            const newCircuit = await electricalProjectService.createCircuit({
+                organizationId,
+                boardId: defaultBoard.id,
+                name: newCircuitName,
+                circuitType: point.pointType.includes('tomada') ? 'TUG' : 'Iluminação',
+                voltage: localState.voltage || 220
+            });
+            
+            setCircuits([...circuits, newCircuit]);
+            setLocalState(s => ({ ...s, circuitId: newCircuit.id }));
+            setIsCreatingCircuit(false);
+            setNewCircuitName('');
+        } catch (e) {
+            alert('Erro ao criar circuito');
+        }
+    };
 
     const pointDef = POINT_TYPES.find(p => p.id === point.pointType);
     const Icon = pointDef?.icon || Zap;
@@ -38,7 +108,8 @@ export default function PointPropertiesSidebar({
         onUpdate({
             powerW: localState.powerW,
             voltage: localState.voltage,
-            heightM: localState.heightM
+            heightM: localState.heightM,
+            circuitId: localState.circuitId || null
         });
     };
 
@@ -102,6 +173,41 @@ export default function PointPropertiesSidebar({
                             onChange={e => setLocalState(s => ({ ...s, heightM: parseFloat(e.target.value) || 0 }))}
                             className="w-full border border-slate-200 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
                         />
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100">
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Circuito Associado</label>
+                        {isCreatingCircuit ? (
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text"
+                                    placeholder="Ex: C01 - Iluminação"
+                                    value={newCircuitName}
+                                    onChange={e => setNewCircuitName(e.target.value)}
+                                    className="flex-1 border border-slate-200 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <button onClick={handleCreateCircuit} className="bg-blue-600 text-white px-3 rounded-md text-sm font-medium">Add</button>
+                                <button onClick={() => setIsCreatingCircuit(false)} className="bg-slate-100 text-slate-600 px-3 rounded-md text-sm font-medium">X</button>
+                            </div>
+                        ) : (
+                            <select 
+                                value={localState.circuitId}
+                                onChange={e => {
+                                    if (e.target.value === 'new') {
+                                        setIsCreatingCircuit(true);
+                                    } else {
+                                        setLocalState(s => ({ ...s, circuitId: e.target.value }));
+                                    }
+                                }}
+                                className="w-full border border-slate-200 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            >
+                                <option value="">Sem circuito associado</option>
+                                {circuits.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                                <option value="new" className="font-bold text-blue-600">+ Criar Novo Circuito</option>
+                            </select>
+                        )}
                     </div>
                 </div>
 

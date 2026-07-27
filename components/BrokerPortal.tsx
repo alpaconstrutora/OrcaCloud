@@ -94,8 +94,12 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
     const [loading, setLoading] = useState(true);
     const [proposals, setProposals] = useState<Partial<BrokerProposal>[]>([]);
     const [commercialDeals, setCommercialDeals] = useState<PropertyDeal[]>([]);
-    const [selectedUnit, setSelectedUnit] = useState<BrokerUnit | null>(null);
+    // A CESTA da proposta. Uma proposta pode reunir apto + vaga + box do mesmo
+    // empreendimento sob um comprador. Clicar numa unidade continua funcionando
+    // como antes (cesta de 1) — a seleção múltipla é opt-in.
+    const [cart, setCart] = useState<BrokerUnit[]>([]);
     const [showSimulator, setShowSimulator] = useState(false);
+    const [cartWarning, setCartWarning] = useState<string | null>(null);
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [showTabConfig, setShowTabConfig] = useState(false);
 
@@ -316,18 +320,48 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
         }
     };
 
+    // Clique direto na unidade: abre o simulador com uma cesta de 1, como sempre.
     const handleMakeProposal = (unit: BrokerUnit) => {
-        setSelectedUnit(unit);
+        setCart([unit]);
         setShowSimulator(true);
         setCurrentTab('propostas');
     };
+
+    /**
+     * Liga/desliga uma unidade na cesta.
+     *
+     * A cesta é restrita a UM empreendimento porque o Plano de Vendas é por
+     * prédio (`sales_plans.building_id`): misturar prédios deixaria a proposta
+     * sem política aplicável. Ao clicar em unidade de outro prédio, avisa e
+     * troca a cesta em vez de recusar em silêncio.
+     */
+    const handleToggleCart = (unit: BrokerUnit) => {
+        setCartWarning(null);
+        setCart(prev => {
+            if (prev.some(u => u.id === unit.id)) return prev.filter(u => u.id !== unit.id);
+            if (unit.status && unit.status !== PropertyStatus.AVAILABLE) {
+                setCartWarning(`A unidade ${unit.number || unit.name} não está disponível.`);
+                return prev;
+            }
+            if (prev.length > 0 && prev[0].parent_id !== unit.parent_id) {
+                setCartWarning('Uma proposta só pode reunir unidades do mesmo empreendimento — a seleção foi reiniciada.');
+                return [unit];
+            }
+            return [...prev, unit];
+        });
+    };
+
+    const cartTotal = useMemo(
+        () => cart.reduce((s, u) => s + (Number(u.current_price) || 0), 0),
+        [cart]
+    );
 
     const handleSubmitProposal = async (proposal: Partial<BrokerProposal>) => {
         try {
             const savedProposal = await brokerService.saveProposal(proposal);
             setProposals(prev => [savedProposal, ...prev.filter(p => !p.id?.startsWith('prop-'))]);
             setShowSimulator(false);
-            setSelectedUnit(null);
+            setCart([]);
             alert('Proposta enviada com sucesso! A incorporadora irá analisar.');
         } catch (error) {
             console.error("Erro ao salvar proposta:", error);
@@ -339,9 +373,35 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
     const [shareMsg, setShareMsg] = useState<string | null>(null);
     const toast = (m: string) => { setShareMsg(m); setTimeout(() => setShareMsg(null), 4000); };
 
+    /**
+     * Rótulo da proposta: "Unidade 101 +2" com a lista completa no title.
+     * `units` chega das RPCs/embed; propostas legadas caem no property_id.
+     */
+    const proposalUnitLabel = (p: Partial<BrokerProposal>) => {
+        const list = (p.units && p.units.length > 0)
+            ? p.units
+            : (p.property_id ? [{ property_id: p.property_id }] : []);
+        const names = list.map(u => {
+            const named = (u as { unit_name?: string }).unit_name;
+            if (named) return named;
+            const found = units.find(x => x.id === u.property_id);
+            return found?.number || found?.name || '';
+        }).filter(Boolean);
+        return { primary: names[0] || '-', extra: Math.max(0, list.length - 1), all: names.join(' + ') };
+    };
+
     const handleProposalPdf = (p: Partial<BrokerProposal>, unitLabel: string) => {
         downloadProposalPdf({
             id: p.id, property_name: unitLabel, buyer_name: p.buyer_name,
+            // Cesta: o PDF ganha a tabela de unidades quando há mais de uma.
+            units: (p.units || []).map(u => ({
+                unit_name: (u as { unit_name?: string }).unit_name
+                    || units.find(x => x.id === u.property_id)?.number
+                    || units.find(x => x.id === u.property_id)?.name,
+                unit_price: u.unit_price,
+                allocated_value: u.allocated_value,
+                is_primary: u.is_primary,
+            })),
             unit_price: p.unit_price, discount_pct: p.discount_pct, total_value: p.total_value,
             down_payment: p.down_payment, monthly_installments: p.monthly_installments,
             monthly_value: p.monthly_value, balloon_value: p.balloon_value,
@@ -760,16 +820,24 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                         parentProperty={buildings.find(b => b.id === selectedBuildingId)}
                         deals={[
                             ...commercialDeals,
-                            ...proposals.map(p => ({
-                                ...p,
-                                status: p.status === 'ENVIADA' ? 'PENDING' :
+                            // O mapa casa negócio↔unidade por property_id. Uma proposta em
+                            // cesta tem N unidades, então vira N pseudo-negócios — sem isso
+                            // só a unidade principal ficaria pintada no espelho.
+                            ...proposals.flatMap(p => {
+                                const status = p.status === 'ENVIADA' ? 'PENDING' :
                                     p.status === 'APROVADA' ? 'COMPLETED' :
                                         p.status === 'REJEITADA' ? 'CANCELLED' :
-                                            'IN_NEGOTIATION'
-                            }))
+                                            'IN_NEGOTIATION';
+                                const ids = (p.units && p.units.length > 0)
+                                    ? p.units.map(u => u.property_id)
+                                    : (p.property_id ? [p.property_id] : []);
+                                return ids.map(pid => ({ ...p, property_id: pid, status }));
+                            })
                         ] as unknown as PropertyDeal[]}
                         onSelectUnit={handleMakeProposal}
                         onReserveUnit={handleReserve}
+                        selectedUnitIds={cart.map(u => u.id)}
+                        onToggleUnit={handleToggleCart}
                     />
                 </div>
             )}
@@ -781,12 +849,14 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                     portalToken={portalToken}
                     organizationId={initialOrgId || selectedOrgId}
                     onMakeProposal={handleMakeProposal}
+                    selectedUnitIds={cart.map(u => u.id)}
+                    onToggleUnit={handleToggleCart}
                 />
             )}
 
-            {currentTab === 'propostas' && showSimulator && selectedUnit && (
+            {currentTab === 'propostas' && showSimulator && cart.length > 0 && (
                 <BrokerProposalSimulator
-                    unit={selectedUnit}
+                    units={cart}
                     brokerEmail={effectiveBrokerEmail || ''}
                     organizationId={initialOrgId || selectedOrgId || 'demo'}
                     onSubmitProposal={handleSubmitProposal}
@@ -812,6 +882,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                         <div className="divide-y divide-gray-100">
                             {myProposals.map((p, i) => {
                                 const unit = units.find(u => u.id === p.property_id);
+                                const label = proposalUnitLabel(p);
                                 return (
                                     <div key={p.id || i} className="p-5 flex items-center justify-between hover:bg-gray-50 transition-colors">
                                         <div className="flex items-center gap-4">
@@ -819,8 +890,11 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                                 <Building2 className="w-5 h-5 text-blue-600" />
                                             </div>
                                             <div>
-                                                <p className="text-sm font-bold text-gray-900">
-                                                    Unidade {unit?.number || unit?.name || '-'} • {unit?.block || 'Geral'}
+                                                <p className="text-sm font-bold text-gray-900" title={label.all || undefined}>
+                                                    Unidade {label.primary}
+                                                    {label.extra > 0
+                                                        ? <span className="ml-1.5 text-xs font-normal text-gray-400">+{label.extra}</span>
+                                                        : <> • {unit?.block || 'Geral'}</>}
                                                 </p>
                                                 <p className="text-xs text-gray-400 mt-0.5">
                                                     {p.buyer_name} • {p.buyer_cpf}
@@ -839,7 +913,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                                                <ActionIconButton kind="download" title="Baixar PDF" onClick={() => handleProposalPdf(p, `Unidade ${unit?.number || unit?.name || '-'}`)} />
+                                                <ActionIconButton kind="download" title="Baixar PDF" onClick={() => handleProposalPdf(p, `Unidade ${label.primary}`)} />
                                                 <ActionIconButton kind="share" title="Gerar link público" onClick={() => handleProposalShare(p.id)} />
                                             </div>
                                         </div>
@@ -854,6 +928,57 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             {shareMsg && (
                 <div className="fixed bottom-6 right-6 z-[300] flex items-center gap-2 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium bg-gray-900 text-white animate-in slide-in-from-bottom-4 duration-300">
                     <Link2 className="w-4 h-4 shrink-0" /> {shareMsg}
+                </div>
+            )}
+
+            {/* Barra da cesta — só aparece com seleção em andamento e fora do simulador.
+                Permite montar apto + vaga + box e mandar UMA proposta. */}
+            {!showSimulator && cart.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[290] w-[min(92vw,44rem)] bg-white rounded-2xl border border-indigo-200 shadow-2xl p-4 animate-in slide-in-from-bottom-4 duration-300">
+                    {cartWarning && (
+                        <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
+                            {cartWarning}
+                        </p>
+                    )}
+                    <div className="flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-indigo-500 uppercase tracking-widest">
+                                {cart.length} {cart.length === 1 ? 'unidade selecionada' : 'unidades selecionadas'}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {cart.map(u => (
+                                    <button
+                                        key={u.id}
+                                        type="button"
+                                        onClick={() => handleToggleCart(u)}
+                                        title="Remover da proposta"
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                    >
+                                        {u.number || u.name} <X className="w-3 h-3" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                            <p className="text-xs text-gray-400 uppercase tracking-widest">Total</p>
+                            <p className="text-lg font-black text-gray-900">{formatCurrency(cartTotal)}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => { setCartWarning(null); setShowSimulator(true); setCurrentTab('propostas'); }}
+                            className="shrink-0 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                        >
+                            Fazer proposta ({cart.length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setCart([]); setCartWarning(null); }}
+                            title="Limpar seleção"
+                            className="shrink-0 p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             )}
 

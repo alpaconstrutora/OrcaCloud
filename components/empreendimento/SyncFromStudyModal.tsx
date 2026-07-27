@@ -131,7 +131,7 @@ export const SyncFromStudyModal: React.FC<Props> = ({ empreendimentoId, onClose,
 };
 
 // Stat = mini-KPI dentro do modal — label mantém uppercase (mesmo padrão do
-// KpiCard "md" em ui_ux_standard_guide.md §4.3, não é o estilo "gritado" do §21).
+// KpiCard "md" em ui_ux_guia_unificado.md §4.3, não é o estilo "gritado" do §21).
 const Stat: React.FC<{ icon: any; label: string; value: number }> = ({ icon: Icon, label, value }) => (
   <div className="bg-gray-50/60 border border-gray-100 rounded-[10px] p-4 flex items-center gap-3">
     <div className="p-2 bg-white rounded-[6px] text-violet-600 border border-gray-100"><Icon className="w-4 h-4" /></div>

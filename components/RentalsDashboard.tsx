@@ -70,7 +70,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* 1. PAINEL EXECUTIVO (TOPO) — toolbar de botões (§4 do UI UX tabela.md):
+      {/* 1. PAINEL EXECUTIVO (TOPO) — toolbar de botões (§5.3 do ui_ux_guia_unificado.md):
           escopo (período) à direita do título, controles compactos h-9/rounded-[6px].
           Os cards de KPI e gráficos abaixo mantêm a linguagem de analytics/dashboard
           (mesmo precedente do BIDashboard/CashFlowDashboard, §20) — fora de escopo. */}

@@ -65,7 +65,7 @@ interface ScheduleHeaderProps {
     onAutoSchedule: () => void;
 }
 
-// Abas de navegação da tela (padrão UI UX tabela.md §3 — trilho + botões h-7).
+// Abas de navegação da tela (padrão ui_ux_guia_unificado.md §19.1 — trilho + botões h-7).
 const VIEW_TABS = [
     { key: 'table', label: 'Tabela' },
     { key: 'gantt', label: 'Gantt' },
@@ -138,7 +138,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     const closeOverflow = () => setOverflowOpen(false);
 
     return (
-        // space-y-3 (12px) entre as barras de cromo — UI UX tabela.md: "12px entre KPIs → abas → botões".
+        // space-y-3 (12px) entre as barras de cromo — ui_ux_guia_unificado.md: "12px entre KPIs → abas → botões".
         <div className="space-y-3">
         <div className="bg-white px-5 py-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
             {/* ── Title + Project selector ── */}
@@ -186,7 +186,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             </div>
         </div>
 
-        {/* Toolbar de abas — UI UX tabela.md §3 */}
+        {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1 */}
         <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
             <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                 {VIEW_TABS.map(({ key, label }) => (
@@ -203,7 +203,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             </div>
         </div>
 
-        {/* Toolbar de botões — UI UX tabela.md §4 (escopo à esquerda, ações à direita) */}
+        {/* Toolbar de botões — ui_ux_guia_unificado.md §5.3 (escopo à esquerda, ações à direita) */}
         <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
             {/* Escopo: escala de tempo (só Tabela/Gantt) + período do planejamento */}
             <div className="flex flex-wrap items-center gap-2">

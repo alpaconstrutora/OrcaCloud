@@ -234,7 +234,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
             return next;
         });
     }
-    // Seleção de intervalo com Shift+clique (ui_ux_standard_guide.md §10.1)
+    // Seleção de intervalo com Shift+clique (ui_ux_guia_unificado.md §10.1)
     const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
         if (shiftKey && lastCheckedIndex !== null) {
@@ -318,7 +318,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
     return (
         <div className="space-y-6">
-            {/* Cabeçalho de tela — ui_ux_standard_guide.md §20 */}
+            {/* Cabeçalho de tela — ui_ux_guia_unificado.md §20 */}
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Contas a Pagar</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Invoices e boletos aprovados para pagamento.</p>
@@ -443,7 +443,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             </div>
 
                             {/* Status pills — filtro rápido em controle segmentado, não ordenação (§6.4).
-                                Padrão "Tudo/Receitas/Despesas" de UI UX tabela.md §5. */}
+                                Padrão "Tudo/Receitas/Despesas" de ui_ux_guia_unificado.md §5.2. */}
                             <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                 {(['all', 'pending', 'approved', 'overdue', 'paid'] as StatusFilter[]).map(s => {
                                     const activeColor = s === 'overdue' ? 'text-red-600' : s === 'paid' ? 'text-emerald-600' : s === 'pending' ? 'text-amber-600' : s === 'approved' ? 'text-blue-600' : 'text-gray-900';
@@ -659,7 +659,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                         )}
 
                                                         {/* Pagar via Asaas — só para invoices originados de boleto com linha digitável.
-                                                            Link de texto, padrão §8/UI UX tabela.md (mesmo tratamento do "Baixar"/"Emitir" de ContasReceberManager.tsx). */}
+                                                            Link de texto, padrão §9/ui_ux_guia_unificado.md (mesmo tratamento do "Baixar"/"Emitir" de ContasReceberManager.tsx). */}
                                                         {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.supplierOrganizationId && (
                                                             <button
                                                                 onClick={() => setPagandoAsaas(inv)}
@@ -714,7 +714,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                     </div>
                     </div>
 
-            {/* Barra de ações em lote — fixa no rodapé, paleta azul (ui_ux_standard_guide.md §10) */}
+            {/* Barra de ações em lote — fixa no rodapé, paleta azul (ui_ux_guia_unificado.md §10) */}
             {selectedVisible.length > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
                     <span className="flex-1 text-sm font-bold whitespace-nowrap">

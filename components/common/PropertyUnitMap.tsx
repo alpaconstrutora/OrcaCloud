@@ -8,6 +8,13 @@ interface PropertyUnitMapProps {
     deals?: PropertyDeal[];
     onSelectUnit?: (unit: Property) => void;
     onReserveUnit?: (unit: Property) => void;
+    /**
+     * Seleção múltipla (cesta de proposta do Portal do Corretor). AMBAS opcionais:
+     * sem elas o componente se comporta exatamente como antes — ele é
+     * compartilhado com o modo admin, que não deve mudar.
+     */
+    selectedUnitIds?: string[];
+    onToggleUnit?: (unit: Property) => void;
     onEditUnit?: (unit: Property) => void;
     onDeleteUnit?: (unit: Property) => void;
     renderExtraActions?: (unit: Property) => React.ReactNode;
@@ -28,8 +35,10 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
     units,
     parentProperty,
     deals = [],
-    onSelectUnit, 
-    onReserveUnit, 
+    onSelectUnit,
+    onReserveUnit,
+    selectedUnitIds,
+    onToggleUnit,
     onEditUnit,
     renderExtraActions,
     showDetailsPanel = true,
@@ -119,6 +128,9 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
 
         const Icon = cfg.icon;
         const isSelected = selectedUnit?.id === unit.id;
+        // Está na cesta da proposta (seleção múltipla). Só existe quando o pai
+        // habilita `onToggleUnit`.
+        const isInCart = !!selectedUnitIds?.includes(unit.id);
         
         // Priorizar o valor da negociação ativa (contrato) sobre o preço base do imóvel
         const unitPrice = activeDeal?.value || unit.current_price || unit.price;
@@ -137,10 +149,19 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                     key={unit.id}
                     title={tooltip}
                     onClick={() => handleUnitClick(unit)}
-                    className={`relative flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all min-w-[64px] ${cfg.bg} ${cfg.border} ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 scale-105' : ''} cursor-pointer hover:scale-105 hover:shadow-md focus:outline-none`}
+                    className={`relative flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all min-w-[64px] ${cfg.bg} ${isInCart ? 'border-indigo-500 ring-2 ring-indigo-400' : cfg.border} ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 scale-105' : ''} cursor-pointer hover:scale-105 hover:shadow-md focus:outline-none`}
                 >
                     <span className={`text-xs font-black leading-none ${cfg.color}`}>{unit.name || unit.number || 'N/A'}</span>
                     <span className="text-[9px] font-bold text-gray-400 leading-none mt-0.5">{formatPrice(unitPrice)}</span>
+                    {onToggleUnit && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onToggleUnit(unit); }}
+                            title={isInCart ? 'Remover da proposta' : 'Adicionar à proposta'}
+                            className={`absolute -top-1.5 -left-1.5 w-4 h-4 rounded-md border flex items-center justify-center transition-all ${isInCart ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-300 text-transparent hover:border-indigo-400'}`}
+                        >
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                        </button>
+                    )}
                     {mode === 'admin' && onEditUnit && (
                         <button
                             onClick={(e) => { e.stopPropagation(); onEditUnit(unit); }}
@@ -157,8 +178,17 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
             <div
                 key={unit.id}
                 onClick={() => handleUnitClick(unit)}
-                className={`relative flex flex-col items-center p-3 rounded-xl border-2 transition-all min-w-[100px] group ${cfg.bg} ${cfg.border} ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 scale-105' : ''} cursor-pointer hover:scale-105 hover:shadow-lg focus:outline-none`}
+                className={`relative flex flex-col items-center p-3 rounded-xl border-2 transition-all min-w-[100px] group ${cfg.bg} ${isInCart ? 'border-indigo-500 ring-2 ring-indigo-400' : cfg.border} ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 scale-105' : ''} cursor-pointer hover:scale-105 hover:shadow-lg focus:outline-none`}
             >
+                {onToggleUnit && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onToggleUnit(unit); }}
+                        title={isInCart ? 'Remover da proposta' : 'Adicionar à proposta'}
+                        className={`absolute top-1.5 left-1.5 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${isInCart ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-gray-300 text-transparent hover:border-indigo-400'}`}
+                    >
+                        <CheckCircle2 className="w-3 h-3" />
+                    </button>
+                )}
                 <Icon className={`w-4 h-4 mb-1 ${cfg.color}`} />
                 <span className={`text-sm font-black ${cfg.color}`}>{unit.name || unit.number || 'N/A'}</span>
                 

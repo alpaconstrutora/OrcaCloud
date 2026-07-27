@@ -34,7 +34,7 @@ interface SupplierPortalManagerProps {
   onNavigate?: (link: string) => void;
 }
 
-// ui_ux_standard_guide.md — COLUMNS fora do componente (§2)
+// ui_ux_guia_unificado.md — COLUMNS fora do componente (§2)
 const SUPPLIER_PORTAL_COLUMNS: ColumnConfig[] = [
   { key: 'supplier', label: 'Fornecedor', sortable: true },
   { key: 'organization', label: 'Organização', sortable: true },
@@ -52,7 +52,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Tela de listagem (KPI + tabela, ui_ux_standard_guide.md) — filtros sobrevivem a navegação (§3)
+  // Tela de listagem (KPI + tabela, ui_ux_guia_unificado.md) — filtros sobrevivem a navegação (§3)
   const [searchTerm, setSearchTerm] = usePersistedState('supplierPortalList:search', '');
   const tableColumns = useTableColumns(SUPPLIER_PORTAL_COLUMNS, 'supplierPortalListColumns');
   const [supplierStats, setSupplierStats] = useState<Record<string, { orders: number; quotations: number; documents: number }>>({});
@@ -343,7 +343,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
               <KpiCard shadow={false} size="sm" label="Globais" value={kpis.globais} icon={<Link2 className="w-4 h-4" />} color="violet" />
             </div>
 
-            {/* Toolbar de botões (UI UX tabela.md §4) — escopo/contexto à esquerda, ação primária à direita;
+            {/* Toolbar de botões (ui_ux_guia_unificado.md §5.3) — escopo/contexto à esquerda, ação primária à direita;
                 barra própria, acima da toolbar de busca, porque não é filtro de linha, é ação da tela */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
               <span className="text-xs text-gray-400">
@@ -358,7 +358,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
               </button>
             </div>
 
-            {/* Tabela com toolbar de busca acoplada (UI UX tabela.md §5) — um único card,
+            {/* Tabela com toolbar de busca acoplada (ui_ux_guia_unificado.md §5.2) — um único card,
                 border-b da toolbar é a única linha entre os dois blocos */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-gray-100 bg-white">

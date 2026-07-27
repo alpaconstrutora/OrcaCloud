@@ -14,7 +14,7 @@ export type FiscalPage = 'documents' | 'admin' | 'rules';
 
 interface ToastState { msg: string; type: 'ok' | 'err'; }
 
-// Toast — padrão ui_ux_standard_guide.md §13
+// Toast — padrão ui_ux_guia_unificado.md §13
 function FiscalToast({ msg, type, onClose }: ToastState & { onClose: () => void }) {
   useEffect(() => {
     const t = setTimeout(onClose, 4500);

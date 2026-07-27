@@ -23,6 +23,9 @@ interface PublicProposal {
     created_at?: string;
     property_name?: string;
     organization_name?: string;
+    /** Cesta da proposta (fn_proposal_public devolve sempre, com 1 item no caso
+     *  de uma unidade só — o backfill garante). */
+    units?: { unit_name?: string; property_id?: string; unit_price?: number; allocated_value?: number; is_primary?: boolean }[];
 }
 
 const fmtBRL = (v?: number | null) =>
@@ -62,6 +65,8 @@ const Props: React.FC<{ token: string }> = ({ token }) => {
     );
 
     const p = proposal;
+    const basket = (p.units || []).filter(Boolean);
+    const isBasket = basket.length > 1;
     const Line: React.FC<{ label: string; value: string; strong?: boolean }> = ({ label, value, strong }) => (
         <div className="flex items-center justify-between gap-2 py-2.5 border-b border-gray-100 last:border-b-0">
             <span className="text-sm font-normal text-gray-500">{label}</span>
@@ -78,9 +83,41 @@ const Props: React.FC<{ token: string }> = ({ token }) => {
                     </div>
                     <h1 className="text-2xl font-bold mt-2">Proposta de compra</h1>
                     <p className="text-sm opacity-90 mt-1">
-                        {p.property_name || 'Unidade'}{p.version ? ` · versão ${p.version}` : ''}
+                        {isBasket
+                            ? `${basket.length} unidades`
+                            : (p.property_name || 'Unidade')}{p.version ? ` · versão ${p.version}` : ''}
                     </p>
                 </div>
+
+                {/* Cesta: uma linha por unidade, com a cota de cada uma. Com uma
+                    unidade só este bloco não aparece — layout intacto. */}
+                {isBasket && (
+                    <div className="bg-white rounded-[14px] p-6 shadow-sm">
+                        <p className="text-xs font-semibold text-gray-500 mb-3 flex items-center gap-1.5">
+                            <Building2 className="w-3.5 h-3.5" /> Unidades
+                        </p>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="text-xs text-gray-400 border-b border-gray-100">
+                                        <th className="py-2 font-medium">Unidade</th>
+                                        <th className="py-2 font-medium text-right whitespace-nowrap">Tabela</th>
+                                        <th className="py-2 font-medium text-right whitespace-nowrap">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {basket.map((u, i) => (
+                                        <tr key={u.property_id || i} className="border-b border-gray-100 last:border-b-0">
+                                            <td className="py-2.5 text-sm font-medium text-gray-800">{u.unit_name || '—'}</td>
+                                            <td className="py-2.5 text-sm font-normal text-gray-500 text-right whitespace-nowrap">{fmtBRL(u.unit_price)}</td>
+                                            <td className="py-2.5 text-sm font-medium text-gray-900 text-right whitespace-nowrap">{fmtBRL(u.allocated_value)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
 
                 <div className="bg-white rounded-[14px] p-6 shadow-sm">
                     <Line label="Comprador" value={p.buyer_name || '—'} />

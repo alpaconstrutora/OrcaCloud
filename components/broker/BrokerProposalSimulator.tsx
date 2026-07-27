@@ -1,14 +1,20 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Send, User, Phone, Mail, CreditCard, DollarSign, Percent, ArrowRight, ShieldCheck, ShieldAlert, ShieldX, Info } from 'lucide-react';
-import type { BrokerUnit, BrokerProposal } from '../../types';
+import type { BrokerUnit, BrokerProposal, BrokerProposalUnit } from '../../types';
 import {
     salesPlanService, simulatePayment,
     type SalesPlan, type PolicyValidation, type Verdict,
 } from '../../services/salesPlanService';
 import { brokerPortalService } from '../../services/brokerPortalService';
+import { allocateProRata } from '../../services/brokerService';
 
 interface BrokerProposalSimulatorProps {
-    unit: BrokerUnit | null;
+    /**
+     * A CESTA da proposta. Uma proposta pode reunir apto + vaga + box do mesmo
+     * empreendimento sob um comprador, com UM desconto e UM fluxo de pagamento —
+     * uma unidade só é o caso trivial da lista.
+     */
+    units: BrokerUnit[];
     brokerEmail: string;
     organizationId: string;
     onSubmitProposal: (proposal: Partial<BrokerProposal>) => void;
@@ -35,13 +41,18 @@ const VERDICT_ICON: Record<Verdict, React.ReactNode> = {
 };
 
 const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
-    unit,
+    units,
     brokerEmail,
     organizationId,
     onSubmitProposal,
     onCancel,
     portalToken,
 }) => {
+    // A unidade PRINCIPAL é a primeira da cesta: é ela que vai para
+    // broker_portal_proposals.property_id e que define o eixo (venda × locação)
+    // e o empreendimento. O resto do componente lê `unit` como sempre leu.
+    const unit: BrokerUnit | null = units[0] ?? null;
+
     // Buyer info
     const [buyerName, setBuyerName] = useState('');
     const [buyerCpf, setBuyerCpf] = useState('');
@@ -56,8 +67,16 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     const [discountPct, setDiscountPct] = useState(0);
     const [notes, setNotes] = useState('');
 
-    // Active step
-    const [activeStep, setActiveStep] = useState<'buyer' | 'payment' | 'review'>('buyer');
+    // Active step. `rateio` só aparece quando a cesta tem mais de uma unidade —
+    // com uma só, o rateio é trivial e o passo seria burocracia.
+    const [activeStep, setActiveStep] = useState<'buyer' | 'payment' | 'rateio' | 'review'>('buyer');
+
+    /**
+     * Rateio manual do corretor (property_id → cota). `null` = usar o pro rata
+     * automático. Zera quando o total da cesta muda (mexer no desconto tem que
+     * recalcular o rateio — manter cotas antigas deixaria a soma fora do total).
+     */
+    const [manualAlloc, setManualAlloc] = useState<Record<string, number> | null>(null);
 
     // Plano de Vendas: a politica comercial. Carrega os planos ativos do predio
     // (unit.parent_id). Fluxo de venda exige um plano; locacao segue sem plano.
@@ -67,19 +86,29 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     const [selectedPlanId, setSelectedPlanId] = useState<string>('');
     const [policy, setPolicy] = useState<PolicyValidation | null>(null);
 
+    // O Plano de Vendas é POR PRÉDIO (sales_plans.building_id) — é exatamente o
+    // motivo pelo qual a cesta é restrita a um empreendimento. `mixedBuildings`
+    // é a trava de última linha: a UI da cesta já impede montar assim, mas se
+    // algo escapar, o envio é bloqueado em vez de gravar uma cesta sem política.
+    const commonParentId = unit?.parent_id ?? null;
+    const mixedBuildings = useMemo(
+        () => units.length > 1 && units.some(u => u.parent_id !== commonParentId),
+        [units, commonParentId]
+    );
+
     useEffect(() => {
-        if (isRental || !unit?.parent_id) return;
+        if (isRental || !commonParentId) return;
         let alive = true;
         setPlansLoading(true);
         const load = portalToken
-            ? brokerPortalService.getSalesPlansByToken(portalToken, unit.parent_id)
-            : salesPlanService.listActive(unit.parent_id);
+            ? brokerPortalService.getSalesPlansByToken(portalToken, commonParentId)
+            : salesPlanService.listActive(commonParentId);
         load
             .then(list => { if (!alive) return; setPlans(list); if (list.length === 1) setSelectedPlanId(list[0].id); })
             .catch(err => console.error('[Simulador] erro ao carregar planos:', err))
             .finally(() => { if (alive) setPlansLoading(false); });
         return () => { alive = false; };
-    }, [isRental, unit?.parent_id, portalToken]);
+    }, [isRental, commonParentId, portalToken]);
 
     const selectedPlan = useMemo(() => plans.find(p => p.id === selectedPlanId) ?? null, [plans, selectedPlanId]);
 
@@ -87,7 +116,18 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     const maxDiscount = selectedPlan?.max_discount_pct ?? 10;
     const maxInstallments = selectedPlan?.max_installments ?? 120;
 
-    const unitPrice = unit?.current_price || 0;
+    // Preço de tabela da CESTA = soma das unidades.
+    //
+    // Esta soma é o que permite reusar `simulatePayment` sem tocar no motor:
+    // como a cesta tem um desconto e um fluxo, simular a soma é matematicamente
+    // idêntico a simular a cesta consolidada, e os percentuais (nominal,
+    // financeiro, econômico) já saem com o denominador certo. Pelo mesmo motivo
+    // `fn_validate_sales_simulation` continua recebendo o payload consolidado.
+    const unitPriceOf = useCallback((u: BrokerUnit) => Number(u.current_price) || 0, []);
+    const unitPrice = useMemo(
+        () => units.reduce((s, u) => s + unitPriceOf(u), 0),
+        [units, unitPriceOf]
+    );
 
     // Motor puro (salesPlanService): calcula os 3 descontos e o VPL.
     const engine = useMemo(() => simulatePayment({
@@ -141,6 +181,41 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
         return () => clearTimeout(t);
     }, [isRental, selectedPlanId, downPaymentPct, monthlyInstallments, discountPct, simulation.monthlyValue, portalToken]);
 
+    // ── Rateio da cesta ───────────────────────────────────────────────────
+    // Cota de cada unidade no total. Base = pro rata do preço de tabela
+    // (allocateProRata joga o resíduo de centavos na maior cota, então a soma
+    // fecha EXATO); o corretor pode sobrescrever unidade a unidade.
+    const proRata = useMemo(
+        () => allocateProRata(
+            units.map((u, i) => ({
+                property_id: u.id, unit_price: unitPriceOf(u), allocated_value: 0,
+                is_primary: i === 0, sort_order: i,
+            })),
+            simulation.totalValue
+        ),
+        [units, unitPriceOf, simulation.totalValue]
+    );
+
+    // Mexer no desconto/entrada muda o total: o rateio manual antigo deixaria a
+    // soma fora do total, então volta para o pro rata.
+    useEffect(() => { setManualAlloc(null); }, [simulation.totalValue, units.length]);
+
+    const allocations = useMemo<BrokerProposalUnit[]>(
+        () => proRata.map(u => ({
+            ...u,
+            allocated_value: manualAlloc?.[u.property_id] ?? u.allocated_value,
+        })),
+        [proRata, manualAlloc]
+    );
+
+    const allocatedSum = useMemo(
+        () => Math.round(allocations.reduce((s, u) => s + (Number(u.allocated_value) || 0), 0) * 100) / 100,
+        [allocations]
+    );
+    // Tolerância de 1 centavo: o corretor digita valores redondos e não deve ser
+    // travado por arredondamento.
+    const allocationOk = Math.abs(allocatedSum - simulation.totalValue) < 0.011;
+
     const formatCurrency = useCallback((value: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), []);
 
@@ -164,13 +239,17 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     // Sem plano configurado, mantem o envio livre (nao regride quem nao adotou o PV).
     const planOk = isRental || plans.length === 0 || !!selectedPlanId;
     const canProceedBuyer = buyerName.length >= 3 && buyerCpf.length >= 14;
-    const canProceedPayment = simulation.remainingPct >= 0 && planOk && !isBlocked;
-    const canSubmit = canProceedBuyer && canProceedPayment;
+    const canProceedPayment = simulation.remainingPct >= 0 && planOk && !isBlocked && !mixedBuildings;
+    const canSubmit = canProceedBuyer && canProceedPayment && allocationOk;
+    const isBasket = units.length > 1;
 
     const handleSubmit = () => {
         if (!unit || !canSubmit) return;
         onSubmitProposal({
             property_id: unit.id,
+            // A cesta. O service deriva property_id (a principal), unit_price
+            // (soma das tabelas) e total_value (soma das cotas) desta lista.
+            units: allocations,
             broker_email: brokerEmail,
             organization_id: organizationId,
             buyer_name: buyerName,
@@ -208,7 +287,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
 
     if (!unit) return null;
 
-    const StepButton = ({ step, label, number }: { step: 'buyer' | 'payment' | 'review'; label: string; number: number }) => (
+    const StepButton = ({ step, label, number }: { step: 'buyer' | 'payment' | 'rateio' | 'review'; label: string; number: number }) => (
         <button
             onClick={() => setActiveStep(step)}
             className={`flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-bold transition-all ${activeStep === step
@@ -230,22 +309,43 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black text-white">Simulador de Proposta</h2>
-                        <p className="text-indigo-200 text-sm mt-1">
-                            Unidade {unit.number || unit.name} • {unit.block || 'Geral'} • {unit.bedrooms || unit.specs?.bedrooms ? `${unit.bedrooms || unit.specs?.bedrooms} Dormitório${(unit.bedrooms || unit.specs?.bedrooms) !== 1 ? 's' : ''}` : (unit.typology || 'Padrão')} • {unit.private_area || unit.area}m²
-                        </p>
+                        {isBasket ? (
+                            <p className="text-indigo-200 text-sm mt-1">
+                                {units.length} unidades • {units.map(u => u.number || u.name).filter(Boolean).join(' + ')}
+                            </p>
+                        ) : (
+                            <p className="text-indigo-200 text-sm mt-1">
+                                Unidade {unit.number || unit.name} • {unit.block || 'Geral'} • {unit.bedrooms || unit.specs?.bedrooms ? `${unit.bedrooms || unit.specs?.bedrooms} Dormitório${(unit.bedrooms || unit.specs?.bedrooms) !== 1 ? 's' : ''}` : (unit.typology || 'Padrão')} • {unit.private_area || unit.area}m²
+                            </p>
+                        )}
                     </div>
                     <div className="text-right">
-                        <p className="text-xs font-black text-indigo-300 uppercase tracking-widest">Valor da Unidade</p>
+                        <p className="text-xs font-black text-indigo-300 uppercase tracking-widest">
+                            {isBasket ? 'Total da Cesta' : 'Valor da Unidade'}
+                        </p>
                         <p className="text-2xl font-black text-white">{formatCurrency(unitPrice)}</p>
                     </div>
                 </div>
             </div>
 
+            {/* A cesta cruzando empreendimentos não tem política aplicável — o
+                Plano de Vendas é por prédio. Bloqueia em vez de gravar sem regra. */}
+            {mixedBuildings && (
+                <div className="px-6 py-4 bg-rose-50 border-b border-rose-200 flex items-start gap-2">
+                    <ShieldX className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                    <p className="text-xs font-bold text-rose-700">
+                        Esta proposta reúne unidades de empreendimentos diferentes. O Plano de Vendas
+                        é definido por empreendimento, então a proposta precisa ser dividida.
+                    </p>
+                </div>
+            )}
+
             {/* Step Navigation */}
-            <div className="flex gap-3 p-4 border-b border-gray-100 bg-gray-50">
+            <div className="flex gap-3 p-4 border-b border-gray-100 bg-gray-50 flex-wrap">
                 <StepButton step="buyer" label="Comprador" number={1} />
                 <StepButton step="payment" label="Pagamento" number={2} />
-                <StepButton step="review" label="Revisão" number={3} />
+                {isBasket && <StepButton step="rateio" label="Rateio" number={3} />}
+                <StepButton step="review" label="Revisão" number={isBasket ? 4 : 3} />
             </div>
 
             <div className="p-6">
@@ -538,15 +638,101 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
                                 Voltar
                             </button>
-                            <button onClick={() => setActiveStep('review')} disabled={!canProceedPayment}
+                            <button onClick={() => setActiveStep(isBasket ? 'rateio' : 'review')} disabled={!canProceedPayment}
                                 className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Revisar <ArrowRight className="w-4 h-4" />
+                                {isBasket ? 'Rateio' : 'Revisar'} <ArrowRight className="w-4 h-4" />
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* Step 3: Review & Submit */}
+                {/* Step 3 (só cesta): Rateio do total entre as unidades.
+                    Existe porque cada unidade vai virar uma linha de contrato e uma
+                    base de comissão — sem cota por unidade, o desconto da cesta
+                    ficaria pendurado num imóvel só. */}
+                {activeStep === 'rateio' && isBasket && (
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                        <div>
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Rateio por unidade</h4>
+                            <p className="text-sm text-gray-500 mt-1">
+                                A cota de cada unidade nasce proporcional ao preço de tabela. Ajuste se
+                                precisar — a soma tem que fechar com o total da proposta.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            {allocations.map(a => {
+                                const u = units.find(x => x.id === a.property_id);
+                                const share = unitPrice > 0 ? (a.unit_price / unitPrice) * 100 : 0;
+                                return (
+                                    <div key={a.property_id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-gray-900 truncate">
+                                                {u?.number || u?.name || 'Unidade'}
+                                                {a.is_primary && <span className="ml-2 text-xs font-medium text-indigo-500">principal</span>}
+                                            </p>
+                                            <p className="text-xs text-gray-400">
+                                                Tabela {formatCurrency(a.unit_price)} • {share.toFixed(1)}% da cesta
+                                            </p>
+                                        </div>
+                                        <div className="relative shrink-0">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={a.allocated_value || ''}
+                                                onChange={e => setManualAlloc(prev => ({
+                                                    ...(prev ?? Object.fromEntries(proRata.map(p => [p.property_id, p.allocated_value]))),
+                                                    [a.property_id]: parseFloat(e.target.value) || 0,
+                                                }))}
+                                                className="w-40 pl-9 pr-3 py-2 bg-white border border-gray-200 focus:border-indigo-400 rounded-xl outline-none text-sm text-right text-gray-700 transition-all"
+                                                placeholder="0,00"
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className={`flex items-center justify-between px-5 py-4 rounded-xl border ${allocationOk ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                            <div>
+                                <p className={`text-xs uppercase tracking-widest font-bold ${allocationOk ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    Soma das cotas
+                                </p>
+                                {!allocationOk && (
+                                    <p className="text-xs text-rose-600 mt-0.5">
+                                        Diferença de {formatCurrency(Math.abs(allocatedSum - simulation.totalValue))} em relação ao total.
+                                    </p>
+                                )}
+                            </div>
+                            <div className="text-right">
+                                <p className={`text-xl font-black ${allocationOk ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                    {formatCurrency(allocatedSum)}
+                                </p>
+                                <p className="text-xs text-gray-500">total {formatCurrency(simulation.totalValue)}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between pt-2">
+                            <button onClick={() => setActiveStep('payment')}
+                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                Voltar
+                            </button>
+                            <div className="flex gap-3">
+                                <button onClick={() => setManualAlloc(null)}
+                                    className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                    Redistribuir
+                                </button>
+                                <button onClick={() => setActiveStep('review')} disabled={!allocationOk}
+                                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Revisar <ArrowRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Step 3 (ou 4, na cesta): Review & Submit */}
                 {activeStep === 'review' && (
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -570,7 +756,24 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     {unit.purpose === 'RENTAL' ? 'Condições de Locação' : 'Condições de Venda'}
                                 </h4>
                                 <div className="space-y-2">
-                                    <p className="text-sm"><span className="font-bold text-gray-500">Unidade:</span> <span className="font-bold text-gray-900">{unit?.number} ({unit?.block})</span></p>
+                                    {isBasket ? (
+                                        <div className="text-sm">
+                                            <span className="font-bold text-gray-500">Unidades ({units.length}):</span>
+                                            <ul className="mt-1 space-y-0.5">
+                                                {allocations.map(a => {
+                                                    const u = units.find(x => x.id === a.property_id);
+                                                    return (
+                                                        <li key={a.property_id} className="flex items-center justify-between gap-2">
+                                                            <span className="font-bold text-gray-900 truncate">{u?.number || u?.name}</span>
+                                                            <span className="font-bold text-gray-600 shrink-0">{formatCurrency(a.allocated_value)}</span>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm"><span className="font-bold text-gray-500">Unidade:</span> <span className="font-bold text-gray-900">{unit?.number} ({unit?.block})</span></p>
+                                    )}
                                     {unit.purpose === 'RENTAL' ? (
                                         <>
                                             <p className="text-sm"><span className="font-bold text-gray-500">Aluguel:</span> <span className="font-bold text-blue-600">{formatCurrency(simulation.totalValue)}/mês</span></p>
@@ -598,7 +801,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                         </div>
 
                         <div className="flex justify-between pt-2">
-                            <button onClick={() => setActiveStep('payment')}
+                            <button onClick={() => setActiveStep(isBasket ? 'rateio' : 'payment')}
                                 className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
                                 Voltar
                             </button>

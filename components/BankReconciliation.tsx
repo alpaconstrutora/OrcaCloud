@@ -338,7 +338,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const getStatementColWidth = (key: string) => statementColWidths[key] ?? DEFAULT_STATEMENT_COL_WIDTHS[key] ?? 150;
     // Largura explícita da tabela = soma das colunas visíveis — nunca w-full com
     // table-layout:fixed, senão o navegador redistribui espaço entre colunas ao
-    // arrastar (bug real documentado em ui_ux_standard_guide.md §6.1).
+    // arrastar (bug real documentado em ui_ux_guia_unificado.md §6.1).
     const statementTableTotalWidth = 40 // checkbox
         + STATEMENT_COLUMNS.filter(c => c.key !== 'actions')
             .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? getStatementColWidth(c.key) : 0), 0)

@@ -200,7 +200,7 @@ Hoje importado e renderizado dentro de `BIDashboard.tsx:13`. Mover a chamada par
 já recebe `orgId`/`onNavigate` como props.
 
 ### Regras de UI a seguir (CLAUDE.md — obrigatório, não opcional)
-- Ler `docs/ui_ux_standard_guide.md` inteiro antes de codar os cards (KPI card, badge de severidade).
+- Ler `docs/ui_ux_guia_unificado.md` inteiro antes de codar os cards (KPI card, badge de severidade).
 - Rodar os 3 greps de autoverificação do guia nos arquivos tocados (`CentralControle.tsx`,
   `BIDashboard.tsx`) antes de reportar a tarefa como concluída.
 - `UI_PATTERNS.md` para decidir se algum drill-down merece abrir em `Sheet` em vez de navegar de tela
@@ -216,7 +216,7 @@ já recebe `orgId`/`onNavigate` como props.
 ---
 
 ## 6. Padrões obrigatórios do repo (ao implementar UI)
-- Ler `docs/ui_ux_standard_guide.md` inteiro antes de tocar KPI card / badge de status / tabela.
+- Ler `docs/ui_ux_guia_unificado.md` inteiro antes de tocar KPI card / badge de status / tabela.
 - `UI_PATTERNS.md` para decidir modal × Sheet × página nos drill-downs.
 - Busca/filtro persistido via `usePersistedState`.
 - Datas: nunca `new Date('YYYY-MM-DD').toLocaleDateString()` (bug de fuso UTC-3).

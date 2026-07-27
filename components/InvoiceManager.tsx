@@ -27,7 +27,7 @@ const INVOICE_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-// StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (UI UX tabela.md §7)
+// StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8)
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     paid: { label: 'Pago', color: 'text-emerald-700' },
     rejected: { label: 'Recusado', color: 'text-red-600' },
@@ -287,7 +287,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier, portalToken }
                 )}
             </div>
 
-            {/* Tabela com toolbar de busca acoplada (UI UX tabela.md §5) */}
+            {/* Tabela com toolbar de busca acoplada (ui_ux_guia_unificado.md §5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">

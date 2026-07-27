@@ -22,7 +22,7 @@ export const financialRegistryService = {
 
     async createPaymentAccount(account: Omit<PaymentAccount, 'id' | 'created_at'>): Promise<PaymentAccount> {
         const payload: Record<string, unknown> = { ...account };
-        // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+        // Código sequencial 001/002/003... único por organização (§ui_ux_guia_unificado.md).
         if (!payload.code) {
             const { data: nextCode } = await supabase.rpc('get_next_payment_account_code', { p_org_id: account.organization_id });
             if (nextCode) payload.code = nextCode;

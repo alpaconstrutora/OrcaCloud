@@ -274,7 +274,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
     const getLevel = (code?: string) => code ? code.split('.').length : 0;
 
-    // Hierarquia visual via cor/tamanho, nunca font-bold/font-black (ui_ux_standard_guide.md §7) —
+    // Hierarquia visual via cor/tamanho, nunca font-bold/font-black (ui_ux_guia_unificado.md §7) —
     // o nível mais alto (1) ganha uma linha de fundo sutil pra se destacar sem precisar de peso.
     const LEVEL_STYLES = [
         // level 0 (sem código)

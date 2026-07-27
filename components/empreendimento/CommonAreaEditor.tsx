@@ -21,7 +21,7 @@ const CATEGORY_LABELS: Record<CommonAreaCategory, string> = {
   OUTRO: 'Outro',
 };
 
-// Texto colorido, sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+// Texto colorido, sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
 const CATEGORY_TEXT_COLOR: Record<CommonAreaCategory, string> = {
   LAZER: 'text-emerald-600',
   COMUM: 'text-blue-600',

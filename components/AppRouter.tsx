@@ -1216,6 +1216,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           projects={typedProjects}
           activeSection={activeView}
           onChangeView={setActiveView}
+          organizations={organizations}
+          isProjectsLoading={projectsLoading}
+          onLoadProject={handleLoadProject}
+          onEditProject={handleLoadAndEditProject}
+          onNewProject={handleNewProject}
+          onDuplicateProject={handleDuplicateProject}
+          onImportProject={handleImportProject}
+          onExportProject={handleExportProject}
         />
       );
 

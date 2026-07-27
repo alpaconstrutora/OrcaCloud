@@ -8,7 +8,7 @@
      nenhum — text-table-header/text-button/etc ficaram inertes em ~285
      arquivos desde que foram criadas (achado real, 2026-07-10, ao investigar
      por que o thead da tabela continuava menor que o corpo mesmo depois da
-     classe já estar aplicada). Ver docs/ui_ux_standard_guide.md §6.
+     classe já estar aplicada). Ver docs/ui_ux_guia_unificado.md §6.
      https://tailwindcss.com/docs/theme#theme-variable-namespaces */
   --text-menu: 14px;
   --text-button: 14px;

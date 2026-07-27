@@ -1598,7 +1598,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         { key: 'contas_pagar', label: 'Contas a Pagar' },
     ];
 
-    /* Toolbar de abas — UI UX tabela.md §3. Trilho dentro de card branco, igual à
+    /* Toolbar de abas — ui_ux_guia_unificado.md §19.1. Trilho dentro de card branco, igual à
        tela de referência (Extrato/BankReconciliation:3253). Export à direita no §8:
        h-9 + rounded-[6px] + font-medium sentence case. */
     const tabsBar = (

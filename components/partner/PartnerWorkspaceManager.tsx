@@ -51,7 +51,7 @@ interface PartnerWorkspaceManagerProps {
   currentUserEmail?: string;
 }
 
-// ui_ux_standard_guide.md — COLUMNS fora do componente (§2)
+// ui_ux_guia_unificado.md — COLUMNS fora do componente (§2)
 const PARTNER_COLUMNS: ColumnConfig[] = [
   { key: 'supplier', label: 'Parceiro', sortable: true },
   { key: 'organization', label: 'Organização', sortable: true },
@@ -108,7 +108,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [loading, setLoading] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('usuarios');
 
-  // Tela de listagem (KPI + tabela, ui_ux_standard_guide.md) — filtros sobrevivem a navegação (§3)
+  // Tela de listagem (KPI + tabela, ui_ux_guia_unificado.md) — filtros sobrevivem a navegação (§3)
   const [searchTerm, setSearchTerm] = usePersistedState('partnerWorkspaceList:search', '');
   const tableColumns = useTableColumns(PARTNER_COLUMNS, 'partnerWorkspaceListColumns');
   const [workspaceStats, setWorkspaceStats] = useState<Record<string, { users: number; documents: number; requestsOpen: number }>>({});

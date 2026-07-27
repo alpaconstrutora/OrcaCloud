@@ -14,7 +14,7 @@ export interface CostCenterInput {
 }
 
 export const costCenterService = {
-    // REGRA #5 (ui_ux_standard_guide/CLAUDE.md): "Todas as organizações" (organizationId
+    // REGRA #5 (ui_ux_guia_unificado/CLAUDE.md): "Todas as organizações" (organizationId
     // null/undefined) NUNCA bloqueia leitura — deixa a RLS filtrar pelas orgs do usuário.
     async list(organizationId?: string | null): Promise<CostCenterV2[]> {
         let query = supabase.from('cost_centers_v2').select(COLUMNS);

@@ -108,7 +108,7 @@ export const investorService = {
         } else {
             await assertDocumentNotDuplicated('investor', payload.document as string);
 
-            // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+            // Código sequencial 001/002/003... único por organização (§ui_ux_guia_unificado.md).
             if (!payload.code) {
                 const { data: nextCode } = await supabase.rpc('get_next_investor_code', { p_org_id: investor.organization_id ?? null });
                 if (nextCode) payload.code = nextCode;

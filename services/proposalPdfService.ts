@@ -14,10 +14,21 @@ const GRAY    = [100, 116, 139] as [number, number, number]; // slate-500
 const fmtBRL = (v?: number | null) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(v) || 0);
 
+/** Uma unidade da cesta, como vem das RPCs do portal. */
+export interface ProposalPdfUnit {
+    unit_name?: string;
+    unit_price?: number;
+    allocated_value?: number;
+    is_primary?: boolean;
+}
+
 export interface ProposalPdfData {
     id?: string;
     version?: number;
     property_name?: string;
+    /** Cesta da proposta. Com mais de uma unidade o PDF ganha a tabela
+     *  "Unidades"; com uma só, o layout continua exatamente o de antes. */
+    units?: ProposalPdfUnit[];
     organization_name?: string;
     buyer_name?: string;
     unit_price?: number;
@@ -60,11 +71,19 @@ export function buildProposalPdf(p: ProposalPdfData): Blob {
     doc.text(p.organization_name || '', 14, 20);
     if (p.version) doc.text(`Versão ${p.version}`, W - 14, 20, { align: 'right' });
 
+    const basket = (p.units || []).filter(u => !!u);
+    const isBasket = basket.length > 1;
+
     let y = 40;
     doc.setTextColor(...DARK);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text(p.property_name || 'Unidade', 14, y);
+    doc.text(
+        isBasket
+            ? `${basket.length} unidades — ${basket.map(u => u.unit_name).filter(Boolean).join(' + ')}`
+            : (p.property_name || 'Unidade'),
+        14, y, { maxWidth: W - 28 }
+    );
     y += 6;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
@@ -74,6 +93,39 @@ export function buildProposalPdf(p: ProposalPdfData): Blob {
         doc.text(new Date(p.created_at).toLocaleDateString('pt-BR'), W - 14, y, { align: 'right' });
     }
     y += 12;
+
+    // Bloco das unidades — só na cesta. Sem isto, uma proposta de 3 unidades
+    // sairia citando um imóvel e cobrando o total de três.
+    if (isBasket) {
+        doc.setFillColor(...LIGHT);
+        doc.rect(14, y - 6, W - 28, 8, 'F');
+        doc.setTextColor(...PRIMARY);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.text('UNIDADES', 16, y - 0.5);
+        y += 8;
+
+        doc.setFontSize(8);
+        doc.setTextColor(...GRAY);
+        doc.text('Unidade', 16, y);
+        doc.text('Tabela', W - 70, y, { align: 'right' });
+        doc.text('Valor', W - 16, y, { align: 'right' });
+        y += 5;
+
+        doc.setFontSize(9);
+        for (const u of basket) {
+            doc.setTextColor(...DARK);
+            doc.setFont('helvetica', 'normal');
+            doc.text(u.unit_name || '—', 16, y, { maxWidth: W - 100 });
+            doc.setTextColor(...GRAY);
+            doc.text(fmtBRL(u.unit_price), W - 70, y, { align: 'right' });
+            doc.setTextColor(...DARK);
+            doc.setFont('helvetica', 'bold');
+            doc.text(fmtBRL(u.allocated_value), W - 16, y, { align: 'right' });
+            y += 7;
+        }
+        y += 5;
+    }
 
     // Bloco de valores
     doc.setFillColor(...LIGHT);
@@ -123,7 +175,10 @@ export function downloadProposalPdf(p: ProposalPdfData): void {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `proposta-${(p.property_name || 'unidade').replace(/\s+/g, '-').toLowerCase()}-v${p.version || 1}.pdf`;
+    const slug = (p.units && p.units.length > 1)
+        ? `${p.units.length}-unidades`
+        : (p.property_name || 'unidade').replace(/\s+/g, '-').toLowerCase();
+    a.download = `proposta-${slug}-v${p.version || 1}.pdf`;
     document.body.appendChild(a);
     a.click();
     a.remove();

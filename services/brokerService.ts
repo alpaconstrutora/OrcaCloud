@@ -1,6 +1,101 @@
 import { supabase } from '../lib/supabase';
-import { BrokerProposal, BrokerProfile } from '../types';
+import { BrokerProposal, BrokerProposalUnit, BrokerProfile } from '../types';
 import { supplierService } from './supplierService';
+
+/**
+ * `broker_portal_proposal_units` só existe depois da migration 20270826000010.
+ * Enquanto ela não for aplicada, ler a tabela falha com 42P01/PGRST205 e
+ * derrubaria a aba de propostas inteira. Este flag registra a ausência na
+ * primeira falha e o Portal passa a operar no modo legado (1 unidade por
+ * proposta, via `property_id`) sem erro visível.
+ */
+let proposalUnitsTableMissing = false;
+function noteProposalUnitsError(error: { code?: string; message?: string } | null | undefined): boolean {
+    const code = error?.code || '';
+    const msg = error?.message || '';
+    if (code === '42P01' || code === 'PGRST205' || msg.includes('broker_portal_proposal_units')) {
+        if (!proposalUnitsTableMissing) {
+            console.warn('[BROKER SERVICE] Tabela broker_portal_proposal_units indisponível — operando em modo 1 unidade por proposta. Aplique a migration 20270826000010.');
+        }
+        proposalUnitsTableMissing = true;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Normaliza a cesta de unidades de uma proposta.
+ *
+ * Propostas anteriores à tabela de itens (e qualquer linha que o backfill não
+ * tenha alcançado) só têm `property_id`. Em vez de espalhar `if (units?.length)`
+ * pela base, toda leitura passa por aqui e enxerga SEMPRE uma lista — com uma
+ * única unidade, no caso legado.
+ */
+export function proposalUnitsOf(p: Partial<BrokerProposal> | null | undefined): BrokerProposalUnit[] {
+    if (!p) return [];
+    const list = (p.units || []).filter(u => !!u?.property_id);
+    if (list.length > 0) {
+        const primaryIdx = Math.max(0, list.findIndex(u => u.is_primary));
+        return list
+            .map((u, i) => ({
+                ...u,
+                unit_price: Number(u.unit_price) || 0,
+                allocated_value: Number(u.allocated_value) || 0,
+                is_primary: i === primaryIdx,
+                sort_order: u.sort_order ?? i,
+            }))
+            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    }
+    if (p.property_id) {
+        return [{
+            property_id: p.property_id,
+            unit_price: Number(p.unit_price) || 0,
+            allocated_value: Number(p.total_value) || 0,
+            is_primary: true,
+            sort_order: 0,
+        }];
+    }
+    return [];
+}
+
+/** Soma dos preços de tabela da cesta — é o `unit_price` do header. */
+export function proposalUnitsTablePrice(units: BrokerProposalUnit[] | undefined): number {
+    return (units || []).reduce((s, u) => s + (Number(u.unit_price) || 0), 0);
+}
+
+/** Soma das cotas rateadas — tem que fechar com o `total_value` do header. */
+export function proposalUnitsAllocated(units: BrokerProposalUnit[] | undefined): number {
+    return (units || []).reduce((s, u) => s + (Number(u.allocated_value) || 0), 0);
+}
+
+/**
+ * Rateia `totalValue` entre as unidades pro rata do preço de tabela, jogando o
+ * resíduo de centavos na maior cota — assim a soma fecha EXATAMENTE com o total,
+ * sem o clássico R$ 0,01 de diferença que faria a validação do simulador falhar.
+ */
+export function allocateProRata(units: BrokerProposalUnit[], totalValue: number): BrokerProposalUnit[] {
+    const base = proposalUnitsTablePrice(units);
+    if (units.length === 0) return [];
+    if (base <= 0) {
+        // Sem preço de tabela não há proporção: divide igualmente.
+        const each = Math.round((totalValue / units.length) * 100) / 100;
+        const out = units.map(u => ({ ...u, allocated_value: each }));
+        const diff = Math.round((totalValue - each * units.length) * 100) / 100;
+        if (diff !== 0) out[0].allocated_value = Math.round((out[0].allocated_value + diff) * 100) / 100;
+        return out;
+    }
+    const out = units.map(u => ({
+        ...u,
+        allocated_value: Math.round(((Number(u.unit_price) || 0) / base) * totalValue * 100) / 100,
+    }));
+    const diff = Math.round((totalValue - proposalUnitsAllocated(out)) * 100) / 100;
+    if (diff !== 0) {
+        let biggest = 0;
+        out.forEach((u, i) => { if (u.allocated_value > out[biggest].allocated_value) biggest = i; });
+        out[biggest].allocated_value = Math.round((out[biggest].allocated_value + diff) * 100) / 100;
+    }
+    return out;
+}
 
 export const brokerService = {
     // --- Broker Profiles (Gestão de Corretores) ---
@@ -174,54 +269,157 @@ export const brokerService = {
 
     // --- Broker Proposals (Gestão de Propostas do Portal) ---
     async listProposals(organizationId: string, brokerEmail?: string) {
-        let query = supabase
-            .from('broker_portal_proposals')
-            .select('id, property_id, broker_id, broker_email, organization_id, buyer_name, buyer_cpf, buyer_email, buyer_phone, buyer_income, unit_price, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, discount_pct, total_value, status, notes, admin_notes, created_at, updated_at')
-            .eq('organization_id', organizationId)
-            .order('created_at', { ascending: false });
+        const BASE_COLS = 'id, property_id, broker_id, broker_email, organization_id, buyer_name, buyer_cpf, buyer_email, buyer_phone, buyer_income, unit_price, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, discount_pct, total_value, status, notes, admin_notes, created_at, updated_at';
+        const UNITS_EMBED = ', units:broker_portal_proposal_units(id, proposal_id, property_id, organization_id, unit_price, allocated_value, is_primary, sort_order)';
 
-        if (brokerEmail) {
-            query = query.eq('broker_email', brokerEmail);
+        const buildQuery = (withUnits: boolean) => {
+            let q = supabase
+                .from('broker_portal_proposals')
+                .select(withUnits ? BASE_COLS + UNITS_EMBED : BASE_COLS)
+                .eq('organization_id', organizationId)
+                .order('created_at', { ascending: false });
+            if (brokerEmail) q = q.eq('broker_email', brokerEmail);
+            return q;
+        };
+
+        // `as any` porque o select é montado dinamicamente (com ou sem o embed da
+        // cesta) e o parser de tipos do supabase-js não resolve string variável.
+        let { data, error } = await (buildQuery(!proposalUnitsTableMissing) as any);
+        if (error && noteProposalUnitsError(error)) {
+            ({ data, error } = await (buildQuery(false) as any));
         }
-
-        const { data, error } = await query;
 
         if (error) {
             console.error('[BROKER SERVICE] Error listing proposals:', error);
             throw error;
         }
 
-        return (data || []) as BrokerProposal[];
+        return ((data || []) as BrokerProposal[]).map(p => ({ ...p, units: proposalUnitsOf(p) }));
+    },
+
+    /**
+     * Substitui a cesta de uma proposta: apaga as unidades que saíram e grava as
+     * atuais. O simulador sempre reenvia a cesta inteira, então é replace, não merge.
+     */
+    async syncProposalUnits(proposalId: string, organizationId: string | undefined, units: BrokerProposalUnit[]) {
+        if (proposalUnitsTableMissing) return;
+
+        const { data: existing, error: readErr } = await supabase
+            .from('broker_portal_proposal_units')
+            .select('id, property_id')
+            .eq('proposal_id', proposalId);
+        if (readErr && noteProposalUnitsError(readErr)) return;
+
+        const keep = new Set(units.map(u => u.property_id));
+        const removed = (existing || [])
+            .filter(e => !keep.has(e.property_id as string))
+            .map(e => e.property_id as string);
+
+        if (removed.length > 0) {
+            await supabase
+                .from('broker_portal_proposal_units')
+                .delete()
+                .eq('proposal_id', proposalId)
+                .in('property_id', removed);
+        }
+
+        if (units.length > 0) {
+            const rows = units.map((u, i) => ({
+                proposal_id: proposalId,
+                property_id: u.property_id,
+                organization_id: organizationId || u.organization_id || null,
+                unit_price: Number(u.unit_price) || 0,
+                allocated_value: Number(u.allocated_value) || 0,
+                is_primary: !!u.is_primary,
+                sort_order: u.sort_order ?? i,
+            }));
+            const { error } = await supabase
+                .from('broker_portal_proposal_units')
+                .upsert(rows, { onConflict: 'proposal_id,property_id' });
+            if (error) {
+                if (noteProposalUnitsError(error)) return;
+                console.error('[BROKER SERVICE] Erro ao sincronizar unidades da proposta:', error);
+                throw error;
+            }
+        }
     },
 
     async saveProposal(proposal: Partial<BrokerProposal>) {
+        // A cesta NÃO é coluna de broker_portal_proposals — vive em
+        // broker_portal_proposal_units. Extraída antes de qualquer coisa; se
+        // vazasse no payload, o PostgREST rejeitaria ("Could not find the 'units'
+        // column"). Quem manda é a lista: property_id é a principal, unit_price é
+        // a soma das tabelas e total_value a soma das cotas rateadas.
+        const units = proposalUnitsOf(proposal);
+        const primaryUnit = units.find(u => u.is_primary) || units[0];
+
+        // Sem a tabela de itens, uma cesta seria gravada com a SOMA no header e as
+        // unidades perdidas em silêncio — proposta com valor de 3 imóveis apontando
+        // para 1. Falha explícita em vez de dado errado. (Uma unidade só continua
+        // funcionando: o header já a representa por inteiro.)
+        if (units.length > 1) {
+            const { error: probeErr } = await supabase
+                .from('broker_portal_proposal_units')
+                .select('id')
+                .limit(1);
+            if (probeErr && noteProposalUnitsError(probeErr)) {
+                throw new Error(
+                    'Propostas com mais de uma unidade exigem a migration 20270826000010 aplicada. '
+                    + 'Envie uma proposta por unidade ou aplique a migration.'
+                );
+            }
+        }
+
+        const withDerived = <T extends Partial<BrokerProposal>>(payload: T): T => {
+            if (!primaryUnit) return payload;
+            return {
+                ...payload,
+                property_id: primaryUnit.property_id,
+                unit_price: Number(proposalUnitsTablePrice(units).toFixed(2)),
+                total_value: Number(proposalUnitsAllocated(units).toFixed(2)),
+            };
+        };
+
         if (proposal.id && !proposal.id.startsWith('prop-')) {
             // Versionamento (F3): antes de alterar, guarda a versão atual em
             // revision_history e incrementa version. version/revision_history são
             // controlados aqui — o payload do caller não os define.
-            const { version, revision_history, ...clean } = proposal as Partial<BrokerProposal> & {
+            const { version, revision_history, units: _units, ...clean } = proposal as Partial<BrokerProposal> & {
                 version?: number; revision_history?: unknown[];
             };
             const { data: current } = await supabase
                 .from('broker_portal_proposals')
-                .select('version, revision_history, unit_price, discount_pct, total_value, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, status, updated_at')
+                .select('version, revision_history, property_id, unit_price, discount_pct, total_value, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, status, updated_at')
                 .eq('id', proposal.id)
                 .single();
+
+            // A cesta ANTERIOR entra no snapshot. Versionar a proposta sem as
+            // unidades perderia justamente o que mudou quando o corretor troca
+            // uma unidade ou mexe no rateio.
+            let previousUnits: unknown[] = [];
+            if (!proposalUnitsTableMissing) {
+                const { data: prevRows, error: prevErr } = await supabase
+                    .from('broker_portal_proposal_units')
+                    .select('property_id, unit_price, allocated_value, is_primary, sort_order')
+                    .eq('proposal_id', proposal.id);
+                if (prevErr) noteProposalUnitsError(prevErr);
+                previousUnits = prevRows || [];
+            }
 
             const prevVersion = (current?.version as number) ?? 1;
             const history = Array.isArray(current?.revision_history) ? current!.revision_history : [];
             const snapshot = current
-                ? { v: prevVersion, at: current.updated_at, ...current, version: undefined, revision_history: undefined }
+                ? { v: prevVersion, at: current.updated_at, ...current, units: previousUnits, version: undefined, revision_history: undefined }
                 : null;
 
             const { data, error } = await supabase
                 .from('broker_portal_proposals')
-                .update({
+                .update(withDerived({
                     ...clean,
                     version: prevVersion + 1,
                     revision_history: snapshot ? [...history, snapshot] : history,
                     updated_at: new Date().toISOString(),
-                })
+                }))
                 .eq('id', proposal.id)
                 .select()
                 .single();
@@ -230,13 +428,23 @@ export const brokerService = {
                 console.error('[BROKER SERVICE] Error updating proposal:', error);
                 throw error;
             }
-            return data as BrokerProposal;
+            const updated = data as BrokerProposal;
+
+            if (units.length > 0) {
+                try {
+                    await this.syncProposalUnits(updated.id, updated.organization_id, units);
+                } catch (e) {
+                    console.error('[BROKER SERVICE] Falha ao gravar unidades da proposta:', e);
+                }
+            }
+            updated.units = units;
+            return updated;
         } else {
             // Remove temporary ID if exists
-            const { id, ...payload } = proposal;
+            const { id, units: _u, ...payload } = proposal;
             const { data, error } = await supabase
                 .from('broker_portal_proposals')
-                .insert(payload)
+                .insert(withDerived(payload))
                 .select()
                 .single();
 
@@ -245,6 +453,15 @@ export const brokerService = {
                 throw error;
             }
             const saved = data as BrokerProposal;
+
+            if (units.length > 0) {
+                try {
+                    await this.syncProposalUnits(saved.id, saved.organization_id, units);
+                } catch (e) {
+                    console.error('[BROKER SERVICE] Falha ao gravar unidades da proposta:', e);
+                }
+            }
+            saved.units = units;
 
             // Notifica admins da organização — fire-and-forget (falha silenciosa)
             if (saved.id && saved.organization_id) {

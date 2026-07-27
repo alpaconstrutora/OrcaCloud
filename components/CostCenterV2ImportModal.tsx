@@ -20,7 +20,7 @@ interface Props {
     onSuccess: () => void;
 }
 
-// Sheet + modal seguem docs/ui_ux_standard_guide.md §21 (título sentence case,
+// Sheet + modal seguem docs/ui_ux_guia_unificado.md §21 (título sentence case,
 // rótulo text-xs font-semibold text-slate-500) — arquivo novo, não herda o
 // estilo antigo uppercase/tracking-widest do CostCenterImportModal.tsx (Plano
 // de Contas legado).

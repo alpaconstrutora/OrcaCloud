@@ -21,6 +21,13 @@ interface BrokerDevelopmentsProps {
     /** Reusa exatamente o fluxo que a aba Estoque já usa: abre o plano de vendas
      *  (BrokerProposalSimulator) com a unidade preenchida. */
     onMakeProposal: (unit: BrokerUnit) => void;
+    /**
+     * Cesta compartilhada com a aba Estoque — permite montar apto + vaga + box
+     * daqui também. Opcionais: sem elas a tabela funciona como antes (clique =
+     * proposta de uma unidade).
+     */
+    selectedUnitIds?: string[];
+    onToggleUnit?: (unit: BrokerUnit) => void;
 }
 
 // Status da unidade — mesmas labels/cores de PriceTableManager.tsx e PropertyUnitMap.tsx.
@@ -96,7 +103,7 @@ type SortKey = 'unit' | 'status' | 'privArea' | 'bedrooms' | 'parking' | 'bathro
     | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker' | 'showPrice';
 type BuildingSortKey = 'name' | 'units';
 
-const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal }) => {
+const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, units, portalToken, organizationId, onMakeProposal, selectedUnitIds, onToggleUnit }) => {
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
     // Eixo de preço exibido: venda (price) ou locação (rental_price). Toggle no
     // detalhe do empreendimento — o mesmo prédio pode ter as duas tabelas.
@@ -467,6 +474,10 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                     {isCol('showPrice') && <SortableHeader colKey="showPrice" label="Exibir Preço" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
                                         className="px-6 py-2 text-center whitespace-nowrap" />}
+                                    {/* Coluna de seleção da cesta — fora do config de colunas
+                                        por org (broker_portal_price_columns), que espelha as 13
+                                        colunas de dados da tabela de preços. */}
+                                    {onToggleUnit && <th className="px-4 py-2 w-10" />}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -528,6 +539,21 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                             {isCol('showPrice') && <td className="px-6 py-2.5 text-center text-sm font-normal text-gray-600">
                                                 {showPrice(item) ? 'Sim' : 'Não'}
                                             </td>}
+                                            {onToggleUnit && (
+                                                <td className="px-4 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={!!selectedUnitIds?.includes(item.property_id)}
+                                                        disabled={!clickable}
+                                                        onChange={() => {
+                                                            const u = units.find(x => x.id === item.property_id);
+                                                            if (u) onToggleUnit(u);
+                                                        }}
+                                                        title="Incluir esta unidade na proposta"
+                                                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400 cursor-pointer disabled:cursor-not-allowed"
+                                                    />
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}

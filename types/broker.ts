@@ -27,9 +27,37 @@ export interface BrokerPaymentPlan {
     is_default?: boolean;
 }
 
+/**
+ * Uma unidade da cesta de uma proposta (`broker_portal_proposal_units`). Uma
+ * proposta pode reunir apto + vaga + box do MESMO empreendimento sob um único
+ * comprador, com um desconto e um fluxo de pagamento.
+ */
+export interface BrokerProposalUnit {
+    id?: string;
+    proposal_id?: string;
+    property_id: string;
+    organization_id?: string;
+    /** Preço de tabela da unidade no momento do envio (snapshot). */
+    unit_price: number;
+    /** Cota desta unidade no `total_value` da cesta (pro rata, editável). */
+    allocated_value: number;
+    /** A principal é a que espelha `BrokerProposal.property_id`. */
+    is_primary?: boolean;
+    sort_order?: number;
+    /** Campo transitório: nome da unidade, vindo das RPCs públicas. Não vai ao banco. */
+    unit_name?: string;
+}
+
 export interface BrokerProposal {
     id: string;
+    /** Unidade PRINCIPAL. Mantida por compatibilidade (PropertyUnitMap, edge
+     *  function de notificação, funil de vendas); a cesta completa vive em `units`. */
     property_id: string;
+    /** Todas as unidades da proposta. Derivada de `broker_portal_proposal_units`
+     *  na leitura e persistida por `brokerService.saveProposal` — NÃO é coluna de
+     *  `broker_portal_proposals`. Quando presente, manda em `property_id` (a
+     *  is_primary), em `unit_price` (soma das tabelas) e em `total_value`. */
+    units?: BrokerProposalUnit[];
     broker_id: string;
     broker_email: string;
     organization_id: string;

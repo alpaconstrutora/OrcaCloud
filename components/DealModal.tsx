@@ -3,6 +3,7 @@ import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Che
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
+import { KpiCard } from './ui/KpiCard';
 import { paymentTypeService } from '../services/paymentTypeService';
 import {
     DEFAULT_PAYMENT_TYPES,
@@ -27,7 +28,7 @@ import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
 
-type TabId = 'cliente' | 'unidade' | 'pagamento' | 'partes' | 'contrato';
+type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato';
 
 /** Checklist de documentos exigidos do cliente/comprador, por tipo de pessoa.
  * As chaves (`key`) são o que fica gravado em commercial_deals.doc_checklist —
@@ -1076,6 +1077,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             icon: <DollarSign className="w-4 h-4" />,
         },
         {
+            // O plano de pagamento saiu de "Forma de Pagamento" para cá: lá são
+            // as CONDIÇÕES do acordo, aqui é a lista de cobranças — tarefa
+            // diferente, e que precisa da largura toda da tela.
+            id: 'parcelas',
+            label: 'Parcelas',
+            icon: <Layers className="w-4 h-4" />,
+            badge: (formData.custom_installments?.length ?? 0) > 0,
+        },
+        {
             id: 'partes',
             label: 'Partes e Comissões',
             icon: <UserCheck className="w-4 h-4" />,
@@ -1710,273 +1720,320 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 )}
                             </div>
 
-                            {/* Plano de Pagamento — largura total: data + valor bruto + desconto +
-                                valor final cabem todos na mesma linha por parcela. */}
+                            {/* O Plano de Pagamento saiu daqui para a aba PARCELAS:
+                                esta aba define as CONDIÇÕES (valor, datas, forma, entrada);
+                                a lista de parcelas é outra tarefa e pedia a largura toda. */}
                             {formData.payment_method === 'INSTALLMENTS' && (
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center gap-3">
-                                            {(formData.custom_installments?.length ?? 0) > 0 && (
-                                                <input
-                                                    type="checkbox"
-                                                    title="Selecionar todas"
-                                                    checked={formData.custom_installments!.every(i => selectedInstallmentIds.has(i.id))}
-                                                    onChange={() => {
-                                                        const all = formData.custom_installments || [];
-                                                        const allSelected = all.every(i => selectedInstallmentIds.has(i.id));
-                                                        setSelectedInstallmentIds(allSelected ? new Set() : new Set(all.map(i => i.id)));
-                                                    }}
-                                                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                                                />
-                                            )}
-                                            <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {(formData.custom_installments || []).some(i => i.installmentType && i.installmentType !== 'AVULSA') && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleOpenRecalcModal}
-                                                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all bg-white text-amber-600 border border-amber-200 hover:bg-amber-50 active:scale-95"
-                                                >
-                                                    <RefreshCw className="w-3.5 h-3.5" />
-                                                    Recalcular
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={handleOpenAddAdhocModal}
-                                                className="flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all bg-white text-purple-600 border border-purple-200 hover:bg-purple-50 active:scale-95"
-                                            >
-                                                <Plus className="w-3.5 h-3.5" />
-                                                Parcela Avulsa
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleOpenGenerateModal}
-                                                disabled={loading}
-                                                className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${loading ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95'}`}
-                                            >
-                                                {loading ? 'Verificando...' : 'Gerar Parcelas'}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {((formData.down_payment || 0) > 0 || (formData.custom_installments?.length ?? 0) > 0) && (
-                                        <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-2 custom-scrollbar">
-                                            {/* Entrada — não é item de custom_installments (é o campo down_payment
-                                                à parte), mas aparece como 1ª linha do Plano de Pagamento para poder
-                                                receber Tipo de Pagamento e Descrição igual às demais parcelas. */}
-                                            {(formData.down_payment || 0) > 0 && (
-                                                <div className="flex flex-wrap items-center gap-3 p-3 bg-purple-50/40 border border-purple-100 rounded-xl shadow-sm">
-                                                    <span className="w-6 shrink-0" />
-                                                    <span className="w-6 shrink-0 text-center text-[10px] font-black text-purple-500 uppercase">Entr.</span>
-
-                                                    <input
-                                                        type="date"
-                                                        value={formData.date}
-                                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                                        className="w-[160px] shrink-0 bg-white border border-transparent focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
-                                                    />
-
-                                                    <div className="relative w-[150px] shrink-0">
-                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
-                                                        <input
-                                                            type="number"
-                                                            value={formData.down_payment ?? ''}
-                                                            onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
-                                                            className="w-full pl-6 pr-2 py-2 bg-white border border-transparent focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
-                                                        />
-                                                    </div>
-
-                                                    <select
-                                                        value={formData.down_payment_installment_type ?? 'SINAL'}
-                                                        onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
-                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none cursor-pointer"
-                                                    >
-                                                        {installmentTypeOptions.map(t => (
-                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                        ))}
-                                                    </select>
-
-                                                    <select
-                                                        value={formData.down_payment_payment_type ?? ''}
-                                                        onChange={(e) => setFormData({ ...formData, down_payment_payment_type: (e.target.value || undefined) as PaymentInstallment['paymentType'] })}
-                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none cursor-pointer"
-                                                    >
-                                                        <option value="">Forma Pagto.</option>
-                                                        <option value="PIX">PIX</option>
-                                                        <option value="TED">TED</option>
-                                                        <option value="DOC">DOC</option>
-                                                        <option value="DINHEIRO">Dinheiro</option>
-                                                        <option value="CHEQUE">Cheque</option>
-                                                        <option value="PERMUTA">Permuta</option>
-                                                    </select>
-
-                                                    <input
-                                                        type="text"
-                                                        value={formData.down_payment_notes ?? ''}
-                                                        onChange={(e) => setFormData({ ...formData, down_payment_notes: e.target.value })}
-                                                        placeholder="Descrição / observação"
-                                                        className="flex-1 min-w-[160px] text-xs font-medium text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none focus:border-purple-300"
-                                                    />
-                                                </div>
-                                            )}
-                                            {formData.custom_installments && formData.custom_installments.map((inst, index) => (
-                                                <div key={inst.id} className={`flex flex-wrap items-center gap-3 p-3 bg-white border rounded-xl shadow-sm ${selectedInstallmentIds.has(inst.id) ? 'border-purple-300 bg-purple-50/30' : 'border-purple-100'}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        title="Dica: segure Shift e clique para selecionar um intervalo"
-                                                        checked={selectedInstallmentIds.has(inst.id)}
-                                                        onChange={(e) => handleInstallmentRowCheck(inst.id, index, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
-                                                        className="w-4 h-4 shrink-0 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                                                    />
-                                                    <span className="w-6 shrink-0 text-center text-xs font-black text-gray-400">{index + 1}</span>
-
-                                                    <input
-                                                        type="date"
-                                                        value={inst.dueDate}
-                                                        onChange={(e) => {
-                                                            const newInsts = [...formData.custom_installments!];
-                                                            newInsts[index] = { ...inst, dueDate: e.target.value };
-                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                        }}
-                                                        className="w-[160px] shrink-0 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
-                                                    />
-
-                                                    <div className="relative w-[150px] shrink-0">
-                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
-                                                        <input
-                                                            type="number"
-                                                            value={inst.originalValue ?? inst.value}
-                                                            onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
-                                                            className="w-full pl-6 pr-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
-                                                        />
-                                                    </div>
-
-                                                    <select
-                                                        value={inst.discountType ?? ''}
-                                                        onChange={(e) => {
-                                                            const type = e.target.value as 'VALUE' | 'PERCENT' | '';
-                                                            updateInstallmentDiscount(index, {
-                                                                discountType: type || undefined,
-                                                                discountAmount: type ? inst.discountAmount : undefined
-                                                            });
-                                                        }}
-                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
-                                                    >
-                                                        <option value="">Sem desconto</option>
-                                                        <option value="VALUE">Desconto R$</option>
-                                                        <option value="PERCENT">Desconto %</option>
-                                                    </select>
-
-                                                    {inst.discountType && (
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            step="0.01"
-                                                            value={inst.discountAmount ?? ''}
-                                                            onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
-                                                            placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
-                                                            className="w-[110px] shrink-0 text-xs font-semibold text-amber-700 border border-amber-200 rounded-lg px-2 py-2 bg-amber-50 outline-none"
-                                                        />
-                                                    )}
-
-                                                    <select
-                                                        value={inst.installmentType ?? ''}
-                                                        onChange={(e) => {
-                                                            const newInsts = [...formData.custom_installments!];
-                                                            newInsts[index] = { ...inst, installmentType: (e.target.value || undefined) as PaymentInstallment['installmentType'] };
-                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                        }}
-                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
-                                                    >
-                                                        <option value="">Tipo Pagto.</option>
-                                                        {installmentTypeOptions.map(t => (
-                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                        ))}
-                                                    </select>
-
-                                                    <select
-                                                        value={inst.paymentType ?? ''}
-                                                        onChange={(e) => {
-                                                            const newInsts = [...formData.custom_installments!];
-                                                            newInsts[index] = { ...inst, paymentType: (e.target.value || undefined) as PaymentInstallment['paymentType'] };
-                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                        }}
-                                                        className="w-[130px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
-                                                    >
-                                                        <option value="">Forma Pagto.</option>
-                                                        <option value="PIX">PIX</option>
-                                                        <option value="TED">TED</option>
-                                                        <option value="DOC">DOC</option>
-                                                        <option value="DINHEIRO">Dinheiro</option>
-                                                        <option value="CHEQUE">Cheque</option>
-                                                        <option value="PERMUTA">Permuta</option>
-                                                    </select>
-
-                                                    <input
-                                                        type="text"
-                                                        value={inst.notes ?? ''}
-                                                        onChange={(e) => {
-                                                            const newInsts = [...formData.custom_installments!];
-                                                            newInsts[index] = { ...inst, notes: e.target.value };
-                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                        }}
-                                                        placeholder="Descrição / observação"
-                                                        className="flex-1 min-w-[160px] text-xs font-medium text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none focus:bg-white focus:border-purple-300"
-                                                    />
-
-                                                    <div className="shrink-0 text-right">
-                                                        {inst.discountType && (
-                                                            <span className="text-xs font-black text-emerald-600">
-                                                                Final: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    <button
-                                                        type="button"
-                                                        title="Remover parcela"
-                                                        onClick={() => handleRemoveInstallment(inst.id)}
-                                                        className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            {(() => {
-                                                // Soma bruta valida contra o Valor do Fechamento (parcelas somam o
-                                                // preço combinado, independente de desconto). Soma com desconto é
-                                                // o que de fato será cobrado — mostrada só quando difere da bruta,
-                                                // para não confundir "faltou parcela" com "desconto aplicado".
-                                                const grossSum = (formData.custom_installments || []).reduce((sum, i) => sum + (i.originalValue ?? i.value), 0) + (formData.down_payment || 0);
-                                                const netSum = (formData.custom_installments || []).reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0);
-                                                const hasDiscount = Math.abs(netSum - grossSum) > 0.01;
-                                                return (
-                                                    <div className="max-w-3xl flex items-center justify-between gap-6 p-3 mt-2 bg-gray-50 rounded-xl border border-gray-100">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Soma das Parcelas</span>
-                                                            <span className={`text-sm font-black ${Math.abs(grossSum - (formData.value || 0)) < 0.01 ? 'text-green-600' : 'text-amber-600'}`}>
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grossSum)}
-                                                            </span>
-                                                        </div>
-                                                        {hasDiscount && (
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Total com Desconto</span>
-                                                                <span className="text-sm font-black text-emerald-600">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(netSum)}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                    )}
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('parcelas')}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-purple-600 text-white rounded-[6px] hover:bg-purple-700 font-medium text-[13px] transition-all active:scale-95"
+                                >
+                                    <DollarSign className="w-[15px] h-[15px]" />
+                                    Ver plano de pagamento
+                                </button>
                             )}
                         </div>
                     )}
+
+
+                    {/* ══════════════════════════════════════════
+                        ABA — PARCELAS (Plano de Pagamento)
+                        Saiu de "Forma de Pagamento": lá ficam as CONDIÇÕES
+                        (valor, datas, forma, entrada); aqui fica a LISTA, que
+                        é outra tarefa e precisa da largura toda.
+                        Padrão: docs/ui_ux_guia_unificado.md — KPIs §4, toolbar
+                        de botões §5.3, tabela acoplada §5.2/§6, tipografia §7,
+                        editáveis inline §7.1, lote §10, vazio §12, escala §16.
+                    ══════════════════════════════════════════ */}
+                    {activeTab === 'parcelas' && (() => {
+                        const parcelas = formData.custom_installments || [];
+                        const entrada = formData.down_payment || 0;
+                        const somaBruta = parcelas.reduce((s, i) => s + (i.originalValue ?? i.value), 0) + entrada;
+                        const somaLiquida = parcelas.reduce((s, i) => s + i.value, 0) + entrada;
+                        const descontoTotal = somaBruta - somaLiquida;
+                        const bate = Math.abs(somaBruta - (formData.value || 0)) < 0.01;
+                        const todasSelecionadas = parcelas.length > 0 && parcelas.every(i => selectedInstallmentIds.has(i.id));
+                        // Célula editável dentro de TD: mesma tipografia do texto (§7.1).
+                        const CELL = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-50 focus:bg-white focus:border-blue-400 outline-none transition-all';
+
+                        return (
+                            <div className="space-y-6">
+                                {/* KPIs — §4: cor semântica por métrica, componente único */}
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                                    <KpiCard shadow={false} size="sm" label="Parcelas" value={parcelas.length}
+                                        icon={<Layers className="w-4 h-4" />} color="blue" />
+                                    <KpiCard shadow={false} size="sm" label="Soma das parcelas"
+                                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaBruta)}
+                                        sub={bate ? 'Confere com o fechamento' : 'Diverge do valor do fechamento'}
+                                        icon={<DollarSign className="w-4 h-4" />} color={bate ? 'emerald' : 'amber'} />
+                                    <KpiCard shadow={false} size="sm" label="Desconto"
+                                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(descontoTotal)}
+                                        icon={<Percent className="w-4 h-4" />} color={descontoTotal > 0 ? 'orange' : 'gray'} />
+                                    <KpiCard shadow={false} size="sm" label="Total a receber"
+                                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaLiquida)}
+                                        icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
+                                </div>
+
+                                {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita */}
+                                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                                    <p className="text-sm text-gray-500">
+                                        {formData.payment_method === 'INSTALLMENTS'
+                                            ? 'Cada linha é uma cobrança. Data, valor, desconto e forma de pagamento são editáveis aqui.'
+                                            : 'A forma de pagamento atual não é parcelada — troque em "Forma de Pagamento" para montar um plano.'}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        {parcelas.some(i => i.installmentType && i.installmentType !== 'AVULSA') && (
+                                            <button type="button" onClick={handleOpenRecalcModal}
+                                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all">
+                                                <RefreshCw className="w-4 h-4" /> Recalcular
+                                            </button>
+                                        )}
+                                        <button type="button" onClick={handleOpenAddAdhocModal}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
+                                            <Plus className="w-4 h-4" /> Parcela avulsa
+                                        </button>
+                                        <button type="button" onClick={handleOpenGenerateModal} disabled={loading}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
+                                            <Plus className="w-[15px] h-[15px]" />
+                                            {loading ? 'Verificando…' : 'Gerar parcelas'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Tabela acoplada — §5.2 */}
+                                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                                    {parcelas.length === 0 && entrada <= 0 ? (
+                                        /* Empty state — §12 (sem moldura própria dentro do card) */
+                                        <div className="text-center py-12">
+                                            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma parcela no plano</h3>
+                                            <p className="text-sm text-gray-500">
+                                                Use "Gerar parcelas" para criar o cronograma, ou "Parcela avulsa" para lançar uma cobrança isolada.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-auto max-h-[60vh]">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead>
+                                                    {/* Sticky §6.5, sentence case §6.2, px-6 + border-r §6.6.
+                                                        Sem SortableHeader (§6.3): a ORDEM é o cronograma — a
+                                                        posição da parcela é o próprio dado (Parcela Avulsa
+                                                        insere "na posição N"), então reordenar mentiria. */}
+                                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                        <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                                            {parcelas.length > 0 && (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    title="Selecionar todas"
+                                                                    checked={todasSelecionadas}
+                                                                    onChange={() => setSelectedInstallmentIds(todasSelecionadas ? new Set() : new Set(parcelas.map(i => i.id)))}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                            )}
+                                                        </th>
+                                                        <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
+                                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-200">
+                                                    {/* Entrada — não é item de custom_installments (é o campo
+                                                        down_payment), mas entra como 1ª linha para receber tipo,
+                                                        forma e descrição igual às demais. */}
+                                                    {entrada > 0 && (
+                                                        <tr className="bg-blue-50/40">
+                                                            <td className="px-4 py-2.5 border-r border-gray-100"></td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">Entr.</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <input type="date" value={formData.date}
+                                                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                                    className={CELL} />
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <input type="number" value={formData.down_payment ?? ''}
+                                                                    onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
+                                                                    className={CELL} />
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entrada)}
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <select
+                                                                    value={formData.down_payment_installment_type ?? 'SINAL'}
+                                                                    onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
+                                                                    className={`${CELL} cursor-pointer`}>
+                                                                    {installmentTypeOptions.map(t => (
+                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <select
+                                                                    value={formData.down_payment_payment_type ?? ''}
+                                                                    onChange={(e) => setFormData({ ...formData, down_payment_payment_type: (e.target.value || undefined) as PaymentInstallment['paymentType'] })}
+                                                                    className={`${CELL} cursor-pointer`}>
+                                                                    <option value="">Forma Pagto.</option>
+                                                                    <option value="PIX">PIX</option>
+                                                                    <option value="TED">TED</option>
+                                                                    <option value="DOC">DOC</option>
+                                                                    <option value="DINHEIRO">Dinheiro</option>
+                                                                    <option value="CHEQUE">Cheque</option>
+                                                                    <option value="PERMUTA">Permuta</option>
+                                                                </select>
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <input type="text" value={formData.down_payment_notes ?? ''}
+                                                                    onChange={(e) => setFormData({ ...formData, down_payment_notes: e.target.value })}
+                                                                    placeholder="Descrição / observação" className={CELL} />
+                                                            </td>
+                                                            <td className="px-6 py-2.5"></td>
+                                                        </tr>
+                                                    )}
+
+                                                    {parcelas.map((inst, index) => (
+                                                        <tr key={inst.id}
+                                                            className={`hover:bg-blue-50/50 transition-colors ${selectedInstallmentIds.has(inst.id) ? 'bg-blue-50/60' : ''}`}>
+                                                            <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                                    checked={selectedInstallmentIds.has(inst.id)}
+                                                                    onChange={(e) => handleInstallmentRowCheck(inst.id, index, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{index + 1}</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <input
+                                                                    type="date"
+                                                                    value={inst.dueDate}
+                                                                    onChange={(e) => {
+                                                                        const newInsts = [...parcelas];
+                                                                        newInsts[index] = { ...inst, dueDate: e.target.value };
+                                                                        setFormData({ ...formData, custom_installments: newInsts });
+                                                                    }}
+                                                                    className={CELL}
+                                                                />
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <input
+                                                                    type="number"
+                                                                    value={inst.originalValue ?? inst.value}
+                                                                    onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
+                                                                    className={CELL}
+                                                                />
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <select
+                                                                        value={inst.discountType ?? ''}
+                                                                        onChange={(e) => {
+                                                                            const type = e.target.value as 'VALUE' | 'PERCENT' | '';
+                                                                            updateInstallmentDiscount(index, {
+                                                                                discountType: type || undefined,
+                                                                                discountAmount: type ? inst.discountAmount : undefined
+                                                                            });
+                                                                        }}
+                                                                        className={`${CELL} cursor-pointer`}>
+                                                                        <option value="">Sem desconto</option>
+                                                                        <option value="VALUE">R$</option>
+                                                                        <option value="PERCENT">%</option>
+                                                                    </select>
+                                                                    {inst.discountType && (
+                                                                        <input
+                                                                            type="number" min="0" step="0.01"
+                                                                            value={inst.discountAmount ?? ''}
+                                                                            onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
+                                                                            placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
+                                                                            className={`${CELL} w-24`}
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <select
+                                                                    value={inst.installmentType ?? ''}
+                                                                    onChange={(e) => {
+                                                                        const newInsts = [...parcelas];
+                                                                        newInsts[index] = { ...inst, installmentType: (e.target.value || undefined) as PaymentInstallment['installmentType'] };
+                                                                        setFormData({ ...formData, custom_installments: newInsts });
+                                                                    }}
+                                                                    className={`${CELL} cursor-pointer`}>
+                                                                    <option value="">Tipo Pagto.</option>
+                                                                    {installmentTypeOptions.map(t => (
+                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <select
+                                                                    value={inst.paymentType ?? ''}
+                                                                    onChange={(e) => {
+                                                                        const newInsts = [...parcelas];
+                                                                        newInsts[index] = { ...inst, paymentType: (e.target.value || undefined) as PaymentInstallment['paymentType'] };
+                                                                        setFormData({ ...formData, custom_installments: newInsts });
+                                                                    }}
+                                                                    className={`${CELL} cursor-pointer`}>
+                                                                    <option value="">Forma Pagto.</option>
+                                                                    <option value="PIX">PIX</option>
+                                                                    <option value="TED">TED</option>
+                                                                    <option value="DOC">DOC</option>
+                                                                    <option value="DINHEIRO">Dinheiro</option>
+                                                                    <option value="CHEQUE">Cheque</option>
+                                                                    <option value="PERMUTA">Permuta</option>
+                                                                </select>
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                <input
+                                                                    type="text"
+                                                                    value={inst.notes ?? ''}
+                                                                    onChange={(e) => {
+                                                                        const newInsts = [...parcelas];
+                                                                        newInsts[index] = { ...inst, notes: e.target.value };
+                                                                        setFormData({ ...formData, custom_installments: newInsts });
+                                                                    }}
+                                                                    placeholder="Descrição / observação"
+                                                                    className={CELL}
+                                                                />
+                                                            </td>
+                                                            <td className="px-6 py-2.5 text-right">
+                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                    <ActionIconButton kind="delete" title="Remover parcela"
+                                                                        onClick={() => handleRemoveInstallment(inst.id)} />
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {!bate && parcelas.length > 0 && (
+                                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] p-3 text-sm">
+                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                        <span>
+                                            A soma das parcelas ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(somaBruta)})
+                                            não fecha com o valor do fechamento ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(formData.value || 0)}).
+                                            Use "Recalcular" ou ajuste as parcelas.
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {/* ══════════════════════════════════════════
                         ABA 4 — PARTES & COMISSÃO
@@ -2472,7 +2529,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                 {/* Barra de ação em lote — parcelas selecionadas no Plano de Pagamento
                     (guia §10: fixa no rodapé, fora do fluxo normal). */}
-                {activeTab === 'pagamento' && selectedInstallmentIds.size > 0 && (
+                {activeTab === 'parcelas' && selectedInstallmentIds.size > 0 && (
                     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
                         <span className="flex-1 text-sm font-bold whitespace-nowrap">
                             {selectedInstallmentIds.size} parcela{selectedInstallmentIds.size !== 1 ? 's' : ''} selecionada{selectedInstallmentIds.size !== 1 ? 's' : ''}

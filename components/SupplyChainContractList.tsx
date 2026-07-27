@@ -4,7 +4,7 @@ import {
     FileText, Calendar, Building2, DollarSign,
     ArrowRight, Clock, Shield, LayoutDashboard,
     Table2, RefreshCw, Copy,
-    AlertCircle
+    AlertCircle, MoveHorizontal
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { contractService } from '../services/contractService';
@@ -13,11 +13,16 @@ import { appSettingsService } from '../services/appSettingsService';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { Contract } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    number: 110, title: 260, project: 180, supplier: 200, date: 170, status: 130, value: 150, actions: 200,
+};
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -74,6 +79,13 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainContractFilters:viewMode', 'list');
     const [localShowAll, setLocalShowAll] = React.useState(true);
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainContractColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplyChainContractColWidths');
+    // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
+    // table-layout:fixed: o navegador redistribuiria a sobra entre as colunas e
+    // arrastar uma borda moveria a vizinha errada (§6.1).
+    const tableTotalWidth = (['number', 'title', 'project', 'supplier', 'date', 'status', 'value'] as const)
+        .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
 
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     const confirm = useConfirm();
@@ -321,6 +333,18 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
+                    {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                        Duplo clique no divisor segue "restaurar padrão". Só em modo
+                        lista: no modo blocos não há coluna para ajustar. */}
+                    {viewMode === 'list' && (
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                    )}
                     <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
@@ -414,19 +438,37 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 </div>
             ) : (
                 <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.visibleColumns.includes('number') && <col data-col-key="number" style={{ width: `${cols.getWidth('number')}px` }} />}
+                                {tableColumns.visibleColumns.includes('title') && <col data-col-key="title" style={{ width: `${cols.getWidth('title')}px` }} />}
+                                {tableColumns.visibleColumns.includes('project') && <col data-col-key="project" style={{ width: `${cols.getWidth('project')}px` }} />}
+                                {tableColumns.visibleColumns.includes('supplier') && <col data-col-key="supplier" style={{ width: `${cols.getWidth('supplier')}px` }} />}
+                                {tableColumns.visibleColumns.includes('date') && <col data-col-key="date" style={{ width: `${cols.getWidth('date')}px` }} />}
+                                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                {tableColumns.visibleColumns.includes('value') && <col data-col-key="value" style={{ width: `${cols.getWidth('value')}px` }} />}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
                                 SortableHeader força uppercase internamente por padrão. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('number') && <SortableHeader colKey="number" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
-                                    {tableColumns.visibleColumns.includes('title') && <SortableHeader colKey="title" label="Contrato" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {tableColumns.visibleColumns.includes('project') && <SortableHeader colKey="project" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
-                                    {tableColumns.visibleColumns.includes('supplier') && <SortableHeader colKey="supplier" label={direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
-                                    {tableColumns.visibleColumns.includes('date') && <SortableHeader colKey="date" label="Vigência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
-                                    {tableColumns.visibleColumns.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
-                                    {tableColumns.visibleColumns.includes('value') && <SortableHeader colKey="value" label="Valor Atual" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />}
-                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    {tableColumns.visibleColumns.includes('number') && <SortableHeader colKey="number" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="number" /></SortableHeader>}
+                                    {tableColumns.visibleColumns.includes('title') && <SortableHeader colKey="title" label="Contrato" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="title" /></SortableHeader>}
+                                    {tableColumns.visibleColumns.includes('project') && <SortableHeader colKey="project" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="project" /></SortableHeader>}
+                                    {tableColumns.visibleColumns.includes('supplier') && <SortableHeader colKey="supplier" label={direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="supplier" /></SortableHeader>}
+                                    {tableColumns.visibleColumns.includes('date') && <SortableHeader colKey="date" label="Vigência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="date" /></SortableHeader>}
+                                    {tableColumns.visibleColumns.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="status" /></SortableHeader>}
+                                    {tableColumns.visibleColumns.includes('value') && <SortableHeader colKey="value" label="Valor Atual" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"><cols.ResizeHandle colKey="value" /></SortableHeader>}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -473,11 +515,13 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                                 R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </td>
                                         )}
+                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">
-                                            <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onViewDetails(contract.id); }}
-                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
                                                 >
                                                     Ver Detalhes
                                                 </button>

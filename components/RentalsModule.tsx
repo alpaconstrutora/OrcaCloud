@@ -1519,6 +1519,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 initialData={editingDeal}
                 organizationId={organizationId}
                 initialTab={dealModalTab}
+                // Dentro de "Gestão de Unidades" a negociação só pode enxergar as
+                // unidades DESTE edifício — sem isso o seletor de unidades listava
+                // as unidades de todos os imóveis misturadas (Vendas já passava).
+                buildingId={selectedBuildingId || undefined}
             />
 
             <RentalPricingIntelligenceModal

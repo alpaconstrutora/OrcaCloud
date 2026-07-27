@@ -1355,7 +1355,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         },
         {
             id: 'contrato',
-            label: 'Contrato e Assinatura',
+            label: 'Contrato',
             icon: <PenLine className="w-4 h-4" />,
             badge: !!hasContratoContent
         },

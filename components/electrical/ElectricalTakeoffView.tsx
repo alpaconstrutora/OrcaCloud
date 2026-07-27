@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { OpuraElectricalVersion, OpuraElectricalTakeoff } from '../../types/electrical';
 import { electricalProjectService } from '../../services/electricalProjectService';
+import { exportElectricalService } from '../../services/exportElectricalService';
 import Button from '../ui/Button';
 import { RefreshCw, Download, Calculator } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
@@ -43,6 +44,15 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
       showToast(`Erro ao extrair: ${error.message}`, 'error');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      await exportElectricalService.generateTakeoffPDF(takeoffs, `Orcamento_V${version.versionNumber}`);
+      showToast('PDF gerado com sucesso!', 'success');
+    } catch (error: any) {
+      showToast(`Erro ao exportar: ${error.message}`, 'error');
     }
   };
 
@@ -137,9 +147,9 @@ export function ElectricalTakeoffView({ version, organizationId }: ElectricalTak
                 <h3 className="text-lg font-semibold leading-none tracking-tight">Ações</h3>
               </div>
               <div className="p-6 pt-0 space-y-3">
-                <Button variant="secondary" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
+                <Button variant="secondary" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0} onClick={handleExportPDF}>
                   <Download className="w-4 h-4 mr-2 text-slate-500" />
-                  Exportar Planilha
+                  Exportar PDF
                 </Button>
                 <Button variant="secondary" className="w-full justify-start rounded-xl" disabled={takeoffs.length === 0}>
                   Enviar para Suprimentos

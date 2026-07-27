@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { electricalProjectService } from '../../services/electricalProjectService';
 import { OpuraElectricalPoint, OpuraElectricalBoard, OpuraElectricalCircuit } from '../../types/electrical';
-import { Loader2 } from 'lucide-react';
+import { exportElectricalService } from '../../services/exportElectricalService';
+import { Loader2, Download } from 'lucide-react';
 import Button from '../ui/Button';
 
 interface LoadScheduleViewProps {
@@ -60,7 +61,13 @@ const LoadScheduleView: React.FC<LoadScheduleViewProps> = ({ versionId, points }
   return (
     <div className="flex-1 bg-white overflow-auto p-6">
       <div className="max-w-5xl mx-auto">
-        <h2 className="text-xl font-bold text-slate-900 mb-6">Quadro de Cargas</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-slate-900">Quadro de Cargas</h2>
+          <Button variant="secondary" onClick={() => exportElectricalService.generateLoadSchedulePDF(boards, circuits, `V${versionId}`)} disabled={boards.length === 0}>
+            <Download className="w-4 h-4 mr-2" />
+            Baixar PDF
+          </Button>
+        </div>
         
         {boards.length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">

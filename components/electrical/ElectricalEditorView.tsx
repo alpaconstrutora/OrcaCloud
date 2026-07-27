@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { electricalProjectService } from '../../services/electricalProjectService';
+import { exportElectricalService } from '../../services/exportElectricalService';
 import RoomSidebar from './RoomSidebar';
 import PointToolbox, { ElectricalPointType, POINT_TYPES } from './PointToolbox';
 import PointPropertiesSidebar from './PointPropertiesSidebar';
@@ -35,6 +36,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [selectedToolboxItem, setSelectedToolboxItem] = useState<ElectricalPointType | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
+  
+  const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
 
@@ -113,6 +117,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleExportPDF = () => {
+    if (stageRef.current) {
+      const dataUrl = stageRef.current.toDataURL({ pixelRatio: 2 });
+      exportElectricalService.generatePlanPDF(dataUrl, project?.name || 'Projeto');
+    }
+  };
+
+  const handleExportDXF = () => {
+    exportElectricalService.generateDXF(rooms, points, project?.name || 'Projeto');
   };
 
   const isPointInPolygon = (point: {x: number, y: number}, polygon: number[]) => {
@@ -254,6 +269,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         </div>
 
         <div className="flex items-center gap-3">
+          <Button variant="secondary" className="rounded-[1rem]" onClick={handleExportDXF}>
+            <Download className="w-4 h-4 mr-2" />
+            DXF
+          </Button>
+          <Button variant="secondary" className="rounded-[1rem]" onClick={handleExportPDF}>
+            <Download className="w-4 h-4 mr-2" />
+            PDF (Prancha)
+          </Button>
           <Button variant="primary" className="rounded-[1rem]">
             <Save className="w-4 h-4 mr-2" />
             Salvar
@@ -309,6 +332,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                   <React.Fragment>
                     <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
                       <Stage 
+                        ref={stageRef}
                         width={stageSize.width} 
                         height={stageSize.height}
                         onClick={handleStageClick}

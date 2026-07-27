@@ -1773,6 +1773,37 @@ export const contractService = {
 
     // Lançamentos financeiros gerados a partir deste contrato (Conciliação / internal_transactions)
     /**
+     * Edita UMA parcela lançada pelo contrato (vencimento, valor, descrição).
+     * Mesma regra da exclusão: paga ou conciliada não se altera por aqui.
+     * `transaction_date` acompanha `due_date` — as duas datas nascem iguais na
+     * geração e Contas a Receber usa a segunda para calcular atraso.
+     */
+    updateFinancialEntry: async (
+        entryId: string,
+        patch: { due_date?: string; amount?: number; description?: string },
+    ): Promise<void> => {
+        const { data } = await supabase
+            .from('internal_transactions')
+            .select('id, status, business_status')
+            .eq('id', entryId)
+            .maybeSingle();
+        if (!data) return;
+        const pago = data.status !== 'PENDING'
+            || ['RECEBIDO', 'PAGO'].includes((data.business_status as string) ?? '');
+        if (pago) {
+            throw new Error('Parcela já paga ou conciliada — estorne no financeiro antes de editar.');
+        }
+        const payload: Record<string, unknown> = {};
+        if (patch.due_date) { payload.due_date = patch.due_date; payload.transaction_date = patch.due_date; }
+        if (patch.amount != null) payload.amount = patch.amount;
+        if (patch.description != null) payload.description = patch.description;
+        if (Object.keys(payload).length === 0) return;
+
+        const { error } = await supabase.from('internal_transactions').update(payload).eq('id', entryId);
+        if (error) throw error;
+    },
+
+    /**
      * Exclui UMA parcela lançada pelo contrato (Contas a Receber).
      *
      * Só PENDING/PREVISTO: parcela paga ou conciliada é dinheiro reconhecido —

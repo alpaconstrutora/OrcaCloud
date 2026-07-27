@@ -709,6 +709,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewTarget, generateTargets]);
 
+    /**
+     * Edita uma parcela do contrato. Atualiza a tela na hora (otimista) e grava;
+     * se o banco recusar (parcela paga), recarrega a série e mostra o motivo —
+     * é o mesmo comportamento das células do plano de pagamento.
+     */
+    const patchContractEntry = (entryId: string, patch: { due_date?: string; amount?: number; description?: string }) => {
+        setContractEntries(prev => prev.map(e => e.id === entryId
+            ? {
+                ...e,
+                ...(patch.due_date ? { transaction_date: patch.due_date } : {}),
+                ...(patch.amount != null ? { amount: patch.amount } : {}),
+                ...(patch.description != null ? { description: patch.description } : {}),
+            }
+            : e));
+        void contractService.updateFinancialEntry(entryId, patch).catch(async (err) => {
+            setContractError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
+            const alvo = generateTargets.find(t => t.id === viewTarget);
+            if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
+        });
+    };
+
     /** Exclui uma parcela lançada pelo contrato. Paga/conciliada é recusada pelo serviço. */
     const handleRemoveContractEntry = async (entryId: string) => {
         const ok = await confirm({
@@ -1922,6 +1943,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         const todasSelecionadas = parcelas.length > 0 && parcelas.every(i => selectedInstallmentIds.has(i.id));
                         // Célula editável dentro de TD: mesma tipografia do texto (§7.1).
                         const CELL = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-50 focus:bg-white focus:border-blue-400 outline-none transition-all';
+                        // Mesma caixa da célula editável, em estado bloqueado: parcela paga
+                        // não se altera pela negociação (estorno é no financeiro).
+                        const CELL_RO = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-100 text-gray-500 outline-none cursor-not-allowed';
 
                         const alvoVisualizado = generateTargets.find(t => t.id === viewTarget);
 
@@ -1995,28 +2019,50 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                     <tr key={e.id} className="hover:bg-blue-50/50 transition-colors">
                                                                         <td className="px-4 py-2.5 border-r border-gray-100"></td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                                                                            {fmtDateBR(e.transaction_date)}
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                            <input
+                                                                                type="date"
+                                                                                value={e.transaction_date.slice(0, 10)}
+                                                                                disabled={pago}
+                                                                                onChange={(ev) => patchContractEntry(e.id, { due_date: ev.target.value })}
+                                                                                className={pago ? CELL_RO : CELL}
+                                                                            />
                                                                         </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                            <input
+                                                                                type="number"
+                                                                                value={e.amount}
+                                                                                disabled={pago}
+                                                                                onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
+                                                                                className={pago ? CELL_RO : CELL}
+                                                                            />
                                                                         </td>
+                                                                        {/* Desconto, Tipo e Forma de pagamento são campos do PLANO da
+                                                                            negociação; a parcela do contrato não os tem. A coluna fica
+                                                                            no lugar, com "—", para as duas tabelas lerem igual. */}
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
                                                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
                                                                         </td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
-                                                                            {e.description || '—'}
-                                                                            <span className={`ml-2 text-sm font-normal ${pago ? 'text-emerald-600' : 'text-gray-400'}`}>
-                                                                                {e.status === 'PENDING' ? 'Previsto'
-                                                                                    : e.status === 'PAID' ? 'Pago'
-                                                                                        : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
-                                                                            </span>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                            <input
+                                                                                type="text"
+                                                                                value={e.description ?? ''}
+                                                                                disabled={pago}
+                                                                                placeholder="Descrição / observação"
+                                                                                onChange={(ev) => patchContractEntry(e.id, { description: ev.target.value })}
+                                                                                className={pago ? CELL_RO : CELL}
+                                                                            />
                                                                         </td>
                                                                         <td className="px-6 py-2.5 text-right">
                                                                             <div className="flex items-center justify-end gap-1.5">
+                                                                                <span className={`text-sm font-normal ${pago ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                                                    {e.status === 'PENDING' ? 'Previsto'
+                                                                                        : e.status === 'PAID' ? 'Pago'
+                                                                                            : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
+                                                                                </span>
                                                                                 <ActionIconButton
                                                                                     kind="delete"
                                                                                     title={pago

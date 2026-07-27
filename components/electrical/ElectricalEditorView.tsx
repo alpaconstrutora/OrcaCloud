@@ -232,12 +232,34 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
 
+    // Calcula Área e Perímetro em Pixels
+    let areaPx = 0;
+    let perimeterPx = 0;
+    const pts = currentPolygon;
+    for (let i = 0; i < pts.length; i += 2) {
+      const x1 = pts[i];
+      const y1 = pts[i + 1];
+      const x2 = pts[(i + 2) % pts.length];
+      const y2 = pts[(i + 3) % pts.length];
+      
+      areaPx += (x1 * y2 - x2 * y1);
+      perimeterPx += Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+    }
+    areaPx = Math.abs(areaPx / 2);
+
+    // Converte para metros usando scaleFactor (Pixels Por Metro). Assume 100 PPM como fallback.
+    const ppm = plan.scaleFactor || 100;
+    const areaSqm = areaPx / (ppm * ppm);
+    const perimeterM = perimeterPx / ppm;
+
     try {
       const newRoom = await electricalProjectService.createRoom({
         organizationId: organizationId,
         planId: plan.id,
         name: roomName,
-        polygonPoints: currentPolygon
+        polygonPoints: currentPolygon,
+        areaSqm: Number(areaSqm.toFixed(2)),
+        perimeterM: Number(perimeterM.toFixed(2))
       });
       setRooms([...rooms, newRoom]);
     } catch (error) {

@@ -765,8 +765,33 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 wheel={{ step: 0.01 }}
                 doubleClick={{ disabled: true }}
               >
-                {({ zoomIn, zoomOut, resetTransform, ...rest }) => (
+                {({ zoomIn, zoomOut, resetTransform, state, transformState, ...rest }: any) => {
+                  const tState = state || transformState || { scale: 1, positionX: 0, positionY: 0 };
+                  const s = tState.scale;
+                  const px = tState.positionX;
+                  const py = tState.positionY;
+                  
+                  const ppm = plan?.scaleFactor || 100;
+                  const baseGridPx = (gridSizeCm / 100) * ppm;
+                  const scaledGridPx = baseGridPx * s;
+
+                  return (
                   <React.Fragment>
+                    {/* Infinite Crisp CSS Grid */}
+                    {gridSizeCm > 0 && scaledGridPx >= 5 && (
+                      <div 
+                        className="absolute inset-0 pointer-events-none opacity-[0.15] z-0"
+                        style={{
+                          backgroundImage: `
+                            linear-gradient(to right, #000 1px, transparent 1px),
+                            linear-gradient(to bottom, #000 1px, transparent 1px)
+                          `,
+                          backgroundSize: `${scaledGridPx}px ${scaledGridPx}px`,
+                          backgroundPosition: `${px}px ${py}px`
+                        }}
+                      />
+                    )}
+                    
                     <div className="absolute bottom-6 left-6 flex items-center gap-1 bg-white p-1.5 rounded-xl shadow-lg border border-slate-200 z-10 text-xs">
                       <button 
                         onClick={() => setGridSizeCm(prev => Math.max(0, prev - 1))}
@@ -883,23 +908,6 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         <Layer>
                           {/* Imagem de Fundo */}
                           {imageObj && showBackground && <KonvaImage image={imageObj} />}
-                          
-                          {/* Grid Layer */}
-                          {(() => {
-                              if (!plan || gridSizeCm <= 0) return null;
-                              const ppm = plan.scaleFactor || 100;
-                              const gridPx = (gridSizeCm / 100) * ppm;
-                              if (gridPx < 2) return null; // Previne travamento com grid excessivamente denso
-                              
-                              const lines = [];
-                              for (let i = 0; i <= stageSize.width / gridPx; i++) {
-                                  lines.push(<Line key={`gv-${i}`} points={[Math.round(i * gridPx), 0, Math.round(i * gridPx), stageSize.height]} stroke="rgba(0,0,0,0.3)" strokeWidth={0.2} listening={false} />);
-                              }
-                              for (let j = 0; j <= stageSize.height / gridPx; j++) {
-                                  lines.push(<Line key={`gh-${j}`} points={[0, Math.round(j * gridPx), stageSize.width, Math.round(j * gridPx)]} stroke="rgba(0,0,0,0.3)" strokeWidth={0.2} listening={false} />);
-                              }
-                              return lines;
-                          })()}
                           
                           {/* Walls */}
                           {walls.map(w => {
@@ -1092,7 +1100,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                     </div>
                   </TransformComponent>
                   </React.Fragment>
-                )}
+                  );
+                }}
               </TransformWrapper>
             )}
 

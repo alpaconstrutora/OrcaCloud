@@ -768,6 +768,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         const midX = (x1 + x2) / 2;
         const midY = (y1 + y2) / 2;
         
+        const posPx = {
+          x: midX * stageTransform.scale + stageTransform.x,
+          y: midY * stageTransform.scale + stageTransform.y
+        };
+        
         const lengthPx = Math.sqrt(Math.pow(x2-x1,2) + Math.pow(y2-y1,2));
         const lengthM = lengthPx / (plan.scaleFactor || 100);
 
@@ -777,7 +782,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             <div 
                 key={i}
                 className="absolute z-50 flex items-center justify-center pointer-events-auto"
-                style={{ left: midX, top: midY, transform: 'translate(-50%, -50%)' }}
+                style={{ left: posPx.x, top: posPx.y, transform: 'translate(-50%, -50%)' }}
             >
                 {isEditing ? (
                     <div className="bg-white border-2 border-blue-500 rounded p-1 shadow-lg flex items-center" onClick={e => e.stopPropagation()}>

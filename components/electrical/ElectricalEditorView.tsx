@@ -1122,7 +1122,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                               y={currentPolygon[1]} 
                               radius={6} 
                               fill="#ef4444" 
-                              onClick={finishPolygon}
+                              onClick={() => finishPolygon()}
                               onMouseEnter={(e) => {
                                 const container = e.target.getStage()?.container();
                                 if (container) container.style.cursor = 'pointer';

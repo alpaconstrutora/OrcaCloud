@@ -22,6 +22,12 @@ interface ElectricalEditorViewProps {
   onBack: () => void;
 }
 
+export interface CanvasState {
+  walls: OpuraElectricalWall[];
+  rooms: OpuraElectricalRoom[];
+  points: OpuraElectricalPoint[];
+}
+
 const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizationId, projectId, electricalProjectId, onBack }) => {
   const [project, setProject] = useState<OpuraElectricalProject | null>(null);
   const [version, setVersion] = useState<OpuraElectricalVersion | null>(null);
@@ -32,7 +38,103 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [rooms, setRooms] = useState<OpuraElectricalRoom[]>([]);
   const [walls, setWalls] = useState<OpuraElectricalWall[]>([]);
   const [points, setPoints] = useState<OpuraElectricalPoint[]>([]);
+
+  // Undo/Redo State
+  const [history, setHistory] = useState<CanvasState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const isUndoRedoRef = useRef(false);
   
+  const pushHistoryState = (newState: CanvasState) => {
+    setHistory(prev => {
+        const newHistory = prev.slice(0, historyIndex + 1);
+        newHistory.push(newState);
+        return newHistory;
+    });
+    setHistoryIndex(prev => prev + 1);
+  };
+
+  const performUndoRedo = async (targetState: CanvasState) => {
+    if (isUndoRedoRef.current) return;
+    isUndoRedoRef.current = true;
+    try {
+        const currentWalls = walls;
+        const currentRooms = rooms;
+        const currentPoints = points;
+
+        // Diff Walls
+        const wallsToDelete = currentWalls.filter(w => !targetState.walls.find(x => x.id === w.id));
+        const wallsToCreate = targetState.walls.filter(w => !currentWalls.find(x => x.id === w.id));
+        const wallsToUpdate = targetState.walls.filter(w => {
+            const o = currentWalls.find(x => x.id === w.id);
+            return o && JSON.stringify(o.points) !== JSON.stringify(w.points);
+        });
+
+        // Diff Rooms
+        const roomsToDelete = currentRooms.filter(r => !targetState.rooms.find(x => x.id === r.id));
+        const roomsToCreate = targetState.rooms.filter(r => !currentRooms.find(x => x.id === r.id));
+        const roomsToUpdate = targetState.rooms.filter(r => {
+            const o = currentRooms.find(x => x.id === r.id);
+            return o && JSON.stringify(o.polygonPoints) !== JSON.stringify(r.polygonPoints);
+        });
+
+        // Diff Points
+        const pointsToDelete = currentPoints.filter(p => !targetState.points.find(x => x.id === p.id));
+        const pointsToCreate = targetState.points.filter(p => !currentPoints.find(x => x.id === p.id));
+        const pointsToUpdate = targetState.points.filter(p => {
+            const o = currentPoints.find(x => x.id === p.id);
+            return o && (o.canvasX !== p.canvasX || o.canvasY !== p.canvasY || o.pointType !== p.pointType);
+        });
+
+        // Update local state immediately
+        setWalls(targetState.walls);
+        setRooms(targetState.rooms);
+        setPoints(targetState.points);
+
+        // Execute API calls
+        await Promise.all([
+            ...wallsToDelete.map(w => electricalProjectService.deleteWall(w.id)),
+            ...wallsToCreate.map(w => electricalProjectService.createWall(w)),
+            ...wallsToUpdate.map(w => electricalProjectService.updateWall(w.id, { points: w.points })),
+            
+            ...roomsToDelete.map(r => electricalProjectService.deleteRoom(r.id)),
+            ...roomsToCreate.map(r => electricalProjectService.createRoom(r)),
+            ...roomsToUpdate.map(r => electricalProjectService.updateRoom(r.id, { polygonPoints: r.polygonPoints })),
+            
+            ...pointsToDelete.map(p => electricalProjectService.deletePoint(p.id)),
+            ...pointsToCreate.map(p => electricalProjectService.createPoint(p)),
+            ...pointsToUpdate.map(p => electricalProjectService.updatePoint(p.id, { canvasX: p.canvasX, canvasY: p.canvasY, pointType: p.pointType }))
+        ]);
+        
+    } catch (err) {
+        console.error("Erro durante Undo/Redo", err);
+        showToast("Erro ao sincronizar histórico", "error");
+    } finally {
+        isUndoRedoRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            if (historyIndex > 0 && !isUndoRedoRef.current) {
+                const targetIdx = historyIndex - 1;
+                setHistoryIndex(targetIdx);
+                performUndoRedo(history[targetIdx]);
+            }
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+            e.preventDefault();
+            if (historyIndex < history.length - 1 && !isUndoRedoRef.current) {
+                const targetIdx = historyIndex + 1;
+                setHistoryIndex(targetIdx);
+                performUndoRedo(history[targetIdx]);
+            }
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history, historyIndex, walls, rooms, points]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
@@ -113,7 +215,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           e.preventDefault();
           try {
             await electricalProjectService.deleteWall(selectedWallId);
-            setWalls(prev => prev.filter(w => w.id !== selectedWallId));
+            setWalls(prev => {
+                const newWalls = prev.filter(w => w.id !== selectedWallId);
+                pushHistoryState({ walls: newWalls, rooms, points });
+                return newWalls;
+            });
             setSelectedWallId(null);
             showToast('Parede excluída');
           } catch(err) {
@@ -194,12 +300,16 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           const r = await electricalProjectService.listRoomsByPlan(p.id);
           setRooms(r);
           
+          let initialPoints: OpuraElectricalPoint[] = [];
           if (r.length > 0) {
-            const pts = await electricalProjectService.listPointsByRooms(r.map(room => room.id));
-            setPoints(pts);
+            initialPoints = await electricalProjectService.listPointsByRooms(r.map(room => room.id));
+            setPoints(initialPoints);
           } else {
             setPoints([]);
           }
+          
+          setHistory([{ walls: w, rooms: r, points: initialPoints }]);
+          setHistoryIndex(0);
 
           if (p.fileUrl) {
             loadImage(p.fileUrl);
@@ -491,6 +601,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 }
                 
                 setRooms(updatedRooms);
+                pushHistoryState({ walls, rooms: updatedRooms, points });
                 showToast('Escala calibrada e ambientes recalculados com sucesso!', 'success');
               } catch (err) {
                 console.error(err);
@@ -564,7 +675,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
               canvasX: pointerPosition.x,
               canvasY: pointerPosition.y
           });
-          setPoints([...points, newPoint]);
+          const newPoints = [...points, newPoint];
+          setPoints(newPoints);
+          pushHistoryState({ walls, rooms, points: newPoints });
           setTool('select');
           setSelectedToolboxItem(null);
           setSelectedPointId(newPoint.id);
@@ -630,7 +743,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         areaSqm: Number(areaSqm.toFixed(2)),
         perimeterM: Number(perimeterM.toFixed(2))
       });
-      setRooms(prev => [...prev, newRoom]);
+      setRooms(prev => {
+        const newRooms = [...prev, newRoom];
+        pushHistoryState({ walls, rooms: newRooms, points });
+        return newRooms;
+      });
     } catch (error) {
       console.error(error);
       alert('Erro ao salvar ambiente.');
@@ -670,7 +787,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         points: pts,
         thicknessM: 0.15
       });
-      setWalls(prev => [...prev, newWall]);
+      setWalls(prev => {
+        const newWalls = [...prev, newWall];
+        pushHistoryState({ walls: newWalls, rooms, points });
+        return newWalls;
+      });
     } catch (error) {
       console.error(error);
       showToast('Erro ao salvar parede', 'error');
@@ -682,7 +803,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   const handleUpdateWallThickness = async (wallId: string, thicknessM: number) => {
     if (isNaN(thicknessM) || thicknessM <= 0) return;
-    setWalls(prev => prev.map(w => w.id === wallId ? { ...w, thicknessM } : w));
+    setWalls(prev => {
+        const newWalls = prev.map(w => w.id === wallId ? { ...w, thicknessM } : w);
+        pushHistoryState({ walls: newWalls, rooms, points });
+        return newWalls;
+    });
     try {
        await electricalProjectService.updateWall(wallId, { thicknessM });
     } catch(err) {
@@ -693,7 +818,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   const handleUpdateWallHeight = async (wallId: string, heightM: number) => {
     if (isNaN(heightM) || heightM <= 0) return;
-    setWalls(prev => prev.map(w => w.id === wallId ? { ...w, heightM } : w));
+    setWalls(prev => {
+        const newWalls = prev.map(w => w.id === wallId ? { ...w, heightM } : w);
+        pushHistoryState({ walls: newWalls, rooms, points });
+        return newWalls;
+    });
     try {
        await electricalProjectService.updateWall(wallId, { heightM });
     } catch(err) {
@@ -739,7 +868,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const updatedWall = await electricalProjectService.updateWall(wall.id, { points: pts });
-      setWalls(prev => prev.map(w => w.id === wall.id ? updatedWall : w));
+      setWalls(prev => {
+        const newWalls = prev.map(w => w.id === wall.id ? updatedWall : w);
+        pushHistoryState({ walls: newWalls, rooms, points });
+        return newWalls;
+      });
     } catch (err) {
       console.error(err);
       showToast('Erro ao atualizar comprimento', 'error');
@@ -892,10 +1025,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
 
     // Update local state immediately for fast feedback
-    setWalls(prev => prev.map(w => {
-        const updated = wallsToUpdate.find(x => x.id === w.id);
-        return updated ? updated : w;
-    }));
+    setWalls(prev => {
+        const newWalls = prev.map(w => {
+            const updated = wallsToUpdate.find(x => x.id === w.id);
+            return updated ? updated : w;
+        });
+        pushHistoryState({ walls: newWalls, rooms, points });
+        return newWalls;
+    });
 
     try {
         await Promise.all(wallsToUpdate.map(w => 
@@ -1018,7 +1155,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
               onClick={async () => {
                 try {
                   await electricalProjectService.deleteWall(selectedWallId);
-                  setWalls(walls.filter(w => w.id !== selectedWallId));
+                  setWalls(prev => {
+                      const newWalls = prev.filter(w => w.id !== selectedWallId);
+                      pushHistoryState({ walls: newWalls, rooms, points });
+                      return newWalls;
+                  });
                   setSelectedWallId(null);
                   showToast('Parede excluída com sucesso');
                 } catch (e) {
@@ -1588,7 +1729,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 onUpdate={async (updates) => {
                   try {
                       const updated = await electricalProjectService.updatePoint(selectedPointId, updates);
-                      setPoints(points.map(p => p.id === selectedPointId ? updated : p));
+                      setPoints(prev => {
+                          const newPoints = prev.map(p => p.id === selectedPointId ? updated : p);
+                          pushHistoryState({ walls, rooms, points: newPoints });
+                          return newPoints;
+                      });
                   } catch (err) {
                       alert('Erro ao atualizar ponto.');
                   }
@@ -1596,7 +1741,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 onDelete={async () => {
                   try {
                       await electricalProjectService.deletePoint(selectedPointId);
-                      setPoints(points.filter(p => p.id !== selectedPointId));
+                      setPoints(prev => {
+                          const newPoints = prev.filter(p => p.id !== selectedPointId);
+                          pushHistoryState({ walls, rooms, points: newPoints });
+                          return newPoints;
+                      });
                       setSelectedPointId(null);
                   } catch (err) {
                       alert('Erro ao deletar ponto.');
@@ -1661,7 +1810,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                     onDeleteRoom={async (id) => {
                       try {
                         await electricalProjectService.deleteRoom(id);
-                        setRooms(rooms.filter(r => r.id !== id));
+                        setRooms(prev => {
+                            const newRooms = prev.filter(r => r.id !== id);
+                            pushHistoryState({ walls, rooms: newRooms, points });
+                            return newRooms;
+                        });
                       } catch (e) {
                         alert('Erro ao deletar.');
                       }

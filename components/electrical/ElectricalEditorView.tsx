@@ -50,6 +50,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [isShiftDown, setIsShiftDown] = useState(false);
   const [isOrthoMode, setIsOrthoMode] = useState(false);
   const [gridSizeCm, setGridSizeCm] = useState<number>(100);
+  const [showBackground, setShowBackground] = useState(true);
   const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
   const wallPreviewRef = useRef<any>(null);
   
@@ -159,6 +160,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             loadImage(p.fileUrl);
           } else {
             setImageObj(null);
+            setStageSize({ width: 3000, height: 3000 }); // Default large canvas for drawing without image
           }
         }
       } catch (error) {
@@ -665,9 +667,41 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
               Excluir Parede
             </button>
           )}
+          
+          {plan?.fileUrl && (
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+              <button
+                onClick={() => setShowBackground(!showBackground)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                  showBackground ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {showBackground ? 'Ocultar Planta' : 'Mostrar Planta'}
+              </button>
+              <button
+                onClick={async () => {
+                  if (confirm('Tem certeza que deseja remover a planta de fundo? Os elementos desenhados não serão perdidos.')) {
+                    try {
+                      await electricalProjectService.updatePlan(plan.id, { fileUrl: null });
+                      setPlans(plans.map(p => p.id === plan.id ? { ...p, fileUrl: null } : p));
+                      setImageObj(null);
+                      showToast('Planta removida.');
+                    } catch(e) {
+                      showToast('Erro ao remover', 'error');
+                    }
+                  }
+                }}
+                className="px-2 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Remover planta importada"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <label className="cursor-pointer inline-flex items-center justify-center rounded-xl font-black uppercase tracking-widest transition-all active:scale-95 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 h-9 px-4 text-sm gap-2">
             <Upload className="w-4 h-4 mr-2 text-slate-500" />
-            Planta
+            {plan?.fileUrl ? 'Trocar Planta' : 'Importar Planta'}
             <input type="file" className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
           </label>
           <Button variant="secondary" className="rounded-[1rem]" onClick={handleExportDXF}>
@@ -700,7 +734,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         /* Workspace area */
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar (Toolbox) */}
-          {plan?.fileUrl && (
+          {plan && (
             <PointToolbox 
               selectedToolboxItem={selectedToolboxItem}
               onSelectToolboxItem={setSelectedToolboxItem}
@@ -711,17 +745,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
           {/* CANVAS AREA */}
           <div className="flex-1 bg-slate-100 relative overflow-hidden" ref={containerRef}>
-            {!plan?.fileUrl && !uploading && (
+            {!plan && !uploading && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center p-8 bg-white/50 rounded-2xl border border-dashed border-slate-300">
                   <Upload className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-                  <p className="font-bold text-slate-600">Nenhuma planta carregada</p>
-                  <p className="text-sm text-slate-500">Faça o upload de uma imagem (PNG/JPG) ou PDF no menu superior.</p>
+                  <p className="font-bold text-slate-600">Nenhum pavimento selecionado</p>
+                  <p className="text-sm text-slate-500">Crie ou selecione um pavimento no menu lateral.</p>
                 </div>
               </div>
             )}
 
-            {plan?.fileUrl && imageObj && (
+            {plan && (
               <TransformWrapper
                 initialScale={1}
                 minScale={0.1}
@@ -848,7 +882,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         >
                         <Layer>
                           {/* Imagem de Fundo */}
-                          <KonvaImage image={imageObj} />
+                          {imageObj && showBackground && <KonvaImage image={imageObj} />}
                           
                           {/* Grid Layer */}
                           {(() => {

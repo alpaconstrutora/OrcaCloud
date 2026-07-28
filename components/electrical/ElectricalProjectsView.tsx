@@ -113,7 +113,7 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {(!projectId && obras && obras.length > 0) && (
+          {(obras && obras.length > 0) && (
             <select
               className="h-10 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={projectId || ''}

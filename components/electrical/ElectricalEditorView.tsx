@@ -1435,9 +1435,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             performUndoRedo(history[newIdx]);
                           }
                         }}
-                        disabled={historyIndex <= 0 || isUndoRedoRef.current}
+                        disabled={historyIndex <= 0}
                         className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
-                          historyIndex > 0 && !isUndoRedoRef.current ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'
+                          historyIndex > 0 ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'
                         }`}
                         title="Desfazer (Ctrl+Z)"
                       >
@@ -1453,9 +1453,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             performUndoRedo(history[newIdx]);
                           }
                         }}
-                        disabled={historyIndex >= history.length - 1 || isUndoRedoRef.current}
+                        disabled={historyIndex >= history.length - 1}
                         className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
-                          historyIndex < history.length - 1 && !isUndoRedoRef.current ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'
+                          historyIndex < history.length - 1 ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'
                         }`}
                         title="Refazer (Ctrl+Y)"
                       >

@@ -735,7 +735,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const updatedWall = await electricalProjectService.updateWall(wall.id, { points: pts });
-const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
+      setWalls(prev => prev.map(w => w.id === wall.id ? updatedWall : w));
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao atualizar comprimento', 'error');
+    }
+  };
+
+  const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
     const newLengthM = parseFloat(newLengthStr.replace(',', '.'));
     if (isNaN(newLengthM) || newLengthM <= 0) {
         setEditingSegment(null);

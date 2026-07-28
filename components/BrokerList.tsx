@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Mail, Phone, Search, Loader2, LayoutDashboard, Table2, Link2, Copy, Check, RefreshCw, X, UserCheck, UserX } from 'lucide-react';
+import { User, Mail, Phone, Search, Loader2, LayoutDashboard, Link2, Copy, Check, RefreshCw, X, UserCheck, UserX } from 'lucide-react';
 import { BrokerProfile } from '../types';
 import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
@@ -66,7 +66,6 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('brokerListFilters:search', '');
     const [statusFilter, setStatusFilter] = usePersistedState<'all' | 'active' | 'inactive'>('brokerListFilters:status', 'all');
-    const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('brokerListFilters:viewMode', 'list');
 
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [selectedBroker, setSelectedBroker] = React.useState<BrokerProfile | undefined>(undefined);
@@ -295,33 +294,14 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                         <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                            {viewMode === 'list' && (
-                                <>
-                                    <ColumnConfigButton
-                                        columns={BROKER_COLUMNS}
-                                        visibleColumns={tableColumns.visibleColumns}
-                                        showColumnConfig={tableColumns.showColumnConfig}
-                                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                        onToggleColumn={tableColumns.toggleColumn}
-                                        onReset={tableColumns.resetColumns}
-                                    />
-                                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
-                                </>
-                            )}
-                            <button
-                                onClick={() => setViewMode('grid')}
-                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Visualização em blocos"
-                            >
-                                <LayoutDashboard className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('list')}
-                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Visualização em linhas"
-                            >
-                                <Table2 className="w-4 h-4" />
-                            </button>
+                            <ColumnConfigButton
+                                columns={BROKER_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
                         </div>
                     </div>
                 </div>
@@ -339,7 +319,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                             {searchTerm ? 'Tente buscar por outro termo.' : 'Cadastre seu primeiro corretor no botão acima.'}
                         </p>
                     </div>
-                ) : viewMode === 'list' ? (
+                ) : (
                     <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-left border-collapse">
                         {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força uppercase internamente por padrão. */}
@@ -418,61 +398,6 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                             ))}
                         </tbody>
                     </table>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
-                    {filtered.map(broker => (
-                        <div key={broker.id} className="bg-white rounded-[10px] border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden">
-                            <div className="p-6 flex-1">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
-                                            <User className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{broker.name}</h3>
-                                            <StatusLabel active={broker.is_active} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2.5 pt-4 border-t border-gray-50">
-                                    {broker.email && (
-                                        <div className="flex items-center text-sm text-gray-600 font-medium">
-                                            <Mail className="w-4 h-4 mr-2 text-blue-500 shrink-0" />
-                                            <span className="truncate">{broker.email}</span>
-                                        </div>
-                                    )}
-                                    {broker.phone && (
-                                        <div className="flex items-center text-sm text-gray-600 font-medium">
-                                            <Phone className="w-4 h-4 mr-2 text-gray-400 shrink-0" />
-                                            {broker.phone}
-                                        </div>
-                                    )}
-                                    <div className="flex items-center justify-between text-xs pt-1">
-                                        <span className="text-gray-400 uppercase tracking-widest font-bold">CRECI</span>
-                                        <span className="text-gray-900 font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{broker.creci || '-'}</span>
-                                    </div>
-                                    {broker.agency_name && (
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="text-gray-400 uppercase tracking-widest font-bold">Imobiliária</span>
-                                            <span className="text-gray-900 font-semibold truncate ml-2">{broker.agency_name}</span>
-                                        </div>
-                                    )}
-                                    {broker.commission_rate !== undefined && (
-                                        <div className="flex items-center justify-between text-xs">
-                                            <span className="text-gray-400 uppercase tracking-widest font-bold">Comissão</span>
-                                            <span className="text-gray-900 font-bold">{broker.commission_rate}%</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="px-6 py-4 bg-gray-50/50 rounded-b-[10px] border-t border-gray-100 flex justify-end gap-1.5">
-                                <ActionBar broker={broker} />
-                            </div>
-                        </div>
-                    ))}
                 </div>
             )}
             </div>

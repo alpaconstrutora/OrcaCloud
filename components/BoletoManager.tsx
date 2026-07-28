@@ -377,6 +377,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [orgPrompt, setOrgPrompt] = useState(false);
     const orgSelectRef = useRef<HTMLSelectElement>(null);
 
+    // Abrir edição substitui a lista pelo BoletoFormModal (página cheia) — ao
+    // voltar, a div de scroll da tabela é recriada do zero e o navegador zera
+    // o scrollTop, dando a impressão de que "o foco volta pra primeira linha".
+    // Guardamos a posição aqui e restauramos ao fechar o formulário.
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const savedScrollTopRef = useRef(0);
+
     // Deep-link: item destacado vindo de outro módulo (ex: conciliação bancária)
     const viewFocus = useStore(s => s.viewFocus);
     const setViewFocus = useStore(s => s.setViewFocus);
@@ -645,9 +652,22 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     }
 
     const abrirEdicao = useCallback((b: Boleto) => {
+        savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0;
         setEditing(b);
         setIsModalOpen(true);
     }, []);
+
+    function fecharModal() {
+        setIsModalOpen(false);
+        setEditing(undefined);
+        // O container ainda não existe no primeiro paint pós-fechamento — espera
+        // o próximo frame antes de restaurar o scroll.
+        requestAnimationFrame(() => {
+            if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollTop = savedScrollTopRef.current;
+            }
+        });
+    }
 
     function handleSaved(updated: Boleto) {
         // `boletos` já vem filtrado por status no servidor (carregar() passa
@@ -689,7 +709,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 userEmail={userEmail}
                 projectId={projectId}
                 boleto={editing}
-                onClose={() => { setIsModalOpen(false); setEditing(undefined); }}
+                onClose={fecharModal}
                 onSaved={handleSaved}
             />
         );
@@ -1076,7 +1096,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     contínua de boletos); overflow-auto cobre rolagem vertical E
                     horizontal (§15). Sem bg/border/rounded/shadow própria: já está
                     dentro do card acoplado toolbar+conteúdo (ver abertura acima). */
-                <div className="overflow-auto max-h-[70vh]">
+                <div ref={scrollContainerRef} className="overflow-auto max-h-[70vh]">
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                         <colgroup>
                             <col style={{ width: '40px' }} /> {/* checkbox */}

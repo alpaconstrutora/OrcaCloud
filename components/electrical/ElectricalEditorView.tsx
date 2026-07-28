@@ -963,9 +963,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       
       setElements(prev => [...prev, newElement]);
       setCurrentWall([]);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Erro ao salvar o elemento.');
+      alert('Erro ao salvar o elemento: ' + (error?.message || JSON.stringify(error)));
     }
   };
 

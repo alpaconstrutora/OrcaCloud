@@ -59,6 +59,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [stageTransform, setStageTransform] = useState({ scale: 1, x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [lastPanPos, setLastPanPos] = useState({ x: 0, y: 0 });
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -279,7 +281,40 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return isInside;
   };
 
+  const handleStageMouseDown = (e: any) => {
+    if (tool === 'select' || isShiftDown) {
+      setIsPanning(true);
+      setLastPanPos({ x: e.evt.clientX, y: e.evt.clientY });
+      return;
+    }
+  };
+
+  const handleStageMouseUp = (e: any) => {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+  };
+
+  const handleStageMouseLeave = (e: any) => {
+    if (isPanning) {
+      setIsPanning(false);
+    }
+  };
+
   const handleStageMouseMove = (e: any) => {
+    if (isPanning) {
+      const dx = e.evt.clientX - lastPanPos.x;
+      const dy = e.evt.clientY - lastPanPos.y;
+      setStageTransform(prev => ({
+        ...prev,
+        x: prev.x + dx,
+        y: prev.y + dy
+      }));
+      setLastPanPos({ x: e.evt.clientX, y: e.evt.clientY });
+      return;
+    }
+
     if (tool !== 'draw_wall' || currentWall.length === 0) return;
     const stage = e.target.getStage();
     const pointerPosition = stage.getRelativePointerPosition();
@@ -1185,8 +1220,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         x={px}
                         y={py}
                         onWheel={handleWheel}
-                        draggable={tool === 'select' || isShiftDown}
-                        onDragMove={handleDragMove}
+                        onMouseDown={handleStageMouseDown}
+                        onMouseUp={handleStageMouseUp}
+                        onMouseLeave={handleStageMouseLeave}
                         onClick={handleStageClick}
                         onMouseMove={handleStageMouseMove}
                         onDblClick={handleStageDblClick}

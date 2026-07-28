@@ -1174,36 +1174,53 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           {/* Imagem de Fundo */}
                           {imageObj && showBackground && <KonvaImage image={imageObj} />}
                           
-                          {/* Walls */}
+                          {/* 1. Camada de Bordas (Outlines) */}
                           {walls.map(w => {
                             const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
                             return (
-                              <Group 
-                                key={w.id}
-                                onClick={(e) => {
-                                  if (tool === 'select') {
-                                    e.cancelBubble = true;
-                                    setSelectedWallId(w.id);
-                                    setSelectedPointId(null);
-                                    setSelectedPoint(null);
-                                  }
-                                }}
-                              >
                                 <Line 
+                                  key={`outline-${w.id}`}
                                   points={w.points} 
                                   stroke={selectedWallId === w.id ? "#ef4444" : "#1e293b"} 
                                   strokeWidth={widthPx} 
                                   lineCap="square" 
                                   lineJoin="miter" 
                                 />
+                            );
+                          })}
+
+                          {/* 2. Camada de Preenchimentos (Fills) */}
+                          {walls.map(w => {
+                            const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
+                            return (
                                 <Line 
+                                  key={`fill-${w.id}`}
                                   points={w.points} 
                                   stroke="#ffffff" 
                                   strokeWidth={Math.max(1, widthPx - 2)} 
                                   lineCap="square" 
                                   lineJoin="miter" 
+                                  onPointerDown={(e) => {
+                                    if (tool === 'select') {
+                                      e.cancelBubble = true;
+                                      setSelectedWallId(w.id);
+                                      setSelectedPointId(null);
+                                      setSelectedPoint(null);
+                                    }
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (tool === 'select') {
+                                      const stage = e.target.getStage();
+                                      if (stage) stage.container().style.cursor = 'pointer';
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (tool === 'select') {
+                                      const stage = e.target.getStage();
+                                      if (stage) stage.container().style.cursor = 'default';
+                                    }
+                                  }}
                                 />
-                              </Group>
                             );
                           })}
                           

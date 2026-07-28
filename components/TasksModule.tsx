@@ -38,15 +38,15 @@ const TabBtn: React.FC<{
 }> = ({ active, icon: Icon, label, count, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all
+    className={`flex items-center gap-2 px-3 h-7 rounded-[6px] text-sm font-medium transition-all
       ${active
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+        ? 'bg-white text-blue-600 shadow-sm'
+        : 'text-slate-400 hover:text-slate-600'}`}
   >
-    <Icon className="w-4 h-4" />
+    <Icon className="w-3.5 h-3.5" />
     {label}
     {count !== undefined && count > 0 && (
-      <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? 'bg-white/20' : 'bg-slate-200 text-slate-600'}`}>
+      <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? 'bg-blue-50 text-blue-600' : 'bg-slate-200 text-slate-600'}`}>
         {count}
       </span>
     )}
@@ -407,7 +407,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Tabs — só no mobile (no desktop o rail substitui) */}
-          <div className="flex items-center gap-1 md:hidden">
+          <div className="flex items-center bg-slate-50 p-1 rounded-[6px] border border-slate-100 gap-1 md:hidden">
             <TabBtn active={!isSpaceMode && view === 'today'}   icon={Calendar}      label="Hoje"      count={today.length}   onClick={() => handleSelectInbox('today')} />
             <TabBtn active={!isSpaceMode && view === 'overdue'} icon={AlertTriangle} label="Atrasadas" count={overdue.length} onClick={() => handleSelectInbox('overdue')} />
             <TabBtn active={!isSpaceMode && view === 'all'}     icon={ListChecks}    label="Todas"                            onClick={() => handleSelectInbox('all')} />
@@ -415,24 +415,24 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             {spaces.length > 0 && (
               <button
                 onClick={() => setShowSpaceSheet(true)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all
+                className={`flex items-center gap-2 px-3 h-7 rounded-[6px] text-sm font-medium transition-all
                   ${isSpaceMode
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600'}`}
               >
-                <LayoutGrid className="w-4 h-4" />
+                <LayoutGrid className="w-3.5 h-3.5" />
                 Espaços
               </button>
             )}
           </div>
 
           {/* Toggle List / Board */}
-          <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white">
+          <div className="flex items-center h-9 border border-slate-200 rounded-[6px] overflow-hidden bg-white">
             <button
               onClick={() => setViewMode('list')}
               title="Visualização em lista"
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-button font-black uppercase tracking-widest transition-all
-                ${viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
+              className={`flex items-center gap-1.5 h-full px-3 text-sm font-medium transition-all
+                ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
             >
               <List className="w-3.5 h-3.5" />
               Lista
@@ -443,8 +443,8 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                 if (groupBy === 'none') setGroupBy('status')
               }}
               title="Visualização Kanban"
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-button font-black uppercase tracking-widest transition-all
-                ${viewMode === 'board' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
+              className={`flex items-center gap-1.5 h-full px-3 text-sm font-medium transition-all
+                ${viewMode === 'board' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
             >
               <Kanban className="w-3.5 h-3.5" />
               Kanban
@@ -457,7 +457,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             <select
               value={groupBy}
               onChange={e => setGroupBy(e.target.value as GroupByField)}
-              className={`pl-8 pr-3 py-2.5 rounded-xl text-form-input font-black uppercase tracking-widest border appearance-none cursor-pointer transition-all
+              className={`h-9 pl-8 pr-3 rounded-[6px] text-sm font-medium border appearance-none cursor-pointer transition-all
                 ${groupBy !== 'none'
                   ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-slate-900'
                   : 'border-slate-200 text-slate-500 bg-white hover:bg-slate-50'}`}
@@ -475,7 +475,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             <button
               onClick={() => setShowStatusMgr(true)}
               title="Gerenciar status"
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-form-input font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              className="flex items-center gap-2 h-9 px-3 rounded-[6px] text-sm font-medium border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
             >
               <Settings2 className="w-4 h-4" />
               Status
@@ -484,7 +484,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <button
             onClick={() => setShowMobilePreview(true)}
             title="Prévia Mobile"
-            className="hidden md:flex items-center gap-2 px-3 py-2.5 rounded-xl text-button font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+            className="hidden md:flex items-center gap-2 h-9 px-3 rounded-[6px] text-sm font-medium border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
           >
             <Smartphone className="w-4 h-4" />
             Mobile
@@ -500,9 +500,9 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               setShowForm(true)
             }}
             disabled={!orgForNew}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] bg-blue-600 text-white hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-[15px] h-[15px]" />
             Nova
           </button>
         </div>
@@ -515,7 +515,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <select
             value={filterOrg}
             onChange={(e) => setFilterOrg(e.target.value)}
-            className="text-form-input font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-blue-400"
+            className="h-9 text-sm font-medium text-slate-700 border border-slate-200 rounded-[6px] px-3 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
           >
             <option value="">Todas as organizações</option>
             {orgsOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}

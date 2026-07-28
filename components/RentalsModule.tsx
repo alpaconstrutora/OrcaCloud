@@ -69,6 +69,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [loading, setLoading] = useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('rentalsModuleFilters:search', '');
+    const [brokerSearchTerm, setBrokerSearchTerm] = usePersistedState('rentalsModuleFilters:brokerSearch', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list' | 'tower'>('rentalsModuleFilters:viewMode', 'list');
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
@@ -524,10 +525,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         });
     }, [deals, properties, clients, dealSortConfig, selectedBuildingId]);
 
-    // Corretores ordenáveis (§6.3) — filtro reaproveita o searchTerm global da régua do módulo.
+    // Corretores ordenáveis (§6.3) — busca própria (§5.2): o searchTerm global
+    // pertence à aba Unidades e não tem input visível aqui, então a aba
+    // Corretores precisa da sua própria caixa de busca persistida.
     const sortedBrokers = useMemo(() => {
         const filtered = brokers.filter(b =>
-            b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase())
+            b.name.toLowerCase().includes(brokerSearchTerm.toLowerCase()) || b.email.toLowerCase().includes(brokerSearchTerm.toLowerCase())
         );
         if (!brokerSortConfig) return filtered;
         const { key, direction } = brokerSortConfig;
@@ -540,7 +543,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             if (aValue > bValue) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [brokers, searchTerm, brokerSortConfig]);
+    }, [brokers, brokerSearchTerm, brokerSortConfig]);
 
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
@@ -912,7 +915,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
             {/* Toolbar de botões — ui_ux_guia_unificado.md §5.3. Esta tela não tem controles de
                 escopo reais (não é conta/competência/período) — "Relatórios" fica à
-                esquerda como ação secundária, a ação primária (criar) à direita. */}
+                esquerda como ação secundária, a ação primária (criar) à direita.
+                Oculta na aba Corretores: "Novo imóvel/edifício" e "Relatórios" não
+                são ações desta aba — o cadastro de corretor é centralizado em
+                Fornecedores (aviso já na própria aba), sem ação primária própria aqui. */}
+            {activeTab !== 'brokers' && (
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
                 <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
                     <Maximize2 className="w-4 h-4" />
@@ -940,6 +947,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     </button>
                 </div>
             </div>
+            )}
 
             {/* Content */}
             {(!selectedBuildingId || activeTab === 'inventory') && (
@@ -1479,8 +1487,26 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         </div>
                     </div>
 
+                    {/* Toolbar acoplada à tabela — §5.2: busca própria desta aba +
+                        conteúdo dividem um único card (border/rounded/shadow só no pai). */}
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar corretor por nome ou e-mail..."
+                                value={brokerSearchTerm}
+                                onChange={(e) => setBrokerSearchTerm(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        <button onClick={loadData} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95" title="Atualizar">
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     {sortedBrokers.length > 0 ? (
-                        <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
@@ -1538,14 +1564,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
                     ) : (
-                        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                        <div className="text-center py-12">
                             <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum corretor encontrado</h3>
                             <p className="text-sm text-gray-500">Tente ajustar sua busca ou cadastre um corretor em Minha Organização &gt; Fornecedores.</p>
                         </div>
                     )}
+                    </div>
 
                     <div className="bg-amber-50/40 border border-dashed border-amber-100 rounded-[10px] p-4 flex items-center gap-3">
                         <span className="text-sm font-bold text-amber-700 shrink-0">Cadastro centralizado:</span>

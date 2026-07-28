@@ -64,9 +64,9 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
       });
       
       loadProjects();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Erro ao criar projeto elétrico.');
+      alert('Erro ao criar projeto elétrico: ' + (error.message || 'Desconhecido'));
     }
   };
 

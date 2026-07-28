@@ -12,16 +12,33 @@ import { notificationLogService } from './notificationLogService';
 import { whatsappService } from './whatsappService';
 import { approvalService } from './approvalService';
 import { appSettingsService } from './appSettingsService';
+import { generateOrderNumber } from './orderNumberingService';
 import { processService } from './processService';
 
 type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
 
+/**
+ * Traduz a violação do índice único de `purchase_orders.number` (23505) para uma
+ * mensagem acionável. O sequencial é por obra, então o número só repete quando
+ * duas obras compartilham o mesmo par (código do empreendimento, código da obra)
+ * — que é exatamente o que o usuário precisa corrigir.
+ */
+function duplicateNumberError(error: { code?: string; message?: string }, number: string): Error {
+    if (error?.code === '23505' && (error.message || '').includes('number')) {
+        return new Error(
+            `Já existe um pedido com o número ${number}. Isso acontece quando duas obras têm o ` +
+            'mesmo código dentro do mesmo empreendimento — ajuste o código da obra em Obra › Editar.',
+        );
+    }
+    return error instanceof Error ? error : new Error(error?.message || 'Erro ao salvar o pedido.');
+}
+
 export const orderService = {
     async createOrder(order: Omit<PurchaseOrder, 'id' | 'created_at' | 'updated_at'>) {
-        // Generate a simple number if not provided (e.g. PO-Timestamp) or let backend handle it
-        // For now, we'll generate a simple one
-        const { orderPrefix } = appSettingsService.get();
-        const number = `${orderPrefix}${Date.now().toString().slice(-6)}`;
+        // Nomenclatura PC-{empreendimento}-{obra}-{seq} (Configurações › Nomenclatura).
+        // Lança MissingCodeError — com mensagem pronta para a tela — quando a obra
+        // ou o empreendimento está sem código; o pedido NÃO é criado nesse caso.
+        const number = await generateOrderNumber(order.projectId);
 
         const { data, error } = await supabase
             .from('purchase_orders')
@@ -50,7 +67,7 @@ export const orderService = {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) throw duplicateNumberError(error, number);
 
         // Trigger Make.com Webhook if Enviado at creation
         if (order.status === 'Enviado') {
@@ -559,9 +576,10 @@ export const orderService = {
         // 2. Prepare new order data
         const { id: _, created_at: __, updated_at: ___, number: ____, ...rest } = original;
         
-        // Generate new number
-        const { orderPrefix, orderDuplicateSuffix } = appSettingsService.get();
-        const newNumber = `${orderPrefix}${Date.now().toString().slice(-6)}${orderDuplicateSuffix}`;
+        // Duplicata consome um sequencial novo da mesma obra e carrega o sufixo,
+        // para não haver dois pedidos com o mesmo número.
+        const { orderDuplicateSuffix } = appSettingsService.get();
+        const newNumber = `${await generateOrderNumber(original.project_id)}${orderDuplicateSuffix}`;
 
         // 3. Insert as new order
         const { data: NewOrder, error: insertError } = await supabase
@@ -577,7 +595,7 @@ export const orderService = {
             .select()
             .single();
 
-        if (insertError) throw insertError;
+        if (insertError) throw duplicateNumberError(insertError, newNumber);
         return NewOrder;
     },
 

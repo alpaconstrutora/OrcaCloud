@@ -166,7 +166,9 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             notify("Pedido duplicado com sucesso! O novo pedido está como Rascunho.");
         } catch (error) {
             console.error("Erro ao duplicar pedido:", error);
-            notify("Erro ao duplicar pedido.", "error");
+            // Mensagem crua: quando a obra/empreendimento está sem código, ela
+            // explica o que cadastrar — engolir isso deixa o usuário sem saída.
+            notify(error instanceof Error ? error.message : "Erro ao duplicar pedido.", "error");
         } finally {
             setLoading(false);
         }

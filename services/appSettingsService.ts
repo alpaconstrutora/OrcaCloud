@@ -4,6 +4,10 @@ export interface AppSettings {
     // Order numbering
     orderPrefix: string;
     orderDuplicateSuffix: string;
+    /** Máscara do número do pedido. Tokens: {prefixo} {empreendimento} {obra} {seq}. */
+    orderNumberPattern: string;
+    /** Casas do sequencial por obra (zeros à esquerda). */
+    orderSeqPadding: number;
 
     // Exibição de fornecedores: razão social ou apelido curto
     supplierNameDisplay: 'razao' | 'apelido';
@@ -18,8 +22,10 @@ export interface AppSettings {
 }
 
 export const APP_SETTINGS_DEFAULTS: AppSettings = {
-    orderPrefix: 'PO-',
+    orderPrefix: 'PC',
     orderDuplicateSuffix: '-DUP',
+    orderNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
+    orderSeqPadding: 4,
 
     supplierNameDisplay: 'razao',
 
@@ -35,6 +41,7 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
 
 // Variable reference for UI hints
 export const TEMPLATE_VARS = {
+    orderNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     whatsappOrderSent: ['{fornecedor}', '{pedido}', '{obra}', '{itens}', '{total}', '{entrega}'],
     whatsappStatusChange: ['{fornecedor}', '{pedido}', '{status}'],
     email: ['{pedido}', '{status}'],

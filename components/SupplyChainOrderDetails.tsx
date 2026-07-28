@@ -36,18 +36,19 @@ interface SupplyChainOrderDetailsProps {
     portalToken?: string;
 }
 
+// §8: texto colorido simples — sem pílula, fundo ou uppercase.
 const getStatusStyles = (status: string) => {
     switch (status) {
-        case 'Rascunho': return 'bg-gray-100 text-gray-600 border-gray-200';
-        case 'Enviado': return 'bg-blue-50 text-blue-600 border-blue-100';
-        case 'Confirmado': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-        case 'Separação': return 'bg-amber-50 text-amber-600 border-amber-100';
-        case 'Em Trânsito': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+        case 'Rascunho': return 'text-gray-600';
+        case 'Enviado': return 'text-blue-600';
+        case 'Confirmado': return 'text-emerald-600';
+        case 'Separação': return 'text-amber-600';
+        case 'Em Trânsito': return 'text-indigo-600';
         case 'Entregue':
-        case 'Recebido': return 'bg-green-50 text-green-600 border-green-100';
-        case 'Divergência': return 'bg-red-50 text-red-600 border-red-100';
-        case 'Cancelado': return 'bg-gray-50 text-gray-400 border-gray-100';
-        default: return 'bg-gray-100 text-gray-600 border-gray-200';
+        case 'Recebido': return 'text-green-600';
+        case 'Divergência': return 'text-red-600';
+        case 'Cancelado': return 'text-gray-400';
+        default: return 'text-gray-600';
     }
 };
 
@@ -330,7 +331,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             notify("Pedido duplicado com sucesso! O novo pedido está como Rascunho.");
         } catch (error) {
             console.error("Error duplicating order:", error);
-            notify("Erro ao duplicar o pedido.", "error");
+            notify(error instanceof Error ? error.message : "Erro ao duplicar o pedido.", "error");
         } finally {
             setLoading(false);
         }
@@ -596,9 +597,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     <div>
                         <div className="flex items-center gap-4 flex-wrap">
                             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pedido <span className="text-indigo-600">#{order.number}</span></h1>
-                            <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border ${getStatusStyles(order.status)} animate-in fade-in duration-700`}>
+                            <span className={`text-sm font-normal ${getStatusStyles(order.status)} animate-in fade-in duration-700`}>
                                 {order.status}
-                            </div>
+                            </span>
                         </div>
                         <div className="flex items-center gap-4 mt-2">
                             <p className="text-gray-400 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
@@ -807,22 +808,23 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm border-collapse">
-                                <thead className="bg-gray-50/50">
+                                {/* §6.2 sentence case + §6.6 px-6 e separador vertical */}
+                                <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <tr>
-                                        <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">Código</th>
-                                        <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">Descrição</th>
-                                        <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-right">Qtd</th>
-                                        <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-right">Un</th>
-                                        <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-right">Unitário</th>
-                                        <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-right">Total</th>
-                                        <th className="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-center">Ações</th>
+                                        <th className="px-6 py-2 border-r border-gray-100">Código</th>
+                                        <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Un</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Unitário</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Total</th>
+                                        <th className="px-6 py-2 text-center">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {order.items.map((item, idx) => (
                                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="px-8 py-5 font-mono text-xs text-gray-400">{item.code}</td>
-                                            <td className="px-8 py-5 font-bold text-gray-900 max-w-xs">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-xs">
                                                 {editingIndex === idx ? (
                                                     <input
                                                         type="text"
@@ -832,7 +834,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                     />
                                                 ) : item.description}
                                             </td>
-                                            <td className="px-8 py-5 text-right font-black text-indigo-600">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
                                                 {editingIndex === idx ? (
                                                     <input
                                                         type="number"
@@ -842,7 +844,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                     />
                                                 ) : item.quantity}
                                             </td>
-                                            <td className="px-8 py-5 text-right text-xs font-black text-gray-400 uppercase">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
                                                 {editingIndex === idx ? (
                                                     <input
                                                         type="text"
@@ -852,7 +854,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                     />
                                                 ) : item.unit}
                                             </td>
-                                            <td className="px-8 py-5 text-right font-bold text-gray-900">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
                                                 {editingIndex === idx ? (
                                                     <input
                                                         type="number"
@@ -864,11 +866,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitPrice)
                                                 )}
                                             </td>
-                                            <td className="px-8 py-5 text-right font-black text-gray-900 bg-gray-50/30">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 bg-gray-50/30">
                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(editingIndex === idx ? (editQty * editPrice) : item.total)}
                                             </td>
-                                            <td className="px-8 py-5 text-center">
-                                                <div className="flex items-center justify-center gap-2">
+                                            <td className="px-6 py-2.5 text-center">
+                                                <div className="flex items-center justify-center gap-1.5">
                                                     {editingIndex === idx ? (
                                                         <>
                                                             <button
@@ -888,8 +890,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                         </>
                                                     ) : !portalToken ? (
                                                         <>
-                                                            <ActionIconButton kind="edit" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleStartEdit(idx, item)} />
-                                                            <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteItem(idx)} />
+                                                            {/* §9: ação sempre visível — nunca opacity-0 + group-hover */}
+                                                            <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(idx, item)} />
+                                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteItem(idx)} />
                                                         </>
                                                     ) : null}
                                                 </div>
@@ -899,8 +902,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 </tbody>
                                 <tfoot className="bg-gray-900 text-white">
                                     <tr>
-                                        <td colSpan={6} className="px-8 py-6 text-right text-xs font-black uppercase tracking-widest opacity-60">Valor Total do Pedido</td>
-                                        <td className="px-8 py-6 text-right font-black text-xl">
+                                        <td colSpan={6} className="px-6 py-4 text-right text-sm font-normal opacity-60">Valor total do pedido</td>
+                                        <td className="px-6 py-4 text-right text-xl font-medium">
                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                                         </td>
                                     </tr>
@@ -957,12 +960,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                                     {receipt.items.length > 0 && (
                                         <div className="overflow-x-auto rounded-xl border border-gray-100">
-                                            <table className="w-full text-xs">
-                                                <thead className="bg-gray-50">
+                                            <table className="w-full">
+                                                <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                     <tr>
-                                                        <th className="px-3 py-2 text-left font-black text-gray-400 uppercase tracking-widest">Item</th>
-                                                        <th className="px-3 py-2 text-right font-black text-gray-400 uppercase tracking-widest">Pedido</th>
-                                                        <th className="px-3 py-2 text-right font-black text-gray-400 uppercase tracking-widest">Recebido</th>
+                                                        <th className="px-6 py-2 text-left border-r border-gray-100">Item</th>
+                                                        <th className="px-6 py-2 text-right border-r border-gray-100">Pedido</th>
+                                                        <th className="px-6 py-2 text-right">Recebido</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
@@ -970,16 +973,16 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                         const isShort = item.quantityReceived < item.quantityOrdered;
                                                         return (
                                                             <tr key={item.orderItemCode} className={isShort ? 'bg-amber-50/50' : ''}>
-                                                                <td className="px-3 py-2">
-                                                                    <p className="font-bold text-gray-900">{item.description}</p>
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <p className="text-sm font-normal text-gray-700">{item.description}</p>
                                                                     {item.issue && (
-                                                                        <p className="text-xs text-amber-600 font-bold uppercase mt-0.5">{item.issue}</p>
+                                                                        <p className="text-xs text-amber-600 mt-0.5">{item.issue}</p>
                                                                     )}
                                                                 </td>
-                                                                <td className="px-3 py-2 text-right font-bold text-gray-500">
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
                                                                     {item.quantityOrdered} {item.unit}
                                                                 </td>
-                                                                <td className={`px-3 py-2 text-right font-black ${isShort ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                                                <td className={`px-6 py-2.5 text-right text-sm font-normal ${isShort ? 'text-amber-600' : 'text-emerald-600'}`}>
                                                                     {item.quantityReceived} {item.unit}
                                                                 </td>
                                                             </tr>

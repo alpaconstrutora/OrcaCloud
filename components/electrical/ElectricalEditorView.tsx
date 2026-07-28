@@ -744,9 +744,20 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                         title="Aumentar Grid"
                       ><Plus className="w-4 h-4" /></button>
-                      
-                      <div className="px-3 font-bold text-slate-700 min-w-[100px] text-center border-l border-slate-200 ml-1 pl-3">
-                        {gridSizeCm > 0 ? `Grid: ${gridSizeCm.toFixed(1)} cm` : 'Grid: Off'}
+                      <div className="px-2 font-bold text-slate-700 min-w-[120px] flex items-center border-l border-slate-200 ml-1 pl-2">
+                        <span className="mr-1">Grid:</span>
+                        <input 
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={gridSizeCm || ''}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setGridSizeCm(isNaN(val) ? 0 : val);
+                          }}
+                          className="w-12 px-1 py-0.5 text-center border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                        />
+                        <span className="ml-1 text-slate-500 font-normal">cm</span>
                       </div>
                     </div>
 
@@ -844,14 +855,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                               if (!plan || gridSizeCm <= 0) return null;
                               const ppm = plan.scaleFactor || 100;
                               const gridPx = (gridSizeCm / 100) * ppm;
-                              if (gridPx < 10) return null; // Previne travamento com grid muito denso
+                              if (gridPx < 2) return null; // Previne travamento com grid excessivamente denso
                               
                               const lines = [];
                               for (let i = 0; i <= stageSize.width / gridPx; i++) {
-                                  lines.push(<Line key={`gv-${i}`} points={[Math.round(i * gridPx), 0, Math.round(i * gridPx), stageSize.height]} stroke="rgba(0,0,0,0.3)" strokeWidth={1} listening={false} />);
+                                  lines.push(<Line key={`gv-${i}`} points={[Math.round(i * gridPx), 0, Math.round(i * gridPx), stageSize.height]} stroke="rgba(0,0,0,0.3)" strokeWidth={0.2} listening={false} />);
                               }
                               for (let j = 0; j <= stageSize.height / gridPx; j++) {
-                                  lines.push(<Line key={`gh-${j}`} points={[0, Math.round(j * gridPx), stageSize.width, Math.round(j * gridPx)]} stroke="rgba(0,0,0,0.3)" strokeWidth={1} listening={false} />);
+                                  lines.push(<Line key={`gh-${j}`} points={[0, Math.round(j * gridPx), stageSize.width, Math.round(j * gridPx)]} stroke="rgba(0,0,0,0.3)" strokeWidth={0.2} listening={false} />);
                               }
                               return lines;
                           })()}

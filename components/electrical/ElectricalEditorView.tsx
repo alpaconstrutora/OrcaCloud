@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, X, Ruler, Edit3, CornerDownRight, Trash2, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, Redo, X, Ruler, Edit3, CornerDownRight, Trash2, Plus, Minus } from 'lucide-react';
 import Button from '../ui/Button';
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -1424,6 +1424,44 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                       >
                         <CornerDownRight className="w-5 h-5" />
                       </button>
+                      <div className="w-px h-6 bg-slate-300 mx-1"></div>
+
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (historyIndex > 0 && !isUndoRedoRef.current) {
+                            const newIdx = historyIndex - 1;
+                            setHistoryIndex(newIdx);
+                            performUndoRedo(history[newIdx]);
+                          }
+                        }}
+                        disabled={historyIndex <= 0 || isUndoRedoRef.current}
+                        className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                          historyIndex > 0 && !isUndoRedoRef.current ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'
+                        }`}
+                        title="Desfazer (Ctrl+Z)"
+                      >
+                        <Undo className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (historyIndex < history.length - 1 && !isUndoRedoRef.current) {
+                            const newIdx = historyIndex + 1;
+                            setHistoryIndex(newIdx);
+                            performUndoRedo(history[newIdx]);
+                          }
+                        }}
+                        disabled={historyIndex >= history.length - 1 || isUndoRedoRef.current}
+                        className={`p-2 rounded-lg transition-colors flex items-center justify-center ${
+                          historyIndex < history.length - 1 && !isUndoRedoRef.current ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'
+                        }`}
+                        title="Refazer (Ctrl+Y)"
+                      >
+                        <Redo className="w-5 h-5" />
+                      </button>
+
                       <div className="w-px h-6 bg-slate-300 mx-1"></div>
 
                       <button 

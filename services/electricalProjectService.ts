@@ -351,7 +351,52 @@ export const electricalProjectService = {
         }
 
         return [];
-    }
+    },
+  // ==========================================
+  // ELEMENTOS (Portas, Janelas, Escadas)
+  // ==========================================
+  
+  async listElementsByPlan(planId: string): Promise<OpuraElectricalElement[]> {
+    const { data, error } = await supabase
+      .from('opura_electrical_elements')
+      .select('*')
+      .eq('plan_id', planId);
+
+    if (error) throw error;
+    return (data || []).map(toCamelCaseObject) as OpuraElectricalElement[];
+  },
+
+  async createElement(element: Partial<OpuraElectricalElement>): Promise<OpuraElectricalElement> {
+    const { data, error } = await supabase
+      .from('opura_electrical_elements')
+      .insert(toSnakeCaseObject(element))
+      .select()
+      .single();
+
+    if (error) throw error;
+    return toCamelCaseObject(data) as OpuraElectricalElement;
+  },
+
+  async updateElement(id: string, updates: Partial<OpuraElectricalElement>): Promise<OpuraElectricalElement> {
+    const { data, error } = await supabase
+      .from('opura_electrical_elements')
+      .update(toSnakeCaseObject(updates))
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return toCamelCaseObject(data) as OpuraElectricalElement;
+  },
+
+  async deleteElement(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_electrical_elements')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  }
 };
 
 // Helper mappers for snake_case vs camelCase

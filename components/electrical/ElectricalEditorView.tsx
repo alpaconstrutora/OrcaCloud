@@ -39,6 +39,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [rooms, setRooms] = useState<OpuraElectricalRoom[]>([]);
   const [walls, setWalls] = useState<OpuraElectricalWall[]>([]);
   const [points, setPoints] = useState<OpuraElectricalPoint[]>([]);
+  const [elements, setElements] = useState<any[]>([]);
 
   // Undo/Redo State
   const [history, setHistory] = useState<CanvasState[]>([]);
@@ -286,6 +287,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       setWalls([]);
       setRooms([]);
       setPoints([]);
+      setElements([]);
       setImageObj(null);
       return;
     }
@@ -399,7 +401,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
     
-    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t'].includes(tool)) {
+    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t', 'draw_door', 'draw_window', 'draw_opening', 'draw_sliding_door', 'draw_double_door', 'draw_stairs'].includes(tool)) {
       const stage = e.target.getStage();
       const pointerPosition = stage.getRelativePointerPosition();
       if (pointerPosition) {
@@ -721,7 +723,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       }
     }
 
-    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t'].includes(tool)) {
+    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t', 'draw_door', 'draw_window', 'draw_opening', 'draw_sliding_door', 'draw_double_door', 'draw_stairs'].includes(tool)) {
       return; // handled by mousedown/mouseup
     }
 
@@ -929,6 +931,38 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     
     setCurrentWall([]);
     // Do not set tool to 'select', allow continuous drawing unless they hit Esc
+  };
+
+  const finishElement = async (elementType: string, x1: number, y1: number, x2: number, y2: number) => {
+    if (!plan) return;
+    
+    // Convert generic tool name to DB type
+    const typeMap: Record<string, string> = {
+      'draw_door': 'door',
+      'draw_window': 'window',
+      'draw_opening': 'opening',
+      'draw_sliding_door': 'sliding_door',
+      'draw_double_door': 'double_door',
+      'draw_stairs': 'stairs'
+    };
+    
+    const dbType = typeMap[elementType];
+    if (!dbType) return;
+
+    try {
+      const newElement = await electricalProjectService.createElement({
+        organizationId: organizationId,
+        planId: plan.id,
+        type: dbType,
+        points: [x1, y1, x2, y2]
+      });
+      
+      setElements(prev => [...prev, newElement]);
+      setCurrentWall([]);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar o elemento.');
+    }
   };
 
   const finishWallShape = async (shapeType: string, x1: number, y1: number, x2: number, y2: number) => {
@@ -1775,7 +1809,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         onClick={handleStageClick}
                         onMouseMove={handleStageMouseMove}
                         onDblClick={handleStageDblClick}
-                          className={['draw_room', 'draw_wall', 'draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t', 'add_point', 'calibrate'].includes(tool) ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                          className={['draw_room', 'draw_wall', 'draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t', 'draw_door', 'draw_window', 'draw_opening', 'draw_sliding_door', 'draw_double_door', 'draw_stairs', 'add_point', 'calibrate'].includes(tool) ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
                         >
                         <Layer>
                           {/* Imagem de Fundo */}
@@ -1799,6 +1833,59 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             );
                           })}
 
+                          {/* Elementos Arquitetonicos */}
+                          {elements.map(el => {
+                            const pts = el.points as number[];
+                            if (!pts || pts.length < 4) return null;
+                            const [x1, y1, x2, y2] = pts;
+                            const dx = x2 - x1;
+                            const dy = y2 - y1;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                            
+                            if (el.type === 'door') {
+                              // Porta simples
+                              return (
+                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
+                                  <Line points={[0, 0, dist, 0]} stroke="#64748b" strokeWidth={3} />
+                                  <Line points={[dist, 0, dist, -dist]} stroke="#64748b" strokeWidth={3} />
+                                  <Arc x={dist} y={0} innerRadius={dist} outerRadius={dist} angle={90} rotation={180} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />
+                                </Group>
+                              );
+                            }
+                            if (el.type === 'window') {
+                              return (
+                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
+                                  <Rect x={0} y={-10} width={dist} height={20} stroke="#3b82f6" strokeWidth={2} fill="#eff6ff" />
+                                  <Line points={[0, 0, dist, 0]} stroke="#3b82f6" strokeWidth={1} />
+                                </Group>
+                              );
+                            }
+                            if (el.type === 'opening') {
+                              return (
+                                <Line key={`el-${el.id}`} points={[x1, y1, x2, y2]} stroke="#cbd5e1" strokeWidth={15} dash={[10, 10]} />
+                              );
+                            }
+                            if (el.type === 'stairs') {
+                              // Multiple parallel lines
+                              const steps = Math.floor(dist / 30);
+                              const stepLines = [];
+                              for (let i = 0; i <= steps; i++) {
+                                const stepX = i * 30;
+                                if (stepX <= dist) {
+                                  stepLines.push(<Line key={`step-${i}`} points={[stepX, -40, stepX, 40]} stroke="#94a3b8" strokeWidth={2} />);
+                                }
+                              }
+                              return (
+                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
+                                  <Rect x={0} y={-40} width={dist} height={80} stroke="#64748b" strokeWidth={2} />
+                                  {stepLines}
+                                </Group>
+                              );
+                            }
+                            return null;
+                          })}
+                          
                           {/* 2. Camada de Preenchimentos (Fills) */}
                           {walls.map(w => {
                             const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;

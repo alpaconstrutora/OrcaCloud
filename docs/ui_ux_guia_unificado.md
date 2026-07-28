@@ -128,6 +128,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Empty State** — ícone grande + título + subtítulo
 - [ ] **Toast de Notificação** — fixo `bottom-6 right-6`, verde=sucesso/vermelho=erro
 - [ ] **Modal de Confirmação** — usar `useConfirm()` de `./ui/confirm` (nunca `window.confirm()`/`confirm()` nativo)
+- [ ] **Atualização de estado após criar/editar/excluir (§22)** — atualizar o array local em vez de recarregar a tabela inteira; se a edição substitui a lista por página cheia, preservar `scrollTop` ao voltar
 
 ---
 
@@ -186,6 +187,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §20 Cabeçalho de tela (título + subtítulo + KPIs)
 - [ ] §20.1 Ritmo de espaçamento do cromo (24px → KPIs, 12px depois)
 - [ ] §21 Rótulo de campo e título de modal
+- [ ] §22 Atualizar estado local em vez de recarregar a tabela inteira (criar/editar/excluir) + preservar scroll ao voltar de edição em página cheia
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -1581,6 +1583,82 @@ mesmo vocabulário do `<thead>` sentence case (§6.2):
 
 ---
 
+## 22. ATUALIZAR ESTADO LOCAL EM VEZ DE RECARREGAR A TABELA INTEIRA
+
+**Origem:** `BoletoManager.tsx` (Captura de Boletos) recarregava a lista
+inteira — boletos + centros de custo + obras + fornecedores, 4 consultas —
+depois de qualquer criação, edição ou exclusão de **um único** item. Além do
+custo de rede desnecessário, isso tinha um efeito colateral visível: abrir a
+edição substitui a lista pelo formulário (página cheia); ao voltar, a `<div
+overflow-auto>` da tabela é **recriada do zero** e o navegador zera o
+`scrollTop` — na prática, "depois de editar, a tela sempre volta pra primeira
+linha". Corrigido em 2026-07-28 trocando os três `carregar()` (criar/editar,
+excluir 1, excluir em lote) por atualização direta do array em estado, e
+restaurando o `scrollTop` salvo antes de abrir a edição.
+
+### Criar/editar (formulário retorna o registro salvo)
+
+```tsx
+function handleSaved(updated: Item) {
+    // Se a lista já é filtrada no servidor (status, obra, etc. — ver carregar()),
+    // um item que deixou de bater com o filtro atual tem que ser removido, não
+    // inserido, senão ele "vaza" para a aba/filtro errado.
+    const combinaComFiltro = filtroStatus === 'todos' || updated.status === filtroStatus;
+    setItens(prev => {
+        const existe = prev.some(i => i.id === updated.id);
+        if (!combinaComFiltro) return prev.filter(i => i.id !== updated.id);
+        return existe ? prev.map(i => (i.id === updated.id ? updated : i)) : [updated, ...prev];
+    });
+}
+```
+
+### Excluir (1 item ou em lote)
+
+```tsx
+// 1 item
+setItens(prev => prev.filter(i => i.id !== deletedId));
+
+// Lote — só remove os que o backend confirmou (Promise.allSettled)
+const excluidosIds = new Set(alvos.filter((_, i) => resultados[i].status === 'fulfilled').map(a => a.id));
+setItens(prev => prev.filter(i => !excluidosIds.has(i.id)));
+```
+
+### Preservar scroll ao abrir edição em página cheia
+
+Quando a edição substitui a lista por um componente de página cheia (em vez de
+modal sobreposto), guardar o `scrollTop` do container rolável antes de trocar,
+e restaurar depois de fechar (o container só existe de novo no próximo frame):
+
+```tsx
+const scrollContainerRef = useRef<HTMLDivElement>(null);
+const savedScrollTopRef = useRef(0);
+
+function abrirEdicao(item: Item) {
+    savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0;
+    setEditing(item);
+    setIsModalOpen(true);
+}
+
+function fecharModal() {
+    setIsModalOpen(false);
+    setEditing(undefined);
+    requestAnimationFrame(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = savedScrollTopRef.current;
+    });
+}
+```
+
+> ✅ Só recarregue a lista inteira quando o backend não devolve o registro
+> completo, ou quando a operação afeta muitos itens de forma não previsível
+> (ex: importação em lote que não retorna os itens criados).
+> ⚠️ **Pendência de propagação:** corrigido só em `BoletoManager.tsx`. Outras
+> telas do sistema (Contas a Pagar/Receber, Fornecedores, Clientes, Obras,
+> Locações etc.) ainda chamam recarga completa depois de criar/editar/excluir
+> um item — não tratar como "resolvido no app inteiro". Ao tocar em qualquer
+> tabela com esse padrão, aplicar a mesma correção.
+
+---
+
 ## CHECKLIST DE FECHAMENTO
 
 Percorrer antes de dizer "aplicado". Reportar item a item, não em bloco.
@@ -1596,6 +1674,7 @@ Percorrer antes de dizer "aplicado". Reportar item a item, não em bloco.
 | 6 | `rounded-[10px]`/`rounded-[6px]`, controles `h-9` (§16) | `rounded-2xl`/`rounded-xl` sobrando |
 | 7 | Tipografia da tabela (§7) | `font-bold`/`text-xs` em célula de dado |
 | 8 | Ações como link de texto; destrutiva com `useConfirm()` (§9/§14) | botão com borda+sombra na linha |
+| 9 | Criar/editar/excluir atualiza o array local, sem recarregar tudo; scroll preservado ao voltar de edição em página cheia (§22) | `carregar()`/refetch completo por 1 item; foco "volta pra primeira linha" |
 
 Depois:
 

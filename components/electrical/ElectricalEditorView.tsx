@@ -142,7 +142,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   // Editor State
   const [viewMode, setViewMode] = useState<'drawing' | 'schedule' | 'takeoff'>('drawing');
-  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate' | 'draw_wall'>('select');
+  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate' | 'draw_wall' | 'draw_wall_rect'>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
   const [currentWall, setCurrentWall] = useState<number[]>([]);
   const [calibrationPoints, setCalibrationPoints] = useState<number[]>([]);
@@ -398,12 +398,60 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       setLastPanPos({ x: e.evt.clientX, y: e.evt.clientY });
       return;
     }
+    
+    if (tool === 'draw_wall_rect') {
+      const stage = e.target.getStage();
+      const pointerPosition = stage.getRelativePointerPosition();
+      if (pointerPosition) {
+        let snappedPos = pointerPosition;
+        const baseGridPx = gridSizeCm > 0 && plan?.scaleFactor ? (gridSizeCm / 100) * plan.scaleFactor : 0;
+        const scaledGridPx = baseGridPx * stageTransform.scale;
+        if (gridSizeCm > 0 && scaledGridPx >= 5) {
+          const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
+          snappedPos = {
+            x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
+            y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
+          };
+        }
+        setCurrentWall([snappedPos.x, snappedPos.y]);
+      }
+    }
   };
 
   const handleStageMouseUp = (e: any) => {
     if (isPanning) {
       setIsPanning(false);
       return;
+    }
+
+    if (tool === 'draw_wall_rect' && currentWall.length === 2) {
+      const stage = e.target.getStage();
+      const pointerPosition = stage.getRelativePointerPosition();
+      if (pointerPosition) {
+        let snappedPos = pointerPosition;
+        const baseGridPx = gridSizeCm > 0 && plan?.scaleFactor ? (gridSizeCm / 100) * plan.scaleFactor : 0;
+        const scaledGridPx = baseGridPx * stageTransform.scale;
+        if (gridSizeCm > 0 && scaledGridPx >= 5) {
+          const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
+          snappedPos = {
+            x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
+            y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
+          };
+        }
+        
+        const startX = currentWall[0];
+        const startY = currentWall[1];
+        const endX = snappedPos.x;
+        const endY = snappedPos.y;
+        
+        setCurrentWall([]);
+        setCurrentPolygon([]);
+        setTool('select');
+        
+        if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) return;
+        
+        finishWallRect(startX, startY, endX, endY);
+      }
     }
   };
 
@@ -423,6 +471,34 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         y: prev.y + dy
       }));
       setLastPanPos({ x: e.evt.clientX, y: e.evt.clientY });
+      return;
+    }
+
+    if (tool === 'draw_wall_rect' && currentWall.length === 2) {
+      const stage = e.target.getStage();
+      const pointerPosition = stage.getRelativePointerPosition();
+      if (pointerPosition) {
+        let snappedPos = pointerPosition;
+        const baseGridPx = gridSizeCm > 0 && plan?.scaleFactor ? (gridSizeCm / 100) * plan.scaleFactor : 0;
+        const scaledGridPx = baseGridPx * stageTransform.scale;
+        if (gridSizeCm > 0 && scaledGridPx >= 5) {
+          const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
+          snappedPos = {
+            x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
+            y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
+          };
+        }
+        const startX = currentWall[0];
+        const startY = currentWall[1];
+        // Preview polygon for the rect
+        setCurrentPolygon([
+          startX, startY,
+          snappedPos.x, startY,
+          snappedPos.x, snappedPos.y,
+          startX, snappedPos.y,
+          startX, startY
+        ]);
+      }
       return;
     }
 
@@ -645,6 +721,10 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       }
     }
 
+    if (tool === 'draw_wall_rect') {
+      return; // handled by mousedown/mouseup
+    }
+
     if (tool === 'draw_wall') {
       setCurrentWall([...currentWall, snappedPos.x, snappedPos.y]);
       return;
@@ -849,6 +929,61 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     
     setCurrentWall([]);
     // Do not set tool to 'select', allow continuous drawing unless they hit Esc
+  };
+
+  const finishWallRect = async (x1: number, y1: number, x2: number, y2: number) => {
+    if (!plan) return;
+    
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const minY = Math.min(y1, y2);
+    const maxY = Math.max(y1, y2);
+    
+    try {
+        const wallPoints = [
+            [minX, minY, maxX, minY],
+            [maxX, minY, maxX, maxY],
+            [maxX, maxY, minX, maxY],
+            [minX, maxY, minX, minY]
+        ];
+        
+        const newWalls = await Promise.all(wallPoints.map(pts => 
+            electricalProjectService.createWall({
+                organizationId: organizationId,
+                planId: plan.id,
+                points: pts,
+                thicknessM: 0.15
+            })
+        ));
+        
+        let updatedWalls: OpuraElectricalWall[] = [];
+        setWalls(prev => {
+            updatedWalls = [...prev, ...newWalls];
+            pushHistoryState({ walls: updatedWalls, rooms, points });
+            return updatedWalls;
+        });
+        
+        handleAutoRoomDetection(updatedWalls);
+        
+    } catch (err) {
+        console.error(err);
+        showToast('Erro ao salvar paredes do retângulo.', 'error');
+    }
+  };
+
+  const handleRenameRoom = async (roomId: string, newName: string) => {
+    try {
+      const updated = await electricalProjectService.updateRoom(roomId, { name: newName });
+      setRooms(prev => {
+        const newRooms = prev.map(r => r.id === roomId ? updated : r);
+        pushHistoryState({ walls, rooms: newRooms, points });
+        return newRooms;
+      });
+      showToast('Nome do ambiente atualizado!', 'success');
+    } catch(err) {
+      console.error(err);
+      showToast('Erro ao atualizar nome do ambiente.', 'error');
+    }
   };
 
   const handleUpdateWallThickness = async (wallId: string, thicknessM: number) => {
@@ -1456,6 +1591,15 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           Desenhar Parede
                         </button>
                         <button
+                          onClick={() => { setTool('draw_wall_rect'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'draw_wall_rect' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title="Desenhar Parede em Retângulo (Arrastar)"
+                        >
+                          <Square className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => { setTool('calibrate'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
                           className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
                             tool === 'calibrate' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
@@ -1554,7 +1698,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         onClick={handleStageClick}
                         onMouseMove={handleStageMouseMove}
                         onDblClick={handleStageDblClick}
-                          className={tool === 'draw_room' || tool === 'draw_wall' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                          className={tool === 'draw_room' || tool === 'draw_wall' || tool === 'draw_wall_rect' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
                         >
                         <Layer>
                           {/* Imagem de Fundo */}
@@ -1634,7 +1778,30 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             const centerY = minY + (maxY - minY) / 2;
 
                             return (
-                              <Group key={room.id}>
+                              <Group 
+                                key={room.id}
+                                onDblClick={(e) => {
+                                  e.cancelBubble = true;
+                                  if (tool === 'select') {
+                                    const newName = prompt('Novo nome para o ambiente:', room.name);
+                                    if (newName && newName !== room.name) {
+                                      handleRenameRoom(room.id, newName);
+                                    }
+                                  }
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (tool === 'select') {
+                                    const container = e.target.getStage()?.container();
+                                    if (container) container.style.cursor = 'text';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (tool === 'select') {
+                                    const container = e.target.getStage()?.container();
+                                    if (container) container.style.cursor = 'default';
+                                  }
+                                }}
+                              >
                                 <Line
                                   points={pts}
                                   fill="rgba(59, 130, 246, 0.2)"

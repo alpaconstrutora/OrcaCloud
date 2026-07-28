@@ -49,7 +49,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
   const [isOrthoMode, setIsOrthoMode] = useState(true);
-  const [gridSizeCm, setGridSizeCm] = useState<number>(100);
+  const [gridSizeCm, setGridSizeCm] = useState<number>(10);
   const [showBackground, setShowBackground] = useState(true);
   const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
   const [editingWallLengthValue, setEditingWallLengthValue] = useState<string>('');
@@ -1026,23 +1026,25 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           />
                           <span className="text-sm text-slate-500">m</span>
                         </div>
-                        <div className="flex items-center gap-2 px-2 border-l border-slate-200">
-                          <span className="text-sm text-slate-500">Comprimento:</span>
-                          <input 
-                             type="number"
-                             step="0.01"
-                             min="0.01"
-                             value={editingWallLengthValue}
-                             onChange={(e) => setEditingWallLengthValue(e.target.value)}
-                             onBlur={(e) => handleUpdateWallTotalLength(selectedWallId, parseFloat(e.target.value))}
-                             onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleUpdateWallTotalLength(selectedWallId, parseFloat((e.target as HTMLInputElement).value));
-                             }}
-                             className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all bg-yellow-50"
-                             title="Digite e aperte Enter para aplicar"
-                          />
-                          <span className="text-sm text-slate-500">m</span>
-                        </div>
+                        {walls.find(w => w.id === selectedWallId)?.points?.length === 4 && (
+                          <div className="flex items-center gap-2 px-2 border-l border-slate-200">
+                            <span className="text-sm text-slate-500">Comprimento:</span>
+                            <input 
+                               type="number"
+                               step="0.01"
+                               min="0.01"
+                               value={editingWallLengthValue}
+                               onChange={(e) => setEditingWallLengthValue(e.target.value)}
+                               onBlur={(e) => handleUpdateWallTotalLength(selectedWallId, parseFloat(e.target.value))}
+                               onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleUpdateWallTotalLength(selectedWallId, parseFloat((e.target as HTMLInputElement).value));
+                               }}
+                               className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all bg-yellow-50"
+                               title="Digite e aperte Enter para aplicar"
+                            />
+                            <span className="text-sm text-slate-500">m</span>
+                          </div>
+                        )}
                         <button
                           onClick={() => setSelectedWallId(null)}
                           className="p-1 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"

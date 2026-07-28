@@ -1548,16 +1548,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             </td>
                                             <td className="px-6 py-2.5">
                                                 <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        id={`rental-broker-access-${broker.id}`}
-                                                        checked={!!brokerAccess[broker.id]}
-                                                        onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
-                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                    />
-                                                    <label htmlFor={`rental-broker-access-${broker.id}`} className="text-sm font-normal text-gray-600 cursor-pointer">
-                                                        Habilitado neste empreendimento
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="sr-only peer"
+                                                            checked={!!brokerAccess[broker.id]}
+                                                            onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
+                                                        />
+                                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                                     </label>
+                                                    <span className="text-sm font-normal text-gray-600">
+                                                        Habilitado neste empreendimento
+                                                    </span>
                                                 </div>
                                             </td>
                                         </tr>

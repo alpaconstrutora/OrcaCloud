@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Upload, Save, MousePointer2, Square, Loader2, Download, ZoomIn, ZoomOut, Maximize, Undo, Redo, X, Ruler, Edit3, CornerDownRight, Trash2, Plus, Minus } from 'lucide-react';
 import Button from '../ui/Button';
-import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Line, Circle, Text, Group, Arc, Rect } from 'react-konva';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { electricalProjectService } from '../../services/electricalProjectService';
 import { exportElectricalService } from '../../services/exportElectricalService';
@@ -143,7 +143,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   // Editor State
   const [viewMode, setViewMode] = useState<'drawing' | 'schedule' | 'takeoff'>('drawing');
-  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate' | 'draw_wall' | 'draw_wall_rect' | 'draw_wall_l' | 'draw_wall_u' | 'draw_wall_t'>('select');
+  const [tool, setTool] = useState<string>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
   const [currentWall, setCurrentWall] = useState<number[]>([]);
   const [calibrationPoints, setCalibrationPoints] = useState<number[]>([]);

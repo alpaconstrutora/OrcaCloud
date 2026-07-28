@@ -1858,6 +1858,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             </span>
                                                         </td>
                                                     )}
+                                                    {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <ActionIconButton kind="edit" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} />

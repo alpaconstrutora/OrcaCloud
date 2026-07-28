@@ -714,16 +714,35 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     const newDx = dx * ratio;
     const newDy = dy * ratio;
 
-    const newX2 = x1 + newDx;
-    const newY2 = y1 + newDy;
+    const diffX = (x1 + newDx) - x2;
+    const diffY = (y1 + newDy) - y2;
 
-    const diffX = newX2 - x2;
-    const diffY = newY2 - y2;
-
-    for (let i = startIndex + 2; i < pts.length; i += 2) {
-        pts[i] += diffX;
-        pts[i+1] += diffY;
+    const numPoints = pts.length / 2;
+    const isClosed = numPoints >= 4 && Math.abs(pts[0] - pts[pts.length - 2]) < 1 && Math.abs(pts[1] - pts[pts.length - 1]) < 1;
+    
+    let p1 = (startIndex / 2) + 1;
+    let p2 = p1 + 1;
+    
+    const indicesToMove = new Set<number>();
+    indicesToMove.add(p1);
+    
+    if (isClosed) {
+       if (p2 >= numPoints) p2 = p2 % (numPoints - 1);
+       indicesToMove.add(p2);
+       
+       if (indicesToMove.has(0)) indicesToMove.add(numPoints - 1);
+       if (indicesToMove.has(numPoints - 1)) indicesToMove.add(0);
+    } else {
+       if (p2 < numPoints) indicesToMove.add(p2);
     }
+
+    for (const idx of indicesToMove) {
+        pts[idx * 2] += diffX;
+        pts[idx * 2 + 1] += diffY;
+    }
+
+    // Update local state immediately
+    setWalls(walls.map(w => w.id === wall.id ? { ...w, points: pts } : w));
 
     try {
         const updatedWall = await electricalProjectService.updateWall(wall.id, { points: pts });

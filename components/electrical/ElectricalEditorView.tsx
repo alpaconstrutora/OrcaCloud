@@ -56,8 +56,22 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [stageTransform, setStageTransform] = useState({ scale: 1, x: 0, y: 0 });
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (containerRef.current) {
+      setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
+    }
+    const handleResize = () => {
+      if (containerRef.current) {
+        setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -160,7 +174,6 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             loadImage(p.fileUrl);
           } else {
             setImageObj(null);
-            setStageSize({ width: 3000, height: 3000 }); // Default large canvas for drawing without image
           }
         }
       } catch (error) {
@@ -179,7 +192,6 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     img.crossOrigin = 'Anonymous';
     img.onload = () => {
       setImageObj(img);
-      setStageSize({ width: img.width, height: img.height });
     };
   };
 
@@ -274,6 +286,42 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       wallPreviewRef.current.getLayer().batchDraw();
     }
   };
+
+  const handleWheel = (e: any) => {
+    e.evt.preventDefault();
+    const stage = stageRef.current;
+    if (!stage) return;
+    
+    const scaleBy = 1.1;
+    const oldScale = stage.scaleX();
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    };
+
+    const newScale = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+    if (newScale < 0.1 || newScale > 20) return;
+
+    const newPos = {
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    };
+    
+    setStageTransform({ scale: newScale, x: newPos.x, y: newPos.y });
+  };
+
+  const handleDragMove = (e: any) => {
+    if (e.target === stageRef.current) {
+      setStageTransform(prev => ({ ...prev, x: e.target.x(), y: e.target.y() }));
+    }
+  };
+
+  const zoomIn = () => setStageTransform(prev => ({ ...prev, scale: Math.min(20, prev.scale * 1.2) }));
+  const zoomOut = () => setStageTransform(prev => ({ ...prev, scale: Math.max(0.1, prev.scale / 1.2) }));
+  const resetTransform = () => setStageTransform({ scale: 1, x: 0, y: 0 });
 
   const handleStageDblClick = (e: any) => {
     if (tool === 'draw_wall') {
@@ -606,12 +654,6 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return segments;
   };
 
-  const handleStageDblClick = (e: any) => {
-    if (tool === 'draw_wall') {
-      finishWall();
-    }
-  };
-
   if (loading) return <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
   return (
@@ -764,20 +806,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             )}
 
             {plan && (
-              <TransformWrapper
-                initialScale={1}
-                minScale={0.1}
-                maxScale={5}
-                limitToBounds={false}
-                panning={{ disabled: tool !== 'select' && !isShiftDown }}
-                wheel={{ step: 0.01 }}
-                doubleClick={{ disabled: true }}
-              >
-                {({ zoomIn, zoomOut, resetTransform, state, transformState, ...rest }: any) => {
-                  const tState = state || transformState || { scale: 1, positionX: 0, positionY: 0 };
-                  const s = tState.scale;
-                  const px = tState.positionX;
-                  const py = tState.positionY;
+              <React.Fragment>
+                {(() => {
+                  const s = stageTransform.scale;
+                  const px = stageTransform.x;
+                  const py = stageTransform.y;
                   
                   const ppm = plan?.scaleFactor || 100;
                   const baseGridPx = (gridSizeCm / 100) * ppm;
@@ -881,7 +914,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                       <div className="w-px h-6 bg-slate-300 mx-1"></div>
 
                       <button 
-                        onClick={() => zoomOut(0.2)} 
+                        onClick={zoomOut} 
                         className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                         title="Reduzir Zoom"
                       >
@@ -895,22 +928,28 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         <Maximize className="w-5 h-5" />
                       </button>
                       <button 
-                        onClick={() => zoomIn(0.2)} 
+                        onClick={zoomIn} 
                         className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                         title="Aumentar Zoom"
                       >
                         <ZoomIn className="w-5 h-5" />
                       </button>
                     </div>
-                    <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
-                      <div className="relative" style={{ width: stageSize.width, height: stageSize.height }}>
-                        <Stage 
-                          ref={stageRef}
-                          width={stageSize.width} 
-                          height={stageSize.height}
-                          onClick={handleStageClick}
-                          onMouseMove={handleStageMouseMove}
-                          onDblClick={handleStageDblClick}
+                    <div className="absolute inset-0">
+                      <Stage 
+                        ref={stageRef}
+                        width={dimensions.width || 800} 
+                        height={dimensions.height || 600}
+                        scaleX={s}
+                        scaleY={s}
+                        x={px}
+                        y={py}
+                        onWheel={handleWheel}
+                        draggable={tool === 'select' || isShiftDown}
+                        onDragMove={handleDragMove}
+                        onClick={handleStageClick}
+                        onMouseMove={handleStageMouseMove}
+                        onDblClick={handleStageDblClick}
                           className={tool === 'draw_room' || tool === 'draw_wall' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
                         >
                         <Layer>

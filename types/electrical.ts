@@ -55,6 +55,7 @@ export interface OpuraElectricalWall {
     planId: string;
     points: any;
     thicknessM?: number | null;
+    heightM?: number | null;
     createdAt: string;
     updatedAt: string;
 }

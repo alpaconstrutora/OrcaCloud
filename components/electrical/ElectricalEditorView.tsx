@@ -598,6 +598,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
   };
 
+  const handleUpdateWallHeight = async (wallId: string, heightM: number) => {
+    if (isNaN(heightM) || heightM <= 0) return;
+    setWalls(prev => prev.map(w => w.id === wallId ? { ...w, heightM } : w));
+    try {
+       await electricalProjectService.updateWall(wallId, { heightM });
+    } catch(err) {
+       console.error(err);
+       showToast('Erro ao atualizar altura', 'error');
+    }
+  };
+
   const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
     const newLengthM = parseFloat(newLengthStr.replace(',', '.'));
     if (isNaN(newLengthM) || newLengthM <= 0) {
@@ -923,6 +934,18 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                              min="0.01"
                              value={walls.find(w => w.id === selectedWallId)?.thicknessM || 0.15}
                              onChange={(e) => handleUpdateWallThickness(selectedWallId, parseFloat(e.target.value))}
+                             className="w-16 px-2 py-1 text-sm border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                          />
+                          <span className="text-sm text-slate-500">m</span>
+                        </div>
+                        <div className="flex items-center gap-2 px-2 border-l border-slate-200">
+                          <span className="text-sm text-slate-500">Altura:</span>
+                          <input 
+                             type="number"
+                             step="0.01"
+                             min="0.01"
+                             value={walls.find(w => w.id === selectedWallId)?.heightM || 2.80}
+                             onChange={(e) => handleUpdateWallHeight(selectedWallId, parseFloat(e.target.value))}
                              className="w-16 px-2 py-1 text-sm border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                           />
                           <span className="text-sm text-slate-500">m</span>

@@ -122,6 +122,7 @@ const DEFAULT_PENDING_BANK_COL_WIDTHS: Record<string, number> = {
     costCenter: 150,
     date: 100,
     amount: 130,
+    actions: 160,
 };
 
 // Colunas da tabela de Lançamentos Internos na aba Pendentes (visualização em linha).
@@ -145,6 +146,7 @@ const DEFAULT_PENDING_INTERNAL_COL_WIDTHS: Record<string, number> = {
     costCenter: 140,
     date: 100,
     amount: 130,
+    actions: 160,
 };
 
 // Larguras de coluna da tabela de Extrato — ajustáveis pelo usuário (arraste a borda
@@ -324,6 +326,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const pendingInternalColumns = useTableColumns(PENDING_INTERNAL_COLUMNS, 'conciliacaoPendentesInternalColumns');
     const pendingBankResize = useResizableColumns(DEFAULT_PENDING_BANK_COL_WIDTHS, 'conciliacaoPendentesBankColWidths');
     const pendingInternalResize = useResizableColumns(DEFAULT_PENDING_INTERNAL_COL_WIDTHS, 'conciliacaoPendentesInternalColWidths');
+    // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
+    // w-full/100% junto com table-layout:fixed (§6.1).
+    const pendingBankTableTotalWidth = 40
+        + PENDING_BANK_COLUMNS.filter(c => c.key !== 'actions')
+            .reduce((sum, c) => sum + (pendingBankColumns.visibleColumns.includes(c.key) ? pendingBankResize.getWidth(c.key) : 0), 0)
+        + pendingBankResize.getWidth('actions');
+    const pendingInternalTableTotalWidth = 40
+        + PENDING_INTERNAL_COLUMNS.filter(c => c.key !== 'actions')
+            .reduce((sum, c) => sum + (pendingInternalColumns.visibleColumns.includes(c.key) ? pendingInternalResize.getWidth(c.key) : 0), 0)
+        + pendingInternalResize.getWidth('actions');
 
     // Redimensionamento de colunas da tabela de Extrato — migrado para o hook
     // compartilhado em 2026-07-27 (mesma localStorage key 'extratoBancarioColWidths'
@@ -4232,6 +4244,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             onToggleColumn={pendingBankColumns.toggleColumn}
                                             onReset={pendingBankColumns.resetColumns}
                                         />
+                                        {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                            Duplo clique no divisor segue "restaurar padrão". */}
+                                        <button
+                                            onClick={() => pendingBankResize.autoFit()}
+                                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                            title="Ajustar largura das colunas ao conteúdo"
+                                        >
+                                            <MoveHorizontal className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -4654,7 +4675,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ) : (
                                 <div className={useAcoplada ? "overflow-x-auto" : "bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto"}>
                                     <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                                        <table ref={pendingBankResize.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                                        <table ref={pendingBankResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: pendingBankTableTotalWidth, minWidth: '100%' }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
                                                 {PENDING_BANK_COLUMNS.filter(c => c.key !== 'actions').map(c => (
@@ -4662,7 +4683,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         <col key={c.key} data-col-key={c.key} style={{ width: `${pendingBankResize.getWidth(c.key)}px` }} />
                                                     )
                                                 ))}
-                                                {pendingBankColumns.visibleColumns.includes('actions') && <col style={{ width: '160px' }} />}
+                                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                                <col />
+                                                {pendingBankColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${pendingBankResize.getWidth('actions')}px` }} />}
                                             </colgroup>
                                             <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
                                                 <tr>
@@ -4732,8 +4756,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             <pendingBankResize.ResizeHandle colKey="amount" />
                                                         </SortableHeader>
                                                     )}
+                                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingBankColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap">
+                                                            Ações
+                                                            <pendingBankResize.ResizeHandle colKey="actions" />
+                                                        </th>
                                                     )}
                                                 </tr>
                                             </thead>
@@ -4742,7 +4771,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     const suggestion = topSuggestionByBankTxId.get(tx.id);
                                                     const cand = suggestion?.candidate_internal_transaction;
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
-                                                    const visibleColCount = 1 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
+                                                    // +2: checkbox + espaçador (não estão em visibleColumns)
+                                                    const visibleColCount = 2 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
                                                     return (
                                                         <React.Fragment key={tx.id}>
                                                             <tr
@@ -4820,6 +4850,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                                 </td>
                                                                 )}
+                                                                {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                                <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                                 {pendingBankColumns.visibleColumns.includes('actions') && (
                                                                 <td className={`px-4 ${cellPad} text-right whitespace-nowrap`} onClick={(e) => e.stopPropagation()}>
                                                                     <div className="flex items-center justify-end gap-1.5">
@@ -4985,6 +5017,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             </div>
                                         )}
                                     </div>
+                                    {/* Só no modo Grade: sem thead, precisa de um seletor de ordenação
+                                        próprio. No modo Lista a ordenação já é pelo cabeçalho da coluna
+                                        (§6.4 — sem dropdown de ordenação fora do thead). */}
+                                    {!internalAcoplada && (
                                     <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
                                         <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
                                         <select
@@ -5006,6 +5042,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             {internalSortOrder === 'desc' ? '↓' : '↑'}
                                         </button>
                                     </div>
+                                    )}
                                     <div className={internalAcoplada ? "relative" : "relative"}>
                                         <Search className={internalAcoplada ? "w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" : "w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"} />
                                         <input
@@ -5037,6 +5074,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 onToggleColumn={pendingInternalColumns.toggleColumn}
                                                 onReset={pendingInternalColumns.resetColumns}
                                             />
+                                            {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                                Duplo clique no divisor segue "restaurar padrão". */}
+                                            <button
+                                                onClick={() => pendingInternalResize.autoFit()}
+                                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                                title="Ajustar largura das colunas ao conteúdo"
+                                            >
+                                                <MoveHorizontal className="w-4 h-4" />
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -5186,7 +5232,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ) : (
                                 <div className={internalAcoplada ? "overflow-x-auto" : "bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto"}>
                                     <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                                        <table ref={pendingInternalResize.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                                        <table ref={pendingInternalResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: pendingInternalTableTotalWidth, minWidth: '100%' }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
                                                 {PENDING_INTERNAL_COLUMNS.filter(c => c.key !== 'actions').map(c => (
@@ -5194,7 +5240,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         <col key={c.key} data-col-key={c.key} style={{ width: `${pendingInternalResize.getWidth(c.key)}px` }} />
                                                     )
                                                 ))}
-                                                {pendingInternalColumns.visibleColumns.includes('actions') && <col style={{ width: '160px' }} />}
+                                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                                <col />
+                                                {pendingInternalColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${pendingInternalResize.getWidth('actions')}px` }} />}
                                             </colgroup>
                                             <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
                                                 <tr>
@@ -5274,8 +5323,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             <pendingInternalResize.ResizeHandle colKey="amount" />
                                                         </SortableHeader>
                                                     )}
+                                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingInternalColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap">
+                                                            Ações
+                                                            <pendingInternalResize.ResizeHandle colKey="actions" />
+                                                        </th>
                                                     )}
                                                 </tr>
                                             </thead>
@@ -5365,6 +5419,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 {formatMoney(tx.amount)}
                                                             </td>
                                                             )}
+                                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {pendingInternalColumns.visibleColumns.includes('actions') && (
                                                             <td className={`px-4 ${cellPad} text-right whitespace-nowrap`}>
                                                                 <div className="flex items-center justify-end gap-1">

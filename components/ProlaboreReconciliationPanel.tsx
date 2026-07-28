@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2, Plus, PencilLine, Search,
+    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2, Plus, PencilLine, Search, MoveHorizontal,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
@@ -12,7 +12,7 @@ import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { formatMoney, formatDateBR } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import type { Company, ProlaboreManualEntry } from '../types';
 
 // A categoria pode ter sido gravada de formas diferentes: o RH grava
@@ -70,6 +70,11 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions',     label: 'Ações',        sortable: false },
 ];
 
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    description: 220, party: 160, category: 140, date: 130, amount: 130, approval: 140, actions: 160,
+};
+
 function currentMonthISO(): string {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
@@ -120,6 +125,13 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('prolaboreReconciliation:search', '');
 
     const tableColumns = useTableColumns(COLUMNS, 'prolaboreReconciliationColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'prolaboreReconciliationColWidths');
+    // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
+    // w-full/100% junto com table-layout:fixed (§6.1).
+    const tableTotalWidth = 40
+        + (['description', 'party', 'category', 'date', 'amount', 'approval'] as const)
+            .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
 
     // Em "Todas as organizações" (organizationId vazio), a empresa selecionada
     // no seletor abaixo é quem define o escopo efetivo — mesmo padrão do resto
@@ -494,6 +506,15 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
+                    {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                        Duplo clique no divisor segue "restaurar padrão". */}
+                    <button
+                        onClick={() => cols.autoFit()}
+                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                        title="Ajustar largura das colunas ao conteúdo"
+                    >
+                        <MoveHorizontal className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
@@ -546,7 +567,20 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                    <colgroup>
+                        <col style={{ width: '40px' }} /> {/* checkbox */}
+                        {tableColumns.visibleColumns.includes('description') && <col data-col-key="description" style={{ width: `${cols.getWidth('description')}px` }} />}
+                        {tableColumns.visibleColumns.includes('party') && <col data-col-key="party" style={{ width: `${cols.getWidth('party')}px` }} />}
+                        {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
+                        {tableColumns.visibleColumns.includes('date') && <col data-col-key="date" style={{ width: `${cols.getWidth('date')}px` }} />}
+                        {tableColumns.visibleColumns.includes('amount') && <col data-col-key="amount" style={{ width: `${cols.getWidth('amount')}px` }} />}
+                        {tableColumns.visibleColumns.includes('approval') && <col data-col-key="approval" style={{ width: `${cols.getWidth('approval')}px` }} />}
+                        {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                            borda de "Ações" não andar a cada redimensionamento. */}
+                        <col />
+                        {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                    </colgroup>
                     <thead>
                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                             <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -561,45 +595,62 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                             {tableColumns.visibleColumns.includes('description') && (
                                 <SortableHeader colKey="description" label="Descrição" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100" />
+                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <cols.ResizeHandle colKey="description" />
+                                </SortableHeader>
                             )}
                             {tableColumns.visibleColumns.includes('party') && (
                                 <SortableHeader colKey="party" label="Contraparte" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100" />
+                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <cols.ResizeHandle colKey="party" />
+                                </SortableHeader>
                             )}
                             {tableColumns.visibleColumns.includes('category') && (
                                 <SortableHeader colKey="category" label="Categoria" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100" />
+                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <cols.ResizeHandle colKey="category" />
+                                </SortableHeader>
                             )}
                             {tableColumns.visibleColumns.includes('date') && (
                                 <SortableHeader colKey="date" label="Data" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100" />
+                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <cols.ResizeHandle colKey="date" />
+                                </SortableHeader>
                             )}
                             {tableColumns.visibleColumns.includes('amount') && (
                                 <SortableHeader colKey="amount" label="Valor" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100" />
+                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <cols.ResizeHandle colKey="amount" />
+                                </SortableHeader>
                             )}
                             {tableColumns.visibleColumns.includes('approval') && (
                                 <SortableHeader colKey="approval" label="Aprovação" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100" />
+                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <cols.ResizeHandle colKey="approval" />
+                                </SortableHeader>
                             )}
+                            {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                            <th aria-hidden="true" className="border-r border-gray-100" />
                             {tableColumns.visibleColumns.includes('actions') && (
-                                <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                <th className="px-6 py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-500">
+                                    Ações
+                                    <cols.ResizeHandle colKey="actions" />
+                                </th>
                             )}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {loading ? (
-                            <tr><td colSpan={tableColumns.visibleColumns.length + 1} className="text-center py-12 text-gray-400">
+                            <tr><td colSpan={tableColumns.visibleColumns.length + 2} className="text-center py-12 text-gray-400">
                                 <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                             </td></tr>
                         ) : sortedRows.length === 0 ? (
-                            <tr><td colSpan={tableColumns.visibleColumns.length + 1} className="text-center py-12">
+                            <tr><td colSpan={tableColumns.visibleColumns.length + 2} className="text-center py-12">
                                 <div className="flex flex-col items-center gap-2 text-gray-400">
                                     <Wallet className="w-8 h-8 opacity-30" />
                                     <p className="text-sm font-medium">Nenhum lançamento de pró-labore nesta competência.</p>
@@ -644,6 +695,8 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                             <span className={`text-sm font-normal ${approvalColor}`}>{approvalLabel}</span>
                                         </td>
                                     )}
+                                    {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-2">

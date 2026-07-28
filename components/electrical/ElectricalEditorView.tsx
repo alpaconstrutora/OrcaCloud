@@ -735,14 +735,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const updatedWall = await electricalProjectService.updateWall(wall.id, { points: pts });
-      setWalls(prev => prev.map(w => w.id === wall.id ? updatedWall : w));
-    } catch (err) {
-      console.error(err);
-      showToast('Erro ao atualizar comprimento', 'error');
-    }
-  };
-
-  const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
+const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
     const newLengthM = parseFloat(newLengthStr.replace(',', '.'));
     if (isNaN(newLengthM) || newLengthM <= 0) {
         setEditingSegment(null);
@@ -774,41 +767,134 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     const diffX = (x1 + newDx) - x2;
     const diffY = (y1 + newDy) - y2;
 
-    const numPoints = pts.length / 2;
-    const isClosed = numPoints >= 4 && Math.abs(pts[0] - pts[pts.length - 2]) < 1 && Math.abs(pts[1] - pts[pts.length - 1]) < 1;
-    
-    let p1 = (startIndex / 2) + 1;
-    let p2 = p1 + 1;
-    
-    const indicesToMove = new Set<number>();
-    indicesToMove.add(p1);
-    
-    if (isClosed) {
-       if (p2 >= numPoints) p2 = p2 % (numPoints - 1);
-       indicesToMove.add(p2);
-       
-       if (indicesToMove.has(0)) indicesToMove.add(numPoints - 1);
-       if (indicesToMove.has(numPoints - 1)) indicesToMove.add(0);
-    } else {
-       if (p2 < numPoints) indicesToMove.add(p2);
+    // --- Vertex Welding Algorithm ---
+    // Instead of only moving the selected wall, we propagate the movement 
+    // to all connected points across all walls to preserve the shape geometry.
+    const newWalls = JSON.parse(JSON.stringify(walls)) as OpuraElectricalWall[];
+    const visited = new Set<string>();
+    const wallsToUpdateMap = new Map<string, OpuraElectricalWall>();
+
+    // Start by moving the SECOND point of the segment (x2, y2)
+    const startPtIndex = startIndex + 2;
+    const queue = [{ 
+        wId: wall.id, 
+        ptIdx: startPtIndex, 
+        moveX: diffX, 
+        moveY: diffY,
+        origX: x2,
+        origY: y2
+    }];
+
+    while(queue.length > 0) {
+        const item = queue.shift()!;
+        const { wId, ptIdx, moveX, moveY, origX, origY } = item;
+        const stateId = `${wId}-${ptIdx}`;
+        if (visited.has(stateId)) continue;
+        visited.add(stateId);
+
+        const w = newWalls.find(x => x.id === wId);
+        if (!w) continue;
+        const wPts = w.points as number[];
+        
+        // Move the point
+        wPts[ptIdx] += moveX;
+        wPts[ptIdx+1] += moveY;
+        wallsToUpdateMap.set(wId, w);
+
+        // 1. Check adjacent points in the SAME wall
+        const checkAdjacent = (adjIndex: number) => {
+            if (adjIndex >= 0 && adjIndex < wPts.length) {
+                const adjId = `${wId}-${adjIndex}`;
+                if (!visited.has(adjId)) {
+                    const origWall = walls.find(x => x.id === wId)!;
+                    const adjOrigX = origWall.points[adjIndex] as number;
+                    const adjOrigY = origWall.points[adjIndex+1] as number;
+                    
+                    // Is segment vertical and movement horizontal?
+                    const isVertical = Math.abs(origX - adjOrigX) < 1;
+                    const isHorizMove = Math.abs(moveX) > 0 && Math.abs(moveY) < 1;
+                    
+                    // Is segment horizontal and movement vertical?
+                    const isHorizontal = Math.abs(origY - adjOrigY) < 1;
+                    const isVertMove = Math.abs(moveY) > 0 && Math.abs(moveX) < 1;
+                    
+                    if ((isVertical && isHorizMove) || (isHorizontal && isVertMove)) {
+                        queue.push({
+                            wId, ptIdx: adjIndex, moveX, moveY,
+                            origX: adjOrigX, origY: adjOrigY
+                        });
+                    }
+                }
+            }
+        };
+        
+        // If it's a closed wall, the "adjacent" point to the first is the second-to-last, etc.
+        const isClosedWall = wPts.length >= 6 && Math.abs(wPts[0] - wPts[wPts.length - 2]) < 1 && Math.abs(wPts[1] - wPts[wPts.length - 1]) < 1;
+        
+        let prevIdx = ptIdx - 2;
+        let nextIdx = ptIdx + 2;
+        
+        if (isClosedWall) {
+            if (ptIdx === 0) prevIdx = wPts.length - 4; // Ignore the duplicate end point
+            if (ptIdx === wPts.length - 2) nextIdx = 2; // Wrap around to second point
+        }
+        
+        checkAdjacent(prevIdx);
+        checkAdjacent(nextIdx);
+
+        // 2. Find points in OTHER walls that share this exact original coordinate
+        for (const otherWall of newWalls) {
+            const origOtherWall = walls.find(x => x.id === otherWall.id)!;
+            const otherPts = origOtherWall.points as number[];
+            for (let i = 0; i < otherPts.length; i += 2) {
+                if (otherWall.id === wId && i === ptIdx) continue;
+                
+                const px = otherPts[i];
+                const py = otherPts[i+1];
+                if (Math.abs(px - origX) < 1 && Math.abs(py - origY) < 1) {
+                    const otherId = `${otherWall.id}-${i}`;
+                    if (!visited.has(otherId)) {
+                        queue.push({
+                            wId: otherWall.id,
+                            ptIdx: i,
+                            moveX, moveY,
+                            origX: px, origY: py
+                        });
+                    }
+                }
+            }
+        }
     }
 
-    for (const idx of indicesToMove) {
-        pts[idx * 2] += diffX;
-        pts[idx * 2 + 1] += diffY;
+    const wallsToUpdate = Array.from(wallsToUpdateMap.values());
+    
+    // Ensure closed walls maintain their duplicate start/end points
+    for (const w of wallsToUpdate) {
+        const origW = walls.find(x => x.id === w.id)!;
+        const origPts = origW.points as number[];
+        const isClosed = origPts.length >= 6 && Math.abs(origPts[0] - origPts[origPts.length - 2]) < 1 && Math.abs(origPts[1] - origPts[origPts.length - 1]) < 1;
+        if (isClosed) {
+            const wPts = w.points as number[];
+            wPts[wPts.length - 2] = wPts[0];
+            wPts[wPts.length - 1] = wPts[1];
+        }
     }
 
-    // Update local state immediately
-    setWalls(walls.map(w => w.id === wall.id ? { ...w, points: pts } : w));
+    // Update local state immediately for fast feedback
+    setWalls(prev => prev.map(w => {
+        const updated = wallsToUpdate.find(x => x.id === w.id);
+        return updated ? updated : w;
+    }));
 
     try {
-        const updatedWall = await electricalProjectService.updateWall(wall.id, { points: pts });
-        setWalls(walls.map(w => w.id === wall.id ? updatedWall : w));
-        showToast('Tamanho ajustado', 'success');
+        await Promise.all(wallsToUpdate.map(w => 
+            electricalProjectService.updateWall(w.id, { points: w.points })
+        ));
+        setEditingSegment(null);
     } catch (err) {
-        showToast('Erro ao atualizar parede', 'error');
+        console.error(err);
+        showToast('Erro ao atualizar comprimento', 'error');
     }
-    setEditingSegment(null);
   };
 
   const renderWallLabels = () => {

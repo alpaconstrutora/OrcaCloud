@@ -275,6 +275,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
   };
 
+  const handleStageDblClick = (e: any) => {
+    if (tool === 'draw_wall') {
+      finishWall();
+    } else if (tool === 'draw_room') {
+      finishPolygon();
+    }
+  };
+
   const handleStageClick = async (e: any) => {
     if (isShiftDown) return; // Prevent clicks while panning
 
@@ -458,7 +466,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         areaSqm: Number(areaSqm.toFixed(2)),
         perimeterM: Number(perimeterM.toFixed(2))
       });
-      setRooms([...rooms, newRoom]);
+      setRooms(prev => [...prev, newRoom]);
     } catch (error) {
       console.error(error);
       alert('Erro ao salvar ambiente.');
@@ -483,7 +491,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         points: currentWall,
         thicknessM: 0.15
       });
-      setWalls([...walls, newWall]);
+      setWalls(prev => [...prev, newWall]);
     } catch (error) {
       console.error(error);
       showToast('Erro ao salvar parede', 'error');

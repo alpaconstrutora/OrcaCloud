@@ -9,7 +9,8 @@ import {
     Settings,
     MonitorPlay,
     ThermometerSnowflake,
-    Wifi
+    Wifi,
+    DoorClosed, LayoutPanelTop, AlignVerticalSpaceAround, ArrowRightLeft, ArrowUpToLine
 } from 'lucide-react';
 
 export type ElectricalPointType = 

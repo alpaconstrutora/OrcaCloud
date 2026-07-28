@@ -62,16 +62,24 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const { showToast } = useToast();
 
   useEffect(() => {
-    if (containerRef.current) {
-      setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
-    }
-    const handleResize = () => {
-      if (containerRef.current) {
-        setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
       }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    });
+    observer.observe(containerRef.current);
+    
+    // Initial size
+    setDimensions({ 
+      width: containerRef.current.offsetWidth, 
+      height: containerRef.current.offsetHeight 
+    });
+
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {

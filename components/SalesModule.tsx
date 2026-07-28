@@ -80,6 +80,16 @@ const DEALS_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+const DEFAULT_INVENTORY_COL_WIDTHS: Record<string, number> = {
+    name: 200, address: 220, block: 100, private_area: 110, price: 140, price_per_m2: 130,
+    position_weight: 130, sun_weight: 130, floor: 100, status: 130, actions: 200,
+};
+const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
+    code: 100, property: 220, block: 90, private_area: 100, price_base: 130, price_per_m2_base: 130,
+    floor: 90, sale_value: 130, sale_value_per_m2: 130, variance: 120, variance_pct: 100, status: 130, actions: 160,
+};
+
 const getPositionWeight = (p?: { position_type?: string | null }) =>
     p?.position_type === 'FRONT' ? 1.03 : p?.position_type === 'BACK' ? 0.97 : 1.00;
 
@@ -110,6 +120,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // ui_ux_guia_unificado.md §3 — colunas + ordenação persistidas via useTableColumns.
     const inventoryColumns = useTableColumns(INVENTORY_COLUMNS, 'salesModuleInventoryColumns');
     const dealsColumns = useTableColumns(DEALS_COLUMNS, 'salesModuleDealsColumns');
+    const inventoryResize = useResizableColumns(DEFAULT_INVENTORY_COL_WIDTHS, 'salesModuleInventoryColWidths');
+    const dealsResize = useResizableColumns(DEFAULT_DEALS_COL_WIDTHS, 'salesModuleDealsColWidths');
 
 
     // Modals Control
@@ -1062,6 +1074,15 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         onToggleColumn={inventoryColumns.toggleColumn}
                                         onReset={inventoryColumns.resetColumns}
                                     />
+                                    {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                        Duplo clique no divisor segue "restaurar padrão". */}
+                                    <button
+                                        onClick={() => inventoryResize.autoFit()}
+                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                        title="Ajustar largura das colunas ao conteúdo"
+                                    >
+                                        <MoveHorizontal className="w-4 h-4" />
+                                    </button>
                                     <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                                 </>
                             )}
@@ -1139,31 +1160,58 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 const isVisible = (key: string) => visible.includes(key) && (
                                     INVENTORY_COLUMNS.find(c => c.key === key)?.context === 'all' || !!selectedBuildingId
                                 );
-                                const colSpan = 1 + INVENTORY_COLUMNS.filter(c => isVisible(c.key)).length;
+                                // +2: checkbox + espaçador (não entram no filter acima)
+                                const colSpan = 2 + INVENTORY_COLUMNS.filter(c => isVisible(c.key)).length;
                                 const sortHeaderProps = {
                                     sortColumn: inventoryColumns.sortColumn,
                                     sortDirection: inventoryColumns.sortDirection,
                                     onSort: inventoryColumns.handleColumnSort,
                                     uppercase: false as const,
                                 };
+                                const inventoryTableTotalWidth = 40
+                                    + INVENTORY_COLUMNS.filter(c => c.key !== 'actions')
+                                        .reduce((sum, c) => sum + (isVisible(c.key) ? inventoryResize.getWidth(c.key) : 0), 0)
+                                    + inventoryResize.getWidth('actions');
                                 return (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse">
+                                    <table ref={inventoryResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: inventoryTableTotalWidth, minWidth: '100%' }}>
+                                        <colgroup>
+                                            <col style={{ width: '40px' }} /> {/* checkbox */}
+                                            {isVisible('name') && <col data-col-key="name" style={{ width: `${inventoryResize.getWidth('name')}px` }} />}
+                                            {isVisible('address') && <col data-col-key="address" style={{ width: `${inventoryResize.getWidth('address')}px` }} />}
+                                            {isVisible('block') && <col data-col-key="block" style={{ width: `${inventoryResize.getWidth('block')}px` }} />}
+                                            {isVisible('private_area') && <col data-col-key="private_area" style={{ width: `${inventoryResize.getWidth('private_area')}px` }} />}
+                                            {isVisible('price') && <col data-col-key="price" style={{ width: `${inventoryResize.getWidth('price')}px` }} />}
+                                            {isVisible('price_per_m2') && <col data-col-key="price_per_m2" style={{ width: `${inventoryResize.getWidth('price_per_m2')}px` }} />}
+                                            {isVisible('position_weight') && <col data-col-key="position_weight" style={{ width: `${inventoryResize.getWidth('position_weight')}px` }} />}
+                                            {isVisible('sun_weight') && <col data-col-key="sun_weight" style={{ width: `${inventoryResize.getWidth('sun_weight')}px` }} />}
+                                            {isVisible('floor') && <col data-col-key="floor" style={{ width: `${inventoryResize.getWidth('floor')}px` }} />}
+                                            {isVisible('status') && <col data-col-key="status" style={{ width: `${inventoryResize.getWidth('status')}px` }} />}
+                                            {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                                borda de "Ações" não andar a cada redimensionamento. */}
+                                            <col />
+                                            <col data-col-key="actions" style={{ width: `${inventoryResize.getWidth('actions')}px` }} />
+                                        </colgroup>
                                         {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3) */}
                                         <thead>
                                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                 <th className="w-10 px-4 py-2 border-r border-gray-100 text-center"></th>
-                                                {isVisible('name') && <SortableHeader colKey="name" label="Imóvel" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                                {isVisible('address') && <SortableHeader colKey="address" label="Endereço / referência" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                                {isVisible('block') && <SortableHeader colKey="block" label="Bloco" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                                {isVisible('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
-                                                {isVisible('price') && <SortableHeader colKey="price" label="Preço" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
-                                                {isVisible('price_per_m2') && <SortableHeader colKey="price_per_m2" label="Vlr/m²" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
-                                                {isVisible('position_weight') && <SortableHeader colKey="position_weight" label="Peso pos." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                                {isVisible('sun_weight') && <SortableHeader colKey="sun_weight" label="Peso sol" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                                {isVisible('floor') && <SortableHeader colKey="floor" label="Andar" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                                {isVisible('status') && <SortableHeader colKey="status" label="Status" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                {isVisible('name') && <SortableHeader colKey="name" label="Imóvel" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="name" /></SortableHeader>}
+                                                {isVisible('address') && <SortableHeader colKey="address" label="Endereço / referência" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="address" /></SortableHeader>}
+                                                {isVisible('block') && <SortableHeader colKey="block" label="Bloco" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="block" /></SortableHeader>}
+                                                {isVisible('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><inventoryResize.ResizeHandle colKey="private_area" /></SortableHeader>}
+                                                {isVisible('price') && <SortableHeader colKey="price" label="Preço" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><inventoryResize.ResizeHandle colKey="price" /></SortableHeader>}
+                                                {isVisible('price_per_m2') && <SortableHeader colKey="price_per_m2" label="Vlr/m²" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><inventoryResize.ResizeHandle colKey="price_per_m2" /></SortableHeader>}
+                                                {isVisible('position_weight') && <SortableHeader colKey="position_weight" label="Peso pos." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="position_weight" /></SortableHeader>}
+                                                {isVisible('sun_weight') && <SortableHeader colKey="sun_weight" label="Peso sol" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="sun_weight" /></SortableHeader>}
+                                                {isVisible('floor') && <SortableHeader colKey="floor" label="Andar" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="floor" /></SortableHeader>}
+                                                {isVisible('status') && <SortableHeader colKey="status" label="Status" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="status" /></SortableHeader>}
+                                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                                <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                    Ações
+                                                    <inventoryResize.ResizeHandle colKey="actions" />
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
@@ -1246,6 +1294,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                     </span>
                                                                 </td>
                                                             )}
+                                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             <td className="px-6 py-2.5 text-right">
                                                                 <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                                                                     <button
@@ -1289,6 +1339,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                 <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>{getStatusLabel(property.status)}</span>
                                                             </td>
                                                         )}
+                                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                         <td className="px-6 py-2.5 text-right">
                                                             <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                                 <ActionIconButton kind="edit" onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} />
@@ -1575,6 +1627,15 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                             onToggleColumn={dealsColumns.toggleColumn}
                                             onReset={dealsColumns.resetColumns}
                                         />
+                                        {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                            Duplo clique no divisor segue "restaurar padrão". */}
+                                        <button
+                                            onClick={() => dealsResize.autoFit()}
+                                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                            title="Ajustar largura das colunas ao conteúdo"
+                                        >
+                                            <MoveHorizontal className="w-4 h-4" />
+                                        </button>
                                         <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                                     </>
                                 )}
@@ -1663,26 +1724,52 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 onSort: dealsColumns.handleColumnSort,
                                 uppercase: false as const,
                             };
+                            const dealsTableTotalWidth = DEALS_COLUMNS.filter(c => c.key !== 'actions')
+                                .reduce((sum, c) => sum + (dv.includes(c.key) ? dealsResize.getWidth(c.key) : 0), 0)
+                                + dealsResize.getWidth('actions');
                             return (
                             <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
                                 <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
+                                <table ref={dealsResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: dealsTableTotalWidth, minWidth: '100%' }}>
+                                    <colgroup>
+                                        {dv.includes('code') && <col data-col-key="code" style={{ width: `${dealsResize.getWidth('code')}px` }} />}
+                                        {dv.includes('property') && <col data-col-key="property" style={{ width: `${dealsResize.getWidth('property')}px` }} />}
+                                        {dv.includes('block') && <col data-col-key="block" style={{ width: `${dealsResize.getWidth('block')}px` }} />}
+                                        {dv.includes('private_area') && <col data-col-key="private_area" style={{ width: `${dealsResize.getWidth('private_area')}px` }} />}
+                                        {dv.includes('price_base') && <col data-col-key="price_base" style={{ width: `${dealsResize.getWidth('price_base')}px` }} />}
+                                        {dv.includes('price_per_m2_base') && <col data-col-key="price_per_m2_base" style={{ width: `${dealsResize.getWidth('price_per_m2_base')}px` }} />}
+                                        {dv.includes('floor') && <col data-col-key="floor" style={{ width: `${dealsResize.getWidth('floor')}px` }} />}
+                                        {dv.includes('sale_value') && <col data-col-key="sale_value" style={{ width: `${dealsResize.getWidth('sale_value')}px` }} />}
+                                        {dv.includes('sale_value_per_m2') && <col data-col-key="sale_value_per_m2" style={{ width: `${dealsResize.getWidth('sale_value_per_m2')}px` }} />}
+                                        {dv.includes('variance') && <col data-col-key="variance" style={{ width: `${dealsResize.getWidth('variance')}px` }} />}
+                                        {dv.includes('variance_pct') && <col data-col-key="variance_pct" style={{ width: `${dealsResize.getWidth('variance_pct')}px` }} />}
+                                        {dv.includes('status') && <col data-col-key="status" style={{ width: `${dealsResize.getWidth('status')}px` }} />}
+                                        {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                            borda de "Ações" não andar a cada redimensionamento. */}
+                                        <col />
+                                        <col data-col-key="actions" style={{ width: `${dealsResize.getWidth('actions')}px` }} />
+                                    </colgroup>
                                     {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3) */}
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            {dv.includes('code') && <SortableHeader colKey="code" label="Código" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
-                                            {dv.includes('property') && <SortableHeader colKey="property" label="Imóvel" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                            {dv.includes('block') && <SortableHeader colKey="block" label="Bloco" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />}
-                                            {dv.includes('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap" />}
-                                            {dv.includes('price_base') && <SortableHeader colKey="price_base" label="Preço base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
-                                            {dv.includes('price_per_m2_base') && <SortableHeader colKey="price_per_m2_base" label="Vlr/m² base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
-                                            {dv.includes('floor') && <SortableHeader colKey="floor" label="Andar" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />}
-                                            {dv.includes('sale_value') && <SortableHeader colKey="sale_value" label="Vlr venda" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
-                                            {dv.includes('sale_value_per_m2') && <SortableHeader colKey="sale_value_per_m2" label="Vlr venda/m²" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
-                                            {dv.includes('variance') && <SortableHeader colKey="variance" label="Var. (R$)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
-                                            {dv.includes('variance_pct') && <SortableHeader colKey="variance_pct" label="Var. (%)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap" />}
-                                            {dv.includes('status') && <SortableHeader colKey="status" label="Status" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
-                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                            {dv.includes('code') && <SortableHeader colKey="code" label="Código" {...dSortProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="code" /></SortableHeader>}
+                                            {dv.includes('property') && <SortableHeader colKey="property" label="Imóvel" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="property" /></SortableHeader>}
+                                            {dv.includes('block') && <SortableHeader colKey="block" label="Bloco" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"><dealsResize.ResizeHandle colKey="block" /></SortableHeader>}
+                                            {dv.includes('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="private_area" /></SortableHeader>}
+                                            {dv.includes('price_base') && <SortableHeader colKey="price_base" label="Preço base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="price_base" /></SortableHeader>}
+                                            {dv.includes('price_per_m2_base') && <SortableHeader colKey="price_per_m2_base" label="Vlr/m² base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="price_per_m2_base" /></SortableHeader>}
+                                            {dv.includes('floor') && <SortableHeader colKey="floor" label="Andar" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"><dealsResize.ResizeHandle colKey="floor" /></SortableHeader>}
+                                            {dv.includes('sale_value') && <SortableHeader colKey="sale_value" label="Vlr venda" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="sale_value" /></SortableHeader>}
+                                            {dv.includes('sale_value_per_m2') && <SortableHeader colKey="sale_value_per_m2" label="Vlr venda/m²" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="sale_value_per_m2" /></SortableHeader>}
+                                            {dv.includes('variance') && <SortableHeader colKey="variance" label="Var. (R$)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="variance" /></SortableHeader>}
+                                            {dv.includes('variance_pct') && <SortableHeader colKey="variance_pct" label="Var. (%)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="variance_pct" /></SortableHeader>}
+                                            {dv.includes('status') && <SortableHeader colKey="status" label="Status" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="status" /></SortableHeader>}
+                                            {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                            <th aria-hidden="true" className="border-r border-gray-100" />
+                                            <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                Ações
+                                                <dealsResize.ResizeHandle colKey="actions" />
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">

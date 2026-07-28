@@ -116,3 +116,15 @@ export interface OpuraElectricalTakeoff {
     createdAt: string;
     updatedAt: string;
 }
+
+
+export interface OpuraElectricalElement {
+    id: string;
+    organizationId: string;
+    planId: string;
+    type: string;
+    points: any;
+    properties?: Record<string, any>;
+    createdAt: string;
+    updatedAt: string;
+}

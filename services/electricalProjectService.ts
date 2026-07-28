@@ -5,6 +5,7 @@ import {
   OpuraElectricalPlan, 
   OpuraElectricalRoom,
   OpuraElectricalWall,
+  OpuraElectricalElement,
   OpuraElectricalPoint,
   OpuraElectricalBoard,
   OpuraElectricalCircuit,

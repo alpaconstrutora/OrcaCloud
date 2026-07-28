@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
@@ -24,12 +24,13 @@ import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
 import ContractRenewalsPanel from './rentals/ContractRenewalsPanel';
+import RentalGuaranteePanel from './rentals/RentalGuaranteePanel';
 import DocumentVersionsPanel from './contracts/DocumentVersionsPanel';
 import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
 
-type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato';
+type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato' | 'garantias';
 
 /** Data BR por split — `new Date(iso)` retrocede um dia em UTC-3. */
 const fmtDateBR = (iso?: string) => {
@@ -1423,6 +1424,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             icon: <PenLine className="w-4 h-4" />,
             badge: !!hasContratoContent
         },
+        // Só locação: garantia locatícia é regida pela Lei do Inquilinato e não
+        // existe em venda de ativo nem em prestação de serviço.
+        ...(formData.type === 'RENTAL' ? [{
+            id: 'garantias' as TabId,
+            label: 'Garantias Locatícias',
+            icon: <ShieldCheck className="w-4 h-4" />,
+            badge: !linkedContract,
+        }] : []),
     ];
 
     // `absolute` (não `fixed`): Layout.tsx tem <main className="relative"> abaixo da
@@ -1501,6 +1510,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     : tab.id === 'unidade' && hasMissingProperty ? 'bg-red-400'
                                     : tab.id === 'partes' && hasBroker ? 'bg-amber-400'
                                     : tab.id === 'contrato' && hasContratoContent ? 'bg-blue-400'
+                                    // Sem contrato gerado não há a que prender a garantia — vermelho.
+                                    : tab.id === 'garantias' && !linkedContract ? 'bg-red-400'
                                     : tab.id === 'parcelas' && tab.badge ? 'bg-blue-400'
                                     : null;
                                 return (
@@ -2711,6 +2722,36 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 )}
                             </div>
                         </div>
+                    )}
+
+                    {/* ══════════════════════════════════════════
+                        ABA 6 — GARANTIAS LOCATÍCIAS
+                        A garantia pertence ao CONTRATO, não à negociação: é ele
+                        que a Lei do Inquilinato regula, e é dele que a garantia
+                        precisa herdar vigência e valor do aluguel. Por isso a
+                        aba mora aqui (onde o usuário trabalha) mas exige o
+                        contrato gerado — sem ele não há a que prender.
+                    ══════════════════════════════════════════ */}
+                    {activeTab === 'garantias' && (
+                        linkedContract ? (
+                            <RentalGuaranteePanel
+                                contract={linkedContract}
+                                onNotify={(msg, type) => {
+                                    if (type === 'error') notifyError(msg);
+                                    else { setSavedNotice(true); setTimeout(() => setSavedNotice(false), 3000); }
+                                }}
+                            />
+                        ) : (
+                            <div className="text-center py-12">
+                                <ShieldCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Contrato ainda não gerado</h3>
+                                <p className="text-sm text-gray-500 max-w-md mx-auto">
+                                    A garantia locatícia é vinculada ao contrato — vigência, valor do
+                                    aluguel e as regras da Lei 8.245/91 saem dele. Gere o contrato na
+                                    aba Contrato para cadastrar a garantia.
+                                </p>
+                            </div>
+                        )
                     )}
 
                     {/* ══════════════════════════════════════════

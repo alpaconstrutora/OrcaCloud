@@ -42,7 +42,11 @@ import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
 import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
 
-const GUARANTEE_KIND_LABELS: Record<GuaranteeKind, string> = {
+// Só as modalidades de OBRA/suprimentos. As de locação (seguro-fiança, cessão
+// fiduciária, sem garantia) têm tela própria — Gerenciar Negociação › Garantias
+// Locatícias — porque o ciclo de vida delas é outro (versionamento, art. 43,
+// caução como passivo). `contractGuaranteeService.list` já filtra scope='OBRA'.
+const GUARANTEE_KIND_LABELS: Partial<Record<GuaranteeKind, string>> = {
     RC_GERAL: 'RC Geral',
     RC_PROFISSIONAL: 'RC Profissional',
     SEGURO_GARANTIA: 'Seguro-Garantia',
@@ -83,6 +87,7 @@ import { webhookService } from '../services/webhookService';
 import { supplierService } from '../services/supplierService';
 import { Organization } from '../types';
 import Button from './ui/Button';
+import { KpiCard } from './ui/KpiCard';
 
 // ─── Avulso helpers ────────────────────────────────────────────────────────────
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
@@ -985,9 +990,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
     if (loading || !contract) {
         return (
-            <div className="flex flex-col items-center justify-center p-20 space-y-4">
-                <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" />
-                <p className="text-gray-400 font-medium animate-pulse uppercase tracking-widest text-xs">Carregando Dossiê Contratual...</p>
+            /* §11 — spinner canônico do guia */
+            <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-500">Carregando...</p>
             </div>
         );
     }
@@ -999,23 +1005,24 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onBack}
-                        className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group"
+                        className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
                     >
-                        <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     </button>
                     <div>
+                        {/* §16/§6.2: sentence case — sem uppercase tracking-widest */}
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-medium text-blue-500 uppercase tracking-widest">{contract.number}</span>
+                            <span className="text-xs font-medium text-blue-600">{contract.number}</span>
                             <span className="w-1 h-1 bg-gray-300 rounded-full" />
-                            <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">{contract.contract_type}</span>
+                            <span className="text-xs font-medium text-gray-400">{contract.contract_type}</span>
                         </div>
-                        <h1 className="text-xl font-medium text-gray-900 tracking-tight uppercase leading-none">{contract.title}</h1>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">{contract.title}</h1>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex flex-col items-end mr-4">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Saldo Contratual</p>
-                        <p className="text-lg font-medium text-gray-900 tracking-tighter">
+                        <p className="text-xs font-medium text-gray-400">Saldo contratual</p>
+                        <p className="text-lg font-medium text-gray-900 tracking-tight">
                             R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>
                     </div>
@@ -1023,10 +1030,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {contractTemplates.length > 0 && (
                         <button
                             onClick={() => setTemplatePdfModal(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-2xl hover:bg-blue-50 transition-all font-medium text-button uppercase tracking-widest shadow-sm"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
                             title="Gerar PDF usando modelo de contrato HTML"
                         >
-                            <FileText className="w-4 h-4" />
+                            <FileText className="w-[15px] h-[15px]" />
                             PDF via Modelo
                         </button>
                     )}
@@ -1034,10 +1041,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {onEdit && (
                         <button
                             onClick={() => onEdit(contract)}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 transition-all font-medium text-button uppercase tracking-widest shadow-sm"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
                             title="Editar dados do contrato"
                         >
-                            <Edit3 className="w-4 h-4 text-gray-500" />
+                            <Edit3 className="w-[15px] h-[15px] text-gray-500" />
                             Editar
                         </button>
                     )}
@@ -1045,22 +1052,25 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <button
                         onClick={handleSyncFinance}
                         disabled={syncingFinance}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-button uppercase tracking-widest shadow-sm disabled:opacity-50"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-emerald-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-50"
                         title="Lançar / Re-lançar este contrato no módulo financeiro"
                     >
-                        <DollarSign className="w-4 h-4" />
+                        <DollarSign className="w-[15px] h-[15px]" />
                         {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
                     </button>
 
-                    <Button
+                    {/* §17: ação primária compacta. Não usar o <Button> compartilhado
+                        aqui — a classe BASE dele herda font-black uppercase
+                        tracking-widest + shadow pesado, que o §17 removeu. */}
+                    <button
                         onClick={() => handleSendWebhook()}
                         disabled={loading}
-                        className="rounded-2xl shadow-xl shadow-blue-200"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
                         title="Enviar para Automação (Make.com)"
                     >
-                        <Zap className="w-4 h-4" />
-                        Enviar Automação
-                    </Button>
+                        <Zap className="w-[15px] h-[15px]" />
+                        Enviar automação
+                    </button>
 
                     {/* Gerar Obra — visível apenas para contratos OUTGOING assinados/ativos sem obra vinculada */}
                     {(contract as any).direction === 'OUTGOING' && !contract.project_id && ['Assinado', 'Ativo'].includes(contract.status) && (
@@ -1081,9 +1091,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
                                 }
                             }}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-200 font-medium text-button uppercase tracking-widest"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 transition-all active:scale-95 shrink-0 font-medium text-[13px]"
                         >
-                            <Layers className="w-4 h-4" />
+                            <Layers className="w-[15px] h-[15px]" />
                             Gerar Obra
                         </button>
                     )}
@@ -1091,7 +1101,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 </div>
             </div>
 
-            <div className="flex bg-white p-1.5 rounded-3xl border border-gray-100 shadow-sm w-fit sticky top-4 z-40 backdrop-blur-md bg-white/80">
+            {/* §19.1 — trilho cinza dentro de card branco, flex-wrap (nunca
+                overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
+                (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit max-w-full sticky top-4 z-40">
                 {(contract.is_recurring ? [
                     { id: 'overview', label: 'Visão Geral', icon: Layers },
                     { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
@@ -1106,26 +1119,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao')}
-                        className={`flex items-center gap-2 px-5 py-2 rounded-2xl transition-all font-medium text-button uppercase tracking-widest ${activeTab === tab.id
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-400 hover:text-gray-600'
                             }`}
                     >
-                        <tab.icon className="w-4 h-4" />
+                        <tab.icon className="w-3.5 h-3.5" />
                         {tab.label}
                     </button>
                 ))}
             </div>
 
             {hasDivergence && (
-                <div className="bg-amber-50 border border-amber-100 p-4 rounded-[32px] flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
+                <div className="bg-amber-50 border border-amber-100 p-4 rounded-[10px] flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center">
-                            <AlertCircle className="w-6 h-6 text-amber-600" />
+                        <div className="w-10 h-10 bg-amber-100 rounded-[6px] flex items-center justify-center shrink-0">
+                            <AlertCircle className="w-5 h-5 text-amber-600" />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-amber-900 uppercase tracking-tight">Divergência Orçamentária Detectada</p>
-                            <p className="text-xs font-medium text-amber-700 uppercase leading-relaxed">
+                            <p className="text-sm font-medium text-amber-900">Divergência orçamentária detectada</p>
+                            <p className="text-xs font-medium text-amber-700 leading-relaxed">
                                 O valor total do contrato difere do planejado no orçamento.<br />
                                 Contrato: <span className="text-amber-900">R$ {contract?.original_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span> |
                                 Orçamento: <span className="text-amber-900">R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -1134,9 +1147,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
                     <button
                         onClick={handleAdjustToBudget}
-                        className="px-6 py-3 bg-amber-600 text-white text-button font-medium uppercase tracking-widest rounded-xl hover:bg-amber-700 transition-all shadow-sm flex items-center gap-2"
+                        className="h-9 px-3.5 bg-amber-600 text-white text-[13px] font-medium rounded-[6px] hover:bg-amber-700 transition-all active:scale-95 shrink-0 flex items-center gap-1.5"
                     >
-                        <TrendingUp className="w-4 h-4" /> Ajustar pelo Orçado
+                        <TrendingUp className="w-[15px] h-[15px]" /> Ajustar pelo orçado
                     </button>
                 </div>
             )}
@@ -1733,7 +1746,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors"
                                             >
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-semibold text-gray-800">{GUARANTEE_KIND_LABELS[g.kind]}</span>
+                                                    <span className="text-xs font-semibold text-gray-800">{GUARANTEE_KIND_LABELS[g.kind] || g.kind}</span>
                                                     <span className={`text-sm font-normal ${statusColor}`}>{statusLabel}</span>
                                                 </div>
                                                 <div className="flex items-center justify-between mt-1">
@@ -1968,112 +1981,110 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Tab: Itens do Contrato */}
             {activeTab === 'items' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    {/* Summary Dashboard */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Total Orçado (WBS)</p>
-                            <h3 className="text-xl font-medium text-gray-900 tracking-tight">R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
-                        </div>
-                        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Total Contratado</p>
-                            <h3 className="text-xl font-medium text-gray-900 tracking-tight">R$ {totalContracted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
-                        </div>
+                    {/* §4 — KpiCard canônico, uma cor semântica por métrica.
+                        Antes eram três cards reimplementados à mão. */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                        <KpiCard shadow={false} size="sm" label="Total orçado (WBS)" color="blue"
+                            icon={<Layers className="w-4 h-4" />}
+                            value={`R$ ${totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                        <KpiCard shadow={false} size="sm" label="Total contratado" color="indigo"
+                            icon={<FileText className="w-4 h-4" />}
+                            value={`R$ ${totalContracted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
                         {(() => {
                             const diff = totalBudgeted - totalContracted;
                             const percent = totalBudgeted > 0 ? (diff / totalBudgeted) * 100 : 0;
                             return (
-                                <div className={`p-6 rounded-3xl border shadow-sm ${diff >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                                    <p className={`text-xs font-medium uppercase tracking-widest mb-1 ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                        {diff >= 0 ? 'Economia Gerada' : 'Excesso de Custo'}
-                                    </p>
-                                    <div className="flex items-baseline gap-2">
-                                        <h3 className={`text-xl font-medium tracking-tight ${diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                            {diff >= 0 ? '+' : ''} R$ {diff.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                        </h3>
-                                        <span className={`text-xs font-medium ${diff >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                            ({percent.toFixed(1)}%)
-                                        </span>
-                                    </div>
-                                </div>
+                                <KpiCard
+                                    shadow={false}
+                                    size="sm"
+                                    label={diff >= 0 ? 'Economia gerada' : 'Excesso de custo'}
+                                    color={diff >= 0 ? 'emerald' : 'red'}
+                                    icon={<TrendingUp className="w-4 h-4" />}
+                                    value={`${diff >= 0 ? '+' : ''} R$ ${diff.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${percent.toFixed(1)}%)`}
+                                />
                             );
                         })()}
                     </div>
 
-                    <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-                        <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
+                    {/* §5.2 — toolbar e tabela num único card (escala compacta §16) */}
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+                        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row md:justify-between md:items-center gap-2.5 bg-white">
                             <div>
-                                <h3 className="text-lg font-medium text-gray-900 tracking-tight uppercase">Planilha de Itens Contratados</h3>
-                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">Vínculo direto com o orçamento da obra (WBS)</p>
+                                <h3 className="text-sm font-semibold text-gray-900">Planilha de itens contratados</h3>
+                                <p className="text-xs font-medium text-gray-400 mt-0.5">Vínculo direto com o orçamento da obra (WBS)</p>
                             </div>
-                            <div className="flex items-center gap-3">
+                            {/* §17 — ação primária é a única azul sólida; a secundária é neutra */}
+                            <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
-                                    className="flex items-center gap-2 px-5 py-3 bg-orange-50 border border-orange-200 text-orange-700 rounded-xl hover:bg-orange-100 transition-all font-medium text-button uppercase tracking-widest"
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
                                 >
-                                    <Package className="w-4 h-4" /> Item Avulso
+                                    <Package className="w-[15px] h-[15px]" /> Item avulso
                                 </button>
                                 <button
                                     onClick={() => setIsBudgetPickerOpen(true)}
-                                    className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-blue-600 transition-all font-medium text-button uppercase tracking-widest"
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0"
                                 >
-                                    <PlusCircle className="w-4 h-4" /> Importar do Orçamento
+                                    <PlusCircle className="w-[15px] h-[15px]" /> Importar do orçamento
                                 </button>
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 border-y border-gray-100">
-                                    <tr>
-                                        <th className="px-8 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">WBS / Item</th>
-                                        <th className="px-6 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Descrição</th>
-                                        <th className="px-2 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-center">Unid</th>
-                                        <th className="px-4 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Qtd</th>
-                                        <th className="px-4 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right border-l border-gray-100">Unit (C)</th>
-                                        <th className="px-4 py-3 text-table-header font-medium text-blue-500 uppercase tracking-widest text-right bg-blue-50/30">Unit (O)</th>
-                                        <th className="px-4 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right border-l border-gray-100">Total (C)</th>
-                                        <th className="px-4 py-3 text-table-header font-medium text-blue-500 uppercase tracking-widest text-right bg-blue-50/30">Total (O)</th>
-                                        <th className="px-8 py-3 text-table-header font-medium text-emerald-600 uppercase tracking-widest text-right bg-emerald-50/30 border-l border-emerald-100">Economia</th>
-                                        <th className="px-6 py-3 w-10"></th>
+                        {/* §6.5 — rolagem própria para o thead sticky funcionar */}
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table className="w-full text-left border-collapse">
+                                {/* §6.2 sentence case + §6.6 px-6 e border-r em todo cabeçalho.
+                                    Siglas (WBS, C, O) seguem maiúsculas — exceção do §6.2. */}
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">WBS / item</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Descrição</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-center">Unid.</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd.</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Unit. (C)</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/30">Unit. (O)</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Total (C)</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/30">Total (O)</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-right text-emerald-600 bg-emerald-50/30">Economia</th>
+                                        <th className="px-6 py-2 text-right">Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50">
+                                <tbody className="divide-y divide-gray-200">
                                     {items.length === 0 ? (
                                         <tr>
-                                            <td colSpan={10} className="px-8 py-20 text-center">
-                                                <div className="max-w-xs mx-auto space-y-4">
-                                                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
-                                                        <FileText className="w-8 h-8 text-gray-200" />
-                                                    </div>
-                                                    <p className="text-sm font-bold text-gray-400">Nenhum item vinculado a este contrato.</p>
-                                                    <button onClick={() => setIsBudgetPickerOpen(true)} className="text-button font-black text-blue-600 uppercase tracking-widest hover:underline">Adicionar Primeiro Item</button>
-                                                </div>
+                                            {/* §12 — empty state canônico */}
+                                            <td colSpan={10} className="text-center py-12">
+                                                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item vinculado a este contrato</h3>
+                                                <p className="text-sm text-gray-500 mb-6">Importe do orçamento da obra ou cadastre um item avulso.</p>
+                                                <button onClick={() => setIsBudgetPickerOpen(true)} className="text-blue-600 font-bold hover:underline">
+                                                    Adicionar primeiro item
+                                                </button>
                                             </td>
                                         </tr>
                                     ) : items.map((item) => (
-                                        <tr key={item.id} className="hover:bg-blue-50/20 transition-colors group">
-                                            <td className="px-8 py-4">
+                                        <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
+                                            {/* §8: código/AVULSO viram texto simples — sem pílula, fundo ou uppercase */}
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
                                                 {item.budget_item_id === 'AVULSO' || (!item.budget_item_id) ? (
-                                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-md text-xs font-medium uppercase tracking-wider border border-orange-200 flex items-center gap-1 w-fit">
-                                                        <Package className="w-3 h-3" /> AVULSO
+                                                    <span className="flex items-center gap-1.5 text-orange-600">
+                                                        <Package className="w-3.5 h-3.5 shrink-0" /> Avulso
                                                     </span>
                                                 ) : (
-                                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md text-xs font-medium uppercase tracking-wider border border-gray-200">
-                                                        {item.budget_item_id}
-                                                    </span>
+                                                    <span className="text-gray-600">{item.budget_item_id}</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-2.5 border-r border-gray-100">
                                                 <div className="flex flex-col">
-                                                    <p className="text-sm font-normal text-gray-700 tracking-tight leading-tight">{item.description}</p>
+                                                    <p className="text-sm font-normal text-gray-700 leading-tight">{item.description}</p>
                                                     <div className="flex items-center gap-3 mt-1">
-                                                        <p className="text-xs text-gray-400 font-medium tracking-tighter">ID: {item.id.slice(0, 8)}</p>
+                                                        <p className="text-xs text-gray-400 font-medium">ID: {item.id.slice(0, 8)}</p>
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 handleViewItemHistory(item);
                                                             }}
-                                                            className="flex items-center gap-1.5 text-button font-medium text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-tight"
+                                                            className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
                                                             title="Ver Histórico de Medições"
                                                         >
                                                             <History className="w-3 h-3" /> Histórico
@@ -2081,57 +2092,55 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-2 py-4 text-center">
-                                                <span className="text-xs font-medium text-gray-400 uppercase">{item.unit}</span>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-gray-600">
+                                                {item.unit}
                                             </td>
-                                            <td className="px-4 py-4 text-right">
-                                                <p className="text-sm font-medium text-gray-900 tracking-tighter">{item.quantity.toLocaleString()}</p>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
+                                                {item.quantity.toLocaleString()}
                                             </td>
-                                            <td className="px-4 py-4 text-right border-l border-gray-50">
-                                                <p className="text-xs font-medium text-gray-700">R$ {item.unit_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            {/* §7: valor financeiro é o único caso com font-medium */}
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                                R$ {item.unit_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </td>
-                                            <td className="px-4 py-4 text-right bg-blue-50/10">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-blue-50/10 text-sm font-medium text-blue-600">
                                                 {(() => {
                                                     const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                                                    if (!bItem) return <span className="text-gray-300">-</span>;
-                                                    return (
-                                                        <p className="text-xs font-medium text-blue-600">R$ {bItem.sinapiItem.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                                    );
+                                                    if (!bItem) return <span className="font-normal text-gray-400">—</span>;
+                                                    return <>R$ {bItem.sinapiItem.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>;
                                                 })()}
                                             </td>
-                                            <td className="px-4 py-4 text-right border-l border-gray-50">
-                                                <p className="text-sm font-medium text-gray-900 tracking-tighter">R$ {item.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                                R$ {item.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </td>
-                                            <td className="px-4 py-4 text-right bg-blue-50/10">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-blue-50/10 text-sm font-medium text-blue-600">
                                                 {(() => {
                                                     const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                                                    if (!bItem) return <span className="text-gray-300">-</span>;
+                                                    if (!bItem) return <span className="font-normal text-gray-400">—</span>;
                                                     const totalBudgeted = bItem.sinapiItem.price * item.quantity;
-                                                    return (
-                                                        <p className="text-xs font-medium text-blue-600">R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                                                    );
+                                                    return <>R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>;
                                                 })()}
                                             </td>
-                                            <td className="px-8 py-4 text-right bg-emerald-50/10 border-l border-emerald-50">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-emerald-50/10">
                                                 {(() => {
                                                     const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                                                    if (!bItem) return <span className="text-gray-300 font-medium">-</span>;
+                                                    if (!bItem) return <span className="text-sm font-normal text-gray-400">—</span>;
                                                     const saving = (bItem.sinapiItem.price - item.unit_price) * item.quantity;
                                                     const percent = ((bItem.sinapiItem.price - item.unit_price) / bItem.sinapiItem.price) * 100;
                                                     return (
                                                         <div className="flex flex-col items-end">
-                                                            <p className={`text-sm font-medium tracking-tighter ${saving >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                            <p className={`text-sm font-medium ${saving >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                                                 {saving >= 0 ? '+' : ''} R$ {saving.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                             </p>
-                                                            <p className={`text-xs font-medium uppercase tracking-tighter ${saving >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                            <p className={`text-xs font-medium ${saving >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                                                                 {saving >= 0 ? '↓' : '↑'} {Math.abs(percent).toFixed(1)}%
                                                             </p>
                                                         </div>
                                                     );
                                                 })()}
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {/* §9 — coluna de ações SEMPRE visível (nada de opacity-0 group-hover) */}
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                     {(item.budget_item_id === 'AVULSO' || !item.budget_item_id || item.budget_item_id === item.budget_item_id) && (
                                                         <ActionIconButton
                                                             kind="edit"
@@ -2164,10 +2173,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                     {/* Matriz de Fornecimento (Fase 8.1 — Anexo II, Cl.11) */}
                     {contract && (
-                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                        <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
-                                    <Package className="w-4 h-4 text-blue-600" /> Matriz de Fornecimento
+                                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                    <Package className="w-4 h-4 text-blue-600" /> Matriz de fornecimento
                                 </h3>
                                 <button type="button" onClick={() => setSupplyMatrixModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
                                     + Adicionar
@@ -2176,25 +2185,25 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             {supplyMatrixItems.length === 0 ? (
                                 <p className="text-xs text-gray-400">Nenhum item cadastrado (Anexo II).</p>
                             ) : (
-                                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                                     <table className="w-full text-left border-collapse">
-                                        <thead className="bg-gray-50 border-b border-gray-100">
-                                            <tr>
-                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Item</th>
-                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Fornece</th>
-                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Transporta</th>
-                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Guarda</th>
-                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Instala</th>
+                                        <thead>
+                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <th className="px-6 py-2 border-r border-gray-100">Item</th>
+                                                <th className="px-6 py-2 border-r border-gray-100">Fornece</th>
+                                                <th className="px-6 py-2 border-r border-gray-100">Transporta</th>
+                                                <th className="px-6 py-2 border-r border-gray-100">Guarda</th>
+                                                <th className="px-6 py-2">Instala</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-50">
+                                        <tbody className="divide-y divide-gray-200">
                                             {supplyMatrixItems.map(row => (
-                                                <tr key={row.id} className="hover:bg-blue-50/20 cursor-pointer transition-all" onClick={() => setSupplyMatrixModal({ open: true, editing: row })}>
-                                                    <td className="px-4 py-2.5 text-sm text-gray-700">{row.item}</td>
-                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.supplies || '—'}</td>
-                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.transports || '—'}</td>
-                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.stores || '—'}</td>
-                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.installs || '—'}</td>
+                                                <tr key={row.id} className="hover:bg-blue-50/50 cursor-pointer transition-colors" onClick={() => setSupplyMatrixModal({ open: true, editing: row })}>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{row.item}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.supplies || '—'}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.transports || '—'}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.stores || '—'}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{row.installs || '—'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -2206,10 +2215,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                     {/* Matriz de Interfaces (Fase 8.1 — Anexo I) */}
                     {contract && (
-                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                        <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
-                                    <ArrowUpRight className="w-4 h-4 text-blue-600" /> Matriz de Interfaces
+                                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                    <ArrowUpRight className="w-4 h-4 text-blue-600" /> Matriz de interfaces
                                 </h3>
                                 <button type="button" onClick={() => setInterfaceModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
                                     + Adicionar
@@ -2221,7 +2230,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <div className="space-y-1.5">
                                     {contractInterfaces.map(row => (
                                         <button key={row.id} type="button" onClick={() => setInterfaceModal({ open: true, editing: row })}
-                                            className="w-full text-left flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">
+                                            className="w-full text-left flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-[6px] transition-colors">
                                             <span className="text-sm text-gray-700">{row.interface_event}</span>
                                             <span className="text-xs text-gray-400">{row.primary_responsible || '—'}</span>
                                         </button>

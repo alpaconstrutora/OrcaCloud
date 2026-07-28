@@ -6,7 +6,10 @@ import { useConfirm } from './ui/confirm';
 import { Contract, ContractGuarantee, GuaranteeKind, GuaranteeStatus } from '../types';
 import { contractGuaranteeService } from '../services/contractGuaranteeService';
 
-const KIND_LABELS: Record<GuaranteeKind, string> = {
+// Modalidades de OBRA/suprimentos apenas — locação usa RentalGuaranteePanel,
+// que versiona a garantia e aplica as regras da Lei 8.245/91. Editar uma
+// garantia de locação por este modal quebraria os invariantes de versão/ativa.
+const KIND_LABELS: Partial<Record<GuaranteeKind, string>> = {
     RC_GERAL: 'RC Geral',
     RC_PROFISSIONAL: 'RC Profissional',
     SEGURO_GARANTIA: 'Seguro-Garantia',
@@ -85,7 +88,7 @@ const ContractGuaranteeModal: React.FC<ContractGuaranteeModalProps> = ({ isOpen,
         if (!initialData) return;
         const ok = await confirm({
             title: 'Excluir seguro/garantia?',
-            message: `${KIND_LABELS[initialData.kind]} — ${initialData.insurer || 'sem seguradora'}. Esta ação não pode ser desfeita.`,
+            message: `${KIND_LABELS[initialData.kind] || initialData.kind} — ${initialData.insurer || 'sem seguradora'}. Esta ação não pode ser desfeita.`,
             variant: 'danger',
             confirmLabel: 'Excluir',
         });

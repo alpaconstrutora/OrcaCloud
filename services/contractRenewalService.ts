@@ -4,6 +4,7 @@ import {
 } from './contractService';
 import { contractIndexService, normalizeIndexName, IndexName } from './contractIndexService';
 import { commercialFinanceService } from './commercialFinanceService';
+import { rentalGuaranteeService } from './rentalGuaranteeService';
 import { Contract, ContractAddendum } from '../types';
 
 /**
@@ -383,6 +384,15 @@ export const contractRenewalService = {
             await contractService.approveAddendum(addendum.id, 'Renovação');
         }
 
+        // Prorrogação por aditivo: o contrato é o MESMO, então a garantia
+        // continua ativa (desativá-la deixaria um contrato vigente descoberto),
+        // mas passa a exigir reanálise — a vigência que ela cobria acabou.
+        try {
+            await rentalGuaranteeService.onContractRenewed(parent.id, { deactivate: false });
+        } catch (e) {
+            console.error('[RENEWAL] Falha ao marcar a garantia para reanálise:', e);
+        }
+
         const updatedParent = await fetchContract(parent.id);
         const saved = await contractService.getAddendumById(addendum.id);
         return { addendum: saved ?? addendum, parent: updatedParent, preview };
@@ -547,6 +557,19 @@ export const contractRenewalService = {
 
         // ── 4) Corta as parcelas futuras do pai ─────────────────────────────
         await contractRenewalService._cutFutureInstallments(parent, startDate);
+
+        // ── 5) Garantia locatícia: NÃO é herdada ────────────────────────────
+        // Decisão de produto (2026-07-28): renovar exige reanálise explícita da
+        // garantia. `guarantor_name` é clonado acima só porque é campo de texto
+        // dos modelos .docx — a garantia de verdade (fiador analisado, apólice,
+        // caução) fica encerrada no pai com `requires_reanalysis`, e o filho
+        // nasce sem garantia ativa até alguém aprovar. Falhar aqui não pode
+        // desfazer a renovação, que já está gravada: registra e segue.
+        try {
+            await rentalGuaranteeService.onContractRenewed(parent.id);
+        } catch (e) {
+            console.error('[RENEWAL] Falha ao marcar a garantia para reanálise:', e);
+        }
 
         return { child, parent: updatedParent, preview };
     },

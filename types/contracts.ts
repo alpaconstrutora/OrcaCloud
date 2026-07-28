@@ -294,19 +294,46 @@ export interface ContractUtilityBill {
 // PLANO_MODULO_CONTRATOS_GAPS.md
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Modalidade jurídica da garantia. Os oito primeiros valores são de OBRA/
+ * suprimentos (Fase 5 de Contratos); os três últimos são de LOCAÇÃO e vêm do
+ * rol taxativo do art. 37 da Lei 8.245/91 (+ a ausência formal de garantia).
+ *
+ * ⚠️ `SEGURO_FIANCA` (locatícia) é distinto de `SEGURO_GARANTIA` (performance
+ * de obra) — não reaproveitar um pelo outro.
+ */
 export type GuaranteeKind =
     | 'RC_GERAL' | 'RC_PROFISSIONAL' | 'SEGURO_GARANTIA' | 'FIANCA'
-    | 'CAUCAO' | 'EQUIPAMENTOS' | 'AMBIENTAL' | 'GARANTIA_ADIANTAMENTO';
+    | 'CAUCAO' | 'EQUIPAMENTOS' | 'AMBIENTAL' | 'GARANTIA_ADIANTAMENTO'
+    | 'SEM_GARANTIA' | 'SEGURO_FIANCA' | 'CESSAO_FIDUCIARIA';
 
-export type GuaranteeStatus = 'VIGENTE' | 'VENCIDA' | 'CANCELADA' | 'SUBSTITUIDA';
+/** Modalidades juridicamente admitidas num contrato de locação (art. 37). */
+export const RENTAL_GUARANTEE_KINDS = [
+    'SEM_GARANTIA', 'CAUCAO', 'FIANCA', 'SEGURO_FIANCA', 'CESSAO_FIDUCIARIA',
+] as const;
+export type RentalGuaranteeKind = typeof RENTAL_GUARANTEE_KINDS[number];
+
+export type GuaranteeStatus =
+    | 'VIGENTE' | 'VENCIDA' | 'CANCELADA' | 'SUBSTITUIDA'
+    | 'EM_ANALISE' | 'PENDENTE_DOCUMENTOS' | 'PENDENTE_ASSINATURA'
+    | 'PENDENTE_REGISTRO' | 'EM_RENOVACAO' | 'INSUFICIENTE'
+    | 'LIBERADA' | 'DEVOLVIDA';
+
+/** Espécie da caução. Só `DINHEIRO` tem ciclo financeiro na Fase 1. */
+export type CaucaoType = 'DINHEIRO' | 'BEM_MOVEL' | 'BEM_IMOVEL' | 'TITULOS' | 'QUOTAS';
+
+/** Separa o uso de obra (várias apólices por contrato) do de locação (uma só). */
+export type GuaranteeScope = 'OBRA' | 'LOCACAO';
 
 export interface ContractGuarantee {
     id: string;
     organization_id: string;
     contract_id: string;
     kind: GuaranteeKind;
+    /** Provedor da garantia (seguradora, banco, garantidora). */
     insurer?: string;
     policy_number?: string;
+    /** Limite ATUAL da cobertura — diverge de `guaranteed_value` após deduções. */
     coverage_limit?: number;
     premium?: number;
     valid_from?: string;
@@ -316,6 +343,130 @@ export interface ContractGuarantee {
     notes?: string;
     created_at?: string;
     updated_at?: string;
+
+    // ── Locação (migration 20270836000000) ──────────────────────────────────
+    scope?: GuaranteeScope;
+    /** Produto comercial, separado da modalidade jurídica (ex: título de capitalização). */
+    product_name?: string;
+    caucao_type?: CaucaoType;
+    /** Valor originalmente garantido. */
+    guaranteed_value?: number;
+    /** Equivalente em nº de aluguéis — base da conferência do art. 38 (máx. 3). */
+    rent_months_equivalent?: number;
+    cost_bearer?: 'LOCATARIO' | 'LOCADOR' | 'AMBOS';
+    scope_notes?: string;
+
+    /** Versionamento: substituir cria versão nova, não edita a existente. */
+    version?: number;
+    supersedes_id?: string;
+    substitution_reason?: string;
+    /** É a versão que vale hoje. A trava do art. 43 conta por este campo. */
+    is_active?: boolean;
+
+    registry_office?: string;
+    registry_protocol?: string;
+    registered_at?: string;
+
+    // Caução em dinheiro — o SALDO não mora aqui, é derivado do ledger.
+    deposit_bank?: string;
+    deposit_agency?: string;
+    deposit_account?: string;
+    deposit_account_holder?: string;
+    deposit_date?: string;
+
+    /** Renovação nunca herda garantia: marca que falta reanálise explícita. */
+    requires_reanalysis?: boolean;
+}
+
+export interface ContractGuarantor {
+    id: string;
+    organization_id: string;
+    guarantee_id: string;
+    person_type: 'PF' | 'PJ';
+    name: string;
+    document?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+
+    /** CC 1.647-1.649: fiança sem outorga é anulável, salvo separação absoluta. */
+    marital_status?: string;
+    marital_regime?: string;
+    spouse_name?: string;
+    spouse_document?: string;
+    spouse_consent: boolean;
+
+    monthly_income?: number;
+    net_worth?: number;
+    income_commitment_pct?: number;
+    properties_offered?: string;
+    analysis_result?: 'PENDENTE' | 'APROVADO' | 'REPROVADO';
+    analysis_notes?: string;
+    documents_valid_until?: string;
+    signed: boolean;
+
+    /** Caução em bem: o titular do bem também é registrado aqui. */
+    asset_description?: string;
+    asset_value?: number;
+    asset_valuation_date?: string;
+    asset_registration?: string;
+    asset_encumbrances?: string;
+
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface GuaranteeDocument {
+    id: string;
+    organization_id: string;
+    guarantee_id: string;
+    guarantor_id?: string;
+    label: string;
+    is_required: boolean;
+    received: boolean;
+    received_at?: string;
+    valid_until?: string;
+    file_url?: string;
+    notes?: string;
+    created_at?: string;
+}
+
+/**
+ * Movimento do ledger da caução em dinheiro.
+ *
+ * 🔴 `amount` é o efeito sobre o SALDO DEVIDO AO LOCATÁRIO, não sobre o caixa:
+ * DEPOSITO/RENDIMENTO são positivos, DEDUCAO/DEVOLUCAO são negativos (o banco
+ * trava o sinal por tipo). Caução é passivo — este ledger NÃO é sincronizado
+ * para `internal_transactions`, senão inflaria a receita de locação.
+ */
+export type GuaranteeDepositEventType = 'DEPOSITO' | 'RENDIMENTO' | 'DEDUCAO' | 'DEVOLUCAO';
+
+export interface GuaranteeDepositEvent {
+    id: string;
+    organization_id: string;
+    guarantee_id: string;
+    event_type: GuaranteeDepositEventType;
+    event_date: string;
+    amount: number;
+    description?: string;
+    document_url?: string;
+    created_at?: string;
+}
+
+/** Uma linha da RPC `fn_rental_guarantee_alerts`. */
+export interface RentalGuaranteeAlert {
+    contract_id: string;
+    contract_number?: string;
+    contract_title?: string;
+    guarantee_id?: string;
+    alert_code:
+        | 'SEM_GARANTIA_ATIVA' | 'VIGENCIA' | 'COBERTURA_MENOR_QUE_CONTRATO'
+        | 'OUTORGA_CONJUGAL_AUSENTE' | 'DOCUMENTO_PENDENTE'
+        | 'CAUCAO_A_DEVOLVER' | 'REANALISE_PENDENTE';
+    severity: 'ALTA' | 'MEDIA' | 'BAIXA';
+    detail: string;
+    reference_date?: string;
 }
 
 export type PenaltyKind = 'MORATORIA' | 'COMPENSATORIA' | 'SST' | 'OUTRA';

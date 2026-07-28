@@ -12,11 +12,21 @@ export interface ContractGuaranteeExpiring {
 }
 
 export const contractGuaranteeService = {
+    /**
+     * Seguros/garantias de OBRA do contrato.
+     *
+     * Filtra `scope='OBRA'` de propósito: garantia LOCATÍCIA vive na mesma
+     * tabela mas é versionada (uma ativa por contrato, art. 43) e tem tela
+     * própria em Gerenciar Negociação › Garantias Locatícias. Listá-la aqui
+     * exporia um formulário que não conhece `is_active`/`version` e que, ao
+     * salvar, corromperia a cadeia de versões.
+     */
     list: async (contractId: string): Promise<ContractGuarantee[]> => {
         const { data, error } = await supabase
             .from('contract_guarantees')
             .select('*')
             .eq('contract_id', contractId)
+            .eq('scope', 'OBRA')
             .order('created_at', { ascending: false });
         if (error) throw error;
         return data ?? [];

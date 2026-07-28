@@ -1,0 +1,49 @@
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Garantias Locatícias — FASE 1
+-- ═════════════════════════════════════════════════════════════════════════════
+-- ⛔ NÃO EXECUTE ESTE ARQUIVO. Ele é só o marcador da migration no histórico.
+--
+-- A versão executável está QUEBRADA EM 5 PARTES, em:
+--     supabase/migrations/aplicar_20270836000000/
+--
+--   parte1_colunas_contract_guarantees.sql
+--   parte2_tabela_garantidores.sql
+--   parte3_documentos_e_ledger_caucao.sql
+--   parte4_backfill_e_trava_art43.sql
+--   parte5_rpc_alertas.sql
+--
+-- Rodar UMA POR VEZ, na ordem, esperando a anterior terminar.
+--
+-- ── Por que foi quebrado ─────────────────────────────────────────────────────
+-- Rodar tudo junto deu `40P01: deadlock detected` (2026-07-28). O editor SQL
+-- executa o script como UMA transação: os locks das tabelas novas ficam
+-- segurados enquanto a transação ainda espera AccessExclusiveLock numa tabela
+-- antiga e quente (`organizations`/`contracts`), e qualquer processo
+-- concorrente — PostgREST recarregando o cache de schema, uma query da
+-- aplicação — fecha o ciclo. É a mesma armadilha já registrada no projeto:
+-- DDL em tabela quente com FK/view deadlocka.
+--
+-- Cada parte agora abre `SET lock_timeout = '5s'`: em vez de pendurar esperando,
+-- falha rápido com "canceling statement due to lock timeout". Se isso acontecer,
+-- é só reexecutar a parte — todas são idempotentes.
+--
+-- ── Uma coisa foi retirada de propósito ──────────────────────────────────────
+-- O `COMMENT ON COLUMN public.contracts.guarantor_name` (que marcava a coluna
+-- como legada/derivada) saiu: é documentação pura e obrigava a pegar lock na
+-- `contracts`, uma das tabelas mais quentes do sistema. Não vale o risco de
+-- deadlock. O mesmo aviso está no código, em services/rentalGuaranteeService.ts
+-- (`syncGuarantorNameToContract`), que é onde quem for mexer vai olhar.
+--
+-- ── Resumo do que a migration faz ────────────────────────────────────────────
+-- Estende `contract_guarantees` (não cria tabela nova de garantia — ela já
+-- existe desde 20270130000010 e alimenta o KPI de apólices vencendo). O corte
+-- entre os dois usos é a coluna `scope`:
+--   • scope='OBRA'    → RC, ambiental, adiantamento. Várias por contrato.
+--   • scope='LOCACAO' → art. 37 da Lei 8.245/91. UMA ativa por contrato (art. 43),
+--                       versionada, com garantidores/documentos/ledger próprios.
+--
+-- Decisões de produto travadas aqui:
+--   1. Caução em dinheiro é PASSIVO — ledger `guarantee_deposit_events`,
+--      deliberadamente NÃO sincronizado para `internal_transactions`.
+--   2. Renovação NUNCA herda garantia — exige reanálise explícita
+--      (`requires_reanalysis`).

@@ -426,7 +426,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
 
-    if (tool === 'draw_wall_rect' && currentWall.length === 2) {
+    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t', 'draw_door', 'draw_window', 'draw_opening', 'draw_sliding_door', 'draw_double_door', 'draw_stairs'].includes(tool) && currentWall.length === 2) {
       const stage = e.target.getStage();
       const pointerPosition = stage.getRelativePointerPosition();
       if (pointerPosition) {
@@ -452,7 +452,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         
         if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) return;
         
-        finishWallShape(tool, startX, startY, endX, endY);
+        if (['draw_door', 'draw_window', 'draw_opening', 'draw_sliding_door', 'draw_double_door', 'draw_stairs'].includes(tool)) {
+          finishElement(tool, startX, startY, endX, endY);
+        } else {
+          finishWallShape(tool, startX, startY, endX, endY);
+        }
       }
     }
   };
@@ -476,7 +480,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
 
-    if (tool === 'draw_wall_rect' && currentWall.length === 2) {
+    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t', 'draw_door', 'draw_window', 'draw_opening', 'draw_sliding_door', 'draw_double_door', 'draw_stairs'].includes(tool) && currentWall.length === 2) {
       const stage = e.target.getStage();
       const pointerPosition = stage.getRelativePointerPosition();
       if (pointerPosition) {

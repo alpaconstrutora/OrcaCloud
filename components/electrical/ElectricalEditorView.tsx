@@ -1177,6 +1177,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           {/* 1. Camada de Bordas (Outlines) */}
                           {walls.map(w => {
                             const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
+                            const pts = w.points as number[];
+                            const isClosed = pts.length >= 6 && Math.abs(pts[0] - pts[pts.length - 2]) < 1 && Math.abs(pts[1] - pts[pts.length - 1]) < 1;
                             return (
                                 <Line 
                                   key={`outline-${w.id}`}
@@ -1185,6 +1187,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   strokeWidth={widthPx} 
                                   lineCap="square" 
                                   lineJoin="miter" 
+                                  closed={isClosed}
                                 />
                             );
                           })}
@@ -1192,6 +1195,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           {/* 2. Camada de Preenchimentos (Fills) */}
                           {walls.map(w => {
                             const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
+                            const pts = w.points as number[];
+                            const isClosed = pts.length >= 6 && Math.abs(pts[0] - pts[pts.length - 2]) < 1 && Math.abs(pts[1] - pts[pts.length - 1]) < 1;
                             return (
                                 <Line 
                                   key={`fill-${w.id}`}
@@ -1200,6 +1205,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   strokeWidth={Math.max(1, widthPx - 4)} 
                                   lineCap="square" 
                                   lineJoin="miter" 
+                                  closed={isClosed}
                                   onPointerDown={(e) => {
                                     if (tool === 'select') {
                                       e.cancelBubble = true;

@@ -1197,7 +1197,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   key={`fill-${w.id}`}
                                   points={w.points} 
                                   stroke="#ffffff" 
-                                  strokeWidth={Math.max(1, widthPx - 2)} 
+                                  strokeWidth={Math.max(1, widthPx - 4)} 
                                   lineCap="square" 
                                   lineJoin="miter" 
                                   onPointerDown={(e) => {
@@ -1369,7 +1369,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                <Line 
                                   points={currentWall} 
                                   stroke="#ffffff" 
-                                  strokeWidth={Math.max(1, (plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10) - 2)} 
+                                  strokeWidth={Math.max(1, (plan?.scaleFactor ? 0.15 * plan.scaleFactor : 10) - 4)} 
                                   opacity={0.6} 
                                   lineCap="square" 
                                   lineJoin="miter" 

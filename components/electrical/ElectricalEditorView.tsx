@@ -594,7 +594,21 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   };
 
   const finishWall = async (overridePts?: number[]) => {
-    const pts = overridePts || currentWall;
+    const rawPts = overridePts || currentWall;
+    
+    // Clean up consecutive duplicate points created by double-click events
+    const pts: number[] = [];
+    for (let i = 0; i < rawPts.length; i += 2) {
+        if (pts.length > 0) {
+            const lastX = pts[pts.length - 2];
+            const lastY = pts[pts.length - 1];
+            if (Math.abs(rawPts[i] - lastX) < 1 && Math.abs(rawPts[i+1] - lastY) < 1) {
+                continue; // Skip duplicate
+            }
+        }
+        pts.push(rawPts[i], rawPts[i+1]);
+    }
+
     if (pts.length < 4) {
       setCurrentWall([]);
       setTool('select');

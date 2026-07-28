@@ -609,6 +609,50 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
   };
 
+  const getWallTotalLength = (wall: OpuraElectricalWall) => {
+    const pts = wall.points as number[];
+    if (!pts || pts.length < 4) return 0;
+    let totalPx = 0;
+    for (let i = 0; i < pts.length - 2; i += 2) {
+      const x1 = pts[i], y1 = pts[i+1];
+      const x2 = pts[i+2], y2 = pts[i+3];
+      totalPx += Math.sqrt(Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2));
+    }
+    return totalPx / (plan?.scaleFactor || 100);
+  };
+
+  const handleUpdateWallTotalLength = async (wallId: string, newLengthM: number) => {
+    if (isNaN(newLengthM) || newLengthM <= 0) return;
+    const wall = walls.find(w => w.id === wallId);
+    if (!wall || !plan) return;
+    
+    const currentLengthM = getWallTotalLength(wall);
+    if (currentLengthM === 0) return;
+    
+    const ratio = newLengthM / currentLengthM;
+    const pts = [...(wall.points as number[])];
+    const originX = pts[0];
+    const originY = pts[1];
+    
+    for (let i = 2; i < pts.length; i += 2) {
+      const dx = pts[i] - originX;
+      const dy = pts[i+1] - originY;
+      pts[i] = originX + dx * ratio;
+      pts[i+1] = originY + dy * ratio;
+    }
+    
+    // Update local state immediately for fast feedback
+    setWalls(walls.map(w => w.id === wall.id ? { ...w, points: pts } : w));
+
+    try {
+      const updatedWall = await electricalProjectService.updateWall(wall.id, { points: pts });
+      setWalls(prev => prev.map(w => w.id === wall.id ? updatedWall : w));
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao atualizar comprimento', 'error');
+    }
+  };
+
   const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
     const newLengthM = parseFloat(newLengthStr.replace(',', '.'));
     if (isNaN(newLengthM) || newLengthM <= 0) {
@@ -947,6 +991,22 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                              value={walls.find(w => w.id === selectedWallId)?.heightM || 2.80}
                              onChange={(e) => handleUpdateWallHeight(selectedWallId, parseFloat(e.target.value))}
                              className="w-16 px-2 py-1 text-sm border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                          />
+                          <span className="text-sm text-slate-500">m</span>
+                        </div>
+                        <div className="flex items-center gap-2 px-2 border-l border-slate-200">
+                          <span className="text-sm text-slate-500">Comprimento:</span>
+                          <input 
+                             type="number"
+                             step="0.01"
+                             min="0.01"
+                             value={selectedWallId ? getWallTotalLength(walls.find(w => w.id === selectedWallId)!).toFixed(2) : 0}
+                             onBlur={(e) => handleUpdateWallTotalLength(selectedWallId, parseFloat(e.target.value))}
+                             onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleUpdateWallTotalLength(selectedWallId, parseFloat((e.target as HTMLInputElement).value));
+                             }}
+                             className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all bg-yellow-50"
+                             title="Digite e aperte Enter para aplicar"
                           />
                           <span className="text-sm text-slate-500">m</span>
                         </div>

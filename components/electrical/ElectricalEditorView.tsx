@@ -399,7 +399,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
     
-    if (tool === 'draw_wall_rect') {
+    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t'].includes(tool)) {
       const stage = e.target.getStage();
       const pointerPosition = stage.getRelativePointerPosition();
       if (pointerPosition) {
@@ -721,7 +721,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       }
     }
 
-    if (tool === 'draw_wall_rect') {
+    if (['draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t'].includes(tool)) {
       return; // handled by mousedown/mouseup
     }
 
@@ -931,21 +931,71 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     // Do not set tool to 'select', allow continuous drawing unless they hit Esc
   };
 
-  const finishWallRect = async (x1: number, y1: number, x2: number, y2: number) => {
+  const finishWallShape = async (shapeType: string, x1: number, y1: number, x2: number, y2: number) => {
     if (!plan) return;
     
     const minX = Math.min(x1, x2);
     const maxX = Math.max(x1, x2);
     const minY = Math.min(y1, y2);
     const maxY = Math.max(y1, y2);
+    const W = maxX - minX;
+    const H = maxY - minY;
     
-    try {
-        const wallPoints = [
+    // Fallback se o tamanho for muito pequeno
+    if (W < 10 || H < 10) {
+        setCurrentWall([]);
+        return;
+    }
+
+    const legW = W * 0.4;
+    const legH = H * 0.4;
+
+    let segments: number[][] = [];
+
+    if (shapeType === 'draw_wall_rect') {
+        segments = [
             [minX, minY, maxX, minY],
             [maxX, minY, maxX, maxY],
             [maxX, maxY, minX, maxY],
             [minX, maxY, minX, minY]
         ];
+    } else if (shapeType === 'draw_wall_l') {
+        segments = [
+            [minX, minY, minX + legW, minY],
+            [minX + legW, minY, minX + legW, maxY - legH],
+            [minX + legW, maxY - legH, maxX, maxY - legH],
+            [maxX, maxY - legH, maxX, maxY],
+            [maxX, maxY, minX, maxY],
+            [minX, maxY, minX, minY]
+        ];
+    } else if (shapeType === 'draw_wall_u') {
+        segments = [
+            [minX, minY, minX + legW, minY],
+            [minX + legW, minY, minX + legW, maxY - legH],
+            [minX + legW, maxY - legH, maxX - legW, maxY - legH],
+            [maxX - legW, maxY - legH, maxX - legW, minY],
+            [maxX - legW, minY, maxX, minY],
+            [maxX, minY, maxX, maxY],
+            [maxX, maxY, minX, maxY],
+            [minX, maxY, minX, minY]
+        ];
+    } else if (shapeType === 'draw_wall_t') {
+        const midL = minX + W / 2 - legW / 2;
+        const midR = minX + W / 2 + legW / 2;
+        segments = [
+            [minX, minY, maxX, minY],
+            [maxX, minY, maxX, minY + legH],
+            [maxX, minY + legH, midR, minY + legH],
+            [midR, minY + legH, midR, maxY],
+            [midR, maxY, midL, maxY],
+            [midL, maxY, midL, minY + legH],
+            [midL, minY + legH, minX, minY + legH],
+            [minX, minY + legH, minX, minY]
+        ];
+    }
+
+    try {
+        const wallPoints = segments;
         
         const newWalls = await Promise.all(wallPoints.map(pts => 
             electricalProjectService.createWall({
@@ -1595,9 +1645,36 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
                             tool === 'draw_wall_rect' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
                           }`}
-                          title="Desenhar Parede em Retângulo (Arrastar)"
+                          title="Parede (Retângulo)"
                         >
                           <Square className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => { setTool('draw_wall_l'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'draw_wall_l' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title="Parede (Formato L)"
+                        >
+                          <div className="font-sans font-extrabold text-lg leading-none" style={{ transform: 'scale(1.2)' }}>L</div>
+                        </button>
+                        <button
+                          onClick={() => { setTool('draw_wall_u'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'draw_wall_u' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title="Parede (Formato U)"
+                        >
+                          <div className="font-sans font-extrabold text-lg leading-none" style={{ transform: 'scale(1.2)' }}>U</div>
+                        </button>
+                        <button
+                          onClick={() => { setTool('draw_wall_t'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
+                          className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ${
+                            tool === 'draw_wall_t' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title="Parede (Formato T)"
+                        >
+                          <div className="font-sans font-extrabold text-lg leading-none" style={{ transform: 'scale(1.2)' }}>T</div>
                         </button>
                         <button
                           onClick={() => { setTool('calibrate'); setCurrentPolygon([]); setCalibrationPoints([]); setCurrentWall([]); }}
@@ -1698,7 +1775,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         onClick={handleStageClick}
                         onMouseMove={handleStageMouseMove}
                         onDblClick={handleStageDblClick}
-                          className={tool === 'draw_room' || tool === 'draw_wall' || tool === 'draw_wall_rect' || tool === 'add_point' || tool === 'calibrate' ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
+                          className={['draw_room', 'draw_wall', 'draw_wall_rect', 'draw_wall_l', 'draw_wall_u', 'draw_wall_t', 'add_point', 'calibrate'].includes(tool) ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}
                         >
                         <Layer>
                           {/* Imagem de Fundo */}

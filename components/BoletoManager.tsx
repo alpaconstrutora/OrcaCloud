@@ -649,8 +649,17 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         setIsModalOpen(true);
     }, []);
 
-    function handleSaved(_updated: Boleto) {
-        carregar(effectiveOrgId);
+    function handleSaved(updated: Boleto) {
+        // `boletos` já vem filtrado por status no servidor (carregar() passa
+        // filters.status) — respeitar o filtro atual em vez de sempre inserir,
+        // senão um boleto capturado com outro status "vaza" para a aba errada.
+        const combinaComFiltro = (filtroStatus === 'todos' || updated.status === filtroStatus)
+            && (!projectId || updated.project_id === projectId);
+        setBoletos(prev => {
+            const existe = prev.some(b => b.id === updated.id);
+            if (!combinaComFiltro) return prev.filter(b => b.id !== updated.id);
+            return existe ? prev.map(b => (b.id === updated.id ? updated : b)) : [updated, ...prev];
+        });
     }
 
     async function handleExport(tipo: 'excel' | 'pdf') {

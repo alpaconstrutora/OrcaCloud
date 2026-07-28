@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FolderGit2, Calendar, User, ChevronRight, PenTool } from 'lucide-react';
+import { Plus, FolderGit2, Calendar, User, ChevronRight, PenTool, Edit2, Trash2 } from 'lucide-react';
 import Button from '../ui/Button';
 import { OpuraElectricalProject } from '../../types/electrical';
 import { electricalProjectService } from '../../services/electricalProjectService';
@@ -73,6 +73,31 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
   const openEditor = (id: string) => {
     onSelectProject(id);
     onChangeView('electrical-editor');
+  };
+
+  const handleEdit = async (e: React.MouseEvent, id: string, currentName: string) => {
+    e.stopPropagation();
+    const newName = prompt('Novo nome do projeto:', currentName);
+    if (!newName || newName === currentName) return;
+    try {
+      await electricalProjectService.updateProject(id, { name: newName });
+      loadProjects();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao atualizar projeto.');
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Tem certeza que deseja excluir este projeto elétrico? Essa ação não pode ser desfeita.')) return;
+    try {
+      await electricalProjectService.deleteProject(id);
+      loadProjects();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao excluir projeto.');
+    }
   };
 
   return (
@@ -159,12 +184,29 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
                     </div>
                   </td>
                   <td className="p-4 text-right">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); openEditor(proj.id); }}
-                      className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-lg text-blue-600 transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => handleEdit(e, proj.id, proj.name)}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Editar Nome"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={(e) => handleDelete(e, proj.id)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir Projeto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); openEditor(proj.id); }}
+                        className="p-2 text-blue-600 hover:bg-blue-50 border border-transparent rounded-lg transition-colors ml-2"
+                        title="Abrir Editor"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

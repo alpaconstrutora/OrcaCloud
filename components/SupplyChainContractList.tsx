@@ -14,7 +14,6 @@ import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { Contract } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -141,16 +140,15 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     // confirmação de 2 passos embutida (ui_ux_guia_unificado.md §9).
     const performDelete = async (id: string) => {
         try {
-            setLoading(true);
             await contractService.deleteContract(id);
-            await loadContracts();
+            // §22: atualiza o array local em vez de recarregar contratos + fornecedores
+            // + clientes + obras (4 consultas) por causa de um único item excluído.
+            setContracts(prev => prev.filter(c => c.id !== id));
             onDelete?.();
             notify("Contrato excluído com sucesso.", "success");
         } catch (error) {
             console.error("Erro ao excluir contrato:", error);
             notify("Erro ao excluir contrato.", "error");
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -169,15 +167,13 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
 
     const performDuplicate = async (id: string) => {
         try {
-            setLoading(true);
             const dupe = await contractService.duplicateContract(id);
-            await loadContracts();
+            // §22: insere a cópia devolvida pelo backend no array local, sem refetch.
+            setContracts(prev => [dupe, ...prev]);
             notify(`Contrato duplicado com sucesso! Nova cópia: ${dupe.title}`, "success");
         } catch (error) {
             console.error("Erro ao duplicar contrato:", error);
             notify("Erro ao duplicar contrato.", "error");
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -217,15 +213,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         pendingMeasurements: 0, // Placeholder
     };
 
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center p-20 space-y-4">
-                <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" />
-                <p className="text-gray-400 font-medium animate-pulse uppercase tracking-widest text-xs">Sincronizando Contratos...</p>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-6">
             {/* Notification toast */}
@@ -254,20 +241,10 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 <KpiCard shadow={false} size="sm" label="Pendentes de Medição" value={stats.pendingMeasurements} icon={<Clock className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Toolbar de botões (§4) — ação de template (quando o consumidor passar
-                extraActions) + ação primária de criação, à direita. Sem controles de
-                escopo fixos aqui: "Filtrar por Obra" é contextual à busca e continua
-                na toolbar acoplada abaixo. */}
-            <div className="flex items-center justify-end gap-2 bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                {extraActions}
-                <button
-                    onClick={onCreateNew}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo contrato
-                </button>
-            </div>
+            {/* §5.3: esta tela não tem controles de escopo (conta/competência/período) —
+                "Filtrar por Obra" é recorte contextual e vive na régua de busca. Sem
+                escopo, a barra de botões própria não existe: a ação primária (§17,
+                criação é ação rara) mora no fim da régua da toolbar acoplada abaixo. */}
 
             {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                 conteúdo dividem um único card (border/rounded/shadow só no container pai);
@@ -367,31 +344,49 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
+
+                {/* Ações da tela — §17 (variante compacta) no fim da régua §5.1 */}
+                {extraActions}
+                <button
+                    onClick={onCreateNew}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo contrato
+                </button>
             </div>
 
             {/* Content List — sem bg/border/rounded próprios: já está dentro do card
                 acoplado toolbar+conteúdo (ver abertura acima) */}
-            {filteredContracts.length === 0 ? (
+            {loading ? (
+                /* §11 — dentro do card acoplado: título, KPIs e toolbar continuam
+                   visíveis durante o carregamento (antes, um early return apagava
+                   a tela inteira). */
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando...</p>
+                </div>
+            ) : filteredContracts.length === 0 ? (
                 <div className="text-center py-12">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato encontrado</h3>
-                    <p className="text-sm text-gray-500 mb-6">Não há contratos registrados para este projeto ainda.</p>
+                    <p className="text-sm text-gray-500 mb-6">Tente ajustar seus filtros de busca ou cadastre o primeiro contrato.</p>
                     <button onClick={onCreateNew} className="text-blue-600 font-bold hover:underline">
                         Começar Cadastro
                     </button>
                 </div>
             ) : viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                     {filteredContracts.map((contract) => (
                         <div
                             key={contract.id}
-                            className="bg-white rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all group overflow-hidden flex flex-col p-8 cursor-pointer"
+                            className="bg-white rounded-[10px] border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-100 transition-all group overflow-hidden flex flex-col p-5 cursor-pointer"
                             onClick={() => onViewDetails(contract.id)}
                         >
-                            <div className="flex justify-between items-start mb-6">
+                            <div className="flex justify-between items-start mb-4">
                                 <div className="flex gap-2">
-                                    <div className="p-4 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
-                                        <FileText className="w-6 h-6" />
+                                    <div className="p-3 bg-blue-50 rounded-[6px] text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
+                                        <FileText className="w-5 h-5" />
                                     </div>
                                     <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
                                         <ActionIconButton kind="edit" size="sm" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onEdit && onEdit(contract); }} />
@@ -402,12 +397,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                 <StatusBadge status={contract.status} />
                             </div>
 
-                            <div className="space-y-1 mb-6">
-                                <p className="text-xs font-medium text-blue-500 uppercase tracking-widest">{contract.number}</p>
-                                <h3 className="text-lg font-medium text-gray-900 tracking-tight leading-tight group-hover:text-blue-600 transition-colors uppercase">{contract.title}</h3>
+                            {/* §16/§6.2: sentence case — o `uppercase tracking-widest`
+                                é o vocabulário "gritado" já removido de thead/badge/botão. */}
+                            <div className="space-y-1 mb-4">
+                                <p className="text-xs font-medium text-blue-600">{contract.number}</p>
+                                <h3 className="text-base font-medium text-gray-900 tracking-tight leading-tight group-hover:text-blue-600 transition-colors">{contract.title}</h3>
                             </div>
 
-                            <div className="space-y-4 mb-8 flex-1">
+                            <div className="space-y-3 mb-5 flex-1">
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Building2 className="w-4 h-4 text-gray-400" />
                                     <span className="text-xs font-medium truncate">
@@ -420,15 +417,15 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                 </div>
                             </div>
 
-                            <div className="pt-6 border-t border-gray-50 mt-auto">
+                            <div className="pt-4 border-t border-gray-100 mt-auto">
                                 <div className="flex justify-between items-end">
                                     <div>
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Valor Atualizado</p>
-                                        <p className="text-xl font-medium text-gray-900 tracking-tighter">
+                                        <p className="text-xs font-medium text-gray-400 mb-1">Valor atualizado</p>
+                                        <p className="text-lg font-medium text-gray-900 tracking-tight">
                                             R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
-                                    <div className="p-3 bg-gray-50 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
+                                    <div className="p-2.5 bg-gray-50 rounded-[6px] group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
                                         <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                     </div>
                                 </div>
@@ -437,8 +434,12 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     ))}
                 </div>
             ) : (
-                <div className="overflow-x-auto">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                /* §6.5 — rolagem própria + thead sticky: a lista de contratos cresce
+                   sem teto. §6.1: nada de width/minWidth 100% no <table> junto com
+                   table-layout:fixed (o navegador redistribuiria a sobra e arrastar
+                   uma borda moveria a coluna vizinha errada). */
+                <div className="overflow-auto max-h-[70vh]">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
                             <colgroup>
                                 {tableColumns.visibleColumns.includes('number') && <col data-col-key="number" style={{ width: `${cols.getWidth('number')}px` }} />}
                                 {tableColumns.visibleColumns.includes('title') && <col data-col-key="title" style={{ width: `${cols.getWidth('title')}px` }} />}
@@ -455,7 +456,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                             {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
                                 SortableHeader força uppercase internamente por padrão. */}
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.visibleColumns.includes('number') && <SortableHeader colKey="number" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="number" /></SortableHeader>}
                                     {tableColumns.visibleColumns.includes('title') && <SortableHeader colKey="title" label="Contrato" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="title" /></SortableHeader>}
                                     {tableColumns.visibleColumns.includes('project') && <SortableHeader colKey="project" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="project" /></SortableHeader>}
@@ -525,7 +526,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                                 >
                                                     Ver Detalhes
                                                 </button>
-                                                <ActionIconButton kind="edit" className="ml-1" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onEdit?.(contract); }} />
+                                                <ActionIconButton kind="edit" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onEdit?.(contract); }} />
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar Contrato', onClick: () => performDuplicate(contract.id) },

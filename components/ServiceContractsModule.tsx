@@ -76,7 +76,9 @@ const ServiceContractsModule: React.FC<Props> = ({
                         setEditingContract(contract);
                         setIsModalOpen(true);
                     }}
-                    onDelete={() => setVersion(v => v + 1)}
+                    /* §22: a lista já remove o item do array local — não forçar
+                       recarga completa (contratos + fornecedores + clientes + obras). */
+                    onDelete={() => { }}
                 />
             )}
 

@@ -14,6 +14,7 @@ import { convertPdfToImage } from '../../utils/pdfToImage';
 import { ElectricalTakeoffView } from './ElectricalTakeoffView';
 import { useToast } from '../../hooks/useToast';
 import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint, OpuraElectricalWall } from '../../types/electrical';
+import { detectNewRooms } from '../../utils/geometry/roomDetection';
 
 interface ElectricalEditorViewProps {
   organizationId: string;
@@ -757,6 +758,54 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     setTool('select');
   };
 
+  const handleAutoRoomDetection = async (currentWalls: OpuraElectricalWall[]) => {
+    if (!plan) return;
+    const newFaces = detectNewRooms(currentWalls, rooms);
+    if (newFaces.length === 0) return;
+
+    const ppm = plan.scaleFactor || 100;
+    const newRoomsToCreate: OpuraElectricalRoom[] = [];
+
+    for (let i = 0; i < newFaces.length; i++) {
+        const pts = newFaces[i];
+        let areaPx = 0;
+        let perimeterPx = 0;
+        for (let j = 0; j < pts.length - 2; j += 2) {
+            const x1 = pts[j]; const y1 = pts[j+1];
+            const x2 = pts[j+2]; const y2 = pts[j+3];
+            areaPx += (x1 * y2 - x2 * y1);
+            perimeterPx += Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+        }
+        areaPx = Math.abs(areaPx / 2);
+        const areaSqm = Number((areaPx / (ppm * ppm)).toFixed(2));
+        const perimeterM = Number((perimeterPx / ppm).toFixed(2));
+
+        try {
+            const newRoom = await electricalProjectService.createRoom({
+                organizationId: organizationId,
+                planId: plan.id,
+                name: `Ambiente ${rooms.length + newRoomsToCreate.length + 1}`,
+                polygonPoints: pts,
+                areaSqm,
+                perimeterM
+            });
+            newRoomsToCreate.push(newRoom);
+        } catch(err) {
+            console.error("Erro ao auto-gerar ambiente:", err);
+        }
+    }
+
+    if (newRoomsToCreate.length > 0) {
+        setRooms(prev => {
+            const newRooms = [...prev, ...newRoomsToCreate];
+            // Fix history state with the new rooms
+            pushHistoryState({ walls: currentWalls, rooms: newRooms, points });
+            return newRooms;
+        });
+        showToast(`${newRoomsToCreate.length} ambiente(s) detectado(s) e criado(s) automaticamente!`, 'success');
+    }
+  };
+
   const finishWall = async (overridePts?: number[]) => {
     const rawPts = overridePts || currentWall;
     
@@ -790,6 +839,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       setWalls(prev => {
         const newWalls = [...prev, newWall];
         pushHistoryState({ walls: newWalls, rooms, points });
+        handleAutoRoomDetection(newWalls);
         return newWalls;
       });
     } catch (error) {
@@ -871,6 +921,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       setWalls(prev => {
         const newWalls = prev.map(w => w.id === wall.id ? updatedWall : w);
         pushHistoryState({ walls: newWalls, rooms, points });
+        handleAutoRoomDetection(newWalls);
         return newWalls;
       });
     } catch (err) {
@@ -1031,6 +1082,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             return updated ? updated : w;
         });
         pushHistoryState({ walls: newWalls, rooms, points });
+        handleAutoRoomDetection(newWalls);
         return newWalls;
     });
 

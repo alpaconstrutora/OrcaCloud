@@ -3393,24 +3393,53 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     )}
                 </div>
 
-                {/* Botão primário — variante compacta (guia §17) */}
-                <button
-                    onClick={() => setShowImportDrawer(true)}
-                    disabled={isImporting}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                >
-                    {isImporting ? (
+                {/* Ações — §17. "Sincronizar"/"Novo" só na aba Pendentes (Lançamentos);
+                    saíram da toolbar acoplada da tabela para aqui, junto do resto das ações. */}
+                <div className="flex items-center gap-2 shrink-0">
+                    {activeView === 'pending' && (
                         <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
-                            <span>{importingMessage || 'Importando...'}</span>
-                        </>
-                    ) : (
-                        <>
-                            <Upload className="w-[15px] h-[15px]" />
-                            <span>Importar extrato</span>
+                            <button
+                                onClick={handleSyncAllData}
+                                disabled={isLoading}
+                                className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium border transition-all ${
+                                    isLoading
+                                        ? 'bg-blue-50 text-blue-300 border-blue-100 animate-pulse'
+                                        : 'bg-white text-blue-600 border-blue-100 hover:bg-blue-50'
+                                }`}
+                                title="Sincronizar nomes de Clientes/Fornecedores dos Projetos"
+                            >
+                                <RefreshCw className={`w-[15px] h-[15px] ${isLoading ? 'animate-spin' : ''}`} />
+                                {isLoading ? 'Sincronizando...' : 'Sincronizar'}
+                            </button>
+                            <button
+                                onClick={() => setShowInternalTxModal(true)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-emerald-600 bg-white border border-emerald-100 hover:bg-emerald-50 transition-all"
+                            >
+                                <Plus className="w-[15px] h-[15px]" />
+                                Novo
+                            </button>
                         </>
                     )}
-                </button>
+
+                    {/* Botão primário — variante compacta (guia §17) */}
+                    <button
+                        onClick={() => setShowImportDrawer(true)}
+                        disabled={isImporting}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                        {isImporting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
+                                <span>{importingMessage || 'Importando...'}</span>
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="w-[15px] h-[15px]" />
+                                <span>Importar extrato</span>
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
 
             {/* Bulk Action Bar — Extrato (padrão simples: contagem + Editar em Lote + Desmarcar,
@@ -4688,8 +4717,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 <col />
                                                 {pendingBankColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${pendingBankResize.getWidth('actions')}px` }} />}
                                             </colgroup>
-                                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
-                                                <tr>
+                                            <thead>
+                                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                         <input
                                                             type="checkbox"
@@ -4708,7 +4737,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     </th>
                                                     {pendingBankColumns.visibleColumns.includes('counterparty') && (
                                                         <SortableHeader
-                                                            colKey="counterparty" label="Contraparte"
+                                                            colKey="counterparty" label="Contraparte" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 overflow-hidden"
@@ -4718,7 +4747,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('category') && (
                                                         <SortableHeader
-                                                            colKey="category" label="Categoria"
+                                                            colKey="category" label="Categoria" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 overflow-hidden"
@@ -4727,18 +4756,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader colKey="project" label="Obra" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingBankResize.ResizeHandle colKey="project" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Plano de Contas" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="costCenter" label="Plano de Contas" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingBankResize.ResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('date') && (
                                                         <SortableHeader
-                                                            colKey="date" label="Data"
+                                                            colKey="date" label="Data" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 text-center overflow-hidden"
@@ -4748,7 +4777,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('amount') && (
                                                         <SortableHeader
-                                                            colKey="amount" label="Valor"
+                                                            colKey="amount" label="Valor" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 text-right overflow-hidden"
@@ -4759,7 +4788,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingBankColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap">
+                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap text-table-header font-semibold text-gray-500">
                                                             Ações
                                                             <pendingBankResize.ResizeHandle colKey="actions" />
                                                         </th>
@@ -5087,29 +5116,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     )}
                                 </div>
                             </div>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={handleSyncAllData}
-                                        disabled={isLoading}
-                                        className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-[13px] font-medium border transition-all ${
-                                            isLoading
-                                                ? 'bg-blue-50 text-blue-300 border-blue-100 animate-pulse'
-                                                : 'bg-white text-blue-600 border-blue-100 hover:bg-blue-50'
-                                        }`}
-                                        title="Sincronizar nomes de Clientes/Fornecedores dos Projetos"
-                                    >
-                                        <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-                                        {isLoading ? 'Sincronizando...' : 'Sincronizar'}
-                                    </button>
-
-                                    <button 
-                                        onClick={() => setShowInternalTxModal(true)}
-                                        className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-[13px] font-medium text-emerald-600 bg-white border border-emerald-100 hover:bg-emerald-50 transition-colors"
-                                    >
-                                        <Plus className="w-3 h-3" />
-                                        Novo
-                                    </button>
-                                </div>
                         </div>
 
                         <div className={`min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
@@ -5245,8 +5251,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 <col />
                                                 {pendingInternalColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${pendingInternalResize.getWidth('actions')}px` }} />}
                                             </colgroup>
-                                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
-                                                <tr>
+                                            <thead>
+                                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                         <input
                                                             type="checkbox"
@@ -5265,7 +5271,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     </th>
                                                     {pendingInternalColumns.visibleColumns.includes('description') && (
                                                         <SortableHeader
-                                                            colKey="description" label="Descrição"
+                                                            colKey="description" label="Descrição" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'description' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('description'), setInternalSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 overflow-hidden"
@@ -5275,7 +5281,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('party') && (
                                                         <SortableHeader
-                                                            colKey="party" label="Cliente/Fornecedor"
+                                                            colKey="party" label="Cliente/Fornecedor" uppercase={false}
                                                             sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 overflow-hidden"
@@ -5285,7 +5291,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('category') && (
                                                         <SortableHeader
-                                                            colKey="category" label="Categoria"
+                                                            colKey="category" label="Categoria" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'category' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('category'), setInternalSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 overflow-hidden"
@@ -5294,18 +5300,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader colKey="project" label="Obra" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingInternalResize.ResizeHandle colKey="project" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Plano de Contas" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="costCenter" label="Plano de Contas" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingInternalResize.ResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('date') && (
                                                         <SortableHeader
-                                                            colKey="date" label="Data"
+                                                            colKey="date" label="Data" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'date' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('date'), setInternalSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 text-center overflow-hidden"
@@ -5315,7 +5321,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('amount') && (
                                                         <SortableHeader
-                                                            colKey="amount" label="Valor"
+                                                            colKey="amount" label="Valor" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'amount' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('amount'), setInternalSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 text-right overflow-hidden"
@@ -5326,7 +5332,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingInternalColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap">
+                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap text-table-header font-semibold text-gray-500">
                                                             Ações
                                                             <pendingInternalResize.ResizeHandle colKey="actions" />
                                                         </th>

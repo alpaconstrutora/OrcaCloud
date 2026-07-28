@@ -15,6 +15,7 @@ import type { Boleto, BoletoStatus, BoletoFilters, Organization, CostCenter } fr
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
+import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -67,15 +68,16 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'capturado_em', label: 'Capturado em', sortable: true },
     { key: 'capturado_por', label: 'Capturado por', sortable: true },
-    // Sem coluna 'actions': clicar na linha já abre o boleto (ação dominante,
-    // única relevante nesta lista) — guia §9.1. Um botão "Ver Detalhes" extra
-    // seria um segundo controle para a mesma ação do clique na linha.
+    // Clicar na linha já abre o boleto (ação dominante, única relevante — guia
+    // §9.1). A coluna 'actions' fica só com o que não é a ação dominante:
+    // excluir (restrito a rascunho, igual à exclusão em lote).
+    { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     numero: 100, beneficiario: 220, obra: 160, centro_custo: 160, valor: 130,
-    vencimento: 130, status: 130, capturado_em: 150, capturado_por: 160,
+    vencimento: 130, status: 130, capturado_em: 150, capturado_por: 160, actions: 70,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
@@ -109,6 +111,7 @@ interface BoletoItemBaseProps {
     onOpen: (b: Boleto) => void;
     onCheckboxMouseDown: (e: React.MouseEvent) => void;
     onCheckboxChange: (checked: boolean, id: string, idx: number) => void;
+    onDelete: (b: Boleto) => void;
 }
 
 // Memoizado para que uma seleção (shift+click em intervalo grande) não force o
@@ -116,7 +119,7 @@ interface BoletoItemBaseProps {
 // estado (selected/atrasado/isHighlighted) são atualizados.
 const BoletoCardItem = React.memo(function BoletoCardItem({
     boleto: b, idx, selected, isHighlighted, atrasado, supplierMap,
-    onOpen, onCheckboxMouseDown, onCheckboxChange,
+    onOpen, onCheckboxMouseDown, onCheckboxChange, onDelete,
 }: BoletoItemBaseProps) {
     return (
         <div className={`relative group transition-all ${isHighlighted ? 'ring-4 ring-blue-400 ring-offset-2 rounded-3xl animate-pulse' : ''}`}>
@@ -134,6 +137,15 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                     className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                 />
             </label>
+            <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
+                <ActionIconButton
+                    kind="delete"
+                    size="sm"
+                    disabled={b.status !== 'rascunho'}
+                    title={b.status === 'rascunho' ? 'Excluir' : 'Apenas rascunhos podem ser excluídos'}
+                    onClick={() => onDelete(b)}
+                />
+            </div>
             <button
                 onClick={() => onOpen(b)}
                 className={`w-full text-left bg-white rounded-[10px] border p-5 pl-9 hover:shadow-lg transition-all ${
@@ -201,7 +213,7 @@ interface BoletoRowItemProps extends BoletoItemBaseProps {
 
 const BoletoRowItem = React.memo(function BoletoRowItem({
     boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, visibleColumns, projectMap, ccMap,
-    onOpen, onCheckboxMouseDown, onCheckboxChange,
+    onOpen, onCheckboxMouseDown, onCheckboxChange, onDelete,
 }: BoletoRowItemProps) {
     return (
         <tr
@@ -280,6 +292,18 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     <p className="truncate">{b.created_by_email ?? '—'}</p>
                 </td>
             )}
+            {visibleColumns.includes('actions') && (
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-end">
+                        <ActionIconButton
+                            kind="delete"
+                            disabled={b.status !== 'rascunho'}
+                            title={b.status === 'rascunho' ? 'Excluir' : 'Apenas rascunhos podem ser excluídos'}
+                            onClick={() => onDelete(b)}
+                        />
+                    </div>
+                </td>
+            )}
             {/* espaçador — casa com o <col /> sem largura, no final (ver colgroup) */}
             <td aria-hidden="true"></td>
         </tr>
@@ -309,7 +333,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // w-full/100% junto com table-layout:fixed (§6.1). Sem coluna "Ações" (§9.1) —
     // o espaçador vai no FINAL, não antes de nada (não há coluna fixa pra ancorar).
     const tableTotalWidth = 40
-        + (['numero', 'beneficiario', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por'] as const)
+        + (['numero', 'beneficiario', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'actions'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0);
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'boletoManagerFilters:advanced');
 
@@ -418,6 +442,28 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             await carregar(effectiveOrgId);
         } finally {
             setExcluindoLote(false);
+        }
+    }
+
+    async function handleExcluirBoleto(b: Boleto) {
+        if (b.status !== 'rascunho') {
+            notify('Apenas boletos em rascunho podem ser excluídos. Use cancelar para os demais.', 'error');
+            return;
+        }
+        const ok = await confirm({
+            title: 'Excluir boleto?',
+            message: 'Excluir permanentemente este boleto? Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            await boletoService.excluirRascunho(b.id, effectiveOrgId ?? organizationId, userEmail);
+            notify('Boleto excluído com sucesso.');
+            await carregar(effectiveOrgId);
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            notify(error.message || 'Falha ao excluir boleto.', 'error');
         }
     }
 
@@ -1005,6 +1051,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 onOpen={abrirEdicao}
                                 onCheckboxMouseDown={handleCheckboxMouseDown}
                                 onCheckboxChange={handleCheckboxChange}
+                                onDelete={handleExcluirBoleto}
                             />
                         );
                     })}
@@ -1028,6 +1075,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
                             {tableColumns.visibleColumns.includes('capturado_em') && <col data-col-key="capturado_em" style={{ width: `${cols.getWidth('capturado_em')}px` }} />}
                             {tableColumns.visibleColumns.includes('capturado_por') && <col data-col-key="capturado_por" style={{ width: `${cols.getWidth('capturado_por')}px` }} />}
+                            {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
                             {/* espaçador NO FINAL (§6.1.1 não se aplica: sem coluna "Ações" fixa
                                 pra ancorar — §9.1, o clique na linha já é a ação). Absorve a folga
                                 quando a soma das colunas é menor que o container. */}
@@ -1172,6 +1220,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         <cols.ResizeHandle colKey="capturado_por" />
                                     </SortableHeader>
                                 )}
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
+                                )}
                                 {/* espaçador — casa com o <col /> sem largura, no final */}
                                 <th aria-hidden="true" />
                             </tr>
@@ -1195,6 +1246,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         onOpen={abrirEdicao}
                                         onCheckboxMouseDown={handleCheckboxMouseDown}
                                         onCheckboxChange={handleCheckboxChange}
+                                        onDelete={handleExcluirBoleto}
                                     />
                                 );
                             })}
@@ -1205,8 +1257,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
-                                {/* colSpan 5: vencimento + status + capturado_em + capturado_por + espaçador final */}
-                                <td colSpan={5} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
+                                {/* colSpan 6: vencimento + status + capturado_em + capturado_por + actions + espaçador final */}
+                                <td colSpan={6} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
                             </tr>
                         </tfoot>
                     </table>

@@ -4907,7 +4907,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         ) : (
                                                                             <span className="text-sm font-normal text-gray-400">{tx.status}</span>
                                                                         )}
-                                                                        <ActionIconButton kind="delete" size="sm" title="Excluir extrato" onClick={() => handleDeleteBankTransactions([tx.id])} />
                                                                     </div>
                                                                 </td>
                                                                 )}

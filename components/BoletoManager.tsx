@@ -432,14 +432,19 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             const resultados = await Promise.allSettled(
                 rascunhos.map(b => boletoService.excluirRascunho(b.id, effectiveOrgId ?? organizationId, userEmail))
             );
-            const falhas = resultados.filter(r => r.status === 'rejected').length;
+            const excluidosIds = new Set(
+                rascunhos.filter((_, i) => resultados[i].status === 'fulfilled').map(b => b.id)
+            );
+            const falhas = resultados.length - excluidosIds.size;
             if (falhas > 0) {
-                notify(`${rascunhos.length - falhas} boleto(s) excluído(s), ${falhas} falharam.`, falhas === rascunhos.length ? 'error' : 'success');
+                notify(`${excluidosIds.size} boleto(s) excluído(s), ${falhas} falharam.`, excluidosIds.size === 0 ? 'error' : 'success');
             } else {
                 notify(`${rascunhos.length} boleto${rascunhos.length !== 1 ? 's excluídos' : ' excluído'} com sucesso.`);
             }
+            if (excluidosIds.size > 0) {
+                setBoletos(prev => prev.filter(item => !excluidosIds.has(item.id)));
+            }
             clearSelection();
-            await carregar(effectiveOrgId);
         } finally {
             setExcluindoLote(false);
         }
@@ -460,7 +465,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         try {
             await boletoService.excluirRascunho(b.id, effectiveOrgId ?? organizationId, userEmail);
             notify('Boleto excluído com sucesso.');
-            await carregar(effectiveOrgId);
+            setBoletos(prev => prev.filter(item => item.id !== b.id));
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             notify(error.message || 'Falha ao excluir boleto.', 'error');

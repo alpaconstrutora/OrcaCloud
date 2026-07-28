@@ -400,9 +400,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     
     let snapPoint = pointerPosition;
     if (gridSizeCm > 0 && scaledGridPx >= 5) {
+      // Offset snapping by half the default wall thickness (0.15m) so the outer edge aligns with the grid
+      const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
       snapPoint = {
-        x: Math.round(pointerPosition.x / baseGridPx) * baseGridPx,
-        y: Math.round(pointerPosition.y / baseGridPx) * baseGridPx
+        x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
+        y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
       };
     }
 
@@ -509,9 +511,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     
     let snappedPos = pointerPosition;
     if (gridSizeCm > 0 && scaledGridPx >= 5) {
+      // Offset snapping by half the default wall thickness (0.15m) so the outer edge aligns with the grid
+      const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
       snappedPos = {
-        x: Math.round(pointerPosition.x / baseGridPx) * baseGridPx,
-        y: Math.round(pointerPosition.y / baseGridPx) * baseGridPx
+        x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
+        y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
       };
     }
 

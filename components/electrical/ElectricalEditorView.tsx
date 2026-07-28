@@ -52,6 +52,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [gridSizeCm, setGridSizeCm] = useState<number>(100);
   const [showBackground, setShowBackground] = useState(true);
   const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
+  const [editingWallLengthValue, setEditingWallLengthValue] = useState<string>('');
   const wallPreviewRef = useRef<any>(null);
   
   const stageRef = useRef<any>(null);
@@ -118,6 +119,26 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [tool, currentWall, plan, organizationId, selectedWallId]);
+
+  useEffect(() => {
+    if (selectedWallId) {
+      const wall = walls.find(w => w.id === selectedWallId);
+      if (wall) {
+        const pts = wall.points as number[];
+        if (pts && pts.length >= 4) {
+          let totalPx = 0;
+          for (let i = 0; i < pts.length - 2; i += 2) {
+            const x1 = pts[i], y1 = pts[i+1];
+            const x2 = pts[i+2], y2 = pts[i+3];
+            totalPx += Math.sqrt(Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2));
+          }
+          setEditingWallLengthValue((totalPx / (plan?.scaleFactor || 100)).toFixed(2));
+        }
+      }
+    } else {
+      setEditingWallLengthValue('');
+    }
+  }, [selectedWallId, walls, plan?.scaleFactor]);
 
   const loadData = async () => {
     setLoading(true);
@@ -1000,7 +1021,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                              type="number"
                              step="0.01"
                              min="0.01"
-                             value={selectedWallId ? getWallTotalLength(walls.find(w => w.id === selectedWallId)!).toFixed(2) : 0}
+                             value={editingWallLengthValue}
+                             onChange={(e) => setEditingWallLengthValue(e.target.value)}
                              onBlur={(e) => handleUpdateWallTotalLength(selectedWallId, parseFloat(e.target.value))}
                              onKeyDown={(e) => {
                                 if (e.key === 'Enter') handleUpdateWallTotalLength(selectedWallId, parseFloat((e.target as HTMLInputElement).value));

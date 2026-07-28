@@ -1943,15 +1943,33 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     </div>
 
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-gray-100 bg-white flex justify-end">
-                            <ColumnConfigButton
-                                columns={BROKERS_COLUMNS}
-                                visibleColumns={brokersColumns.visibleColumns}
-                                showColumnConfig={brokersColumns.showColumnConfig}
-                                onToggleShow={() => brokersColumns.setShowColumnConfig(!brokersColumns.showColumnConfig)}
-                                onToggleColumn={brokersColumns.toggleColumn}
-                                onReset={brokersColumns.resetColumns}
-                            />
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por nome ou e-mail..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <button onClick={loadData} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0" title="Atualizar">
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+
+                            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={BROKERS_COLUMNS}
+                                    visibleColumns={brokersColumns.visibleColumns}
+                                    showColumnConfig={brokersColumns.showColumnConfig}
+                                    onToggleShow={() => brokersColumns.setShowColumnConfig(!brokersColumns.showColumnConfig)}
+                                    onToggleColumn={brokersColumns.toggleColumn}
+                                    onReset={brokersColumns.resetColumns}
+                                />
+                            </div>
                         </div>
 
                         {filteredBrokers.length === 0 ? (
@@ -2041,17 +2059,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     </td>
                                                 )}
                                                 <td className="px-6 py-2.5 text-right">
-                                                    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                                        <label htmlFor={`broker-access-${broker.id}`} className="text-xs font-medium text-gray-500 cursor-pointer">
-                                                            Ver este empreendimento no Portal
+                                                    <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                                                        <label className="relative inline-flex items-center cursor-pointer" title="Ver este empreendimento no Portal">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="sr-only peer"
+                                                                checked={!!brokerAccess[broker.id]}
+                                                                onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
+                                                            />
+                                                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                                         </label>
-                                                        <input
-                                                            type="checkbox"
-                                                            id={`broker-access-${broker.id}`}
-                                                            checked={!!brokerAccess[broker.id]}
-                                                            onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                        />
                                                     </div>
                                                 </td>
                                             </tr>

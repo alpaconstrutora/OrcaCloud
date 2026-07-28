@@ -1145,11 +1145,10 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                       </Stage>
                       {renderWallLabels()}
                     </div>
-                  </TransformComponent>
                   </React.Fragment>
                   );
-                }}
-              </TransformWrapper>
+                })()}
+              </React.Fragment>
             )}
 
             {/* Dica para fechar o polígono */}

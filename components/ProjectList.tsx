@@ -1,7 +1,7 @@
 import React from 'react';
 import { projectService, ProjectData } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TipoObra } from '../types/project';
 
@@ -29,7 +29,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 import ExcelImportModal from './ExcelImportModal';
 import { BudgetEntry } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
@@ -99,6 +99,16 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'lock',          label: 'Bloqueio',    sortable: true },
     { key: 'actions',       label: 'Ações',       sortable: false }
 ];
+
+// Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
+// obra-vinculada/planejamento-vinculada não entram em COLUMNS (não são
+// configuráveis via ColumnConfigButton — só existem no contexto Diário), mas
+// precisam de largura própria por serem colunas reais da tabela.
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    code: 90, name: 240, organization: 180, empreendimento: 180, linked: 200,
+    'obra-vinculada': 180, 'planejamento-vinculada': 180,
+    client: 160, updated: 150, 'status-budget': 130, 'status-obra': 130, lock: 120, actions: 200,
+};
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/ordenação/tipo já existentes, não os substitui.
@@ -198,6 +208,15 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const isPlanejamentoContext = classificationFilter === 'PLANEJAMENTO';
     const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
     const isDiaryContext = isDiarioContext;
+
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'projectListColWidths');
+    // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
+    // table-layout:fixed (§6.1). As 2 colunas extras do contexto Diário entram
+    // condicionalmente — não fazem parte de COLUMNS/visibleColumns.
+    const tableTotalWidth = (['code', 'name', 'organization', 'empreendimento', 'linked', 'client', 'updated', 'status-budget', 'status-obra', 'lock'] as const)
+        .reduce((sum, key) => sum + (visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + (isDiaryContext ? cols.getWidth('obra-vinculada') + cols.getWidth('planejamento-vinculada') : 0)
+        + cols.getWidth('actions');
 
     const loadProjects = async () => {
         setIsLoading(true);
@@ -656,6 +675,18 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
+                    {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                        Duplo clique no divisor segue "restaurar padrão". Só em modo
+                        lista: no modo blocos não há coluna para ajustar. */}
+                    {viewMode === 'list' && (
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                    )}
                     <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
@@ -705,7 +736,25 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ) : (
                 viewMode === 'list' ? (
                         <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
+                                {visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                                {visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
+                                {visibleColumns.includes('empreendimento') && <col data-col-key="empreendimento" style={{ width: `${cols.getWidth('empreendimento')}px` }} />}
+                                {visibleColumns.includes('linked') && <col data-col-key="linked" style={{ width: `${cols.getWidth('linked')}px` }} />}
+                                {isDiaryContext && <col data-col-key="obra-vinculada" style={{ width: `${cols.getWidth('obra-vinculada')}px` }} />}
+                                {isDiaryContext && <col data-col-key="planejamento-vinculada" style={{ width: `${cols.getWidth('planejamento-vinculada')}px` }} />}
+                                {visibleColumns.includes('client') && <col data-col-key="client" style={{ width: `${cols.getWidth('client')}px` }} />}
+                                {visibleColumns.includes('updated') && <col data-col-key="updated" style={{ width: `${cols.getWidth('updated')}px` }} />}
+                                {visibleColumns.includes('status-budget') && <col data-col-key="status-budget" style={{ width: `${cols.getWidth('status-budget')}px` }} />}
+                                {visibleColumns.includes('status-obra') && <col data-col-key="status-obra" style={{ width: `${cols.getWidth('status-obra')}px` }} />}
+                                {visibleColumns.includes('lock') && <col data-col-key="lock" style={{ width: `${cols.getWidth('lock')}px` }} />}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
                                 força uppercase internamente por padrão. */}
                             <thead>
@@ -718,8 +767,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 w-20 text-center"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="code" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('name') && (
                                         <SortableHeader
@@ -729,8 +780,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('organization') && (
                                         <SortableHeader
@@ -740,8 +793,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="organization" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('empreendimento') && (
                                         <SortableHeader
@@ -751,8 +806,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="empreendimento" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('linked') && (
                                         // Vinculado = obra/orçamento/planejamento ligado — sem valor único pra ordenar (§6.3).
@@ -764,8 +821,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
                                             sortable={false}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="linked" />
+                                        </SortableHeader>
                                     )}
                                     {isDiaryContext && (
                                         <>
@@ -777,8 +836,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 sortDirection={sortDirection}
                                                 onSort={handleColumnSort}
                                                 sortable={false}
-                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                            />
+                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                            >
+                                                <cols.ResizeHandle colKey="obra-vinculada" />
+                                            </SortableHeader>
                                             <SortableHeader
                                                 label="Planejamento Vinculado"
                                                 colKey="planejamento-vinculada"
@@ -787,8 +848,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 sortDirection={sortDirection}
                                                 onSort={handleColumnSort}
                                                 sortable={false}
-                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                            />
+                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                            >
+                                                <cols.ResizeHandle colKey="planejamento-vinculada" />
+                                            </SortableHeader>
                                         </>
                                     )}
                                     {visibleColumns.includes('client') && (
@@ -799,8 +862,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="client" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('updated') && (
                                         <SortableHeader
@@ -810,8 +875,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="updated" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('status-budget') && (
                                         <SortableHeader
@@ -821,8 +888,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="status-budget" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('status-obra') && (
                                         <SortableHeader
@@ -832,8 +901,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="status-obra" />
+                                        </SortableHeader>
                                     )}
                                     {visibleColumns.includes('lock') && (
                                         <SortableHeader
@@ -843,10 +914,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 text-center"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="lock" />
+                                        </SortableHeader>
                                     )}
-                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -1090,6 +1168,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </div>
                                             </td>
                                         )}
+                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">
                                             <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-3">
                                                 {/* Para Planejamento/Diário, o clique na linha já abre Cronograma/Diário

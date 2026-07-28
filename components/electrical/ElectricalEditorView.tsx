@@ -48,7 +48,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedPoint, setSelectedPoint] = useState<OpuraElectricalPoint | null>(null);
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
-  const [isOrthoMode, setIsOrthoMode] = useState(false);
+  const [isOrthoMode, setIsOrthoMode] = useState(true);
   const [gridSizeCm, setGridSizeCm] = useState<number>(100);
   const [showBackground, setShowBackground] = useState(true);
   const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
@@ -460,18 +460,29 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
 
+    const ppm = plan?.scaleFactor || 100;
+    const baseGridPx = (gridSizeCm / 100) * ppm;
+    const scaledGridPx = baseGridPx * stageTransform.scale;
+    
     let snappedPos = pointerPosition;
+    if (gridSizeCm > 0 && scaledGridPx >= 5) {
+      snappedPos = {
+        x: Math.round(pointerPosition.x / baseGridPx) * baseGridPx,
+        y: Math.round(pointerPosition.y / baseGridPx) * baseGridPx
+      };
+    }
+
     if (isOrthoMode) {
       if (tool === 'draw_wall' && currentWall.length >= 2) {
         const lastX = currentWall[currentWall.length - 2];
         const lastY = currentWall[currentWall.length - 1];
         snappedPos = Math.abs(pointerPosition.x - lastX) > Math.abs(pointerPosition.y - lastY) 
-          ? { x: pointerPosition.x, y: lastY } : { x: lastX, y: pointerPosition.y };
+          ? { x: snappedPos.x, y: lastY } : { x: lastX, y: snappedPos.y };
       } else if (tool === 'draw_room' && currentPolygon.length >= 2) {
         const lastX = currentPolygon[currentPolygon.length - 2];
         const lastY = currentPolygon[currentPolygon.length - 1];
         snappedPos = Math.abs(pointerPosition.x - lastX) > Math.abs(pointerPosition.y - lastY) 
-          ? { x: pointerPosition.x, y: lastY } : { x: lastX, y: pointerPosition.y };
+          ? { x: snappedPos.x, y: lastY } : { x: lastX, y: snappedPos.y };
       }
     }
 

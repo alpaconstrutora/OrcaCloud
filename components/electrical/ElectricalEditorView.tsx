@@ -142,7 +142,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
   // Editor State
   const [viewMode, setViewMode] = useState<'drawing' | 'schedule' | 'takeoff'>('drawing');
-  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate' | 'draw_wall' | 'draw_wall_rect'>('select');
+  const [tool, setTool] = useState<'select' | 'draw_room' | 'add_point' | 'calibrate' | 'draw_wall' | 'draw_wall_rect' | 'draw_wall_l' | 'draw_wall_u' | 'draw_wall_t'>('select');
   const [currentPolygon, setCurrentPolygon] = useState<number[]>([]);
   const [currentWall, setCurrentWall] = useState<number[]>([]);
   const [calibrationPoints, setCalibrationPoints] = useState<number[]>([]);
@@ -450,7 +450,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         
         if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) return;
         
-        finishWallRect(startX, startY, endX, endY);
+        finishWallShape(tool, startX, startY, endX, endY);
       }
     }
   };

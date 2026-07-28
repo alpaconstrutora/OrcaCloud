@@ -49,7 +49,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [isShiftDown, setIsShiftDown] = useState(false);
   const [isOrthoMode, setIsOrthoMode] = useState(false);
-  const [gridSizeCm, setGridSizeCm] = useState<number>(0);
+  const [gridSizeCm, setGridSizeCm] = useState<number>(100);
   const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
   const wallPreviewRef = useRef<any>(null);
   
@@ -848,10 +848,10 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                               
                               const lines = [];
                               for (let i = 0; i <= stageSize.width / gridPx; i++) {
-                                  lines.push(<Line key={`gv-${i}`} points={[Math.round(i * gridPx), 0, Math.round(i * gridPx), stageSize.height]} stroke="rgba(0,0,0,0.15)" strokeWidth={1} listening={false} />);
+                                  lines.push(<Line key={`gv-${i}`} points={[Math.round(i * gridPx), 0, Math.round(i * gridPx), stageSize.height]} stroke="rgba(0,0,0,0.3)" strokeWidth={1} listening={false} />);
                               }
                               for (let j = 0; j <= stageSize.height / gridPx; j++) {
-                                  lines.push(<Line key={`gh-${j}`} points={[0, Math.round(j * gridPx), stageSize.width, Math.round(j * gridPx)]} stroke="rgba(0,0,0,0.15)" strokeWidth={1} listening={false} />);
+                                  lines.push(<Line key={`gh-${j}`} points={[0, Math.round(j * gridPx), stageSize.width, Math.round(j * gridPx)]} stroke="rgba(0,0,0,0.3)" strokeWidth={1} listening={false} />);
                               }
                               return lines;
                           })()}

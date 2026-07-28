@@ -80,6 +80,16 @@ const DEALS_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+const BROKERS_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Corretor', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    // Contato = e-mail + telefone combinados — sem valor único óbvio pra ordenar (guide §6.3).
+    { key: 'contact', label: 'Contato', sortable: false },
+    { key: 'agency', label: 'Imobiliária', sortable: true },
+    { key: 'commission', label: 'Comissão', sortable: true },
+    { key: 'creci', label: 'CRECI', sortable: true },
+];
+
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_INVENTORY_COL_WIDTHS: Record<string, number> = {
     name: 200, address: 220, block: 100, private_area: 110, price: 140, price_per_m2: 130,
@@ -120,6 +130,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // ui_ux_guia_unificado.md §3 — colunas + ordenação persistidas via useTableColumns.
     const inventoryColumns = useTableColumns(INVENTORY_COLUMNS, 'salesModuleInventoryColumns');
     const dealsColumns = useTableColumns(DEALS_COLUMNS, 'salesModuleDealsColumns');
+    const brokersColumns = useTableColumns(BROKERS_COLUMNS, 'salesModuleBrokersColumns');
     const inventoryResize = useResizableColumns(DEFAULT_INVENTORY_COL_WIDTHS, 'salesModuleInventoryColWidths');
     const dealsResize = useResizableColumns(DEFAULT_DEALS_COL_WIDTHS, 'salesModuleDealsColWidths');
 
@@ -1899,7 +1910,24 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 )
             }
 
-            {activeTab === 'brokers' && (
+            {activeTab === 'brokers' && (() => {
+                const filteredBrokers = brokers
+                    .filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase()))
+                    .sort((a, b) => {
+                        if (brokersColumns.sortColumn) {
+                            const col = brokersColumns.sortColumn;
+                            const dir = brokersColumns.sortDirection === 'asc' ? 1 : -1;
+                            if (col === 'name') return a.name.localeCompare(b.name) * dir;
+                            if (col === 'status') return (a.is_active === b.is_active ? 0 : a.is_active ? -1 : 1) * dir;
+                            if (col === 'agency') return (a.agency_name || '').localeCompare(b.agency_name || '') * dir;
+                            if (col === 'commission') return ((a.commission_rate || 0) - (b.commission_rate || 0)) * dir;
+                            if (col === 'creci') return (a.creci || '').localeCompare(b.creci || '') * dir;
+                        }
+                        // Sem coluna clicada, ordenação default é nome A-Z (guide §6.4).
+                        return a.name.localeCompare(b.name);
+                    });
+
+                return (
                 <div className="space-y-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
@@ -1914,70 +1942,133 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {brokers.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase())).map(broker => (
-                            <div key={broker.id} className="bg-white p-5 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-all">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-12 h-12 bg-gray-100 rounded-[10px] flex items-center justify-center text-gray-400 font-bold text-lg shrink-0">
-                                        {broker.name.charAt(0)}
-                                    </div>
-                                    <div className="flex flex-col min-w-0">
-                                        <span className={`text-xs font-normal mb-0.5 ${broker.is_active ? 'text-emerald-600' : 'text-red-600'}`}>
-                                            {broker.is_active ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                        <h4 className="text-sm font-bold text-gray-900 truncate">{broker.name}</h4>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-gray-500">
-                                        <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                        <span className="text-sm font-normal truncate">{broker.email}</span>
-                                    </div>
-                                    {broker.phone && (
-                                        <div className="flex items-center gap-2 text-gray-500">
-                                            <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                            <span className="text-sm font-normal">{broker.phone}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-2 text-gray-500">
-                                        <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                        <span className="text-sm font-normal text-blue-600">{broker.agency_name || 'Autônomo'}</span>
-                                    </div>
-                                </div>
-
-                                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs text-gray-400">Comissão padrão</span>
-                                        <span className="text-lg font-bold text-gray-900">{broker.commission_rate}%</span>
-                                    </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-xs text-gray-400">CRECI</span>
-                                        <span className="text-sm font-medium text-gray-600">{broker.creci || '---'}</span>
-                                    </div>
-                                </div>
-
-                                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        id={`broker-access-${broker.id}`}
-                                        checked={!!brokerAccess[broker.id]}
-                                        onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
-                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                    />
-                                    <label htmlFor={`broker-access-${broker.id}`} className="text-xs font-medium text-gray-600 cursor-pointer">
-                                        Habilitado para ver este empreendimento no Portal
-                                    </label>
-                                </div>
-                            </div>
-                        ))}
-                        <div className="bg-amber-50/40 border-2 border-dashed border-amber-100 rounded-[10px] p-6 flex flex-col items-center justify-center min-h-[200px]">
-                            <span className="text-sm font-bold text-amber-700">Cadastro centralizado</span>
-                            <p className="text-xs text-amber-600 text-center mt-1 px-4">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-gray-100 bg-white flex justify-end">
+                            <ColumnConfigButton
+                                columns={BROKERS_COLUMNS}
+                                visibleColumns={brokersColumns.visibleColumns}
+                                showColumnConfig={brokersColumns.showColumnConfig}
+                                onToggleShow={() => brokersColumns.setShowColumnConfig(!brokersColumns.showColumnConfig)}
+                                onToggleColumn={brokersColumns.toggleColumn}
+                                onReset={brokersColumns.resetColumns}
+                            />
                         </div>
+
+                        {filteredBrokers.length === 0 ? (
+                            <div className="text-center py-12">
+                                <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum corretor encontrado</h3>
+                                <p className="text-sm text-gray-500">
+                                    {searchTerm ? 'Tente buscar por outro termo.' : 'Cadastre corretores em Minha Organização > Fornecedores > Corretor Imobiliário.'}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="overflow-auto max-h-[70vh]">
+                                <table className="w-full text-left border-collapse">
+                                    {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força uppercase internamente por padrão. */}
+                                    <thead>
+                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            {brokersColumns.visibleColumns.includes('name') && (
+                                                <SortableHeader label="Corretor" colKey="name" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            {brokersColumns.visibleColumns.includes('status') && (
+                                                <SortableHeader label="Status" colKey="status" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            {brokersColumns.visibleColumns.includes('contact') && (
+                                                <SortableHeader label="Contato" colKey="contact" uppercase={false} sortable={false} className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            {brokersColumns.visibleColumns.includes('agency') && (
+                                                <SortableHeader label="Imobiliária" colKey="agency" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            {brokersColumns.visibleColumns.includes('commission') && (
+                                                <SortableHeader label="Comissão" colKey="commission" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            {brokersColumns.visibleColumns.includes('creci') && (
+                                                <SortableHeader label="CRECI" colKey="creci" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Acesso ao portal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {filteredBrokers.map(broker => (
+                                            <tr key={broker.id} className="hover:bg-blue-50/50 transition-colors">
+                                                {brokersColumns.visibleColumns.includes('name') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 font-semibold text-sm shrink-0">
+                                                                {broker.name.charAt(0)}
+                                                            </div>
+                                                            <span className="text-sm font-normal text-gray-900">{broker.name}</span>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {brokersColumns.visibleColumns.includes('status') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        <span className={`text-sm font-normal ${broker.is_active ? 'text-emerald-700' : 'text-gray-400'}`}>
+                                                            {broker.is_active ? 'Ativo' : 'Inativo'}
+                                                        </span>
+                                                    </td>
+                                                )}
+                                                {brokersColumns.visibleColumns.includes('contact') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center text-sm font-normal text-gray-600">
+                                                                <Mail className="w-3.5 h-3.5 mr-1.5 text-blue-500 shrink-0" />
+                                                                {broker.email}
+                                                            </div>
+                                                            {broker.phone && (
+                                                                <div className="flex items-center text-sm font-normal text-gray-600">
+                                                                    <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
+                                                                    {broker.phone}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {brokersColumns.visibleColumns.includes('agency') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
+                                                        {broker.agency_name || 'Autônomo'}
+                                                    </td>
+                                                )}
+                                                {brokersColumns.visibleColumns.includes('commission') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
+                                                        {broker.commission_rate}%
+                                                    </td>
+                                                )}
+                                                {brokersColumns.visibleColumns.includes('creci') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                        {broker.creci || '-'}
+                                                    </td>
+                                                )}
+                                                <td className="px-6 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                                        <label htmlFor={`broker-access-${broker.id}`} className="text-xs font-medium text-gray-500 cursor-pointer">
+                                                            Ver este empreendimento no Portal
+                                                        </label>
+                                                        <input
+                                                            type="checkbox"
+                                                            id={`broker-access-${broker.id}`}
+                                                            checked={!!brokerAccess[broker.id]}
+                                                            onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-amber-50/40 border border-dashed border-amber-100 rounded-[10px] p-4 text-center">
+                        <span className="text-sm font-bold text-amber-700">Cadastro centralizado</span>
+                        <p className="text-xs text-amber-600 mt-1">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {/* Contratos de Venda de Ativos (domain='VENDAS') */}
             {activeTab === 'contracts' && (

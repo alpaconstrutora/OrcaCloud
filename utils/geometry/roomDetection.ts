@@ -188,7 +188,7 @@ export function extractFacesFromWalls(walls: OpuraElectricalWall[]): Point2D[][]
         // By checking if the area is > 0, we can filter out the outer face (if it's < 0).
         // Let's just accept positive area faces (assuming inner faces are CCW or CW consistently).
         
-        if (area < -500) { // inner faces have negative area in canvas coordinates
+        if (area > 500) { // inner faces have positive area in our CW traversal in canvas coordinates
           // Push closed loop points
           facePoints.push({ ...facePoints[0] });
           faces.push(facePoints);

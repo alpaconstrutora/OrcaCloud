@@ -955,7 +955,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const newElement = await electricalProjectService.createElement({
-        organizationId: organizationId,
+        organizationId: project?.organizationId || organizationId,
         planId: plan.id,
         type: dbType,
         points: [x1, y1, x2, y2]

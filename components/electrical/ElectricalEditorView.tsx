@@ -324,10 +324,46 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const resetTransform = () => setStageTransform({ scale: 1, x: 0, y: 0 });
 
   const handleStageDblClick = (e: any) => {
+    e.cancelBubble = true;
+    
+    const stage = e.target.getStage();
+    const pointerPosition = stage.getRelativePointerPosition();
+    if (!pointerPosition) return;
+
+    const ppm = plan?.scaleFactor || 100;
+    const baseGridPx = (gridSizeCm / 100) * ppm;
+    const scaledGridPx = baseGridPx * stageTransform.scale;
+    
+    let snapPoint = pointerPosition;
+    if (gridSizeCm > 0 && scaledGridPx >= 5) {
+      snapPoint = {
+        x: Math.round(pointerPosition.x / baseGridPx) * baseGridPx,
+        y: Math.round(pointerPosition.y / baseGridPx) * baseGridPx
+      };
+    }
+
     if (tool === 'draw_wall') {
-      finishWall();
+      if (isOrthoMode && currentWall.length >= 2) {
+        const lastX = currentWall[currentWall.length - 2];
+        const lastY = currentWall[currentWall.length - 1];
+        if (Math.abs(snapPoint.x - lastX) > Math.abs(snapPoint.y - lastY)) {
+          snapPoint.y = lastY;
+        } else {
+          snapPoint.x = lastX;
+        }
+      }
+      finishWall([...currentWall, snapPoint.x, snapPoint.y]);
     } else if (tool === 'draw_room') {
-      finishPolygon();
+      if (isOrthoMode && currentPolygon.length >= 2) {
+        const lastX = currentPolygon[currentPolygon.length - 2];
+        const lastY = currentPolygon[currentPolygon.length - 1];
+        if (Math.abs(snapPoint.x - lastX) > Math.abs(snapPoint.y - lastY)) {
+          snapPoint.y = lastY;
+        } else {
+          snapPoint.x = lastX;
+        }
+      }
+      finishPolygon([...currentPolygon, snapPoint.x, snapPoint.y]);
     }
   };
 
@@ -470,8 +506,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
   };
 
-  const finishPolygon = async () => {
-    if (currentPolygon.length < 6) {
+  const finishPolygon = async (overridePts?: number[]) => {
+    const pts = overridePts || currentPolygon;
+    if (pts.length < 6) {
       alert('Um ambiente precisa ter no mínimo 3 pontos (6 coordenadas).');
       setCurrentPolygon([]);
       return;
@@ -488,7 +525,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     // Calcula Área e Perímetro em Pixels
     let areaPx = 0;
     let perimeterPx = 0;
-    const pts = currentPolygon;
+    // const pts = currentPolygon; // replaced by param
     for (let i = 0; i < pts.length; i += 2) {
       const x1 = pts[i];
       const y1 = pts[i + 1];
@@ -510,7 +547,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         organizationId: organizationId,
         planId: plan.id,
         name: roomName,
-        polygonPoints: currentPolygon,
+        polygonPoints: pts,
         areaSqm: Number(areaSqm.toFixed(2)),
         perimeterM: Number(perimeterM.toFixed(2))
       });
@@ -524,8 +561,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     setTool('select');
   };
 
-  const finishWall = async () => {
-    if (currentWall.length < 4) {
+  const finishWall = async (overridePts?: number[]) => {
+    const pts = overridePts || currentWall;
+    if (pts.length < 4) {
       setCurrentWall([]);
       setTool('select');
       return;
@@ -536,7 +574,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       const newWall = await electricalProjectService.createWall({
         organizationId: organizationId,
         planId: plan.id,
-        points: currentWall,
+        points: pts,
         thicknessM: 0.15
       });
       setWalls(prev => [...prev, newWall]);
@@ -547,6 +585,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     
     setCurrentWall([]);
     // Do not set tool to 'select', allow continuous drawing unless they hit Esc
+  };
+
+  const handleUpdateWallThickness = async (wallId: string, thicknessM: number) => {
+    if (isNaN(thicknessM) || thicknessM <= 0) return;
+    setWalls(prev => prev.map(w => w.id === wallId ? { ...w, thicknessM } : w));
+    try {
+       await electricalProjectService.updateWall(wallId, { thicknessM });
+    } catch(err) {
+       console.error(err);
+       showToast('Erro ao atualizar espessura', 'error');
+    }
   };
 
   const handleSegmentLengthSave = async (wallId: string, startIndex: number, newLengthStr: string) => {
@@ -860,6 +909,33 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                         <span className="ml-1 text-slate-500 font-normal">cm</span>
                       </div>
                     </div>
+
+                    {selectedWallId && tool === 'select' && (
+                      <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white p-2 rounded-xl shadow-lg border border-slate-200 z-10">
+                        <div className="px-3 text-sm font-medium text-slate-600 border-r border-slate-200">
+                          Parede Selecionada
+                        </div>
+                        <div className="flex items-center gap-2 px-2">
+                          <span className="text-sm text-slate-500">Espessura:</span>
+                          <input 
+                             type="number"
+                             step="0.01"
+                             min="0.01"
+                             value={walls.find(w => w.id === selectedWallId)?.thicknessM || 0.15}
+                             onChange={(e) => handleUpdateWallThickness(selectedWallId, parseFloat(e.target.value))}
+                             className="w-16 px-2 py-1 text-sm border border-slate-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                          />
+                          <span className="text-sm text-slate-500">m</span>
+                        </div>
+                        <button
+                          onClick={() => setSelectedWallId(null)}
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"
+                          title="Deselecionar"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
 
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white p-2 rounded-xl shadow-lg border border-slate-200 z-10">
                       <div className="flex bg-slate-100 p-1 rounded-xl">

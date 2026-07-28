@@ -965,7 +965,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       setCurrentWall([]);
     } catch (error: any) {
       console.error(error);
-      alert('Erro ao salvar o elemento: ' + (error?.message || JSON.stringify(error)));
+      const payload = { organizationId, planId: plan.id, type: dbType, points: [x1, y1, x2, y2] };
+      alert('Erro ao salvar o elemento: ' + (error?.message || JSON.stringify(error)) + ' | Payload: ' + JSON.stringify(payload));
     }
   };
 

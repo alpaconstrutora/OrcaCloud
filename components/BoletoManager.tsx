@@ -11,7 +11,7 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
-import type { Boleto, BoletoStatus, BoletoFilters, Organization, CostCenter } from '../types';
+import type { Boleto, BoletoStatus, BoletoFilters, BoletoStats, Organization, CostCenter } from '../types';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
@@ -317,6 +317,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // O usuário pode filtrar por organização específica via dropdown.
     const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
     const [boletos, setBoletos] = useState<Boleto[]>([]);
+    // Totais agregados no servidor — independem de quantos boletos estão na tela.
+    const [stats, setStats] = useState<BoletoStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -450,6 +452,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             }
             if (excluidosIds.size > 0) {
                 setBoletos(prev => prev.filter(item => !excluidosIds.has(item.id)));
+                void recarregarStats();
             }
             clearSelection();
         } finally {
@@ -473,11 +476,27 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             await boletoService.excluirRascunho(b.id, effectiveOrgId ?? organizationId, userEmail);
             notify('Boleto excluído com sucesso.');
             setBoletos(prev => prev.filter(item => item.id !== b.id));
+            void recarregarStats();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             notify(error.message || 'Falha ao excluir boleto.', 'error');
         }
     }
+
+    /**
+     * Reagrega só os KPIs, sem mexer na lista nem acionar `loading` — assim as
+     * ações locais (§22: criar/editar/excluir atualizam o array na mão) não
+     * deixam os totais defasados e a tela não recarrega nem perde o scroll.
+     */
+    const recarregarStats = useCallback(async () => {
+        try {
+            const filters: BoletoFilters = {};
+            if (projectId) filters.project_id = projectId;
+            setStats(await boletoService.stats(selectedOrgId === 'ALL' ? undefined : selectedOrgId, filters));
+        } catch {
+            // KPI defasado não justifica quebrar a tela; a próxima carga corrige.
+        }
+    }, [selectedOrgId, projectId]);
 
     async function carregar(orgId: string | undefined) {
         setLoading(true);
@@ -487,14 +506,16 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             if (filtroStatus !== 'todos') filters.status = filtroStatus;
             if (projectId) filters.project_id = projectId;
 
-            const [list, ccs, projs, sups] = await Promise.all([
+            const [list, agregados, ccs, projs, sups] = await Promise.all([
                 boletoService.list(orgId, filters),
+                boletoService.stats(orgId, filters),
                 financialRegistryService.listCostCenters(orgId).catch(() => [] as CostCenter[]),
                 projectService.listProjects(undefined, orgId ?? organizationId).catch(() => [] as { id: string; name: string }[]),
                 supplierService.listSuppliers(orgId).catch(() => [] as { id: string; name: string; nickname?: string | null }[]),
             ]);
 
             setBoletos(list);
+            setStats(agregados);
             setCcMap(Object.fromEntries((ccs || []).map((c) => [c.id, c.name])));
             setProjectMap(Object.fromEntries((projs || []).map((p) => [p.id, p.name])));
             setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, s.name])));
@@ -608,43 +629,21 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         lastSelectedIndexRef.current = index;
     }, [filtered]);
 
+    // KPIs e contadores vêm de `boletoService.stats` (agregado sobre a base inteira).
+    // Não recalcular a partir de `boletos`: essa lista é o recorte já filtrado por
+    // status, então os contadores dos outros status zerariam.
     const counts = useMemo(() => {
-        const c: Record<string, number> = { todos: boletos.length };
-        for (const s of Object.keys(STATUS_LABELS)) c[s] = 0;
-        for (const b of boletos) c[b.status] = (c[b.status] || 0) + 1;
+        const c: Record<string, number> = { todos: stats?.total ?? 0 };
+        for (const s of Object.keys(STATUS_LABELS)) c[s] = stats?.countPorStatus[s] ?? 0;
         return c;
-    }, [boletos]);
+    }, [stats]);
 
-    const summary = useMemo(() => {
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        const em7 = new Date(hoje);
-        em7.setDate(hoje.getDate() + 7);
-
-        const pendentes = boletos.filter(b => !['pago', 'cancelado'].includes(b.status));
-        const atrasados = pendentes.filter(b => {
-            if (!b.vencimento) return false;
-            return new Date(b.vencimento + 'T00:00:00') < hoje;
-        });
-        const aVencer7 = pendentes.filter(b => {
-            if (!b.vencimento) return false;
-            const d = new Date(b.vencimento + 'T00:00:00');
-            return d >= hoje && d <= em7;
-        });
-
-        const anoMes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-        const pagosNoMes = boletos.filter(b =>
-            b.status === 'pago' && (b.updated_at ?? b.created_at).startsWith(anoMes),
-        );
-
-        const soma = (arr: Boleto[]) => arr.reduce((s, b) => s + (b.valor ?? 0), 0);
-        return {
-            totalPendente: soma(pendentes), countPendente: pendentes.length,
-            totalAtrasado: soma(atrasados), countAtrasado: atrasados.length,
-            totalAVencer7: soma(aVencer7),  countAVencer7: aVencer7.length,
-            totalPagoMes:  soma(pagosNoMes), countPagoMes: pagosNoMes.length,
-        };
-    }, [boletos]);
+    const summary = useMemo(() => ({
+        totalPendente: stats?.totalPendente ?? 0, countPendente: stats?.countPendente ?? 0,
+        totalAtrasado: stats?.totalAtrasado ?? 0, countAtrasado: stats?.countAtrasado ?? 0,
+        totalAVencer7: stats?.totalAVencer7 ?? 0, countAVencer7: stats?.countAVencer7 ?? 0,
+        totalPagoMes:  stats?.totalPagoMes  ?? 0, countPagoMes:  stats?.countPagoMes  ?? 0,
+    }), [stats]);
 
     function abrirNovo() {
         setEditing(undefined);
@@ -680,6 +679,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             if (!combinaComFiltro) return prev.filter(b => b.id !== updated.id);
             return existe ? prev.map(b => (b.id === updated.id ? updated : b)) : [updated, ...prev];
         });
+        void recarregarStats();
     }
 
     async function handleExport(tipo: 'excel' | 'pdf') {

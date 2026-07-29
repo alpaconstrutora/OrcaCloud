@@ -128,3 +128,21 @@ export interface BoletoFilters {
     vencimento_ate?: string;
     search?: string;
 }
+
+/**
+ * Totais dos KPIs agregados sobre a base inteira (ver `boletoService.stats`),
+ * não sobre o que está carregado na tela.
+ */
+export interface BoletoStats {
+    total: number;
+    /** Quantidade por status, independente do filtro de status ativo. */
+    countPorStatus: Record<string, number>;
+    totalPendente: number;
+    countPendente: number;
+    totalAtrasado: number;
+    countAtrasado: number;
+    totalAVencer7: number;
+    countAVencer7: number;
+    totalPagoMes: number;
+    countPagoMes: number;
+}

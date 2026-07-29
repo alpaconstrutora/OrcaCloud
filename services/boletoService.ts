@@ -8,13 +8,76 @@ import type {
     BoletoFilters,
     BoletoExtractionResult,
     BoletoAuditoria,
+    BoletoStats,
 } from '../types/boletos';
 
 const BUCKET = 'boletos';
 const TABLE = 'boletos';
 const AUDIT_TABLE = 'boletos_auditoria';
 
+/**
+ * Tamanho do bloco de paginação. O PostgREST do Supabase corta toda resposta em
+ * `db-max-rows` (1000 por padrão) — uma query sem `.range()` devolve no máximo
+ * 1000 linhas SEM erro e SEM aviso. Por isso toda leitura de lista aqui é feita
+ * em blocos, em laço, até a página vir incompleta.
+ */
+const PAGE_SIZE = 1000;
+
+const BOLETO_COLUMNS = 'id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at';
+
 // ─── Helpers internos ───────────────────────────────────────────────────────
+
+/** Aplica organização + filtros. Compartilhado por `list` e `stats` para as duas
+ *  lerem exatamente o mesmo recorte. */
+function applyFilters<Q>(queryIn: Q, organizationId: string | undefined, filters: BoletoFilters): Q {
+    let q = queryIn as any;
+    if (organizationId) q = q.eq('organization_id', organizationId);
+
+    if (filters.status) {
+        if (Array.isArray(filters.status)) q = q.in('status', filters.status);
+        else q = q.eq('status', filters.status);
+    }
+    if (filters.supplier_id) q = q.eq('supplier_id', filters.supplier_id);
+    if (filters.project_id) q = q.eq('project_id', filters.project_id);
+    if (filters.vencimento_de) q = q.gte('vencimento', filters.vencimento_de);
+    if (filters.vencimento_ate) q = q.lte('vencimento', filters.vencimento_ate);
+    if (filters.search) {
+        q = q.or(`documento_nome.ilike.%${filters.search}%,beneficiario_nome.ilike.%${filters.search}%,linha_digitavel.ilike.%${filters.search}%`);
+    }
+    return q as Q;
+}
+
+/**
+ * Lê a tabela inteira em blocos de PAGE_SIZE, até uma página vir incompleta.
+ * A ordenação inclui `id` como desempate — sem chave estável, dois registros com
+ * o mesmo `created_at` podem trocar de posição entre um bloco e o seguinte e
+ * aparecer duplicados ou sumir.
+ */
+async function fetchAllPages(
+    columns: string,
+    organizationId: string | undefined,
+    filters: BoletoFilters,
+): Promise<any[]> {
+    const todas: any[] = [];
+    for (let pagina = 0; ; pagina++) {
+        const from = pagina * PAGE_SIZE;
+        const q = applyFilters(
+            supabase
+                .from(TABLE)
+                .select(columns)
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(from, from + PAGE_SIZE - 1),
+            organizationId,
+            filters,
+        );
+        const { data, error } = await q;
+        if (error) throw error;
+        const bloco = (data || []) as any[];
+        todas.push(...bloco);
+        if (bloco.length < PAGE_SIZE) return todas;
+    }
+}
 
 function mapRowToBoleto(row: any): Boleto {
     return {
@@ -490,29 +553,71 @@ export const boletoService = {
     /**
      * Lista boletos com filtros opcionais. Se organizationId for omitido, retorna todas as
      * organizações acessíveis ao usuário (RLS garante o escopo).
+     *
+     * Pagina em blocos de PAGE_SIZE: sem isso o PostgREST devolve no máximo 1000
+     * linhas silenciosamente e a tela some com os boletos mais antigos.
      */
     async list(organizationId: string | undefined, filters: BoletoFilters = {}): Promise<Boleto[]> {
-        let q = supabase
-            .from(TABLE)
-            .select('id, numero, organization_id, documento_path, documento_nome, documento_hash, documento_mime, documento_paginas, documento_tamanho, linha_digitavel, codigo_barras, qr_pix, banco_codigo, banco_nome, valor, valor_original, vencimento, data_documento, beneficiario_nome, beneficiario_cnpj, beneficiario_banco, beneficiario_agencia, beneficiario_conta, pagador_nome, pagador_cnpj, multa, multa_percentual, juros_dia, juros_dia_tipo, metodo_extracao, confidence_score, engine_versao, extracao_raw, extracao_em, checksum_valido, duplicado_de, erros_validacao, project_id, cost_center_id, supplier_id, chart_of_accounts_id, invoice_id, sugestao_supplier_id, sugestao_cc_id, sugestao_confianca, status, observacoes, created_by, created_by_email, created_at, updated_at')
-            .order('created_at', { ascending: false });
-        if (organizationId) q = q.eq('organization_id', organizationId);
+        const rows = await fetchAllPages(BOLETO_COLUMNS, organizationId, filters);
+        return rows.map(mapRowToBoleto);
+    },
 
-        if (filters.status) {
-            if (Array.isArray(filters.status)) q = q.in('status', filters.status);
-            else q = q.eq('status', filters.status);
-        }
-        if (filters.supplier_id) q = q.eq('supplier_id', filters.supplier_id);
-        if (filters.project_id) q = q.eq('project_id', filters.project_id);
-        if (filters.vencimento_de) q = q.gte('vencimento', filters.vencimento_de);
-        if (filters.vencimento_ate) q = q.lte('vencimento', filters.vencimento_ate);
-        if (filters.search) {
-            q = q.or(`documento_nome.ilike.%${filters.search}%,beneficiario_nome.ilike.%${filters.search}%,linha_digitavel.ilike.%${filters.search}%`);
+    /**
+     * Totais dos KPIs calculados sobre a base INTEIRA (não sobre a página carregada
+     * na tela). Puxa só as colunas necessárias para agregar, também paginado.
+     *
+     * `filters.status` é ignorado de propósito: os contadores por status precisam
+     * refletir todos os status, senão o chip do filtro ativo zera os demais.
+     */
+    async stats(organizationId: string | undefined, filters: BoletoFilters = {}): Promise<BoletoStats> {
+        const { status: _ignorado, ...semStatus } = filters;
+        const rows = await fetchAllPages('id, status, valor, vencimento, created_at, updated_at', organizationId, semStatus);
+
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const em7 = new Date(hoje);
+        em7.setDate(hoje.getDate() + 7);
+        const anoMes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+
+        const countPorStatus: Record<string, number> = {};
+        const acc = {
+            totalPendente: 0, countPendente: 0,
+            totalAtrasado: 0, countAtrasado: 0,
+            totalAVencer7: 0, countAVencer7: 0,
+            totalPagoMes: 0, countPagoMes: 0,
+        };
+
+        for (const r of rows) {
+            const status = r.status as string;
+            countPorStatus[status] = (countPorStatus[status] || 0) + 1;
+
+            const valor = r.valor !== null && r.valor !== undefined ? Number(r.valor) : 0;
+
+            if (status === 'pago') {
+                if (String(r.updated_at ?? r.created_at).startsWith(anoMes)) {
+                    acc.totalPagoMes += valor;
+                    acc.countPagoMes += 1;
+                }
+                continue;
+            }
+            if (status === 'cancelado') continue;
+
+            acc.totalPendente += valor;
+            acc.countPendente += 1;
+
+            if (!r.vencimento) continue;
+            // Sem `new Date('YYYY-MM-DD')` puro: o construtor trata como UTC e vira o dia anterior.
+            const venc = new Date(`${r.vencimento}T00:00:00`);
+            if (venc < hoje) {
+                acc.totalAtrasado += valor;
+                acc.countAtrasado += 1;
+            } else if (venc <= em7) {
+                acc.totalAVencer7 += valor;
+                acc.countAVencer7 += 1;
+            }
         }
 
-        const { data, error } = await q;
-        if (error) throw error;
-        return (data || []).map(mapRowToBoleto);
+        return { ...acc, total: rows.length, countPorStatus };
     },
 
     async getById(boletoId: string): Promise<Boleto | null> {

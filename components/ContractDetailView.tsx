@@ -893,19 +893,19 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
         return (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-                <div className="bg-white rounded-[2.5rem] shadow-2xl p-10 w-full max-w-lg border border-gray-100 animate-in zoom-in-95 duration-300">
+                <div className="bg-white rounded-[10px] shadow-xl p-6 w-full max-w-lg border border-gray-100 animate-in zoom-in-95 duration-300">
                     <div className="flex justify-between items-start mb-8">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-600/20">
+                                <div className="p-2 bg-blue-600 rounded-[6px] text-white shadow-lg shadow-blue-600/20">
                                     <Zap className="w-5 h-5" />
                                 </div>
-                                <span className="text-xs font-medium text-blue-600 uppercase tracking-[0.3em]">Automação</span>
+                                <span className="text-xs font-medium text-blue-600">Automação</span>
                             </div>
                             <h3 className="text-2xl font-medium text-gray-900 tracking-tight">Escolha o Template</h3>
                             <p className="text-sm text-gray-500 font-medium">Selecione o modelo de contrato para emissão.</p>
                         </div>
-                        <button onClick={() => setIsTemplateModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-2xl transition-all text-gray-400">
+                        <button onClick={() => setIsTemplateModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-[10px] transition-all text-gray-400">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
@@ -915,13 +915,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <button
                                 key={template.id}
                                 onClick={() => handleSendWebhook(template)}
-                                className="w-full p-6 bg-gray-50 border-2 border-transparent hover:border-blue-500 hover:bg-white rounded-[2rem] transition-all text-left flex items-center justify-between group"
+                                className="w-full p-6 bg-gray-50 border-2 border-transparent hover:border-blue-500 hover:bg-white rounded-[10px] transition-all text-left flex items-center justify-between group"
                             >
                                 <div>
                                     <p className="text-base font-medium text-gray-900 leading-tight mb-1">{template.name}</p>
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest leading-none">ID: {template.externalId}</p>
+                                    <p className="text-xs font-medium text-gray-400 leading-none">ID: {template.externalId}</p>
                                 </div>
-                                <div className="p-3 bg-white rounded-2xl text-gray-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-all border border-gray-100">
+                                <div className="p-3 bg-white rounded-[10px] text-gray-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-all border border-gray-100">
                                     <ArrowRight className="w-5 h-5" />
                                 </div>
                             </button>
@@ -930,7 +930,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                     <button
                         onClick={() => setIsTemplateModalOpen(false)}
-                        className="w-full py-5 bg-gray-100 text-gray-400 rounded-[1.5rem] font-medium text-button uppercase tracking-widest hover:bg-gray-200 hover:text-gray-600 transition-all"
+                        className="w-full py-5 bg-gray-100 text-gray-400 rounded-[6px] font-medium text-[13px] hover:bg-gray-200 hover:text-gray-600 transition-all"
                     >
                         Cancelar Envio
                     </button>
@@ -1010,7 +1010,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     </button>
                     <div>
-                        {/* §16/§6.2: sentence case — sem uppercase tracking-widest */}
+                        {/* §16/§6.2: sentence case — sem caixa alta nem tracking largo */}
                         <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-medium text-blue-600">{contract.number}</span>
                             <span className="w-1 h-1 bg-gray-300 rounded-full" />
@@ -1180,13 +1180,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             />
                         )}
                         {/* Status & Timing */}
-                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                        <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                             <div className="flex justify-between items-center">
-                                <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2 text-blue-600">
+                                <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2 text-blue-600">
                                     <Clock className="w-4 h-4" /> Resumo de Execução
                                 </h3>
                                 <div className="flex gap-2">
-                                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium uppercase tracking-wider">
+                                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium">
                                         ID: {contract.id.slice(0, 8)}
                                     </span>
                                 </div>
@@ -1194,22 +1194,22 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                             <div className="grid grid-cols-4 gap-4">
                                 <div className="space-y-1">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-[0.15em]">{contract.is_recurring ? 'Ciclo' : 'Vigência Total'}</p>
+                                    <p className="text-xs font-medium text-gray-400">{contract.is_recurring ? 'Ciclo' : 'Vigência Total'}</p>
                                     <p className="text-sm font-medium text-gray-700">
                                         {contract.is_recurring ? contract.billing_cycle : `${Math.ceil((new Date(contract.end_date!).getTime() - new Date(contract.start_date).getTime()) / (1000 * 60 * 60 * 24))} Dias`}
                                     </p>
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-[0.15em]">Data Início</p>
+                                    <p className="text-xs font-medium text-gray-400">Data Início</p>
                                     <p className="text-sm font-medium text-gray-700">{new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-[0.15em]">{contract.is_recurring ? 'Dia do Vencimento' : 'Data Término'}</p>
+                                    <p className="text-xs font-medium text-gray-400">{contract.is_recurring ? 'Dia do Vencimento' : 'Data Término'}</p>
                                     <p className="text-sm font-medium text-gray-700">{contract.is_recurring ? `Todo dia ${contract.due_day}` : (contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A')}</p>
                                 </div>
                                 {!contract.is_recurring && (
                                     <div className="space-y-1">
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-[0.15em]">Tempo Decorrido</p>
+                                        <p className="text-xs font-medium text-gray-400">Tempo Decorrido</p>
                                         <p className="text-sm font-medium text-blue-600">{timeProgress.toFixed(1)}%</p>
                                     </div>
                                 )}
@@ -1220,7 +1220,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <div className="space-y-3 pt-2">
                                     <div className="space-y-1">
                                         <div className="flex justify-between items-end">
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Progresso Físico-Financeiro</p>
+                                        <p className="text-xs font-medium text-gray-400">Progresso Físico-Financeiro</p>
                                         <p className="text-sm font-medium text-gray-900">{physicalProgress.toFixed(1)}%</p>
                                     </div>
                                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-50 p-0.5">
@@ -1232,7 +1232,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                                 <div className="space-y-1">
                                     <div className="flex justify-between items-end">
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Execução do Prazo</p>
+                                        <p className="text-xs font-medium text-gray-400">Execução do Prazo</p>
                                         <p className="text-sm font-medium text-gray-900">{timeProgress.toFixed(1)}%</p>
                                     </div>
                                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-50 p-0.5">
@@ -1248,38 +1248,38 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Diff Visual do Orçamento */}
                         {budgetDifferences.length > 0 && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <TrendingUp className="w-5 h-5 text-amber-500" />
                                         <div>
-                                            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest text-amber-600">Divergência de Escopo (Obra vs Contrato)</h3>
+                                            <h3 className="text-xs font-bold text-gray-900 text-amber-600">Divergência de Escopo (Obra vs Contrato)</h3>
                                             <p className="text-xs text-gray-400 font-medium">O orçamento atual da obra diverge das premissas originais do contrato.</p>
                                         </div>
                                     </div>
-                                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold uppercase tracking-wider">
+                                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold">
                                         {budgetDifferences.length} alteração(ões)
                                     </span>
                                 </div>
 
-                                <div className="overflow-x-auto border border-gray-50 rounded-2xl">
+                                <div className="overflow-x-auto border border-gray-50 rounded-[10px]">
                                     <table className="w-full text-left text-xs border-collapse">
-                                        <thead className="bg-gray-50 text-gray-400 font-normal uppercase border-b border-gray-100">
-                                            <tr>
-                                                <th className="px-4 py-2 text-xs">Item</th>
-                                                <th className="px-4 py-2 text-xs text-right">Orçado Original</th>
-                                                <th className="px-4 py-2 text-xs text-right">Atual na Obra</th>
-                                                <th className="px-4 py-2 text-xs text-center">Tipo de Alteração</th>
+                                        <thead>
+                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <th className="px-6 py-2 border-r border-gray-100 text-left">Item</th>
+                                                <th className="px-6 py-2 border-r border-gray-100 text-right">Orçado original</th>
+                                                <th className="px-6 py-2 border-r border-gray-100 text-right">Atual na obra</th>
+                                                <th className="px-6 py-2 text-center">Tipo de alteração</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 text-gray-600">
                                             {budgetDifferences.map((diff, i) => (
                                                 <tr key={i} className="hover:bg-gray-50/50">
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         <p className="font-semibold text-gray-800">{diff.description}</p>
                                                         <p className="text-xs text-gray-400 font-normal">{diff.code || 'AVULSO'} · {diff.unit}</p>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right tabular-nums">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">
                                                         {diff.type === 'added' ? '—' : (
                                                             <>
                                                                 <p className="font-medium text-gray-700">{diff.snapshotQty.toLocaleString()} {diff.unit}</p>
@@ -1287,7 +1287,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                             </>
                                                         )}
                                                     </td>
-                                                    <td className="px-4 py-3 text-right tabular-nums">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">
                                                         {diff.type === 'removed' ? '—' : (
                                                             <>
                                                                 <p className="font-medium text-gray-700">{diff.currentQty.toLocaleString()} {diff.unit}</p>
@@ -1295,7 +1295,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                             </>
                                                         )}
                                                     </td>
-                                                    <td className="px-4 py-3 text-center">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
                                                         <span className={`text-xs font-normal ${
                                                             diff.type === 'quantity_changed' ? 'text-amber-700' :
                                                             diff.type === 'price_changed' ? 'text-blue-700' :
@@ -1319,13 +1319,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {(contract as any).direction === 'OUTGOING' && (
                             (contract as any).description || (contract as any).services_included || (contract as any).services_excluded
                         ) && (
-                            <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
-                                <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                            <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
+                                <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
                                     <ClipboardList className="w-4 h-4 text-blue-600" /> Escopo do Serviço
                                 </h3>
                                 {(contract as any).description && (
                                     <div>
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">Objeto / Descrição</p>
+                                        <p className="text-xs font-medium text-gray-400 mb-2">Objeto / Descrição</p>
                                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{(contract as any).description}</p>
                                     </div>
                                 )}
@@ -1333,7 +1333,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <div className="grid grid-cols-2 gap-6 pt-4 border-t border-gray-50">
                                         {(contract as any).services_included && (
                                             <div>
-                                                <p className="text-xs font-medium text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                                <p className="text-xs font-medium text-emerald-600 mb-2 flex items-center gap-1">
                                                     <CheckCircle2 className="w-3 h-3" /> Serviços Inclusos
                                                 </p>
                                                 <p className="text-sm text-gray-700 whitespace-pre-line">{(contract as any).services_included}</p>
@@ -1341,7 +1341,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         )}
                                         {(contract as any).services_excluded && (
                                             <div>
-                                                <p className="text-xs font-medium text-red-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                                <p className="text-xs font-medium text-red-500 mb-2 flex items-center gap-1">
                                                     <XCircleIcon className="w-3 h-3" /> Serviços Excluídos
                                                 </p>
                                                 <p className="text-sm text-gray-700 whitespace-pre-line">{(contract as any).services_excluded}</p>
@@ -1353,16 +1353,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Recent Activity / Timeline Placeholder */}
-                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
-                            <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                        <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
+                            <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
                                 <History className="w-4 h-4 text-blue-600" /> Histórico Recente
                             </h3>
                             <div className="space-y-4">
                                 {activities.length === 0 ? (
                                     <p className="text-xs text-gray-400 font-medium px-4 py-8 text-center italic">Nenhuma atividade registrada ainda.</p>
                                 ) : activities.slice(0, 5).map((activity, i) => (
-                                    <div key={activity.id || i} className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100">
-                                        <div className={`p-2 ${activity.type === 'measurement' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'} rounded-xl shrink-0`}>
+                                    <div key={activity.id || i} className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-[10px] transition-all border border-transparent hover:border-gray-100">
+                                        <div className={`p-2 ${activity.type === 'measurement' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'} rounded-[6px] shrink-0`}>
                                             <CheckCircle2 className="w-4 h-4" />
                                         </div>
                                         <div>
@@ -1380,9 +1380,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Pré-mobilização & Ordem de Início (Fase 6.3 — Cl.4, Manual §11) */}
                         {contract && (
-                            <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
                                         <ClipboardList className="w-4 h-4 text-blue-600" /> Pré-mobilização
                                     </h3>
                                     {contract.start_order_issued_at ? (
@@ -1422,7 +1422,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 try { await contractService.togglePrecedentCondition(cond.id, !cond.satisfied); await loadContractData(); }
                                                 finally { setFase6Busy(false); }
                                             }}
-                                            className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors disabled:cursor-not-allowed"
+                                            className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-[6px] transition-colors disabled:cursor-not-allowed"
                                         >
                                             <span className="flex items-center gap-2">
                                                 <CheckCircle2 className={`w-4 h-4 ${cond.satisfied ? 'text-emerald-500' : 'text-gray-300'}`} />
@@ -1437,9 +1437,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Matriz Documental (Fase 6.4 — Anexo V, Manual §14) */}
                         {contract && (
-                            <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
                                         <FileText className="w-4 h-4 text-blue-600" /> Matriz Documental
                                     </h3>
                                     <button type="button" onClick={() => setDocReqModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
@@ -1458,7 +1458,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     key={doc.id}
                                                     type="button"
                                                     onClick={() => setDocReqModal({ open: true, editing: doc })}
-                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-[6px] transition-colors"
                                                 >
                                                     <span className="text-sm text-gray-700 flex items-center gap-2">
                                                         {doc.document}
@@ -1482,9 +1482,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             const hasDefinitivo = acceptances.some(a => a.kind === 'DEFINITIVO');
                             const nextKind: AcceptanceKind = hasProvisorio ? 'DEFINITIVO' : 'PROVISORIO';
                             return (
-                                <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                        <h3 className="text-xs font-medium text-gray-900 flex items-center gap-2">
                                             <CheckCircle2 className="w-4 h-4 text-blue-600" /> Recebimento
                                         </h3>
                                         {!hasDefinitivo && (
@@ -1498,7 +1498,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     ) : (
                                         <div className="space-y-1.5">
                                             {acceptances.map(a => (
-                                                <div key={a.id} className="p-3 bg-gray-50 rounded-xl">
+                                                <div key={a.id} className="p-3 bg-gray-50 rounded-[6px]">
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-sm text-gray-700">{a.kind === 'DEFINITIVO' ? 'Recebimento Definitivo' : 'Recebimento Provisório'}</span>
                                                         <span className="text-xs text-gray-400">{new Date(a.issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
@@ -1522,43 +1522,43 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                             <div className="space-y-4 relative z-10">
                                 <div>
-                                    <p className="text-xs font-medium text-blue-400 uppercase tracking-[0.2em] mb-1">Valor Atual do Contrato</p>
+                                    <p className="text-xs font-medium text-blue-400 mb-1">Valor Atual do Contrato</p>
                                     <h4 className="text-2xl font-medium tracking-tighter">
                                         R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </h4>
                                     <div className="flex items-center gap-2 mt-1 text-emerald-400">
                                         <TrendingUp className="w-4 h-4" />
-                                        <span className="text-xs font-medium uppercase tracking-widest">{addendumsMetrics.percentage > 0 ? '+' : ''} {addendumsMetrics.percentage.toFixed(1)}% em Aditivos</span>
+                                        <span className="text-xs font-medium">{addendumsMetrics.percentage > 0 ? '+' : ''} {addendumsMetrics.percentage.toFixed(1)}% em Aditivos</span>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2 pt-3 border-t border-white/10">
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-400 font-medium uppercase tracking-wider">Valor Original</span>
+                                        <span className="text-gray-400 font-medium">Valor Original</span>
                                         <span className="font-medium">R$ {contract.original_value.toLocaleString('pt-BR')}</span>
                                     </div>
                                     {(contract as any).labor_value > 0 && (
                                         <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-400 font-medium uppercase tracking-wider">↳ Mão de Obra</span>
+                                            <span className="text-gray-400 font-medium">↳ Mão de Obra</span>
                                             <span className="font-medium text-gray-300">R$ {(contract as any).labor_value.toLocaleString('pt-BR')}</span>
                                         </div>
                                     )}
                                     {(contract as any).materials_value > 0 && (
                                         <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-400 font-medium uppercase tracking-wider">↳ Materiais</span>
+                                            <span className="text-gray-400 font-medium">↳ Materiais</span>
                                             <span className="font-medium text-gray-300">R$ {(contract as any).materials_value.toLocaleString('pt-BR')}</span>
                                         </div>
                                     )}
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-400 font-medium uppercase tracking-wider">Total Medido</span>
+                                        <span className="text-gray-400 font-medium">Total Medido</span>
                                         <span className="font-medium text-blue-400">R$ {totalMeasurements.toLocaleString('pt-BR')}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-400 font-medium uppercase tracking-wider">Retenções</span>
+                                        <span className="text-gray-400 font-medium">Retenções</span>
                                         <span className="font-medium text-amber-400">R$ {(totalMeasurements * (contract.retention_rate / 100)).toLocaleString('pt-BR')}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-xs pt-2 border-t border-white/10">
-                                        <span className="text-emerald-400 font-medium uppercase tracking-wider">Saldo a Faturar</span>
+                                        <span className="text-emerald-400 font-medium">Saldo a Faturar</span>
                                         <span className="font-medium text-emerald-400">R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR')}</span>
                                     </div>
                                 </div>
@@ -1567,7 +1567,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <Button
                                 onClick={handleExportReport}
                                 disabled={exporting}
-                                className={`w-full rounded-2xl shadow-xl shadow-blue-950/20 ${exporting ? 'bg-gray-700 hover:bg-gray-700 cursor-not-allowed' : ''}`}
+                                className={`w-full rounded-[6px] ${exporting ? 'bg-gray-700 hover:bg-gray-700 cursor-not-allowed' : ''}`}
                             >
                                 {exporting ? (
                                     <>
@@ -1584,25 +1584,25 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </div>
 
                         {/* Partes do Contrato */}
-                        <div className="bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm space-y-2">
-                            <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                        <div className="bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm space-y-2">
+                            <h4 className="text-xs font-medium text-gray-400 px-2 flex items-center gap-2">
                                 <Users className="w-3.5 h-3.5" />
                                 {(contract as any).direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'}
                             </h4>
-                            <div className="p-4 bg-gray-50 rounded-2xl">
+                            <div className="p-4 bg-gray-50 rounded-[10px]">
                                 <p className="text-sm font-semibold text-gray-800">{counterpartyName ?? '—'}</p>
-                                <p className="text-xs text-gray-400 mt-0.5 uppercase tracking-wider">
+                                <p className="text-xs text-gray-400 mt-0.5">
                                     {(contract as any).direction === 'OUTGOING' ? 'Contratante' : 'Contratado'}
                                 </p>
                             </div>
                         </div>
 
                         {/* Additional Info Cards */}
-                        <div className="bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
-                            <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2">Configurações</h4>
+                        <div className="bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
+                            <h4 className="text-xs font-medium text-gray-400 px-2">Configurações</h4>
                             <div className="space-y-3">
                                 {contract.budget_snapshot != null && (
-                                    <div className="p-4 bg-emerald-50 rounded-2xl flex items-center justify-between">
+                                    <div className="p-4 bg-emerald-50 rounded-[10px] flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <LockIcon className="w-5 h-5 text-emerald-500" />
                                             <span className="text-xs font-medium text-gray-700">Orçamento contratado</span>
@@ -1610,13 +1610,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <span className="text-sm font-normal text-emerald-700">Congelado</span>
                                     </div>
                                 )}
-                                <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between">
+                                <div className="p-4 bg-gray-50 rounded-[10px] flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <Shield className="w-5 h-5 text-gray-400" />
                                         <span className="text-xs font-medium text-gray-700">Índice Reajuste</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs font-medium text-blue-600 uppercase">{contract.reajuste_index || '—'}</span>
+                                        <span className="text-xs font-medium text-blue-600">{contract.reajuste_index || '—'}</span>
                                         {contract.reajuste_index && (
                                             <Button
                                                 size="sm"
@@ -1648,7 +1648,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </div>
                                 </div>
                                 {(contract.reajuste_data_base || contract.reajuste_proximo) && (
-                                    <div className="p-3 bg-blue-50 rounded-2xl text-xs text-blue-700 space-y-0.5">
+                                    <div className="p-3 bg-blue-50 rounded-[10px] text-xs text-blue-700 space-y-0.5">
                                         {contract.reajuste_data_base && (
                                             <p>Base: {new Date(contract.reajuste_data_base).toLocaleDateString('pt-BR')}</p>
                                         )}
@@ -1657,7 +1657,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         )}
                                     </div>
                                 )}
-                                <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between">
+                                <div className="p-4 bg-gray-50 rounded-[10px] flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <DollarSign className="w-5 h-5 text-gray-400" />
                                         <span className="text-xs font-medium text-gray-700">Retenção Garantia</span>
@@ -1673,39 +1673,39 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             (contract as any).execution_address || (contract as any).internal_responsible ||
                             (contract as any).client_responsible
                         ) && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
-                                <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
+                                <h4 className="text-xs font-medium text-gray-400 px-2 flex items-center gap-2">
                                     <ClipboardList className="w-3.5 h-3.5" /> Dados do Serviço
                                 </h4>
                                 {(contract as any).internal_responsible && (
-                                    <div className="p-3 bg-gray-50 rounded-2xl flex items-center justify-between">
+                                    <div className="p-3 bg-gray-50 rounded-[10px] flex items-center justify-between">
                                         <span className="text-xs font-medium text-gray-500">Resp. Interno</span>
                                         <span className="text-xs font-semibold text-gray-800">{(contract as any).internal_responsible}</span>
                                     </div>
                                 )}
                                 {(contract as any).client_responsible && (
-                                    <div className="p-3 bg-gray-50 rounded-2xl flex items-center justify-between">
+                                    <div className="p-3 bg-gray-50 rounded-[10px] flex items-center justify-between">
                                         <span className="text-xs font-medium text-gray-500">Resp. Cliente</span>
                                         <span className="text-xs font-semibold text-gray-800">{(contract as any).client_responsible}</span>
                                     </div>
                                 )}
                                 {(contract as any).sla_days && (
-                                    <div className="p-3 bg-blue-50 rounded-2xl flex items-center justify-between">
+                                    <div className="p-3 bg-blue-50 rounded-[10px] flex items-center justify-between">
                                         <span className="text-xs font-medium text-gray-500">SLA de Atendimento</span>
                                         <span className="text-xs font-bold text-blue-600">{(contract as any).sla_days} dias</span>
                                     </div>
                                 )}
                                 {(contract as any).warranty_months && (
-                                    <div className="p-3 bg-blue-50 rounded-2xl flex items-center justify-between">
+                                    <div className="p-3 bg-blue-50 rounded-[10px] flex items-center justify-between">
                                         <span className="text-xs font-medium text-gray-500">Garantia</span>
                                         <span className="text-xs font-bold text-blue-600">{(contract as any).warranty_months} meses</span>
                                     </div>
                                 )}
                                 {(contract as any).execution_address && (
-                                    <div className="p-3 bg-gray-50 rounded-2xl">
+                                    <div className="p-3 bg-gray-50 rounded-[10px]">
                                         <div className="flex items-center gap-1.5 mb-1">
                                             <MapPin className="w-3 h-3 text-gray-400" />
-                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Endereço</span>
+                                            <span className="text-xs font-medium text-gray-400">Endereço</span>
                                         </div>
                                         <p className="text-xs font-medium text-gray-800">{(contract as any).execution_address}</p>
                                     </div>
@@ -1715,9 +1715,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Seguros & Garantias (Fase 5.1 — CP-08/CP-10/Cl.24/Anexo VIII) */}
                         {contract && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
-                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
                                         <Shield className="w-3.5 h-3.5" /> Seguros & Garantias
                                     </h4>
                                     <button
@@ -1743,7 +1743,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 key={g.id}
                                                 type="button"
                                                 onClick={() => setGuaranteeModal({ open: true, editing: g })}
-                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors"
+                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-[10px] transition-colors"
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs font-semibold text-gray-800">{GUARANTEE_KIND_LABELS[g.kind] || g.kind}</span>
@@ -1764,9 +1764,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Classificação de Risco (Fase 6.1 — Manual §3) */}
                         {contract && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
-                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
                                         <AlertCircle className="w-3.5 h-3.5" /> Classificação de Risco
                                     </h4>
                                     <button type="button" onClick={() => setRiskModal(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
@@ -1774,7 +1774,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </button>
                                 </div>
                                 {riskAssessment ? (
-                                    <button type="button" onClick={() => setRiskModal(true)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors flex items-center justify-between">
+                                    <button type="button" onClick={() => setRiskModal(true)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-[10px] transition-colors flex items-center justify-between">
                                         <span className="text-xs text-gray-500">Pontuação {riskAssessment.score}</span>
                                         <span className={`text-sm font-normal ${riskAssessment.level === 'R3' ? 'text-red-600' : riskAssessment.level === 'R2' ? 'text-amber-600' : 'text-emerald-600'}`}>{riskAssessment.level}</span>
                                     </button>
@@ -1786,9 +1786,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Questionário de Risco Trabalhista (Fase 6.2 — Manual §8, Anexo H) — só para Mão de Obra */}
                         {contract && contract.nature === 'Mão de Obra' && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
-                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
                                         <Users className="w-3.5 h-3.5" /> Risco Trabalhista
                                     </h4>
                                     <button type="button" onClick={() => setLaborModal(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
@@ -1796,7 +1796,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </button>
                                 </div>
                                 {laborQuestionnaire ? (
-                                    <button type="button" onClick={() => setLaborModal(true)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors flex items-center justify-between">
+                                    <button type="button" onClick={() => setLaborModal(true)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-[10px] transition-colors flex items-center justify-between">
                                         <span className="text-xs text-gray-500">Alertas</span>
                                         <span className={`text-sm font-normal ${laborQuestionnaire.alert_count >= LABOR_ALERT_THRESHOLD ? 'text-red-600' : 'text-emerald-600'}`}>
                                             {laborQuestionnaire.alert_count}{laborQuestionnaire.alert_count >= LABOR_ALERT_THRESHOLD && !laborQuestionnaire.legal_opinion_url ? ' — exige parecer' : ''}
@@ -1810,9 +1810,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Responsabilidade Técnica (Fase 7.2 — Cl.10, Anexo E) */}
                         {contract && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
                                 <div className="flex items-center justify-between px-2">
-                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
                                         <FileText className="w-3.5 h-3.5" /> Responsabilidade Técnica
                                     </h4>
                                     <button type="button" onClick={() => setTechnicalModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
@@ -1832,7 +1832,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 key={t.id}
                                                 type="button"
                                                 onClick={() => setTechnicalModal({ open: true, editing: t })}
-                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors"
+                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-[10px] transition-colors"
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-xs font-semibold text-gray-800">{t.art_type} — {t.professional_name}</span>
@@ -1849,14 +1849,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {/* Payment Info Card */}
-                        <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
-                            <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2">Pagamento</h4>
+                        <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                            <h4 className="text-xs font-medium text-gray-400 px-2">Pagamento</h4>
                             <div className="space-y-3">
-                                <div className="p-4 bg-blue-50/50 rounded-2xl flex items-center justify-between">
+                                <div className="p-4 bg-blue-50/50 rounded-[10px] flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <HandCoins className="w-5 h-5 text-blue-500" />
                                         <div className="flex flex-col">
-                                            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Forma</span>
+                                            <span className="text-xs font-medium text-gray-400">Forma</span>
                                             <span className="text-xs font-medium text-gray-700">{contract.payment_method || 'A definir'}</span>
                                         </div>
                                     </div>
@@ -1876,14 +1876,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <Button
                             onClick={() => setEmitModalOpen(true)}
                             disabled={loading}
-                            className="rounded-2xl shadow-lg shadow-blue-100"
+                            className="rounded-[6px]"
                         >
                             <FileDown className="w-4 h-4" />
                             Emitir Contrato (.docx)
                         </Button>
                         <button
                             onClick={() => setDocxManagerOpen(true)}
-                            className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-600 rounded-2xl hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-all font-medium text-button uppercase tracking-widest shadow-sm active:scale-95"
+                            className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-600 rounded-[10px] hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-all font-medium text-[13px] shadow-sm active:scale-95"
                         >
                             <FileText className="w-4 h-4" />
                             Modelos de Documento
@@ -1891,16 +1891,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
 
                     {/* GED: signed contract card */}
-                    <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
-                        <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2">Documentos (GED)</h4>
-                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl group flex items-center justify-between">
+                    <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                        <h4 className="text-xs font-medium text-gray-400 px-2">Documentos (GED)</h4>
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] group flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                                <div className="w-10 h-10 bg-blue-600 rounded-[6px] flex items-center justify-center text-white shadow-lg shadow-blue-200">
                                     <FileText className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-medium text-blue-600 uppercase tracking-widest leading-none mb-1">Contrato Assinado</p>
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">
+                                    <p className="text-xs font-medium text-blue-600 leading-none mb-1">Contrato Assinado</p>
+                                    <p className="text-xs font-medium text-gray-400">
                                         {contract.signed_contract_url ? 'PDF Vinculado' : 'Não Anexado'}
                                     </p>
                                 </div>
@@ -2250,11 +2250,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
                                 Aditivos Contratuais <span className="text-sm font-normal text-blue-600">{addendums.length} total</span>
                             </h3>
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Gestão de alterações de valor, prazo e escopo.</p>
+                            <p className="text-xs font-medium text-gray-400 mt-1">Gestão de alterações de valor, prazo e escopo.</p>
                         </div>
                         <button
                             onClick={() => setIsAddendumModalOpen(true)}
-                            className="flex items-center gap-2 px-8 py-4 bg-gray-900 text-white rounded-2xl hover:bg-emerald-600 transition-all shadow-xl shadow-gray-200 font-medium text-button uppercase tracking-widest group"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all active:scale-95 shrink-0 font-medium text-[13px] group"
                         >
                             <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
                             Solicitar Novo Aditivo
@@ -2271,50 +2271,50 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <p className="text-gray-400 text-sm mt-2 font-medium">Este contrato ainda mantém seus termos originais.</p>
                             </div>
                         ) : addendums.map((addendum) => (
-                            <div key={addendum.id} className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all group relative overflow-hidden">
+                            <div key={addendum.id} className="bg-white p-8 rounded-[10px] border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-blue-900/5 transition-all group relative overflow-hidden">
                                 <div className={`absolute top-0 right-0 w-32 h-32 bg-${addendum.status === 'Aprovado' ? 'emerald' : 'amber'}-500/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700`} />
 
                                 <div className="flex justify-between items-start mb-6 relative z-10">
                                     <div>
-                                        <p className="text-xs font-medium text-blue-500 uppercase tracking-widest mb-1">Aditivo {addendum.number}</p>
-                                        <h4 className="text-lg font-medium text-gray-900 uppercase tracking-tight leading-tight">{addendum.description}</h4>
+                                        <p className="text-xs font-medium text-blue-500 mb-1">Aditivo {addendum.number}</p>
+                                        <h4 className="text-lg font-medium text-gray-900 leading-tight">{addendum.description}</h4>
                                     </div>
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium uppercase tracking-widest ${addendum.status === 'Aprovado' ? 'bg-emerald-100 text-emerald-800' :
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-medium ${addendum.status === 'Aprovado' ? 'bg-emerald-100 text-emerald-800' :
                                         addendum.status === 'Pendente' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
                                         }`}>
                                         {addendum.status}
                                     </span>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 mb-8 bg-gray-50 p-6 rounded-2xl relative z-10">
+                                <div className="grid grid-cols-2 gap-4 mb-8 bg-gray-50 p-6 rounded-[10px] relative z-10">
                                     <div className="space-y-1">
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Impacto Financeiro</p>
+                                        <p className="text-xs font-medium text-gray-400">Impacto Financeiro</p>
                                         <p className={`text-lg font-medium tracking-tighter ${addendum.value_impact > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                                             {addendum.value_impact > 0 ? '+' : ''} R$ {addendum.value_impact.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Nova Data Término</p>
+                                        <p className="text-xs font-medium text-gray-400">Nova Data Término</p>
                                         <p className="text-lg font-medium text-gray-900 tracking-tighter">
                                             {addendum.new_end_date ? new Date(addendum.new_end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A'}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between text-xs font-medium text-gray-400 uppercase tracking-widest border-t border-gray-50 pt-4 relative z-10">
+                                <div className="flex items-center justify-between text-xs font-medium text-gray-400 border-t border-gray-50 pt-4 relative z-10">
                                     <div className="flex flex-col gap-1">
                                         <span className="opacity-60">Solicitado em:</span>
                                         <span className="text-gray-900">{new Date(addendum.created_at || '').toLocaleDateString('pt-BR')}</span>
                                     </div>
                                     {addendum.status === 'Aprovado' ? (
-                                        <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl">
+                                        <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-2 rounded-[6px]">
                                             <CheckCircle2 className="w-3 h-3" />
                                             <span>Aprovado em {new Date(addendum.approved_at || '').toLocaleDateString('pt-BR')}</span>
                                         </div>
                                     ) : (
                                         <button
                                             onClick={() => handleApproveAddendum(addendum.id)}
-                                            className="px-6 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 font-medium text-button uppercase tracking-widest active:scale-95 flex items-center gap-2"
+                                            className="h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 transition-all font-medium text-[13px] active:scale-95 shrink-0 flex items-center gap-1.5"
                                         >
                                             <CheckCircle2 className="w-3 h-3" />
                                             Aprovar Aditivo
@@ -2335,7 +2335,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
                                 Diário de Medições <span className="text-sm font-normal text-emerald-600">{measurements.length} registradas</span>
                             </h3>
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Acompanhamento da execução física e liberação de pagamentos.</p>
+                            <p className="text-xs font-medium text-gray-400 mt-1">Acompanhamento da execução física e liberação de pagamentos.</p>
                         </div>
                         <button
                             onClick={() => {
@@ -2343,23 +2343,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 setEditingMeasurementItems([]);
                                 setIsMeasurementModalOpen(true);
                             }}
-                            className="flex items-center gap-2 px-8 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-button uppercase tracking-widest group"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all active:scale-95 shrink-0 font-medium text-[13px] group"
                         >
                             <BarChart3 className="w-4 h-4 group-hover:scale-110 transition-transform" />
                             Nova Medição de Período
                         </button>
                     </div>
 
-                    <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 border-b border-gray-100">
-                                <tr>
-                                    <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">ID / Período</th>
-                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Status</th>
-                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor Medido</th>
-                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Retenções</th>
-                                    <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor Líquido</th>
-                                    <th className="px-6 py-5 w-10"></th>
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="px-6 py-2 border-r border-gray-100 text-left">ID / período</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Valor medido</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Retenções</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Valor líquido</th>
+                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50 text-gray-700">
@@ -2371,13 +2371,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </tr>
                                 ) : measurements.map((m) => (
                                     <tr key={m.id} className="hover:bg-blue-50/20 transition-all group">
-                                        <td className="px-8 py-6">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                                <div className="w-10 h-10 bg-gray-50 rounded-[6px] flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
                                                     <BarChart3 className="w-5 h-5" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs font-medium text-blue-500 uppercase tracking-widest mb-0.5">Medição #{m.number}</p>
+                                                    <p className="text-xs font-medium text-blue-500 mb-0.5">Medição #{m.number}</p>
                                                     <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
                                                         {new Date(m.period_start + 'T12:00:00').toLocaleDateString('pt-BR')} a {new Date(m.period_end + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                     </p>
@@ -2386,7 +2386,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         </td>
                                         <td className="px-6 py-6 font-normal text-sm">
                                             <div className="flex flex-col gap-1">
-                                                <span className={`inline-flex px-2 py-1 rounded-lg text-button font-medium uppercase tracking-widest w-fit ${
+                                                <span className={`inline-flex px-2 py-1 rounded-lg text-[13px] font-medium w-fit ${
                                                     m.status === 'Paga' ? 'bg-green-100 text-green-800' :
                                                     m.status === 'Processada' ? 'bg-blue-100 text-blue-800' :
                                                     m.status === 'Em Análise' ? 'bg-purple-100 text-purple-800' :
@@ -2413,7 +2413,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <td className="px-6 py-6 text-right font-normal text-sm text-red-600">
                                             - R$ {m.retention_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </td>
-                                        <td className="px-8 py-6 text-right">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                             <p className="text-base font-medium text-gray-900 tracking-tighter">R$ {m.net_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                         </td>
                                         <td className="px-6 py-6 border-l border-gray-50">
@@ -2423,7 +2423,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     <button
                                                         onClick={e => { e.stopPropagation(); handleSubmitMeasurementForReview(m.id); }}
                                                         disabled={measurementActionBusy === m.id}
-                                                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium uppercase tracking-wider hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                                                         title="Enviar para conferência/aprovação"
                                                     >
                                                         <Send className="w-3 h-3" /> Enviar
@@ -2434,7 +2434,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         <button
                                                             onClick={e => { e.stopPropagation(); handleApproveMeasurement(m.id); }}
                                                             disabled={measurementActionBusy === m.id}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium uppercase tracking-wider hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                                                             title="Aprovar medição e liberar financeiro"
                                                         >
                                                             <CheckCircle2 className="w-3 h-3" /> Aprovar
@@ -2442,7 +2442,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         <button
                                                             onClick={e => { e.stopPropagation(); setRejectModal({ measurementId: m.id }); setRejectReason(''); }}
                                                             disabled={measurementActionBusy === m.id}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-medium uppercase tracking-wider hover:bg-red-600 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap"
+                                                            className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-medium hover:bg-red-600 hover:text-white disabled:opacity-50 transition-colors whitespace-nowrap"
                                                             title="Rejeitar e devolver para correção"
                                                         >
                                                             <XCircleIcon className="w-3 h-3" /> Rejeitar
@@ -2482,17 +2482,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 return (
                                     <tfoot>
                                         <tr className="border-t-2 border-gray-200 bg-gray-50/80">
-                                            <td className="px-8 py-4 text-table-body font-medium text-gray-500 uppercase tracking-widest">
+                                            {/* §7.2 — py-2.5 também na linha de totais */}
+                                            <td className="px-6 py-2.5 text-sm font-medium text-gray-500">
                                                 Total ({measurements.length} medições)
                                             </td>
                                             <td />
-                                            <td className="px-6 py-4 text-right text-sm font-medium text-gray-900">
+                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-900">
                                                 R$ {fmt(totVal)}
                                             </td>
-                                            <td className="px-6 py-4 text-right text-sm font-medium text-red-600">
+                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-red-600">
                                                 - R$ {fmt(totRet)}
                                             </td>
-                                            <td className="px-8 py-4 text-right text-base font-medium text-gray-900 tracking-tighter">
+                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-900">
                                                 R$ {fmt(totNet)}
                                             </td>
                                             <td />
@@ -2531,12 +2532,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
                                     Lançamentos Financeiros <span className="text-sm font-normal text-emerald-600">{financialEntries.length} registro(s)</span>
                                 </h3>
-                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Boletos, parcelas e valores gerados a partir deste contrato no módulo Financeiro.</p>
+                                <p className="text-xs font-medium text-gray-400 mt-1">Boletos, parcelas e valores gerados a partir deste contrato no módulo Financeiro.</p>
                             </div>
                             <button
                                 onClick={handleSyncFinance}
                                 disabled={syncingFinance}
-                                className="flex items-center gap-2 px-6 py-3 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-button uppercase tracking-widest shadow-sm disabled:opacity-50"
+                                className="flex items-center gap-2 px-6 py-3 bg-white border border-emerald-200 text-emerald-700 rounded-[10px] hover:bg-emerald-50 transition-all font-medium text-[13px] shadow-sm disabled:opacity-50"
                             >
                                 <DollarSign className="w-4 h-4" />
                                 {syncingFinance ? 'Lançando...' : 'Lançar / Atualizar'}
@@ -2545,28 +2546,28 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         <div className="grid grid-cols-3 gap-4">
                             <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
-                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Total Lançado</p>
+                                <p className="text-xs font-medium text-gray-400">Total Lançado</p>
                                 <p className="text-xl font-medium text-gray-900 tracking-tighter">R$ {fmt(totalGeral)}</p>
                             </div>
                             <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
-                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Pago / Conciliado</p>
+                                <p className="text-xs font-medium text-gray-400">Pago / Conciliado</p>
                                 <p className="text-xl font-medium text-emerald-600 tracking-tighter">R$ {fmt(totalPago)}</p>
                             </div>
                             <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
-                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Pendente</p>
+                                <p className="text-xs font-medium text-gray-400">Pendente</p>
                                 <p className="text-xl font-medium text-amber-600 tracking-tighter">R$ {fmt(totalPendente)}</p>
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                             <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-50 border-b border-gray-100">
-                                    <tr>
-                                        <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Data</th>
-                                        <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Descrição</th>
-                                        <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Origem</th>
-                                        <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Status</th>
-                                        <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor</th>
+                                <thead>
+                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Data</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Descrição</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Origem</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
+                                        <th className="px-6 py-2 text-right">Valor</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50 text-gray-700">
@@ -2581,19 +2582,19 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         </tr>
                                     ) : financialEntries.map((e) => (
                                         <tr key={e.id} className="hover:bg-blue-50/20 transition-all group">
-                                            <td className="px-8 py-5 text-sm font-medium text-gray-700">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-700">
                                                 {new Date(e.transaction_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                             </td>
-                                            <td className="px-6 py-5 text-sm text-gray-700">{e.description || '—'}</td>
-                                            <td className="px-6 py-5">
-                                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{sourceLabel[e.source_system] || e.source_system}</span>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-700">{e.description || '—'}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <span className="text-xs font-medium text-gray-500">{sourceLabel[e.source_system] || e.source_system}</span>
                                             </td>
-                                            <td className="px-6 py-5">
-                                                <span className={`inline-flex px-2 py-1 rounded-lg text-button font-medium uppercase tracking-widest w-fit ${statusClass[e.status] || 'bg-gray-100 text-gray-500'}`}>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <span className={`inline-flex px-2 py-1 rounded-lg text-[13px] font-medium w-fit ${statusClass[e.status] || 'bg-gray-100 text-gray-500'}`}>
                                                     {statusLabel[e.status] || e.status}
                                                 </span>
                                             </td>
-                                            <td className={`px-8 py-5 text-right text-base font-medium tracking-tighter ${e.direction === 'CREDIT' ? 'text-emerald-600' : 'text-gray-900'}`}>
+                                            <td className={`px-6 py-2.5 text-right text-sm font-medium ${e.direction === 'CREDIT' ? 'text-emerald-600' : 'text-gray-900'}`}>
                                                 {e.direction === 'DEBIT' ? '- ' : ''}R$ {fmt(e.amount)}
                                             </td>
                                         </tr>
@@ -2604,9 +2605,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Retenção faseada (Fase 5.2 — CP-08/Cl.18) */}
                         {contract && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                                         <HandCoins className="w-4 h-4 text-amber-500" /> Retenção de Garantia
                                     </h3>
                                     <button
@@ -2619,23 +2620,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </button>
                                 </div>
                                 <div className="grid grid-cols-3 gap-4">
-                                    <div className="bg-gray-50 p-4 rounded-2xl space-y-1">
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Retido</p>
+                                    <div className="bg-gray-50 p-4 rounded-[10px] space-y-1">
+                                        <p className="text-xs font-medium text-gray-400">Retido</p>
                                         <p className="text-lg font-medium text-gray-900 tracking-tighter">R$ {fmt(retentionLedger?.total_retained ?? 0)}</p>
                                     </div>
-                                    <div className="bg-gray-50 p-4 rounded-2xl space-y-1">
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Liberado</p>
+                                    <div className="bg-gray-50 p-4 rounded-[10px] space-y-1">
+                                        <p className="text-xs font-medium text-gray-400">Liberado</p>
                                         <p className="text-lg font-medium text-emerald-600 tracking-tighter">R$ {fmt(retentionLedger?.total_released ?? 0)}</p>
                                     </div>
-                                    <div className="bg-amber-50 p-4 rounded-2xl space-y-1">
-                                        <p className="text-xs font-medium text-amber-600 uppercase tracking-widest">Saldo Retido</p>
+                                    <div className="bg-amber-50 p-4 rounded-[10px] space-y-1">
+                                        <p className="text-xs font-medium text-amber-600">Saldo Retido</p>
                                         <p className="text-lg font-medium text-amber-700 tracking-tighter">R$ {fmt(retentionLedger?.balance ?? 0)}</p>
                                     </div>
                                 </div>
                                 {retentionReleases.length > 0 && (
                                     <div className="pt-2 space-y-1.5">
                                         {retentionReleases.map(r => (
-                                            <div key={r.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl text-xs">
+                                            <div key={r.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-[6px] text-xs">
                                                 <span className="text-gray-500">
                                                     {r.kind === 'PROVISORIO' ? 'Provisório' : r.kind === 'DEFINITIVO' ? 'Definitivo' : 'Manual'} — {new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                 </span>
@@ -2649,9 +2650,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Penalidades (Fase 5.3 — CP-09/CP-10/Cl.23/Cl.31) */}
                         {contract && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                                         <AlertCircle className="w-4 h-4 text-red-500" /> Penalidades
                                     </h3>
                                     <button
@@ -2665,15 +2666,15 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 {penalties.length === 0 ? (
                                     <p className="text-xs text-gray-400">Nenhuma penalidade registrada.</p>
                                 ) : (
-                                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                                         <table className="w-full text-left border-collapse">
-                                            <thead className="bg-gray-50 border-b border-gray-100">
-                                                <tr>
-                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Tipo</th>
-                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Motivo</th>
-                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Status</th>
-                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor</th>
-                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Ações</th>
+                                            <thead>
+                                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Motivo</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
+                                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Valor</th>
+                                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
@@ -2687,13 +2688,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     };
                                                     return (
                                                         <tr key={p.id} className="hover:bg-red-50/20 transition-all">
-                                                            <td className="px-5 py-3 text-sm text-gray-700">{PENALTY_KIND_LABELS[p.kind]}</td>
-                                                            <td className="px-5 py-3 text-sm text-gray-700 max-w-xs truncate">{p.reason}</td>
-                                                            <td className="px-5 py-3">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-700">{PENALTY_KIND_LABELS[p.kind]}</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-700 max-w-xs truncate">{p.reason}</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                                 <span className={`text-sm font-normal ${penaltyStatusColor[p.status]}`}>{penaltyStatusLabel[p.status]}</span>
                                                             </td>
-                                                            <td className="px-5 py-3 text-right text-sm font-medium text-gray-900">R$ {fmt(p.amount)}</td>
-                                                            <td className="px-5 py-3 text-right">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-900">R$ {fmt(p.amount)}</td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                                                 <div className="flex items-center justify-end gap-2">
                                                                     {p.status === 'NOTIFICADA' && (
                                                                         <>
@@ -2743,9 +2744,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* Avaliação de Desempenho (Fase 7.3 — Manual §17) */}
                         {contract && (
-                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2">
                                         <BarChart3 className="w-4 h-4 text-violet-500" /> Avaliação de Desempenho
                                     </h3>
                                     <button type="button" onClick={() => setEvaluationModal(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
@@ -2757,7 +2758,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 ) : (
                                     <div className="space-y-1.5">
                                         {evaluations.map(ev => (
-                                            <div key={ev.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl">
+                                            <div key={ev.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-[6px]">
                                                 <span className="text-xs text-gray-500">{ev.period || '—'}{ev.critical_occurrence ? ' · ocorrência crítica' : ''}</span>
                                                 <span className={`text-sm font-normal ${ev.weighted < 2 ? 'text-red-600' : ev.weighted < 3 ? 'text-amber-600' : 'text-emerald-600'}`}>{ev.weighted.toFixed(2)}</span>
                                             </div>
@@ -2778,30 +2779,30 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
                                 Histórico de Consumo <span className="text-sm font-normal text-blue-600">{utilityBills.length} faturas</span>
                             </h3>
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Gerencie os pagamentos mensais deste contrato recorrente.</p>
+                            <p className="text-xs font-medium text-gray-400 mt-1">Gerencie os pagamentos mensais deste contrato recorrente.</p>
                         </div>
                         <button
                             onClick={() => {
                                 setEditingUtilityBill(null);
                                 setIsUtilityBillModalOpen(true);
                             }}
-                            className="flex items-center gap-2 px-8 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-button uppercase tracking-widest group"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all active:scale-95 shrink-0 font-medium text-[13px] group"
                         >
                             <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
                             Lançar Fatura
                         </button>
                     </div>
 
-                    <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 border-b border-gray-100">
-                                <tr>
-                                    <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Mês Ref.</th>
-                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Status</th>
-                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Vencimento</th>
-                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Consumo</th>
-                                    <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor Total</th>
-                                    <th className="px-6 py-5 w-10"></th>
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Mês ref.</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Vencimento</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Consumo</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Valor total</th>
+                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50 text-gray-700">
@@ -2813,20 +2814,20 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </tr>
                                 ) : utilityBills.map((bill) => (
                                     <tr key={bill.id} className="hover:bg-blue-50/20 transition-all group">
-                                        <td className="px-8 py-6">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                                <div className="w-10 h-10 bg-gray-50 rounded-[6px] flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
                                                     <BarChart3 className="w-5 h-5" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors uppercase">
+                                                    <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
                                                         {new Date(bill.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                                                     </p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-6 font-normal text-sm">
-                                            <span className={`px-2 py-1 rounded-lg text-table-body font-medium uppercase tracking-widest ${bill.status === 'Pago' ? 'bg-green-100 text-green-800' :
+                                            <span className={`px-2 py-1 rounded-lg text-table-body font-medium ${bill.status === 'Pago' ? 'bg-green-100 text-green-800' :
                                                 bill.status === 'Atrasado' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
                                                 }`}>
                                                 {bill.status}
@@ -2838,7 +2839,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <td className="px-6 py-6 text-right font-normal text-sm text-gray-700">
                                             {bill.consumption_metric ? bill.consumption_metric.toLocaleString('pt-BR') : '-'}
                                         </td>
-                                        <td className="px-8 py-6 text-right">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                             <p className="text-base font-medium text-gray-900 tracking-tighter">R$ {bill.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                         </td>
                                         <td className="px-6 py-6 border-l border-gray-50 flex items-center gap-2">
@@ -3034,37 +3035,37 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <div className="flex justify-between items-start">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
+                                        <div className="p-2 bg-blue-600 rounded-[6px] shadow-lg shadow-blue-500/20">
                                             <History className="w-5 h-5 text-white" />
                                         </div>
                                         <div>
-                                            <p className="text-xs font-medium text-blue-400 uppercase tracking-[0.2em]">Rastreabilidade de Item</p>
-                                            <h2 className="text-2xl font-medium tracking-tight uppercase leading-none">{selectedHistoryItem.description}</h2>
+                                            <p className="text-xs font-medium text-blue-400">Rastreabilidade de Item</p>
+                                            <h2 className="text-2xl font-black tracking-tight leading-tight">{selectedHistoryItem.description}</h2>
                                         </div>
                                     </div>
                                     <p className="text-gray-400 font-medium text-xs mt-2">ID: {selectedHistoryItem.id}</p>
                                 </div>
                                 <button
                                     onClick={() => setSelectedHistoryItem(null)}
-                                    className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all text-gray-400 hover:text-white border border-white/10"
+                                    className="p-3 bg-white/5 hover:bg-white/10 rounded-[6px] transition-all text-gray-400 hover:text-white border border-white/10"
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-6 mt-8 p-4 bg-white/5 rounded-2xl border border-white/10">
+                            <div className="grid grid-cols-3 gap-6 mt-8 p-4 bg-white/5 rounded-[10px] border border-white/10">
                                 <div>
-                                    <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Total Contratado</p>
+                                    <p className="text-xs font-medium text-gray-400 mb-1">Total Contratado</p>
                                     <p className="text-lg font-medium">{selectedHistoryItem.quantity.toLocaleString()} {selectedHistoryItem.unit}</p>
                                 </div>
                                 <div>
-                                    <p className="text-xs font-medium text-blue-400 uppercase tracking-widest mb-1">Total Medido</p>
+                                    <p className="text-xs font-medium text-blue-400 mb-1">Total Medido</p>
                                     <p className="text-lg font-medium text-blue-400">
                                         {itemHistory.reduce((acc, h) => acc + h.item.quantity_executed, 0).toLocaleString()} {selectedHistoryItem.unit}
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-xs font-medium text-emerald-400 uppercase tracking-widest mb-1">Saldo Remanescente</p>
+                                    <p className="text-xs font-medium text-emerald-400 mb-1">Saldo Remanescente</p>
                                     <p className="text-lg font-medium text-emerald-400">
                                         {(selectedHistoryItem.quantity - itemHistory.reduce((acc, h) => acc + h.item.quantity_executed, 0)).toLocaleString()} {selectedHistoryItem.unit}
                                     </p>
@@ -3081,7 +3082,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         <p className="text-gray-400 font-bold">Nenhuma medição encontrada para este item.</p>
                                     </div>
                                 ) : itemHistory.map((h, idx) => (
-                                    <div key={h.measurement.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center group hover:border-blue-200 transition-all">
+                                    <div key={h.measurement.id} className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm flex justify-between items-center group hover:border-blue-200 transition-all">
                                         <div className="flex items-center gap-4">
                                             <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-medium text-xs">
                                                 #{h.measurement.number}
@@ -3101,7 +3102,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             {h.item.attachment_urls && h.item.attachment_urls.length > 0 ? (
                                                 <div className="flex flex-wrap gap-3">
                                                     {h.item.attachment_urls.map((url, idx) => (
-                                                        <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-100 group/item">
+                                                        <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded-[10px] border border-gray-100 group/item">
                                                             {url.match(/\.(mp4|webm|ogg)$/i) ? (
                                                                 <div className="relative group/vid">
                                                                     <video
@@ -3125,7 +3126,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                                 href={url}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-medium uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                                                                className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-[6px] text-xs font-medium hover:bg-blue-600 hover:text-white transition-all shadow-sm"
                                                             >
                                                                 {url.match(/\.(mp4|webm|ogg)$/i) ? <Video className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
                                                                 Ver
@@ -3134,7 +3135,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <span className="text-xs font-medium text-gray-300 uppercase italic">Sem anexo</span>
+                                                <span className="text-xs font-medium text-gray-400 italic">Sem anexo</span>
                                             )}
                                         </div>
                                     </div>
@@ -3146,7 +3147,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <div className="p-8 bg-white border-t border-gray-100 shrink-0 text-center">
                             <button
                                 onClick={() => setSelectedHistoryItem(null)}
-                                className="px-10 py-3 bg-gray-900 text-white rounded-2xl font-medium text-button uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-gray-200"
+                                className="px-10 py-3 bg-gray-900 text-white rounded-[10px] font-medium text-[13px] hover:bg-blue-600 transition-all shadow-xl shadow-gray-200"
                             >
                                 Fechar Histórico
                             </button>
@@ -3156,7 +3157,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
             {/* Notification toast */}
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] max-w-sm px-6 py-4 rounded-2xl shadow-2xl font-medium text-sm animate-in fade-in slide-in-from-bottom-4 duration-300 flex items-center gap-3 ${
+                <div className={`fixed bottom-6 right-6 z-[300] max-w-sm px-6 py-4 rounded-[10px] shadow-2xl font-medium text-sm animate-in fade-in slide-in-from-bottom-4 duration-300 flex items-center gap-3 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' :
                     notification.type === 'error' ? 'bg-red-600 text-white' :
                     'bg-gray-900 text-white'
@@ -3168,9 +3169,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Inline confirm dialog */}
             {pendingConfirm && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[32px] shadow-2xl p-8 max-w-md w-full space-y-6 border border-gray-100 animate-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-[10px] shadow-2xl p-8 max-w-md w-full space-y-6 border border-gray-100 animate-in zoom-in-95 duration-200">
                         <div className="flex items-start gap-4">
-                            <div className="p-3 bg-amber-100 rounded-2xl shrink-0">
+                            <div className="p-3 bg-amber-100 rounded-[10px] shrink-0">
                                 <AlertCircle className="w-6 h-6 text-amber-600" />
                             </div>
                             <p className="text-sm font-medium text-gray-700 leading-relaxed">{pendingConfirm.message}</p>
@@ -3178,7 +3179,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => setPendingConfirm(null)}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-medium text-button uppercase tracking-widest hover:bg-gray-200 transition-all"
+                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-[6px] font-medium text-[13px] hover:bg-gray-200 transition-all"
                             >
                                 Cancelar
                             </button>
@@ -3199,7 +3200,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Modal: PDF via Template */}
             {templatePdfModal && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-[32px] shadow-2xl p-8 max-w-sm w-full space-y-5 border border-gray-100">
+                    <div className="bg-white rounded-[10px] shadow-2xl p-8 max-w-sm w-full space-y-5 border border-gray-100">
                         <div>
                             <h3 className="text-base font-semibold text-gray-900">Gerar PDF via Modelo</h3>
                             <p className="text-xs text-gray-400 mt-1">As variáveis serão preenchidas automaticamente com os dados do contrato.</p>
@@ -3210,7 +3211,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     key={t.id}
                                     onClick={() => handleGeneratePDFFromTemplate(t)}
                                     disabled={generatingTemplatePdf}
-                                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-blue-50 border border-gray-100 hover:border-blue-200 rounded-2xl text-left transition-colors disabled:opacity-50"
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-blue-50 border border-gray-100 hover:border-blue-200 rounded-[10px] text-left transition-colors disabled:opacity-50"
                                 >
                                     <div>
                                         <p className="text-sm font-medium text-gray-900">{t.name}</p>
@@ -3226,7 +3227,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <button
                             onClick={() => setTemplatePdfModal(false)}
                             disabled={generatingTemplatePdf}
-                            className="w-full py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 disabled:opacity-50"
+                            className="w-full py-2.5 bg-gray-100 text-gray-600 rounded-[6px] text-sm font-medium hover:bg-gray-200 disabled:opacity-50"
                         >
                             Cancelar
                         </button>
@@ -3267,7 +3268,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
                             <div className="flex items-start gap-5 flex-1 min-w-0">
                                 <div className="flex flex-col items-center gap-2 shrink-0">
-                                    <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                                    <div className="bg-blue-600 p-2.5 rounded-[6px] text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                                         <TrendingUp className="w-6 h-6" />
                                     </div>
                                     <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
@@ -3278,8 +3279,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <div className="flex items-center gap-3 flex-wrap">
                                         <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Aplicar Reajuste</h2>
                                         <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
-                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Índice:</span>
-                                            <span className="text-xs font-bold text-blue-600 uppercase">{contract.reajuste_index}</span>
+                                            <span className="text-[9px] font-black text-gray-400">Índice:</span>
+                                            <span className="text-xs font-medium text-blue-600">{contract.reajuste_index}</span>
                                         </div>
                                     </div>
                                     <p className="text-sm text-gray-500 font-medium leading-tight">
@@ -3297,7 +3298,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {/* Body */}
                         <div className="px-8 py-6 space-y-4">
                             {reajusteSuggestion && (
-                                <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700 space-y-0.5">
+                                <div className="p-3 bg-blue-50 rounded-[6px] text-xs text-blue-700 space-y-0.5">
                                     <p className="font-semibold">Valores preenchidos automaticamente do banco:</p>
                                     <p>Base: {reajusteSuggestion.base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.baseMonth.slice(0, 7)})</p>
                                     <p>Atual: {reajusteSuggestion.atual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} ({reajusteSuggestion.atualMonth.slice(0, 7)})</p>
@@ -3305,7 +3306,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             )}
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Base (data de referência)</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Índice Base (data de referência)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -3313,11 +3314,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         value={reajusteBase}
                                         onChange={e => setReajusteBase(e.target.value)}
                                         placeholder="ex: 2850.00"
-                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Índice Atual (hoje)</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Índice Atual (hoje)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -3325,23 +3326,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         value={reajusteAtual}
                                         onChange={e => setReajusteAtual(e.target.value)}
                                         placeholder="ex: 3010.00"
-                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 {reajusteBase && reajusteAtual && parseFloat(reajusteBase) > 0 && parseFloat(reajusteAtual) > 0 && (
-                                    <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700">
+                                    <div className="p-3 bg-blue-50 rounded-[6px] text-xs text-blue-700">
                                         Fator: {(parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toFixed(5)} ·
                                         Novo valor: R$ {(contract.current_value * parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </div>
                                 )}
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Observação (opcional)</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Observação (opcional)</label>
                                     <input
                                         type="text"
                                         value={reajusteNotes}
                                         onChange={e => setReajusteNotes(e.target.value)}
                                         placeholder="ex: INCC-M Janeiro/2027"
-                                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                             </div>
@@ -3350,7 +3351,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <div className="flex items-center justify-end gap-3 px-8 py-5 border-t border-gray-100">
                             <button
                                 onClick={() => { setReajusteModal(false); setReajusteBase(''); setReajusteAtual(''); setReajusteNotes(''); }}
-                                className="px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+                                className="px-5 py-2.5 bg-gray-100 text-gray-600 rounded-[6px] text-sm font-medium hover:bg-gray-200 transition-colors"
                             >
                                 Cancelar
                             </button>
@@ -3368,7 +3369,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Modal de rejeição de medição */}
             {rejectModal && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+                    <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md p-6 space-y-4">
                         <h3 className="text-base font-semibold text-gray-900">Rejeitar Medição</h3>
                         <p className="text-sm text-gray-500">Informe o motivo para devolver a medição ao emitente.</p>
                         <textarea
@@ -3377,12 +3378,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             value={rejectReason}
                             onChange={e => setRejectReason(e.target.value)}
                             placeholder="Ex: Quantidades não conferem com o diário de obra..."
-                            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                            className="w-full rounded-[6px] border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
                         />
                         <div className="flex gap-3">
                             <button
                                 onClick={() => { setRejectModal(null); setRejectReason(''); }}
-                                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+                                className="flex-1 py-2.5 bg-gray-100 text-gray-600 rounded-[6px] text-sm font-medium hover:bg-gray-200 transition-colors"
                             >
                                 Cancelar
                             </button>
@@ -3431,13 +3432,13 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
 
     return (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleClose}>
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
                 <div className="px-6 py-5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-base font-black text-gray-900">Gerenciar Unidades</h2>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Unidades de medida</p>
+                        <p className="text-xs font-bold text-gray-400 mt-0.5">Unidades de medida</p>
                     </div>
-                    <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-xl transition-all text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
+                    <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-[6px] transition-all text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="p-6 space-y-4">
                     <div className="flex gap-2">
@@ -3447,7 +3448,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                             onChange={e => { setNewUnit(e.target.value); setError(''); }}
                             onKeyDown={e => e.key === 'Enter' && handleAdd()}
                             placeholder="Nova unidade..."
-                            className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                            className="flex-1 rounded-[6px] border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                         />
                         <Button size="sm" onClick={handleAdd} className="whitespace-nowrap">
                             <Plus className="w-3.5 h-3.5" /> Adicionar
@@ -3456,7 +3457,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                     {error && <p className="text-xs text-red-500 -mt-2">{error}</p>}
                     <div className="space-y-1.5 max-h-60 overflow-y-auto">
                         {units.map((unit, i) => (
-                            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-[6px] px-3 py-2">
                                 {editingIdx === i ? (
                                     <input autoFocus type="text" value={editVal} onChange={e => setEditVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleEditSave()} className="flex-1 text-sm font-bold border border-blue-300 rounded-lg px-2 py-0.5 outline-none focus:ring-2 focus:ring-blue-400" />
                                 ) : (
@@ -3473,7 +3474,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                     </div>
                 </div>
                 <div className="px-6 pb-6 flex justify-end">
-                    <button onClick={handleClose} className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-black transition-all">Concluído</button>
+                    <button onClick={handleClose} className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-[6px] text-sm font-black transition-all">Concluído</button>
                 </div>
             </div>
         </div>
@@ -3549,14 +3550,14 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="px-8 py-6 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-black text-gray-900">{isEditing ? 'Editar Item Avulso' : 'Adicionar Item Avulso'}</h2>
-                        <p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-0.5">Item não vinculado ao orçamento</p>
+                        <p className="text-xs font-bold text-orange-500 mt-0.5">Item não vinculado ao orçamento</p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-orange-100 rounded-xl transition-all text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="p-2 hover:bg-orange-100 rounded-[6px] transition-all text-gray-400 hover:text-gray-600">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -3566,7 +3567,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                     <button
                         type="button"
                         onClick={() => setPickerOpen(true)}
-                        className="w-full flex items-center justify-center gap-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 rounded-xl py-3 text-sm font-black uppercase tracking-wider transition-all"
+                        className="w-full flex items-center justify-center gap-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 rounded-[6px] py-3 text-sm font-black transition-all"
                     >
                         <Search className="w-4 h-4" />
                         Buscar na base de dados (SINAPI / Própria)
@@ -3577,22 +3578,22 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Código <span className="text-gray-300 font-normal normal-case">(opcional)</span></label>
+                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Código <span className="text-gray-300 font-normal normal-case">(opcional)</span></label>
                             <input
                                 type="text"
                                 value={form.code}
                                 onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
                                 placeholder="Ex: 00001"
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none font-mono"
+                                className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none font-mono"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Unidade *</label>
+                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Unidade *</label>
                             <div className="flex gap-2">
                                 <select
                                     value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
                                     onChange={e => { if (e.target.value !== '__custom__') setForm(f => ({ ...f, unit: e.target.value })); }}
-                                    className="flex-1 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                    className="flex-1 rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                                 >
                                     <option value="">Selecione...</option>
                                     {units.map(u => <option key={u} value={u}>{u}</option>)}
@@ -3602,24 +3603,24 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                     type="button"
                                     onClick={() => setShowUnitManager(true)}
                                     title="Gerenciar unidades"
-                                    className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
+                                    className="p-2.5 rounded-[6px] border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
                                 >
                                     <Settings className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Descrição *</label>
+                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Descrição *</label>
                             <input
                                 type="text"
                                 value={form.description}
                                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                                 placeholder="Descrição do material ou serviço"
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                                className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade *</label>
+                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Quantidade *</label>
                             <input
                                 type="number"
                                 min={0.001}
@@ -3627,11 +3628,11 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                 value={form.quantity}
                                 onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
                                 onFocus={e => e.target.select()}
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                                className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço Unitário (R$)</label>
+                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Preço Unitário (R$)</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
                                 <input
@@ -3643,14 +3644,14 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                         setPriceDigits(digits);
                                         setForm(f => ({ ...f, unitPrice: fromCurrencyDigits(digits) }));
                                     }}
-                                    className="w-full pl-9 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold"
+                                    className="w-full pl-9 rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold"
                                 />
                             </div>
                         </div>
                     </div>
 
                     {/* Salvar na base própria */}
-                    <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50">
+                    <div className="border border-gray-100 rounded-[6px] p-4 space-y-3 bg-gray-50">
                         <label className="flex items-center gap-3 cursor-pointer select-none">
                             <input
                                 type="checkbox"
@@ -3658,18 +3659,18 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                 onChange={e => setSaveToBase(e.target.checked)}
                                 className="w-4 h-4 rounded accent-orange-500 cursor-pointer"
                             />
-                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Salvar na base de dados própria</span>
+                            <span className="text-xs font-bold text-gray-600">Salvar na base de dados própria</span>
                         </label>
                         {saveToBase && (
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Base de dados *</label>
+                                <label className="block text-xs font-bold text-gray-400 mb-1.5">Base de dados *</label>
                                 {databases.length === 0 ? (
                                     <p className="text-xs text-gray-400 italic">Carregando bases...</p>
                                 ) : (
                                     <select
                                         value={selectedDatabaseId}
                                         onChange={e => setSelectedDatabaseId(e.target.value)}
-                                        className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                        className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                                     >
                                         <option value="">Selecione uma base...</option>
                                         {databases.map(db => (
@@ -3689,8 +3690,8 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                     )}
 
                     {form.quantity > 0 && form.unitPrice > 0 && (
-                        <div className="flex justify-between items-center bg-orange-50 rounded-xl px-4 py-3">
-                            <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">Total do Item</span>
+                        <div className="flex justify-between items-center bg-orange-50 rounded-[6px] px-4 py-3">
+                            <span className="text-xs font-bold text-orange-700">Total do Item</span>
                             <span className="text-sm font-black text-orange-700">
                                 R$ {totalItem.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
@@ -3699,14 +3700,14 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                 </div>
 
                 <div className="px-8 pb-8 flex gap-3 justify-end">
-                    <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                    <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-[6px] border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">
                         Cancelar
                     </button>
                     <button
                         type="button"
                         onClick={handleConfirm}
                         disabled={savingToBase}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20"
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-[6px] bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20"
                     >
                         {isEditing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         {savingToBase ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Adicionar Item'}
@@ -3839,35 +3840,35 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
     const nextV = (versions[0]?.v ?? 0) + 1;
 
     return (
-        <div className="bg-white p-6 rounded-[32px] border border-purple-100 shadow-sm space-y-5">
+        <div className="bg-white p-6 rounded-[10px] border border-purple-100 shadow-sm space-y-5">
             <div className="flex items-center gap-3">
                 <History className="w-4 h-4 text-purple-500" />
-                <h4 className="text-xs font-medium text-purple-700 uppercase tracking-widest">Versões da Minuta</h4>
+                <h4 className="text-xs font-medium text-purple-700">Versões da Minuta</h4>
             </div>
 
             {/* Publicar nova versão */}
-            <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100 space-y-3">
-                <p className="text-xs font-bold text-purple-600 uppercase tracking-widest">Adicionar Versão {String(nextV).padStart(2, '0')}</p>
+            <div className="p-4 bg-purple-50 rounded-[10px] border border-purple-100 space-y-3">
+                <p className="text-xs font-bold text-purple-600">Adicionar Versão {String(nextV).padStart(2, '0')}</p>
                 <input
                     type="text"
                     value={docName}
                     onChange={e => setDocName(e.target.value)}
                     placeholder="Nome do documento (opcional — usa o nome do arquivo)"
-                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-[6px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"
                 />
                 <textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     placeholder="Descreva o que mudou nesta versão (opcional)..."
                     rows={2}
-                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none"
+                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-[6px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none"
                 />
                 <div className="flex items-center gap-3">
                     <input ref={fileRef} type="file" accept=".pdf,.docx,.doc" onChange={handleUpload} className="hidden" />
                     <button
                         onClick={() => fileRef.current?.click()}
                         disabled={uploading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-[6px] text-xs font-bold hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         {uploading ? 'Enviando…' : 'Subir Documento'}
@@ -3883,8 +3884,8 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                         const emitted = isEmitted(ver);
                         const busy = busyV === ver.v;
                         return (
-                        <div key={ver.v} className="flex items-start gap-4 p-4 rounded-2xl border border-gray-100 hover:border-purple-100 transition-all group">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-black text-button ${emitted ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
+                        <div key={ver.v} className="flex items-start gap-4 p-4 rounded-[10px] border border-gray-100 hover:border-purple-100 transition-all group">
+                            <div className={`w-9 h-9 rounded-[6px] flex items-center justify-center shrink-0 font-black text-[13px] ${emitted ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
                                 v{ver.v}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -3914,7 +3915,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                                                 {emitted ? 'Emitida' : 'Rascunho'}
                                             </span>
                                         </div>
-                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">
+                                        <p className="text-xs font-medium text-gray-400 mt-0.5">
                                             {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                         </p>
                                         {ver.notes && <p className="text-sm text-gray-600 mt-0.5">{ver.notes}</p>}
@@ -3927,7 +3928,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                                         <button
                                             onClick={() => handleEmit(ver.v)}
                                             disabled={busy}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
                                             title="Emitir ao cliente"
                                         >
                                             <Send className="w-3 h-3" />
@@ -3938,7 +3939,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                                         href={ver.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all"
+                                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-[6px] transition-all"
                                         title="Abrir documento"
                                     >
                                         <ExternalLink className="w-4 h-4" />
@@ -3958,7 +3959,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                     })}
                 </div>
             ) : (
-                <p className="text-xs text-gray-400 uppercase tracking-widest text-center py-2">Nenhuma versão publicada ainda</p>
+                <p className="text-xs text-gray-400 text-center py-2">Nenhuma versão publicada ainda</p>
             )}
         </div>
     );
@@ -4010,10 +4011,10 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
     };
 
     if (isSigned) return (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+        <div className="flex items-center gap-3 p-3 rounded-[6px] bg-emerald-50 border border-emerald-100">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <div className="flex-1">
-                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Contrato Assinado Eletronicamente</p>
+                <p className="text-xs font-semibold text-emerald-700">Contrato Assinado Eletronicamente</p>
                 {contract.signature_completed_at && (
                     <p className="text-xs text-emerald-600 mt-0.5">
                         {new Date(contract.signature_completed_at).toLocaleString('pt-BR')}
@@ -4026,7 +4027,7 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
     return (
         <div className="space-y-3 border-t border-gray-100 pt-4">
             <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Assinatura Eletrônica</p>
+                <p className="text-xs font-medium text-gray-500">Assinatura Eletrônica</p>
                 {hasSig && (
                     <button onClick={() => { setBusy(true); onRefreshStatus().finally(() => setBusy(false)); }} disabled={busy}
                         className="text-xs text-blue-600 hover:underline disabled:opacity-50">
@@ -4050,14 +4051,14 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
 
             {!hasSig && !showForm && (
                 <button onClick={() => setShowForm(true)}
-                    className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
                     <Send size={14} /> Enviar para Assinatura (ZapSign)
                 </button>
             )}
 
             {showForm && (
-                <div className="space-y-3 p-4 bg-gray-50 rounded-2xl">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Signatários</p>
+                <div className="space-y-3 p-4 bg-gray-50 rounded-[10px]">
+                    <p className="text-xs font-semibold text-gray-500">Signatários</p>
                     {signers.map((s, i) => (
                         <div key={i} className="grid grid-cols-3 gap-2 items-end">
                             <input value={s.name} onChange={e => updateSigner(i, 'name', e.target.value)}
@@ -4075,11 +4076,11 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
                             </div>
                         </div>
                     ))}
-                    <button onClick={addSigner} className="text-button text-blue-600 hover:underline">+ Adicionar signatário</button>
+                    <button onClick={addSigner} className="text-[13px] text-blue-600 hover:underline">+ Adicionar signatário</button>
                     <div className="flex gap-2 pt-1">
-                        <button onClick={() => setShowForm(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">Cancelar</button>
+                        <button onClick={() => setShowForm(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-[6px] text-sm font-medium">Cancelar</button>
                         <button onClick={handleSend} disabled={busy || !signers.every(s => s.name && s.email)}
-                            className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                            className="flex-1 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                             {busy ? 'Enviando…' : 'Enviar'}
                         </button>
                     </div>
@@ -4121,9 +4122,9 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
     };
 
     return (
-        <div className="bg-white p-4 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+        <div className="bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
-                <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <h4 className="text-xs font-medium text-gray-400 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" /> Workflow de Aprovação
                 </h4>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLOR[status] ?? STATUS_COLOR.RASCUNHO}`}>
@@ -4135,7 +4136,7 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
             {chain.length > 0 && (
                 <div className="space-y-2">
                     {chain.map((step, i) => (
-                        <div key={i} className={`flex items-start gap-3 p-3 rounded-xl text-sm ${step.action === 'APROVADO' ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                        <div key={i} className={`flex items-start gap-3 p-3 rounded-[6px] text-sm ${step.action === 'APROVADO' ? 'bg-emerald-50' : 'bg-red-50'}`}>
                             {step.action === 'APROVADO'
                                 ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                                 : <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />}
@@ -4161,16 +4162,16 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
                                 placeholder="Observação (opcional)"
                                 value={approveNotes}
                                 onChange={e => setApproveNotes(e.target.value)}
-                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full rounded-[6px] border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             />
                             <div className="flex gap-2">
-                                <button onClick={() => setShowApproveInput(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
+                                <button onClick={() => setShowApproveInput(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-[6px] text-sm font-medium">
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={() => act(() => onApprove(nextLevel, approveNotes || undefined).then(() => { setShowApproveInput(false); setApproveNotes(''); }))}
                                     disabled={busy}
-                                    className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                                    className="flex-1 py-2 bg-emerald-600 text-white rounded-[6px] text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
                                 >
                                     {busy ? 'Aprovando…' : `Aprovar (Nível ${nextLevel})`}
                                 </button>
@@ -4183,16 +4184,16 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
                                 placeholder="Motivo da rejeição *"
                                 value={rejectReason}
                                 onChange={e => setRejectReason(e.target.value)}
-                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                className="w-full rounded-[6px] border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                             />
                             <div className="flex gap-2">
-                                <button onClick={() => setShowRejectInput(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
+                                <button onClick={() => setShowRejectInput(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-[6px] text-sm font-medium">
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={() => { if (!rejectReason.trim()) return; act(() => onReject(rejectReason.trim()).then(() => { setShowRejectInput(false); setRejectReason(''); })); }}
                                     disabled={busy || !rejectReason.trim()}
-                                    className="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                                    className="flex-1 py-2 bg-red-600 text-white rounded-[6px] text-sm font-medium hover:bg-red-700 disabled:opacity-50"
                                 >
                                     {busy ? 'Rejeitando…' : 'Rejeitar'}
                                 </button>
@@ -4202,13 +4203,13 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
                         <div className="flex gap-2">
                             <button
                                 onClick={() => setShowApproveInput(true)}
-                                className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700"
+                                className="flex-1 py-2 bg-emerald-600 text-white rounded-[6px] text-sm font-medium hover:bg-emerald-700"
                             >
                                 {needsLevel2 ? 'Aprovar — Nível 2' : 'Aprovar'}
                             </button>
                             <button
                                 onClick={() => setShowRejectInput(true)}
-                                className="flex-1 py-2 bg-red-100 text-red-700 rounded-xl text-sm font-medium hover:bg-red-200"
+                                className="flex-1 py-2 bg-red-100 text-red-700 rounded-[6px] text-sm font-medium hover:bg-red-200"
                             >
                                 Rejeitar
                             </button>
@@ -4221,7 +4222,7 @@ const ApprovalWorkflowCard: React.FC<ApprovalWorkflowCardProps> = ({ contract, o
                 <button
                     onClick={() => act(onSubmit)}
                     disabled={busy}
-                    className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
                 >
                     {busy ? 'Enviando…' : 'Enviar para Aprovação'}
                 </button>

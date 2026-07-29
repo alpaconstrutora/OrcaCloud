@@ -241,10 +241,20 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 <KpiCard shadow={false} size="sm" label="Pendentes de Medição" value={stats.pendingMeasurements} icon={<Clock className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* §5.3: esta tela não tem controles de escopo (conta/competência/período) —
-                "Filtrar por Obra" é recorte contextual e vive na régua de busca. Sem
-                escopo, a barra de botões própria não existe: a ação primária (§17,
-                criação é ação rara) mora no fim da régua da toolbar acoplada abaixo. */}
+            {/* Toolbar de botões (§5.3) — separada da busca por pedido explícito do
+                usuário (2026-07-29): mesmo sem controles de escopo (conta/competência/
+                período), Templates e Novo Contrato ganham régua própria acima da
+                toolbar de busca/tabela, com o layout canônico justify-between do §5.3. */}
+            <div className="flex items-center justify-end gap-2 bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                {extraActions}
+                <button
+                    onClick={onCreateNew}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo contrato
+                </button>
+            </div>
 
             {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                 conteúdo dividem um único card (border/rounded/shadow só no container pai);
@@ -344,16 +354,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
-
-                {/* Ações da tela — §17 (variante compacta) no fim da régua §5.1 */}
-                {extraActions}
-                <button
-                    onClick={onCreateNew}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo contrato
-                </button>
             </div>
 
             {/* Content List — sem bg/border/rounded próprios: já está dentro do card

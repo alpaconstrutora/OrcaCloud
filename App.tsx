@@ -831,6 +831,7 @@ const App: React.FC = () => {
         projectId={projectId || ''}
         organizationId={activeOrganizationId || undefined}
         initialData={editingContract || undefined}
+        domain="SUPRIMENTOS"
       />
 
       {/* PWA */}

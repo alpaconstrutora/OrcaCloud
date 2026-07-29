@@ -20,6 +20,13 @@ import { Upload, ExternalLink, KeyRound } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import {
+    contractNumberingService,
+    ContractNumberingSettings,
+    CONTRACT_NUMBERING_DEFAULTS,
+    generateContractNumber,
+    MissingCodeError,
+} from '../services/contractNumberingService';
 
 interface ContractModalProps {
     isOpen: boolean;
@@ -33,6 +40,9 @@ interface ContractModalProps {
     // Rótulos do cabeçalho — sobrescrevem o texto padrão "Serviço" para outros domínios (ex.: Vendas).
     titleNew?: string;
     moduleLabel?: string;
+    // Só 'SUPRIMENTOS' habilita a máscara de Configurações › Nomenclatura › Numeração de
+    // Contratos. Serviços e Vendas continuam com o formato legado (3 dígitos).
+    domain?: 'SUPRIMENTOS' | 'SERVICOS' | 'VENDAS';
 }
 
 export const ContractModal: React.FC<ContractModalProps> = ({
@@ -46,6 +56,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     onToast,
     titleNew,
     moduleLabel,
+    domain,
 }) => {
     // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
@@ -186,8 +197,31 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
     // Auto-fetch next sequential number for new contracts — sequence separada por direction
     const contractDirection = direction ?? (initialData?.direction as string | undefined);
+
+    // Numeração de Contratos (Suprimentos) — Configurações do Sistema › Nomenclatura.
+    // Só entra em vigor para domain='SUPRIMENTOS' e com o toggle "enabled" ligado na
+    // config da organização; caso contrário mantém o formato legado (3 dígitos).
+    const [contractNumberingSettings, setContractNumberingSettings] = React.useState<ContractNumberingSettings>({ ...CONTRACT_NUMBERING_DEFAULTS });
+    React.useEffect(() => {
+        if (domain !== 'SUPRIMENTOS' || !organizationId) return;
+        let cancelled = false;
+        contractNumberingService.getSettings(organizationId)
+            .then((s: ContractNumberingSettings) => { if (!cancelled) setContractNumberingSettings(s); })
+            .catch(() => { /* mantém defaults (enabled:false) — não bloqueia o formulário */ });
+        return () => { cancelled = true; };
+    }, [domain, organizationId]);
+    const useNewNumbering = domain === 'SUPRIMENTOS' && contractNumberingSettings.enabled;
+
     React.useEffect(() => {
         if (!isOpen || initialData?.id || !organizationId) return;
+        // Modo novo: o número só é reservado no submit (consumir sequencial ao
+        // simplesmente abrir o modal, ou ao trocar de obra, deixaria buracos).
+        if (useNewNumbering) {
+            numberInputRef.current = '';
+            setFormData(prev => ({ ...prev, number: '' }));
+            setNumberError(null);
+            return;
+        }
         let cancelled = false;
         (async () => {
             setIsFetchingNumber(true);
@@ -220,7 +254,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             }
         })();
         return () => { cancelled = true; };
-    }, [isOpen, initialData, organizationId]);
+    }, [isOpen, initialData, organizationId, useNewNumbering]);
 
     // Recarrega listas dependentes de organização (fornecedores/clientes/etc.) quando o usuário
     // escolhe a organização no seletor interno (modo "Todas as Organizações").
@@ -277,6 +311,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     };
 
     const handleNumberBlur = async () => {
+        if (useNewNumbering) return; // gerado no submit, campo é somente-leitura
         if (!numberInputRef.current) return;
         let value = numberInputRef.current.trim();
 
@@ -334,15 +369,37 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             return;
         }
 
-        const currentNumber = (numberInputRef.current || formData.number || '');
-        if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
-            setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
+        const isNewContract = !initialData?.id;
+
+        if (!(useNewNumbering && isNewContract)) {
+            const currentNumber = (numberInputRef.current || formData.number || '');
+            if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
+                setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
+                return;
+            }
+        } else if (!formData.project_id) {
+            setNumberError('Selecione a obra — a numeração de contratos de Suprimentos usa o código da obra.');
             return;
         }
 
         setIsSubmitting(true);
         try {
             const payload = { ...formData, organization_id: organizationId };
+
+            // Reserva o sequencial da obra só agora — trocar de obra antes do
+            // submit não deve queimar números.
+            if (useNewNumbering && isNewContract) {
+                try {
+                    payload.number = await generateContractNumber(payload.project_id as string, contractNumberingSettings);
+                } catch (numErr: unknown) {
+                    const numMsg = numErr instanceof MissingCodeError
+                        ? numErr.message.replace('o número do pedido', 'o número do contrato').replace('antes de criar o pedido', 'antes de criar o contrato')
+                        : (numErr instanceof Error ? numErr.message : String(numErr));
+                    setNumberError(numMsg);
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
             if (payload.is_recurring) {
                 payload.payment_installments = undefined;
             } else {
@@ -372,8 +429,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                     ? String((err as { message: unknown }).message)
                     : String(err);
             console.error("Erro ao processar contrato:", err);
-            // Constraint de número duplicado — incrementa automaticamente e tenta de novo
-            if (msg.includes('contracts_outgoing_num_unique') || msg.includes('contracts_incoming_num_unique')) {
+            // Constraint de número duplicado — incrementa automaticamente e tenta de novo.
+            // No modo novo o sequencial é atômico (RPC no banco); uma colisão aqui seria
+            // sinal de outro problema, não de corrida — não faz sentido "sugerir" um 001.
+            if (!(useNewNumbering && isNewContract) && (msg.includes('contracts_outgoing_num_unique') || msg.includes('contracts_incoming_num_unique'))) {
                 try {
                     const dir = contractDirection;
                     let q = supabase.from('contracts').select('number').eq('organization_id', organizationId ?? '');
@@ -524,17 +583,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     <div className="relative">
                                         <input
                                             type="text"
-                                            required
-                                            maxLength={3}
-                                            placeholder={isFetchingNumber ? 'Carregando...' : '001'}
-                                            value={formData.number ?? ''}
+                                            required={!useNewNumbering}
+                                            readOnly={useNewNumbering}
+                                            maxLength={useNewNumbering ? undefined : 3}
+                                            placeholder={useNewNumbering ? 'Gerado ao salvar (por obra)' : (isFetchingNumber ? 'Carregando...' : '001')}
+                                            value={useNewNumbering ? (initialData?.number ?? '') : (formData.number ?? '')}
                                             onChange={(e) => {
+                                                if (useNewNumbering) return;
                                                 numberInputRef.current = e.target.value;
                                                 setNumberError(null);
                                                 setFormData({ ...formData, number: e.target.value });
                                             }}
                                             onBlur={handleNumberBlur}
-                                            className={`w-full px-6 py-4 bg-gray-50 border rounded-2xl text-sm font-semibold font-mono focus:outline-none focus:ring-4 transition-all ${numberError ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500' : 'border-gray-100 focus:ring-blue-500/10 focus:border-blue-500'}`}
+                                            className={`w-full px-6 py-4 bg-gray-50 border rounded-2xl text-sm font-semibold font-mono focus:outline-none focus:ring-4 transition-all ${useNewNumbering ? 'text-gray-400' : ''} ${numberError ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500' : 'border-gray-100 focus:ring-blue-500/10 focus:border-blue-500'}`}
                                         />
                                         {isCheckingNumber && (
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2">

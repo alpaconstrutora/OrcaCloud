@@ -42,6 +42,7 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
 // Variable reference for UI hints
 export const TEMPLATE_VARS = {
     orderNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
+    contractNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     whatsappOrderSent: ['{fornecedor}', '{pedido}', '{obra}', '{itens}', '{total}', '{entrega}'],
     whatsappStatusChange: ['{fornecedor}', '{pedido}', '{status}'],
     email: ['{pedido}', '{status}'],

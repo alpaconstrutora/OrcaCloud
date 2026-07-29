@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { QuotationRequest, QuotationResponse } from '../types';
 import { orderService } from './orderService';
+import { generateQuotationNumber } from './quotationNumberingService';
 
 export const quotationService = {
     async listRequests(projectId?: string): Promise<QuotationRequest[]> {
@@ -72,7 +73,7 @@ export const quotationService = {
     },
 
     async createRequest(request: Omit<QuotationRequest, 'id' | 'number' | 'created_at' | 'updated_at'>) {
-        const number = `RFQ-${Date.now().toString().slice(-6)}`;
+        const number = await generateQuotationNumber(request.projectId);
         const { data, error } = await supabase
             .from('quotation_requests')
             .insert({

@@ -1,11 +1,12 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, FileSignature, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, FileSignature, ClipboardList, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import { formatOrderNumber } from '../services/orderNumberingService';
 import { formatContractNumber } from '../services/contractNumberingService';
+import { formatQuotationNumber } from '../services/quotationNumberingService';
 import { useConfirm } from './ui/confirm';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
@@ -100,7 +101,7 @@ const Settings: React.FC = () => {
         setTimeout(() => setAppSettingsSaved(false), 3000);
     };
 
-    const handleAppSettingsReset = async (section: 'numbering' | 'contractNumbering' | 'whatsapp' | 'email') => {
+    const handleAppSettingsReset = async (section: 'numbering' | 'contractNumbering' | 'quotationNumbering' | 'whatsapp' | 'email') => {
         if (!await confirm({ title: 'Restaurar padrões desta seção?', variant: 'warning', confirmLabel: 'Restaurar' })) return;
         const patch: Partial<AppSettings> =
             section === 'numbering' ? {
@@ -112,6 +113,10 @@ const Settings: React.FC = () => {
                 contractPrefix: APP_SETTINGS_DEFAULTS.contractPrefix,
                 contractNumberPattern: APP_SETTINGS_DEFAULTS.contractNumberPattern,
                 contractSeqPadding: APP_SETTINGS_DEFAULTS.contractSeqPadding,
+            } : section === 'quotationNumbering' ? {
+                quotationPrefix: APP_SETTINGS_DEFAULTS.quotationPrefix,
+                quotationNumberPattern: APP_SETTINGS_DEFAULTS.quotationNumberPattern,
+                quotationSeqPadding: APP_SETTINGS_DEFAULTS.quotationSeqPadding,
             } : section === 'whatsapp' ? {
                 whatsappOrderSentTemplate: APP_SETTINGS_DEFAULTS.whatsappOrderSentTemplate,
                 whatsappStatusChangeTemplate: APP_SETTINGS_DEFAULTS.whatsappStatusChangeTemplate,
@@ -127,6 +132,11 @@ const Settings: React.FC = () => {
     const previewContractNumber = React.useMemo(
         () => formatContractNumber({ empreendimentoCode: 'RES01', obraCode: 'TR1' }, 1, appSettings),
         [appSettings.contractPrefix, appSettings.contractNumberPattern, appSettings.contractSeqPadding],
+    );
+
+    const previewQuotationNumber = React.useMemo(
+        () => formatQuotationNumber({ empreendimentoCode: 'RES01', obraCode: 'TR1' }, 1, appSettings),
+        [appSettings.quotationPrefix, appSettings.quotationNumberPattern, appSettings.quotationSeqPadding],
     );
 
     const runMigration = async () => {
@@ -425,6 +435,79 @@ const Settings: React.FC = () => {
                 <div className="flex justify-end mt-4">
                     <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
                         {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <FileSignature className="w-[15px] h-[15px]" />}
+                        {appSettingsSaved ? 'Salvo!' : 'Salvar'}
+                    </button>
+                </div>
+            </div>
+
+                    {/* Numeração de Cotações (Suprimentos) */}
+                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                        <div className="p-3 bg-indigo-50 rounded-[10px]">
+                            <ClipboardList className="w-6 h-6 text-indigo-600" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-800">Numeração de Cotações</h2>
+                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número das cotações de Suprimentos. O sequencial é por obra e reinicia a cada obra.</p>
+                        </div>
+                    </div>
+                    <button onClick={() => handleAppSettingsReset('quotationNumbering')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                        <RotateCcw className="w-3.5 h-3.5" /> Padrões
+                    </button>
+                </div>
+                <div className="mt-4 mb-3 flex flex-wrap gap-2">
+                    <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
+                    {TEMPLATE_VARS.quotationNumber.map(v => (
+                        <span key={v} className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-[6px] border border-indigo-100">{v}</span>
+                    ))}
+                </div>
+                <div className="border-t border-gray-100 pt-6 space-y-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Máscara do Número</label>
+                        <input
+                            type="text"
+                            value={appSettings.quotationNumberPattern}
+                            onChange={e => setAppSettings(s => ({ ...s, quotationNumberPattern: e.target.value }))}
+                            placeholder="{prefixo}-{empreendimento}-{obra}-{seq}"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
+                            <input
+                                type="text"
+                                value={appSettings.quotationPrefix}
+                                onChange={e => setAppSettings(s => ({ ...s, quotationPrefix: e.target.value }))}
+                                placeholder="QT"
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Dígitos do Sequencial</label>
+                            <input
+                                type="number"
+                                min={1}
+                                max={9}
+                                value={appSettings.quotationSeqPadding}
+                                onChange={e => setAppSettings(s => ({ ...s, quotationSeqPadding: Number(e.target.value) || 1 }))}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            />
+                        </div>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-200 rounded-[6px] px-4 py-3">
+                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Pré-visualização</span>
+                        <span className="font-mono text-sm text-gray-700">{previewQuotationNumber}</span>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                        O sequencial é controlado pelo banco e é único por obra. Cotações de obra ou empreendimento
+                        <strong> sem código cadastrado são bloqueadas</strong> — cadastre o código em Empreendimentos › Dados Gerais e em Obra › Editar.
+                    </p>
+                </div>
+                <div className="flex justify-end mt-4">
+                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
+                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <ClipboardList className="w-[15px] h-[15px]" />}
                         {appSettingsSaved ? 'Salvo!' : 'Salvar'}
                     </button>
                 </div>

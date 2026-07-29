@@ -16,6 +16,13 @@ export interface AppSettings {
     /** Casas do sequencial por obra (zeros à esquerda). */
     contractSeqPadding: number;
 
+    // Quotation numbering (Suprimentos) — cópia do padrão de Numeração de Pedidos.
+    quotationPrefix: string;
+    /** Máscara do número da cotação. Tokens: {prefixo} {empreendimento} {obra} {seq}. */
+    quotationNumberPattern: string;
+    /** Casas do sequencial por obra (zeros à esquerda). */
+    quotationSeqPadding: number;
+
     // Exibição de fornecedores: razão social ou apelido curto
     supplierNameDisplay: 'razao' | 'apelido';
 
@@ -38,6 +45,10 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
     contractNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
     contractSeqPadding: 4,
 
+    quotationPrefix: 'QT',
+    quotationNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
+    quotationSeqPadding: 4,
+
     supplierNameDisplay: 'razao',
 
     whatsappOrderSentTemplate:
@@ -54,6 +65,7 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
 export const TEMPLATE_VARS = {
     orderNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     contractNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
+    quotationNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     whatsappOrderSent: ['{fornecedor}', '{pedido}', '{obra}', '{itens}', '{total}', '{entrega}'],
     whatsappStatusChange: ['{fornecedor}', '{pedido}', '{status}'],
     email: ['{pedido}', '{status}'],

@@ -102,7 +102,7 @@ const PARTNER_DOC_COLUMNS: ColumnConfig[] = [
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken }) => {
   const isPreview = !!previewWorkspaceId;
   const isTokenMode = !!portalToken;
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'financeiro' | 'solicitacoes'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,6 +160,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [contractItems, setContractItems] = useState<ContractItem[]>([]);
   const [contractAddendums, setContractAddendums] = useState<ContractAddendum[]>([]);
   const [contractMeasurements, setContractMeasurements] = useState<ContractMeasurement[]>([]);
+
+  // Financeiro (parcelas, medições com NF, retenção) — agregado de todos os contratos do fornecedor
+  const [financials, setFinancials] = useState<{
+    contracts: { id: string; number: string; title: string | null; current_value: number; retention_rate: number | null; status: string }[];
+    installments: { id: string; transaction_date: string; amount: number; direction: string; description: string | null; status: string; business_status: string | null; installment_type: string | null; source_system: string }[];
+    measurements: { id: string; contract_id: string; number: number; period_start: string | null; period_end: string | null; status: string; total_value: number; retention_value: number; net_value: number; invoice_url: string | null }[];
+    retention: { retained: number; released: number; balance: number };
+  }>({ contracts: [], installments: [], measurements: [], retention: { retained: 0, released: 0, balance: 0 } });
+  const [financialsLoading, setFinancialsLoading] = useState(false);
+  const [uploadingInvoiceFor, setUploadingInvoiceFor] = useState<string | null>(null);
+  const [invoiceUploadError, setInvoiceUploadError] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -221,6 +232,35 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       console.error('Erro ao carregar detalhe do contrato:', err);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  // Anexa a NF de uma medição a partir da aba Financeiro — sobe o arquivo (bucket público
+  // 'documents', mesmo caminho que o admin usa) e grava invoice_url via RPC, nos dois modos
+  // de acesso. Atualiza só o item local (§22 do guia de UI), sem recarregar tudo.
+  const handleUploadInvoice = async (measurementId: string, contractId: string, file: File) => {
+    setUploadingInvoiceFor(measurementId);
+    setInvoiceUploadError(null);
+    try {
+      const url = isTokenMode
+        ? await partnerPortalTokenService.uploadInvoice(portalToken!, contractId, file)
+        : await partnerService.uploadInvoice(contractId, file);
+
+      if (isTokenMode) {
+        await partnerPortalTokenService.setMeasurementInvoice(portalToken!, measurementId, url);
+      } else {
+        await partnerService.setMeasurementInvoice(measurementId, url);
+      }
+
+      setFinancials((prev) => ({
+        ...prev,
+        measurements: prev.measurements.map((m) => (m.id === measurementId ? { ...m, invoice_url: url } : m)),
+      }));
+    } catch (err: any) {
+      console.error('Erro ao anexar nota fiscal:', err);
+      setInvoiceUploadError(err.message || 'Erro ao anexar nota fiscal.');
+    } finally {
+      setUploadingInvoiceFor(null);
     }
   };
 
@@ -499,6 +539,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             setSharedDisciplines(bundle.disciplines);
           } else if (activeTab === 'contratos') {
             setContracts(await partnerPortalTokenService.getContracts(portalToken!));
+          } else if (activeTab === 'financeiro') {
+            setFinancialsLoading(true);
+            try {
+              const res = await partnerPortalTokenService.getFinancials(portalToken!);
+              setFinancials(res);
+            } finally {
+              setFinancialsLoading(false);
+            }
           } else if (activeTab === 'solicitacoes') {
             setRequests(await partnerPortalTokenService.getRequests(portalToken!));
           }
@@ -527,6 +575,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         } else if (activeTab === 'contratos') {
           const { data: cts } = await supabase.from('contracts').select('*').eq('supplier_id', workspace.supplier_id);
           setContracts(cts || []);
+        } else if (activeTab === 'financeiro') {
+          setFinancialsLoading(true);
+          try {
+            const res = await partnerService.listFinancials(workspace.supplier_id);
+            setFinancials(res);
+          } finally {
+            setFinancialsLoading(false);
+          }
         } else if (activeTab === 'solicitacoes') {
           const reqs = await partnerService.listRequests(workspace.id);
           setRequests(reqs);
@@ -982,6 +1038,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           >
             <FileText className="w-4 h-4" />
             <span>Contratos</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('financeiro')}
+            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
+              ${activeTab === 'financeiro' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
+          >
+            <DollarSign className="w-4 h-4" />
+            <span>Financeiro</span>
           </button>
           <button
             onClick={() => setActiveTab('solicitacoes')}
@@ -1566,6 +1630,115 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* TAB: FINANCEIRO */}
+          {activeTab === 'financeiro' && (
+            <div className="flex flex-col gap-6">
+              <h3 className="text-md font-bold text-gray-900">Financeiro</h3>
+
+              {financialsLoading ? (
+                <div className="text-center py-12 text-xs text-gray-400">Carregando...</div>
+              ) : (
+                <>
+                  {invoiceUploadError && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded-xl p-3">
+                      {invoiceUploadError}
+                    </div>
+                  )}
+
+                  {/* Resumo de retenção */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="bg-white border border-gray-200 rounded-xl p-3">
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenção Acumulada</span>
+                      <span className="text-sm font-black text-gray-900">R$ {financials.retention.retained.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl p-3">
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenção Liberada</span>
+                      <span className="text-sm font-black text-gray-900">R$ {financials.retention.released.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                      <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo Retido</span>
+                      <span className="text-sm font-black text-orange-700">R$ {financials.retention.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+
+                  {/* Parcelas / contas a pagar */}
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Parcelas</h4>
+                    <div className="flex flex-col gap-2">
+                      {financials.installments.map((t) => (
+                        <div key={t.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{t.description || 'Parcela do contrato'}</p>
+                            <p className="text-[10px] text-gray-400">Vencimento: {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString() : '-'}</p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                              ${t.business_status === 'PAGO' || t.status !== 'PENDING' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {t.business_status === 'PAGO' || t.status !== 'PENDING' ? 'Pago' : 'Pendente'}
+                            </span>
+                            <span className="text-xs font-black text-gray-900">R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {financials.installments.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma parcela encontrada.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Medições — saldo a faturar e envio de NF */}
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Medições</h4>
+                    <div className="flex flex-col gap-2">
+                      {financials.measurements.map((m) => (
+                        <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-xs font-bold text-gray-900">Medição Nº {m.number}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                              ${m.status === 'Paga' || m.status === 'Processada' ? 'bg-green-100 text-green-700' : m.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {m.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 mb-2">
+                            Período: {m.period_start ? new Date(m.period_start).toLocaleDateString() : '-'} até {m.period_end ? new Date(m.period_end).toLocaleDateString() : '-'}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400">
+                            <span>Bruto: R$ {Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            {m.invoice_url ? (
+                              <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-orange-500 hover:text-orange-600 font-semibold">Ver Nota</a>
+                            ) : isPreview ? (
+                              <span className="text-gray-300">Anexar NF disponível apenas no acesso real do parceiro</span>
+                            ) : (
+                              <label className={`flex items-center gap-1.5 font-semibold cursor-pointer ${uploadingInvoiceFor === m.id ? 'text-gray-300' : 'text-blue-600 hover:text-blue-700'}`}>
+                                <Upload className="w-3 h-3" />
+                                {uploadingInvoiceFor === m.id ? 'Enviando...' : 'Anexar NF'}
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  disabled={uploadingInvoiceFor === m.id}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (file) handleUploadInvoice(m.id, m.contract_id, file);
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {financials.measurements.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma medição registrada.</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

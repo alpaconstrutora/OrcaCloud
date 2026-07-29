@@ -543,6 +543,92 @@ export const partnerService = {
     return documentService.generateDownloadUrl(storagePath);
   },
 
+  // --- Financeiro (modo autenticado — login de partner_users) ---
+  // Espelha partner_portal_get_financials (RPC do modo token): parcelas/contas a pagar,
+  // medições (com NF) e retenção, restritas por supplier_id via as policies
+  // *_select_partner (internal_transactions/contract_retention_releases).
+  async listFinancials(supplierId: string, contractId?: string): Promise<{
+    contracts: { id: string; number: string; title: string | null; current_value: number; retention_rate: number | null; status: string }[];
+    installments: { id: string; transaction_date: string; amount: number; direction: string; description: string | null; status: string; business_status: string | null; installment_type: string | null; source_system: string }[];
+    measurements: { id: string; contract_id: string; number: number; period_start: string | null; period_end: string | null; status: string; total_value: number; retention_value: number; net_value: number; invoice_url: string | null }[];
+    retention: { retained: number; released: number; balance: number };
+  }> {
+    let contractQuery = supabase
+      .from('contracts')
+      .select('id, number, title, current_value, retention_rate, status')
+      .eq('supplier_id', supplierId)
+      .or('domain.eq.SUPRIMENTOS,domain.is.null');
+    if (contractId) contractQuery = contractQuery.eq('id', contractId);
+    const { data: contracts, error: cErr } = await contractQuery;
+    if (cErr) throw cErr;
+
+    const contractIds = (contracts || []).map((c: any) => c.id);
+    if (contractIds.length === 0) {
+      return { contracts: [], installments: [], measurements: [], retention: { retained: 0, released: 0, balance: 0 } };
+    }
+
+    const { data: measurements, error: mErr } = await supabase
+      .from('contract_measurements')
+      .select('id, contract_id, number, period_start, period_end, status, total_value, retention_value, net_value, invoice_url')
+      .in('contract_id', contractIds)
+      .order('number', { ascending: false });
+    if (mErr) throw mErr;
+    const measurementIds = (measurements || []).map((m: any) => m.id);
+
+    const installmentCols = 'id, transaction_date, amount, direction, description, status, business_status, installment_type, source_system, reference_id';
+    const [{ data: byContract, error: e1 }, byMeasurement] = await Promise.all([
+      supabase
+        .from('internal_transactions')
+        .select(installmentCols)
+        .in('source_system', ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING'])
+        .or(contractIds.map((id: string) => `reference_id.like.${id}%`).join(',')),
+      measurementIds.length > 0
+        ? supabase
+            .from('internal_transactions')
+            .select(installmentCols)
+            .eq('source_system', 'CONTRACT_MEASUREMENT')
+            .in('reference_id', measurementIds)
+        : Promise.resolve({ data: [], error: null } as any),
+    ]);
+    if (e1) throw e1;
+    if (byMeasurement.error) throw byMeasurement.error;
+
+    const { data: releases, error: rErr } = await supabase
+      .from('contract_retention_releases')
+      .select('amount')
+      .in('contract_id', contractIds);
+    if (rErr) throw rErr;
+
+    const retained = (measurements || []).reduce((sum: number, m: any) => sum + (Number(m.retention_value) || 0), 0);
+    const released = (releases || []).reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+
+    return {
+      contracts: (contracts || []) as any,
+      installments: [...(byContract || []), ...(byMeasurement.data || [])]
+        .sort((a: any, b: any) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()),
+      measurements: (measurements || []) as any,
+      retention: { retained, released, balance: retained - released },
+    };
+  },
+
+  async setMeasurementInvoice(measurementId: string, url: string): Promise<void> {
+    const { data, error } = await supabase.rpc('partner_portal_set_measurement_invoice', {
+      p_token: null,
+      p_measurement_id: measurementId,
+      p_url: url,
+    });
+    if (error) throw error;
+    if (!(data as any)?.valid) throw new Error((data as any)?.error || 'Não foi possível anexar a nota fiscal.');
+  },
+
+  async uploadInvoice(contractId: string, file: File): Promise<string> {
+    const path = `invoices/${contractId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { error } = await supabase.storage.from('documents').upload(path, file, { upsert: false });
+    if (error) throw error;
+    const { data } = supabase.storage.from('documents').getPublicUrl(path);
+    return data.publicUrl;
+  },
+
   // --- Anexos de Solicitações (Onda 5: fluxo reverso — parceiro envia arquivo) ---
   async uploadRequestAttachment(workspaceId: string, file: File): Promise<string> {
     const path = `partner-uploads/${workspaceId}/${Date.now()}_${file.name}`;

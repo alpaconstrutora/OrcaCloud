@@ -94,6 +94,48 @@ export const partnerPortalTokenService = {
     return data as any;
   },
 
+  // Financeiro: parcelas/contas a pagar, medições (com NF) e retenção do fornecedor.
+  // p_contract_id opcional filtra a um único contrato (usado pelo detalhe da aba Contratos);
+  // sem ele, traz o consolidado de todos os contratos do fornecedor.
+  async getFinancials(token: string, contractId?: string): Promise<{
+    valid: boolean;
+    contracts: any[];
+    installments: any[];
+    measurements: any[];
+    retention: { retained: number; released: number; balance: number };
+  }> {
+    const { data, error } = await supabase.rpc('partner_portal_get_financials', {
+      p_token: token,
+      p_contract_id: contractId ?? null,
+    });
+    if (error) throw error;
+    return data as any;
+  },
+
+  async setMeasurementInvoice(token: string, measurementId: string, url: string): Promise<void> {
+    const { data, error } = await supabase.rpc('partner_portal_set_measurement_invoice', {
+      p_token: token,
+      p_measurement_id: measurementId,
+      p_url: url,
+    });
+    if (error) throw error;
+    if (!(data as any)?.valid) throw new Error((data as any)?.error || 'Não foi possível anexar a nota fiscal.');
+  },
+
+  // Upload da NF de uma medição — vai para o bucket público 'documents' (mesmo caminho que
+  // ContractMeasurementModal.tsx usa no admin), diferente do uploadAttachment acima (opura-docs).
+  async uploadInvoice(token: string, contractId: string, file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('token', token);
+    formData.append('contractId', contractId);
+    formData.append('target', 'invoice');
+    formData.append('file', file);
+    const { data, error } = await supabase.functions.invoke('partner-portal-upload', { body: formData });
+    if (error) throw error;
+    if (!data?.publicUrl) throw new Error(data?.error || 'Erro ao enviar nota fiscal.');
+    return data.publicUrl;
+  },
+
   async getRequests(token: string): Promise<any[]> {
     const { data, error } = await supabase.rpc('partner_portal_get_requests', { p_token: token });
     if (error) throw error;

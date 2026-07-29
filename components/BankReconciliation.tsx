@@ -66,7 +66,8 @@ interface BankReconciliationProps {
 
 const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'description',  label: 'Descrição',          sortable: true },
-    { key: 'counterparty', label: 'Cliente/Fornecedor', sortable: true },
+    { key: 'client',       label: 'Cliente',            sortable: true },
+    { key: 'creditor',     label: 'Credor',             sortable: true },
     { key: 'category',     label: 'Categoria',          sortable: true },
     { key: 'project',      label: 'Obra',               sortable: true },
     { key: 'costCenter',   label: 'Plano de Contas',    sortable: true },
@@ -83,7 +84,8 @@ const STATEMENT_COLUMNS: ColumnConfig[] = [
 // valor) — permite regras tipo "valor > 1000" ou "descrição contém PIX".
 const STATEMENT_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'description',  label: 'Descrição',          type: 'text'   },
-    { key: 'counterparty', label: 'Cliente/Fornecedor', type: 'text'   },
+    { key: 'client',       label: 'Cliente',            type: 'text'   },
+    { key: 'creditor',     label: 'Credor',             type: 'text'   },
     { key: 'category',     label: 'Categoria',          type: 'text'   },
     { key: 'amount',       label: 'Valor',              type: 'number' },
     { key: 'direction',    label: 'Tipo', type: 'select', options: [
@@ -94,7 +96,8 @@ const STATEMENT_FILTER_FIELDS: FilterFieldConfig[] = [
 function getBankTxFilterValue(tx: BankTransaction, key: string): unknown {
     switch (key) {
         case 'description':  return tx.description_normalized || tx.description_raw || '';
-        case 'counterparty': return tx.counterparty_name ?? '';
+        case 'client':       return tx.direction === 'CREDIT' ? (tx.counterparty_name ?? '') : '';
+        case 'creditor':     return tx.direction === 'DEBIT' ? (tx.counterparty_name ?? '') : '';
         case 'category':     return tx.category ?? '';
         case 'amount':       return tx.amount ?? 0;
         case 'direction':    return tx.direction ?? '';
@@ -129,7 +132,8 @@ const DEFAULT_PENDING_BANK_COL_WIDTHS: Record<string, number> = {
 // sortable:true só nas colunas que o campo de ordenação da toolbar (internalSortField) suporta.
 const PENDING_INTERNAL_COLUMNS: ColumnConfig[] = [
     { key: 'description',  label: 'Descrição',            sortable: true  },
-    { key: 'party',        label: 'Cliente/Fornecedor',   sortable: true  },
+    { key: 'client',       label: 'Cliente',              sortable: true  },
+    { key: 'creditor',     label: 'Credor',               sortable: true  },
     { key: 'category',     label: 'Categoria',            sortable: true  },
     { key: 'project',      label: 'Obra',                 sortable: false },
     { key: 'costCenter',   label: 'Plano de Contas',      sortable: false },
@@ -140,7 +144,8 @@ const PENDING_INTERNAL_COLUMNS: ColumnConfig[] = [
 
 const DEFAULT_PENDING_INTERNAL_COL_WIDTHS: Record<string, number> = {
     description: 220,
-    party: 150,
+    client: 130,
+    creditor: 130,
     category: 140,
     project: 120,
     costCenter: 140,
@@ -153,7 +158,8 @@ const DEFAULT_PENDING_INTERNAL_COL_WIDTHS: Record<string, number> = {
 // direita do cabeçalho); persistidas em localStorage. Duplo clique restaura o padrão.
 const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
     description: 260,
-    counterparty: 200,
+    client: 160,
+    creditor: 160,
     category: 160,
     project: 160,
     costCenter: 160,
@@ -720,14 +726,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         return Array.from(ents).sort();
     }, [masterClients]);
 
-    // Cliente/Fornecedor presentes no extrato bancário (para o filtro de contraparte)
+    // Cliente/Credor presentes no extrato bancário (para o filtro de contraparte)
     const uniqueBankCounterparties = useMemo(() => {
         const ents = new Set<string>();
         bankTransactions.forEach(tx => { if (tx.counterparty_name) ents.add(tx.counterparty_name); });
         return Array.from(ents).sort();
     }, [bankTransactions]);
 
-    // Cliente/Fornecedor presentes nos lançamentos (para o filtro de contraparte)
+    // Cliente/Credor presentes nos lançamentos (para o filtro de contraparte)
     const uniqueInternalEntities = useMemo(() => {
         const ents = new Set<string>();
         internalTransactions.forEach(tx => { if (tx.entity_name) ents.add(tx.entity_name); });
@@ -757,7 +763,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     );
 
     const [showInternalTxModal, setShowInternalTxModal] = useState(false);
-    // Modal de cadastro rápido de Cliente/Fornecedor a partir do extrato
+    // Modal de cadastro rápido de Cliente/Credor a partir do extrato
     const [registerEntityModal, setRegisterEntityModal] = useState<{
         txId: string;
         kind: 'client' | 'supplier';
@@ -1427,7 +1433,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
 
         if (!newRule.category && !newRule.clientName && !newRule.supplierName) {
-            alert('Por favor, defina pelo menos uma Categoria ou um Cliente/Fornecedor.');
+            alert('Por favor, defina pelo menos uma Categoria ou um Cliente/Credor.');
             return;
         }
 
@@ -2270,7 +2276,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             // Vincula a contraparte recém-cadastrada ao extrato
             await handleUpdateBankCounterparty(txId, name.trim());
             setRegisterEntityModal(null);
-            setActionFeedback({ message: `${kind === 'supplier' ? 'Fornecedor' : 'Cliente'} cadastrado e vinculado!`, type: 'success' });
+            setActionFeedback({ message: `${kind === 'supplier' ? 'Credor' : 'Cliente'} cadastrado e vinculado!`, type: 'success' });
             setTimeout(() => setActionFeedback(null), 3000);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);
@@ -2868,7 +2874,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Atribuir Fornecedor (Despesa)</label>
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Atribuir Credor (Despesa)</label>
                                     <div className="relative group">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center group-focus-within:bg-amber-600 group-focus-within:text-white transition-all">
                                             <DollarSign className="w-4 h-4" />
@@ -2932,10 +2938,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                             <div>
                                 <h3 className="text-lg font-black text-gray-900 uppercase">
-                                    Cadastrar {registerEntityModal.kind === 'supplier' ? 'Fornecedor' : 'Cliente'}
+                                    Cadastrar {registerEntityModal.kind === 'supplier' ? 'Credor' : 'Cliente'}
                                 </h3>
                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                                    Em Organização · {registerEntityModal.kind === 'supplier' ? 'Fornecedores' : 'Clientes'} — a partir do extrato
+                                    Em Organização · {registerEntityModal.kind === 'supplier' ? 'Credores' : 'Clientes'} — a partir do extrato
                                 </p>
                             </div>
                             <button onClick={() => setRegisterEntityModal(null)} className="text-gray-300 hover:text-gray-900 transition-colors">
@@ -2949,7 +2955,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     type="text"
                                     value={registerEntityModal.name}
                                     onChange={(e) => setRegisterEntityModal(m => m && { ...m, name: e.target.value })}
-                                    placeholder="Nome do cliente/fornecedor"
+                                    placeholder="Nome do cliente/credor"
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                     autoFocus
                                 />
@@ -3067,14 +3073,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     type="text" 
                                     value={newInternalTx.description}
                                     onChange={(e) => setNewInternalTx({...newInternalTx, description: e.target.value})}
-                                    placeholder="Ex: Pagamento Fornecedor X"
+                                    placeholder="Ex: Pagamento Credor X"
                                     className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Cliente/Fornecedor</label>
-                                <input 
-                                    type="text" 
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Cliente/Credor</label>
+                                <input
+                                    type="text"
                                     value={newInternalTx.entity_name}
                                     onChange={(e) => setNewInternalTx({...newInternalTx, entity_name: e.target.value})}
                                     placeholder="Ex: João da Silva / Loja de Ferragens"
@@ -4158,7 +4164,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         onClick={() => { setBankCpDropdownOpen(o => !o); setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); }}
                                         className={`h-9 px-2.5 border rounded-[6px] text-xs font-medium focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCounterpartyFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
                                     >
-                                        {bankCounterpartyFilter.length > 0 ? `${bankCounterpartyFilter.length} contraparte${bankCounterpartyFilter.length > 1 ? 's' : ''}` : 'Cliente/fornecedor'}
+                                        {bankCounterpartyFilter.length > 0 ? `${bankCounterpartyFilter.length} contraparte${bankCounterpartyFilter.length > 1 ? 's' : ''}` : 'Cliente/credor'}
                                         <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                     </button>
                                     {bankCpDropdownOpen && (
@@ -4210,7 +4216,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <option value="amount">Valor</option>
                                         <option value="description">Descrição</option>
                                         <option value="category">Categoria</option>
-                                        <option value="counterparty">Cliente/Fornecedor</option>
+                                        <option value="counterparty">Cliente/Credor</option>
                                     </select>
                                     <button
                                         onClick={() => setBankSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
@@ -4344,14 +4350,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             <statementResize.ResizeHandle colKey="description" />
                                                         </SortableHeader>
                                                     )}
-                                                    {tableColumns.visibleColumns.includes('counterparty') && (
+                                                    {tableColumns.visibleColumns.includes('client') && (
                                                         <SortableHeader
-                                                            colKey="counterparty" label="Cliente/Fornecedor" uppercase={false}
+                                                            colKey="counterparty" label="Cliente" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
-                                                            <statementResize.ResizeHandle colKey="counterparty" />
+                                                            <statementResize.ResizeHandle colKey="client" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('creditor') && (
+                                                        <SortableHeader
+                                                            colKey="counterparty" label="Credor" uppercase={false}
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <statementResize.ResizeHandle colKey="creditor" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('category') && (
@@ -4444,27 +4460,58 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     </div>
                                                                 </td>
                                                             )}
-                                                            {tableColumns.visibleColumns.includes('counterparty') && (
+                                                            {tableColumns.visibleColumns.includes('client') && (
                                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
-                                                                    <div className="flex items-center gap-1.5 min-w-0">
-                                                                        <LazySelect
-                                                                            value={tx.counterparty_name || ''}
-                                                                            currentLabel={tx.counterparty_name || ''}
-                                                                            onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
-                                                                            options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
-                                                                            placeholder="— selecionar"
-                                                                            className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
-                                                                        />
-                                                                        {!cpRegistered && (
-                                                                            <button
-                                                                                onClick={() => openRegisterEntity(tx)}
-                                                                                className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
-                                                                                title={`Cadastrar ${tx.direction === 'DEBIT' ? 'fornecedor' : 'cliente'} a partir do extrato`}
-                                                                            >
-                                                                                <UserPlus className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
+                                                                    {tx.direction === 'CREDIT' ? (
+                                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                                            <LazySelect
+                                                                                value={tx.counterparty_name || ''}
+                                                                                currentLabel={tx.counterparty_name || ''}
+                                                                                onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
+                                                                                options={clienteOptions}
+                                                                                placeholder="— selecionar"
+                                                                                className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+                                                                            />
+                                                                            {!cpRegistered && (
+                                                                                <button
+                                                                                    onClick={() => openRegisterEntity(tx)}
+                                                                                    className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
+                                                                                    title="Cadastrar cliente a partir do extrato"
+                                                                                >
+                                                                                    <UserPlus className="w-3.5 h-3.5" />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-gray-300">—</span>
+                                                                    )}
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('creditor') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
+                                                                    {tx.direction === 'DEBIT' ? (
+                                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                                            <LazySelect
+                                                                                value={tx.counterparty_name || ''}
+                                                                                currentLabel={tx.counterparty_name || ''}
+                                                                                onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
+                                                                                options={credorOptions}
+                                                                                placeholder="— selecionar"
+                                                                                className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+                                                                            />
+                                                                            {!cpRegistered && (
+                                                                                <button
+                                                                                    onClick={() => openRegisterEntity(tx)}
+                                                                                    className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
+                                                                                    title="Cadastrar credor a partir do extrato"
+                                                                                >
+                                                                                    <UserPlus className="w-3.5 h-3.5" />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-gray-300">—</span>
+                                                                    )}
                                                                 </td>
                                                             )}
                                                             {tableColumns.visibleColumns.includes('category') && (
@@ -5019,7 +5066,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             onClick={() => { setInternalEntityDropdownOpen(o => !o); setInternalCatDropdownOpen(false); setBankCatDropdownOpen(false); setBankCpDropdownOpen(false); }}
                                             className={`px-3 py-1.5 border rounded-full text-xs font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${internalEntityFilter.length > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
                                         >
-                                            {internalEntityFilter.length > 0 ? `${internalEntityFilter.length} contraparte${internalEntityFilter.length > 1 ? 's' : ''}` : 'Cliente/Fornecedor'}
+                                            {internalEntityFilter.length > 0 ? `${internalEntityFilter.length} contraparte${internalEntityFilter.length > 1 ? 's' : ''}` : 'Cliente/Credor'}
                                             <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                         </button>
                                         {internalEntityDropdownOpen && (
@@ -5031,7 +5078,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 {uniqueInternalEntities.length === 0 && (
                                                     <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase">Nenhuma contraparte nos lançamentos</div>
                                                 )}
-                                                {[{ value: '__none__', label: '— Sem cliente/fornecedor' }, ...uniqueInternalEntities.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
+                                                {[{ value: '__none__', label: '— Sem cliente/credor' }, ...uniqueInternalEntities.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
                                                     <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
                                                         <input
                                                             type="checkbox"
@@ -5060,7 +5107,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             <option value="amount">Valor</option>
                                             <option value="description">Descrição</option>
                                             <option value="category">Categoria</option>
-                                            <option value="entity">Cliente/Fornecedor</option>
+                                            <option value="entity">Cliente/Credor</option>
                                         </select>
                                         <button
                                             onClick={() => setInternalSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
@@ -5191,7 +5238,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 {displayPartyName(tx) && (
                                                     <p className="text-sm font-normal text-gray-500 truncate mb-2" title={displayPartyName(tx) ?? ''}>
                                                         <span className="text-gray-300 mr-1">
-                                                            {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente:' : 'Fornecedor:'}
+                                                            {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente:' : 'Credor:'}
                                                         </span>
                                                         {displayPartyName(tx)}
                                                     </p>
@@ -5278,14 +5325,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             <pendingInternalResize.ResizeHandle colKey="description" />
                                                         </SortableHeader>
                                                     )}
-                                                    {pendingInternalColumns.visibleColumns.includes('party') && (
+                                                    {pendingInternalColumns.visibleColumns.includes('client') && (
                                                         <SortableHeader
-                                                            colKey="party" label="Cliente/Fornecedor" uppercase={false}
+                                                            colKey="party" label="Cliente" uppercase={false}
                                                             sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
                                                             className="px-4 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
-                                                            <pendingInternalResize.ResizeHandle colKey="party" />
+                                                            <pendingInternalResize.ResizeHandle colKey="client" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('creditor') && (
+                                                        <SortableHeader
+                                                            colKey="party" label="Credor" uppercase={false}
+                                                            sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
+                                                            onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <pendingInternalResize.ResizeHandle colKey="creditor" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('category') && (
@@ -5387,9 +5444,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 </div>
                                                             </td>
                                                             )}
-                                                            {pendingInternalColumns.visibleColumns.includes('party') && (
+                                                            {pendingInternalColumns.visibleColumns.includes('client') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
-                                                                {displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
+                                                                {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT'
+                                                                    ? (displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
+                                                                    : <span className="text-gray-300">—</span>}
+                                                            </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('creditor') && (
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
+                                                                {!(tx.party_type === 'CLIENT' || tx.direction === 'CREDIT')
+                                                                    ? (displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
+                                                                    : <span className="text-gray-300">—</span>}
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('category') && (

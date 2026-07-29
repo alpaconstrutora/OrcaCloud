@@ -2,12 +2,29 @@ import { supabase } from '../lib/supabase';
 import { FinancialTransaction, PurchaseOrderItem, ProjectSettings, FinancialInfo } from '../types';
 import { projectService } from './projectService';
 import { invoiceService } from './invoiceService';
+import { isSystemProject } from '../utils/systemProjects';
+
+/**
+ * Campos de `internal_transactions` que o JSONB do projeto não carrega.
+ * Não expõe partyId de propósito: internal_transactions.party_id tem FK só
+ * para `clients` (internal_txs_party_id_fkey), e tudo que passa por aqui é
+ * despesa com fornecedor — gravar o supplier_id ali viola a FK.
+ */
+type InternalTxSyncOptions = {
+    sourceSystem?: string;
+    partyType?: 'SUPPLIER' | 'CLIENT' | null;
+    partyName?: string | null;
+};
 
 export const financialService = {
     /**
      * Adds a transaction to a project's financial settings.
      */
-    async addTransaction(projectId: string, transaction: Omit<FinancialTransaction, 'id'>) {
+    async addTransaction(
+        projectId: string,
+        transaction: Omit<FinancialTransaction, 'id'>,
+        sync?: InternalTxSyncOptions
+    ) {
         const project = await projectService.loadProject(projectId);
         if (!project) throw new Error('Projeto não encontrado');
 
@@ -37,20 +54,29 @@ export const financialService = {
             }
         });
 
-        // Sync to internal_transactions table for reconciliation engine
+        // Sync to internal_transactions — fonte de vw_payables / vw_receivables.
+        // due_date e business_status são obrigatórios de fato: as views derivam
+        // VENCIDO deles, e sem due_date a parcela nasce sem vencimento na tela.
+        const txDate = newTx.date.split('T')[0];
         try {
-            await supabase.from('internal_transactions').insert({
+            const { error } = await supabase.from('internal_transactions').insert({
                 organization_id: settings.organizationId,
-                source_system: 'PROJECT',
+                source_system: sync?.sourceSystem || 'PROJECT',
                 reference_id: newTx.id,
-                project_id: projectId,
-                transaction_date: newTx.date.split('T')[0],
+                project_id: isSystemProject(project) ? null : projectId,
+                transaction_date: txDate,
+                due_date: txDate,
                 amount: newTx.value,
                 direction: newTx.type === 'INCOME' ? 'CREDIT' : 'DEBIT',
                 description: newTx.description,
                 category: newTx.category,
-                status: newTx.status === 'PAID' ? 'CONCILIATED' : 'PENDING'
+                entity_name: sync?.partyName || newTx.supplier || null,
+                party_type: sync?.partyType ?? null,
+                party_name: sync?.partyName || newTx.supplier || null,
+                status: newTx.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
+                business_status: newTx.status === 'PAID' ? 'PAGO' : 'PREVISTO'
             });
+            if (error) throw error;
         } catch (e) {
             console.error('[FINANCIAL-SYNC] Failed to sync to internal_transactions:', e);
         }
@@ -261,6 +287,10 @@ export const financialService = {
                 costCenter: order.cost_center,
                 chartOfAccounts: order.chart_of_accounts,
                 notes: `Gerado da entrega. Método: ${paymentMethod}. NFe: ${invoices[0].fileName}`
+            }, {
+                sourceSystem: 'PURCHASE_ORDER',
+                partyType: 'SUPPLIER',
+                partyName: supplierName
             });
         }
 
@@ -350,6 +380,9 @@ export const financialService = {
                     supplier: supplierName,
                     measurementId: measurementId,
                     notes: `Gerado da medição. Método: ${paymentMethod}.`
+                }, {
+                    partyType: 'SUPPLIER',
+                    partyName: supplierName
                 });
             }
             console.log(`[FINANCIAL] Generated ${paymentSchedule.length} forecast(s) from schedule for Measurement ${measurement.number}`);
@@ -382,6 +415,9 @@ export const financialService = {
                 supplier: supplierName,
                 measurementId: measurementId,
                 notes: `Gerado da medição. Método: ${paymentMethod}.`
+            }, {
+                partyType: 'SUPPLIER',
+                partyName: supplierName
             });
         }
 

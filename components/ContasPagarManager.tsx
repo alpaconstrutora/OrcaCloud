@@ -5,8 +5,10 @@ import {
     Search, X, DollarSign, AlertTriangle, MoveHorizontal,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
-import { Invoice } from '../types/financial';
+import { payableService } from '../services/payableService';
+import { Invoice, Payable } from '../types/financial';
 import type { Organization } from '../types';
+import ContasPagarParcelas from './ContasPagarParcelas';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
@@ -106,7 +108,30 @@ interface Props {
     tabsSlot?: React.ReactNode;
 }
 
+/**
+ * A tela olha dois conjuntos de dados diferentes, não dois filtros do mesmo:
+ * - `parcelas`: títulos a pagar (vw_payables) — parcelas de Pedidos de Compra e
+ *   de Contratos de Suprimentos. É a visão principal do Contas a Pagar.
+ * - `notas`: notas fiscais anexadas ao pedido (tabela `invoices`), que é tudo
+ *   que esta tela mostrava antes de 2026-07-29. Conferência de NF, não título.
+ * Por serem escopos (§5.3), o seletor mora na barra de botões, não na busca.
+ */
+type Visao = 'parcelas' | 'notas';
+
+const VISAO_HEADERS: Record<Visao, { titulo: string; subtitulo: string }> = {
+    parcelas: {
+        titulo: 'Contas a Pagar',
+        subtitulo: 'Parcelas de pedidos de compra e contratos de suprimentos.',
+    },
+    notas: {
+        titulo: 'Notas Fiscais',
+        subtitulo: 'Notas e boletos anexados aos pedidos, aprovados para pagamento.',
+    },
+};
+
 export default function ContasPagarManager({ organizationId, organizations, onOrgChange, tabsSlot }: Props) {
+    const [visao, setVisao] = usePersistedState<Visao>('contasPagarManager:visao', 'parcelas');
+    const [payables, setPayables] = useState<Payable[]>([]);
     const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -144,8 +169,18 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         setLoading(true);
         setError(null);
         try {
-            const data = await invoiceService.listAll(orgId);
-            setInvoices(data);
+            if (visao === 'parcelas') {
+                // orgId undefined = "Todas as Organizações": o service não filtra e a
+                // RLS recorta o que o usuário pode ver (REGRA #5 — leitura não bloqueia).
+                const data = await payableService.list(orgId, {
+                    dueFrom: vencDe || undefined,
+                    dueTo: vencAte || undefined,
+                });
+                setPayables(data);
+            } else {
+                const data = await invoiceService.listAll(orgId);
+                setInvoices(data);
+            }
             setSelectedIds(new Set());
         } catch (e: any) {
             setError(e.message ?? 'Erro ao carregar contas a pagar');
@@ -154,7 +189,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         }
     }
 
-    useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId]);
+    useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, visao, vencDe, vencAte]);
 
     function handleOrgChange(id: string) {
         setSelectedOrgId(id);
@@ -303,7 +338,37 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         }
     }
 
-    const summary = useMemo(() => {
+    /**
+     * KPIs da visão de parcelas. Vencido vem de `effective_status` (a view já
+     * computa comparando due_date com CURRENT_DATE) em vez de recalcular no
+     * cliente, para o card não divergir do que a coluna Status mostra.
+     */
+    const summaryParcelas = useMemo(() => {
+        const now = today();
+        const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1);
+        const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const em7 = new Date(now); em7.setDate(em7.getDate() + 7);
+
+        let aPagar = 0, venc7 = 0, atrasado = 0, pagoMes = 0;
+        let qtdAPagar = 0, qtdVenc7 = 0, qtdAtrasado = 0, qtdPagoMes = 0;
+        payables.forEach(p => {
+            const valor = p.amount ?? 0;
+            const due = p.due_date ? new Date(p.due_date + 'T00:00:00') : null;
+            if (p.effective_status === 'PAGO') {
+                const ref = due ?? new Date(p.transaction_date + 'T00:00:00');
+                if (ref >= inicioMes && ref <= fimMes) { pagoMes += valor; qtdPagoMes++; }
+                return;
+            }
+            if (p.effective_status === 'CANCELADO') return;
+            aPagar += valor;
+            qtdAPagar++;
+            if (p.effective_status === 'VENCIDO') { atrasado += valor; qtdAtrasado++; }
+            else if (due && due <= em7) { venc7 += valor; qtdVenc7++; }
+        });
+        return { aPagar, venc7, atrasado, pagoMes, qtdAPagar, qtdVenc7, qtdAtrasado, qtdPagoMes };
+    }, [payables]);
+
+    const summaryNotas = useMemo(() => {
         const now = today();
         const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1);
         const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -328,12 +393,15 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         return { aPagar, venc7, atrasado, pagoMes, qtdAPagar, qtdVenc7, qtdAtrasado, qtdPagoMes };
     }, [invoices]);
 
+    const summary = visao === 'parcelas' ? summaryParcelas : summaryNotas;
+    const header = VISAO_HEADERS[visao];
+
     return (
         <div className="space-y-6">
             {/* Cabeçalho de tela — ui_ux_guia_unificado.md §20 */}
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Contas a Pagar</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Invoices e boletos aprovados para pagamento.</p>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{header.titulo}</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitulo}</p>
             </div>
 
             {/* KPI Cards — mb-3 (ritmo §20.1): próximo bloco é a toolbar acoplada (§5.2) */}
@@ -386,6 +454,23 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         com o resumo do recorte. */}
                     <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                         <div className="flex flex-wrap items-center gap-2">
+                            {/* Seletor de conjunto de dados — escopo, não filtro (§5.3):
+                                troca a pergunta de "quais títulos devo?" para "quais notas
+                                chegaram?". Controle segmentado, mesmo vocabulário do §19.1. */}
+                            <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                {(['parcelas', 'notas'] as Visao[]).map(v => (
+                                    <button
+                                        key={v}
+                                        onClick={() => setVisao(v)}
+                                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                            visao === v ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                                        }`}
+                                    >
+                                        {v === 'parcelas' ? 'Parcelas' : 'Notas fiscais'}
+                                    </button>
+                                ))}
+                            </div>
+
                             {organizations && organizations.length > 1 && (
                                 <div className="relative flex items-center">
                                     <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
@@ -429,13 +514,26 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         </div>
 
                         <span className="text-sm font-normal text-gray-400 shrink-0">
-                            {filtered.length} de {invoices.length} conta{invoices.length !== 1 ? 's' : ''}
+                            {visao === 'parcelas'
+                                ? `${payables.length} parcela${payables.length !== 1 ? 's' : ''}`
+                                : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
                         </span>
                     </div>
 
-                    {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
-                        conteúdo dividem um único card (border/rounded/shadow só no container
-                        pai); a costura visível entre os dois é o border-b da toolbar. */}
+                    {visao === 'parcelas' ? (
+                        <ContasPagarParcelas
+                            rows={payables}
+                            loading={loading}
+                            error={error}
+                            onReload={() => carregar(effectiveOrgId)}
+                            onRowChanged={row => setPayables(prev => prev.map(p => p.id === row.id ? row : p))}
+                            onRowRemoved={id => setPayables(prev => prev.filter(p => p.id !== id))}
+                            notify={notify}
+                        />
+                    ) : (
+                    /* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
+                       conteúdo dividem um único card (border/rounded/shadow só no container
+                       pai); a costura visível entre os dois é o border-b da toolbar. */
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-4 border-b border-gray-100 bg-white space-y-3">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -765,9 +863,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         )}
                     </div>
                     </div>
+                    )}
 
             {/* Barra de ações em lote — fixa no rodapé, paleta azul (ui_ux_guia_unificado.md §10) */}
-            {selectedVisible.length > 0 && (
+            {visao === 'notas' && selectedVisible.length > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
                     <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}

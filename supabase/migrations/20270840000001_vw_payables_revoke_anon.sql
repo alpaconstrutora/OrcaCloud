@@ -1,0 +1,45 @@
+-- ==========================================================================
+-- vw_payables — REVOKE explícito de anon (REVOKE PUBLIC não bastou)
+-- Date: 2026-07-29
+-- ==========================================================================
+-- CONTEXTO
+-- A migration 20270840000000 fez `REVOKE ALL ... FROM PUBLIC` + `GRANT SELECT
+-- ... TO authenticated`, acreditando que isso bloqueava anon. Não bloqueia.
+--
+-- Sondagem com a anon key logo após aplicar (PostgREST):
+--     GET /rest/v1/vw_payables?limit=2  → HTTP 200 com dados reais
+--     (amount, party_name, source_system de contratos de verdade)
+--
+-- RAZÃO: o Supabase tem `ALTER DEFAULT PRIVILEGES ... GRANT SELECT ON TABLES TO
+-- anon, authenticated, service_role` no schema public. Isso cria um GRANT
+-- **explícito para o papel `anon`** em todo objeto novo — não um grant herdado
+-- de PUBLIC. `REVOKE ... FROM PUBLIC` não toca em grant explícito de papel, e
+-- por isso passa a falsa sensação de ter fechado o acesso.
+--
+-- É o espelho da lição já registrada para RPC ("GRANT authenticated sozinho não
+-- bloqueia anon"): o default privileges age antes, e o REVOKE tem que nomear o
+-- papel.
+-- ==========================================================================
+
+REVOKE ALL ON public.vw_payables FROM anon;
+
+-- ==========================================================================
+-- ⚠️ NÃO RESOLVE O PROBLEMA MAIOR (pré-existente, fora do escopo desta migration)
+-- ==========================================================================
+-- A mesma sondagem mostrou que anon lê direto:
+--     GET /rest/v1/internal_transactions?limit=1  → 200 com dados
+--     GET /rest/v1/vw_receivables?limit=1         → 200 com dados
+--
+-- Ou seja: fechar só `vw_payables` não impede um anon de ler os mesmos
+-- lançamentos pela tabela base ou pelo espelho de recebíveis. O buraco é a
+-- camada anon de `internal_transactions` (ver memória "RLS camada
+-- AUTHENTICATED — 40 tabelas com qual=true" e o rollout drop-anon).
+--
+-- Corrigir aquilo mexe em RLS de tabela quente e afeta todo consumidor de
+-- internal_transactions — decisão consciente, não efeito colateral desta
+-- entrega. Deixado explicitamente pendente aqui para não ser esquecido.
+-- ==========================================================================
+
+-- ==========================================================================
+-- FIM: 20270840000001_vw_payables_revoke_anon.sql
+-- ==========================================================================

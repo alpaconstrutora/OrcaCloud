@@ -688,6 +688,47 @@ export interface Receivable {
     updated_at?: string;
 }
 
+// ────────────────────────────────────────────────────────────
+// Contas a Pagar (parcelas de Suprimentos — Pedidos e Contratos)
+// ────────────────────────────────────────────────────────────
+
+export type PayableBusinessStatus =
+    | 'PREVISTO'
+    | 'APROVADO'
+    | 'PAGO'
+    | 'PARCIAL'
+    | 'RENEGOCIADO'
+    | 'CANCELADO';
+
+// effective_status inclui 'VENCIDO' (computado na view vw_payables)
+export type PayableEffectiveStatus = PayableBusinessStatus | 'VENCIDO';
+
+export interface Payable {
+    id: string;
+    organization_id: string;
+    source_system: string;
+    reference_id?: string;
+    transaction_date: string;
+    due_date?: string;
+    amount: number;
+    direction: 'DEBIT';
+    description?: string;
+    category?: string;
+    status: InternalTransactionStatus;
+    business_status: PayableBusinessStatus;
+    effective_status: PayableEffectiveStatus;
+    party_id?: string;
+    party_name?: string;
+    party_type?: string;
+    /** Fallback de contraparte: alguns produtores preenchem só entity_name. */
+    entity_name?: string;
+    project_id?: string;
+    project_name?: string;
+    cost_center_id?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface InadimplenciaFaixa {
     faixa: string;
     count: number;

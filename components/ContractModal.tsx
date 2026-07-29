@@ -20,13 +20,7 @@ import { Upload, ExternalLink, KeyRound } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
-import {
-    contractNumberingService,
-    ContractNumberingSettings,
-    CONTRACT_NUMBERING_DEFAULTS,
-    generateContractNumber,
-    MissingCodeError,
-} from '../services/contractNumberingService';
+import { generateContractNumber, MissingCodeError } from '../services/contractNumberingService';
 
 interface ContractModalProps {
     isOpen: boolean;
@@ -199,18 +193,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const contractDirection = direction ?? (initialData?.direction as string | undefined);
 
     // Numeração de Contratos (Suprimentos) — Configurações do Sistema › Nomenclatura.
-    // Só entra em vigor para domain='SUPRIMENTOS' e com o toggle "enabled" ligado na
-    // config da organização; caso contrário mantém o formato legado (3 dígitos).
-    const [contractNumberingSettings, setContractNumberingSettings] = React.useState<ContractNumberingSettings>({ ...CONTRACT_NUMBERING_DEFAULTS });
-    React.useEffect(() => {
-        if (domain !== 'SUPRIMENTOS' || !organizationId) return;
-        let cancelled = false;
-        contractNumberingService.getSettings(organizationId)
-            .then((s: ContractNumberingSettings) => { if (!cancelled) setContractNumberingSettings(s); })
-            .catch(() => { /* mantém defaults (enabled:false) — não bloqueia o formulário */ });
-        return () => { cancelled = true; };
-    }, [domain, organizationId]);
-    const useNewNumbering = domain === 'SUPRIMENTOS' && contractNumberingSettings.enabled;
+    // Cópia do mecanismo de Numeração de Pedidos: sempre ativa para domain='SUPRIMENTOS',
+    // sem toggle. Serviços e Vendas continuam com o formato legado (3 dígitos).
+    const useNewNumbering = domain === 'SUPRIMENTOS';
 
     React.useEffect(() => {
         if (!isOpen || initialData?.id || !organizationId) return;
@@ -390,7 +375,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             // submit não deve queimar números.
             if (useNewNumbering && isNewContract) {
                 try {
-                    payload.number = await generateContractNumber(payload.project_id as string, contractNumberingSettings);
+                    payload.number = await generateContractNumber(payload.project_id as string);
                 } catch (numErr: unknown) {
                     const numMsg = numErr instanceof MissingCodeError
                         ? numErr.message.replace('o número do pedido', 'o número do contrato').replace('antes de criar o pedido', 'antes de criar o contrato')

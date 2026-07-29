@@ -9,6 +9,13 @@ export interface AppSettings {
     /** Casas do sequencial por obra (zeros à esquerda). */
     orderSeqPadding: number;
 
+    // Contract numbering (Suprimentos) — cópia do padrão de Numeração de Pedidos.
+    contractPrefix: string;
+    /** Máscara do número do contrato. Tokens: {prefixo} {empreendimento} {obra} {seq}. */
+    contractNumberPattern: string;
+    /** Casas do sequencial por obra (zeros à esquerda). */
+    contractSeqPadding: number;
+
     // Exibição de fornecedores: razão social ou apelido curto
     supplierNameDisplay: 'razao' | 'apelido';
 
@@ -26,6 +33,10 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
     orderDuplicateSuffix: '-DUP',
     orderNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
     orderSeqPadding: 4,
+
+    contractPrefix: 'CT',
+    contractNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
+    contractSeqPadding: 4,
 
     supplierNameDisplay: 'razao',
 

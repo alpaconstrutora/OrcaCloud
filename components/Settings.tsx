@@ -5,15 +5,8 @@ import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeO
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import { formatOrderNumber } from '../services/orderNumberingService';
-import {
-    contractNumberingService,
-    ContractNumberingSettings,
-    CONTRACT_NUMBERING_DEFAULTS,
-    formatContractNumber,
-} from '../services/contractNumberingService';
+import { formatContractNumber } from '../services/contractNumberingService';
 import { useConfirm } from './ui/confirm';
-import { useStore } from '../store/useStore';
-import { useToast } from '../hooks/useToast';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
 import FinancialCategoriesManager from './FinancialCategoriesManager';
@@ -66,15 +59,6 @@ const SETTINGS_NAV: SettingsNavNode[] = [
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
-    const { showToast } = useToast();
-    // Config por organização (contract_numbering_settings) — diferente da máscara
-    // de Pedidos, que é em localStorage. Segue o mesmo padrão de fallback de
-    // ClientCategoriesSettings.tsx: com 1 organização só, usa ela; com "Todas as
-    // organizações" e mais de uma, exige seleção explícita (regra #5).
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
-    const organizations = useStore(state => state.organizations);
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-
     const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('geral');
     const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({});
     const toggleNavNode = (id: string) => setOpenNavNodes(o => ({ ...o, [id]: !o[id] }));
@@ -116,7 +100,7 @@ const Settings: React.FC = () => {
         setTimeout(() => setAppSettingsSaved(false), 3000);
     };
 
-    const handleAppSettingsReset = async (section: 'numbering' | 'whatsapp' | 'email') => {
+    const handleAppSettingsReset = async (section: 'numbering' | 'contractNumbering' | 'whatsapp' | 'email') => {
         if (!await confirm({ title: 'Restaurar padrões desta seção?', variant: 'warning', confirmLabel: 'Restaurar' })) return;
         const patch: Partial<AppSettings> =
             section === 'numbering' ? {
@@ -124,6 +108,10 @@ const Settings: React.FC = () => {
                 orderDuplicateSuffix: APP_SETTINGS_DEFAULTS.orderDuplicateSuffix,
                 orderNumberPattern: APP_SETTINGS_DEFAULTS.orderNumberPattern,
                 orderSeqPadding: APP_SETTINGS_DEFAULTS.orderSeqPadding,
+            } : section === 'contractNumbering' ? {
+                contractPrefix: APP_SETTINGS_DEFAULTS.contractPrefix,
+                contractNumberPattern: APP_SETTINGS_DEFAULTS.contractNumberPattern,
+                contractSeqPadding: APP_SETTINGS_DEFAULTS.contractSeqPadding,
             } : section === 'whatsapp' ? {
                 whatsappOrderSentTemplate: APP_SETTINGS_DEFAULTS.whatsappOrderSentTemplate,
                 whatsappStatusChangeTemplate: APP_SETTINGS_DEFAULTS.whatsappStatusChangeTemplate,
@@ -135,48 +123,11 @@ const Settings: React.FC = () => {
         appSettingsService.save({ ...appSettings, ...patch });
     };
 
-    // Numeração de Contratos (Suprimentos) — config por organização no banco.
-    const [contractNumbering, setContractNumbering] = React.useState<ContractNumberingSettings>({ ...CONTRACT_NUMBERING_DEFAULTS });
-    const [contractNumberingLoading, setContractNumberingLoading] = React.useState(false);
-    const [contractNumberingSaved, setContractNumberingSaved] = React.useState(false);
-
-    React.useEffect(() => {
-        if (!effectiveOrganizationId) return;
-        let cancelled = false;
-        (async () => {
-            setContractNumberingLoading(true);
-            try {
-                const s = await contractNumberingService.getSettings(effectiveOrganizationId);
-                if (!cancelled) setContractNumbering(s);
-            } catch (e: any) {
-                if (!cancelled) showToast(e.message, 'error');
-            } finally {
-                if (!cancelled) setContractNumberingLoading(false);
-            }
-        })();
-        return () => { cancelled = true; };
-    }, [effectiveOrganizationId]);
-
+    // Exemplo com códigos fictícios, só para o usuário ver o efeito da máscara.
     const previewContractNumber = React.useMemo(
-        () => formatContractNumber({ empreendimentoCode: 'RES01', obraCode: 'TR1' }, 1, contractNumbering),
-        [contractNumbering.prefix, contractNumbering.pattern, contractNumbering.seqPadding],
+        () => formatContractNumber({ empreendimentoCode: 'RES01', obraCode: 'TR1' }, 1, appSettings),
+        [appSettings.contractPrefix, appSettings.contractNumberPattern, appSettings.contractSeqPadding],
     );
-
-    const handleContractNumberingSave = async () => {
-        if (!effectiveOrganizationId) return;
-        try {
-            await contractNumberingService.saveSettings(effectiveOrganizationId, contractNumbering);
-            setContractNumberingSaved(true);
-            setTimeout(() => setContractNumberingSaved(false), 3000);
-        } catch (e: any) {
-            showToast(e.message, 'error');
-        }
-    };
-
-    const handleContractNumberingReset = async () => {
-        if (!await confirm({ title: 'Restaurar padrões desta seção?', variant: 'warning', confirmLabel: 'Restaurar' })) return;
-        setContractNumbering(prev => ({ ...CONTRACT_NUMBERING_DEFAULTS, enabled: prev.enabled }));
-    };
 
     const runMigration = async () => {
         if (!await confirm({
@@ -418,46 +369,23 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de Suprimentos. O sequencial é por obra e reinicia a cada obra.</p>
                         </div>
                     </div>
-                    <button onClick={handleContractNumberingReset} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('contractNumbering')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
-
-                {!effectiveOrganizationId ? (
-                    <p className="mt-4 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-[6px] px-4 py-3">
-                        Selecione uma organização para configurar a numeração de contratos — a máscara é salva por empresa.
-                    </p>
-                ) : (
-                <>
-                <div className="mt-4 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
-                    <div>
-                        <span className="block text-sm font-medium text-gray-700">Aplicar máscara aos contratos de Suprimentos</span>
-                        <span className="block text-xs text-gray-400 mt-0.5">Desligado, o número continua no formato atual (ex: 001, 042).</span>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setContractNumbering(s => ({ ...s, enabled: !s.enabled }))}
-                        disabled={contractNumberingLoading}
-                        aria-pressed={contractNumbering.enabled}
-                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${contractNumbering.enabled ? 'bg-indigo-600' : 'bg-gray-300'}`}
-                    >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${contractNumbering.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                </div>
-
                 <div className="mt-4 mb-3 flex flex-wrap gap-2">
                     <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
                     {TEMPLATE_VARS.contractNumber.map(v => (
                         <span key={v} className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-[6px] border border-indigo-100">{v}</span>
                     ))}
                 </div>
-                <fieldset disabled={!contractNumbering.enabled} className="border-t border-gray-100 pt-6 space-y-4 disabled:opacity-50">
+                <div className="border-t border-gray-100 pt-6 space-y-4">
                     <div>
                         <label className="block text-xs font-semibold text-slate-500 mb-1.5">Máscara do Número</label>
                         <input
                             type="text"
-                            value={contractNumbering.pattern}
-                            onChange={e => setContractNumbering(s => ({ ...s, pattern: e.target.value }))}
+                            value={appSettings.contractNumberPattern}
+                            onChange={e => setAppSettings(s => ({ ...s, contractNumberPattern: e.target.value }))}
                             placeholder="{prefixo}-{empreendimento}-{obra}-{seq}"
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                         />
@@ -467,8 +395,8 @@ const Settings: React.FC = () => {
                             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
                             <input
                                 type="text"
-                                value={contractNumbering.prefix}
-                                onChange={e => setContractNumbering(s => ({ ...s, prefix: e.target.value }))}
+                                value={appSettings.contractPrefix}
+                                onChange={e => setAppSettings(s => ({ ...s, contractPrefix: e.target.value }))}
                                 placeholder="CT"
                                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                             />
@@ -479,8 +407,8 @@ const Settings: React.FC = () => {
                                 type="number"
                                 min={1}
                                 max={9}
-                                value={contractNumbering.seqPadding}
-                                onChange={e => setContractNumbering(s => ({ ...s, seqPadding: Number(e.target.value) || 1 }))}
+                                value={appSettings.contractSeqPadding}
+                                onChange={e => setAppSettings(s => ({ ...s, contractSeqPadding: Number(e.target.value) || 1 }))}
                                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                             />
                         </div>
@@ -493,15 +421,13 @@ const Settings: React.FC = () => {
                         O sequencial é controlado pelo banco e é único por obra. Contratos de obra ou empreendimento
                         <strong> sem código cadastrado são bloqueados</strong> — cadastre o código em Empreendimentos › Dados Gerais e em Obra › Editar.
                     </p>
-                </fieldset>
+                </div>
                 <div className="flex justify-end mt-4">
-                    <button onClick={handleContractNumberingSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
-                        {contractNumberingSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <FileSignature className="w-[15px] h-[15px]" />}
-                        {contractNumberingSaved ? 'Salvo!' : 'Salvar'}
+                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
+                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <FileSignature className="w-[15px] h-[15px]" />}
+                        {appSettingsSaved ? 'Salvo!' : 'Salvar'}
                     </button>
                 </div>
-                </>
-                )}
             </div>
                 </div>
             )}

@@ -1502,7 +1502,7 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
                 extraActions={
                     <button
                         onClick={() => setTemplatesOpen(true)}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-50 text-gray-600 rounded-[6px] hover:bg-gray-100 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                     >
                         <FileText className="w-[15px] h-[15px]" />
                         Templates

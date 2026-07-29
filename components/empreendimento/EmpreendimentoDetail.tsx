@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import TowerEditor from './TowerEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
@@ -10,6 +10,8 @@ import { SyncCenterTab } from './SyncCenterTab';
 import CuradoriaTab from './CuradoriaTab';
 import { empreendimentoProposalService } from '../../services/empreendimentoProposalService';
 import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
+import VinculacoesTab from './VinculacoesTab';
+import HistoricoTab from './HistoricoTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { areaEngineService } from '../../services/areaEngineService';
@@ -22,6 +24,9 @@ interface Props {
   onEdit: () => void;
   onGoToStudy?: () => void;
   onSynced?: () => void;
+  /** `handleLoadProject` — abre obra/orçamento/planejamento carregados (aba Vinculações). */
+  onOpenProject?: (projectId: string, targetView?: string | null) => void | Promise<void>;
+  onChangeView?: (view: string) => void;
 }
 
 const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
@@ -51,9 +56,9 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'text-slate-500',
 };
 
-type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'regulatorio' | 'comercial' | 'locacoes';
+type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
 
-export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
+export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -127,6 +132,10 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
     { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
     { id: 'locacoes', label: 'Espelho de Locações', icon: KeyRound },
+    // As duas últimas são transversais (o que está pendurado / o que aconteceu),
+    // não etapas do fluxo de dados — por isso ficam no fim do trilho.
+    { id: 'vinculos', label: 'Vinculações', icon: Link2 },
+    { id: 'historico', label: 'Histórico', icon: History },
   ];
 
   return (
@@ -305,6 +314,19 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       )}
       {tab === 'curadoria' && (
         <CuradoriaTab empreendimentoId={e.id} onChanged={() => setRefreshKey(k => k + 1)} />
+      )}
+      {tab === 'vinculos' && (
+        <VinculacoesTab
+          key={refreshKey}
+          empreendimento={e}
+          organizationId={organizationId}
+          onOpenProject={onOpenProject}
+          onChangeView={onChangeView}
+          onLinksChanged={() => { setRefreshKey(k => k + 1); onSynced?.(); }}
+        />
+      )}
+      {tab === 'historico' && (
+        <HistoricoTab key={refreshKey} empreendimentoId={e.id} organizationId={organizationId} />
       )}
 
       {syncOpen && (

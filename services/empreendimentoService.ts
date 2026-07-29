@@ -20,6 +20,7 @@ import { applyPlan } from './sync/applier';
 import { loadImovibSide } from './sync/imovibAdapter';
 import { SyncPlan, TargetState } from './sync/types';
 import { empreendimentoProposalService } from './empreendimentoProposalService';
+import { empreendimentoAuditService } from './empreendimentoAuditService';
 
 // Resumo de divergências entre as unidades do empreendimento e suas properties no Comercial.
 export interface CommercialDivergenceSummary {
@@ -97,6 +98,76 @@ const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_in
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
 const REGULATORY_ZONE_COLS = 'id, empreendimento_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, created_at, updated_at';
+
+// ── Contexto para a trilha de auditoria ──────────────────────────────────────
+// Torre/pavimento/unidade não carregam `empreendimento_id`: o histórico precisa
+// subir a cadeia unidade → torre → empreendimento. Com cache, porque senão cada
+// evento vira mais um round-trip (e um lote vira N).
+
+interface AuditContext {
+    empreendimentoId: string | null;
+    organizationId: string | null;
+    towerName: string | null;
+}
+
+const NO_CONTEXT: AuditContext = { empreendimentoId: null, organizationId: null, towerName: null };
+const towerContextCache = new Map<string, AuditContext>();
+
+async function towerContext(towerId: string | null | undefined): Promise<AuditContext> {
+    if (!towerId) return NO_CONTEXT;
+    const cached = towerContextCache.get(towerId);
+    if (cached) return cached;
+    try {
+        const { data } = await supabase
+            .from('empreendimento_towers')
+            .select('name, empreendimento_id, empreendimentos!inner(organization_id)')
+            .eq('id', towerId)
+            .maybeSingle();
+        if (!data) return NO_CONTEXT;
+        const emp = (data as any).empreendimentos;
+        const ctx: AuditContext = {
+            empreendimentoId: (data as any).empreendimento_id ?? null,
+            organizationId: (Array.isArray(emp) ? emp[0]?.organization_id : emp?.organization_id) ?? null,
+            towerName: (data as any).name ?? null,
+        };
+        towerContextCache.set(towerId, ctx);
+        return ctx;
+    } catch {
+        return NO_CONTEXT;
+    }
+}
+
+/** Contexto a partir de um pavimento (sobe para a torre). */
+async function floorContext(floorId: string): Promise<AuditContext & { floorName: string | null }> {
+    try {
+        const { data } = await supabase
+            .from('empreendimento_floors')
+            .select('name, tower_id')
+            .eq('id', floorId)
+            .maybeSingle();
+        if (!data) return { ...NO_CONTEXT, floorName: null };
+        const ctx = await towerContext((data as any).tower_id);
+        return { ...ctx, floorName: (data as any).name ?? null };
+    } catch {
+        return { ...NO_CONTEXT, floorName: null };
+    }
+}
+
+/** Contexto a partir de uma unidade (sobe para a torre). */
+async function unitContext(unitId: string): Promise<AuditContext & { unitName: string | null }> {
+    try {
+        const { data } = await supabase
+            .from('empreendimento_units')
+            .select('name, tower_id')
+            .eq('id', unitId)
+            .maybeSingle();
+        if (!data) return { ...NO_CONTEXT, unitName: null };
+        const ctx = await towerContext((data as any).tower_id);
+        return { ...ctx, unitName: (data as any).name ?? null };
+    } catch {
+        return { ...NO_CONTEXT, unitName: null };
+    }
+}
 
 export const empreendimentoService = {
     // ── Empreendimentos ──────────────────────────────────────────────────────
@@ -204,10 +275,32 @@ export const empreendimentoService = {
             .select(EMPREENDIMENTO_COLS)
             .single();
         if (error) throw new Error(`Failed to create empreendimento: ${error.message}`);
+
+        await empreendimentoAuditService.record({
+            empreendimentoId: created.id,
+            organizationId: created.organization_id,
+            entityType: 'empreendimento',
+            entityId: created.id,
+            entityLabel: created.name,
+            action: 'create',
+        });
+
         return created;
     },
 
     async update(id: string, updates: EmpreendimentoUpdate): Promise<Empreendimento> {
+        // Estado anterior para o diff da trilha de auditoria. Best-effort: se falhar,
+        // o update segue e o histórico grava só o valor novo.
+        let before: Empreendimento | null = null;
+        try {
+            const { data: prev } = await supabase
+                .from('empreendimentos')
+                .select(EMPREENDIMENTO_COLS)
+                .eq('id', id)
+                .maybeSingle();
+            before = (prev as unknown as Empreendimento) ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { data, error } = await supabase
             .from('empreendimentos')
             .update(updates)
@@ -215,6 +308,33 @@ export const empreendimentoService = {
             .select(EMPREENDIMENTO_COLS)
             .single();
         if (error) throw new Error(`Failed to update empreendimento: ${error.message}`);
+
+        await empreendimentoAuditService.recordDiff(
+            {
+                empreendimentoId: id,
+                organizationId: data.organization_id,
+                entityType: 'empreendimento',
+                entityId: id,
+                entityLabel: data.name,
+            },
+            before as unknown as Record<string, unknown>,
+            updates as unknown as Record<string, unknown>,
+        );
+
+        // Vínculo com obra é evento próprio — quem lê o histórico procura por
+        // "vinculou a obra", não por "campo project_id mudou".
+        if ('project_id' in updates && before?.project_id !== data.project_id) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: id,
+                organizationId: data.organization_id,
+                entityType: 'obra_link',
+                entityId: data.project_id ?? before?.project_id ?? null,
+                entityLabel: 'Obra principal',
+                action: data.project_id ? 'link' : 'unlink',
+                oldValue: before?.project_id ?? null,
+                newValue: data.project_id ?? null,
+            });
+        }
 
         // Propaga renomeação para os edifícios-pai no Comercial — venda e locação (best-effort)
         const buildingIds = [data.commercial_building_id, data.commercial_rental_building_id].filter(Boolean) as string[];
@@ -260,8 +380,31 @@ export const empreendimentoService = {
     },
 
     async remove(id: string): Promise<void> {
+        // Nome/org antes da exclusão: depois do delete não há de onde tirar, e a
+        // trilha continua existindo (não tem FK para `empreendimentos`).
+        let label: string | null = null;
+        let orgId: string | null = null;
+        try {
+            const { data } = await supabase
+                .from('empreendimentos')
+                .select('name, organization_id')
+                .eq('id', id)
+                .maybeSingle();
+            label = (data as any)?.name ?? null;
+            orgId = (data as any)?.organization_id ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { error } = await supabase.from('empreendimentos').delete().eq('id', id);
         if (error) throw new Error(`Failed to delete empreendimento: ${error.message}`);
+
+        await empreendimentoAuditService.record({
+            empreendimentoId: id,
+            organizationId: orgId,
+            entityType: 'empreendimento',
+            entityId: id,
+            entityLabel: label,
+            action: 'delete',
+        });
     },
 
     // ── Torres (= obra) ──────────────────────────────────────────────────────
@@ -283,10 +426,29 @@ export const empreendimentoService = {
             .select(TOWER_COLS)
             .single();
         if (error) throw new Error(`Failed to create tower: ${error.message}`);
+
+        await empreendimentoAuditService.record({
+            empreendimentoId: data.empreendimento_id,
+            entityType: 'tower',
+            entityId: data.id,
+            entityLabel: data.name,
+            action: 'create',
+        });
+
         return data;
     },
 
     async updateTower(id: string, updates: EmpreendimentoTowerUpdate): Promise<EmpreendimentoTower> {
+        let before: EmpreendimentoTower | null = null;
+        try {
+            const { data: prev } = await supabase
+                .from('empreendimento_towers')
+                .select(TOWER_COLS)
+                .eq('id', id)
+                .maybeSingle();
+            before = (prev as unknown as EmpreendimentoTower) ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { data, error } = await supabase
             .from('empreendimento_towers')
             .update(updates)
@@ -294,20 +456,65 @@ export const empreendimentoService = {
             .select(TOWER_COLS)
             .single();
         if (error) throw new Error(`Failed to update tower: ${error.message}`);
+
+        // O nome pode ter mudado — o cache de contexto ficaria desatualizado.
+        towerContextCache.delete(id);
+
+        await empreendimentoAuditService.recordDiff(
+            {
+                empreendimentoId: data.empreendimento_id,
+                entityType: 'tower',
+                entityId: id,
+                entityLabel: data.name,
+            },
+            before as unknown as Record<string, unknown>,
+            updates as unknown as Record<string, unknown>,
+        );
+
         return data;
     },
 
     async deleteTower(id: string): Promise<void> {
+        const ctx = await towerContext(id);
+
         const { error } = await supabase.from('empreendimento_towers').delete().eq('id', id);
         if (error) throw new Error(`Failed to delete tower: ${error.message}`);
+
+        towerContextCache.delete(id);
+
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'tower',
+                entityId: id,
+                entityLabel: ctx.towerName,
+                action: 'delete',
+            });
+        }
     },
 
-    async linkTowerToObra(towerId: string, projectId: string): Promise<void> {
+    /** `projectId` nulo desfaz o vínculo (a coluna não tem FK — ver 20270719000000). */
+    async linkTowerToObra(towerId: string, projectId: string | null): Promise<void> {
+        const ctx = await towerContext(towerId);
+
         const { error } = await supabase
             .from('empreendimento_towers')
             .update({ project_id: projectId })
             .eq('id', towerId);
         if (error) throw new Error(`Failed to link tower to obra: ${error.message}`);
+
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'obra_link',
+                entityId: towerId,
+                entityLabel: ctx.towerName,
+                action: projectId ? 'link' : 'unlink',
+                newValue: projectId,
+            });
+        }
     },
 
     /**
@@ -325,6 +532,20 @@ export const empreendimentoService = {
             .select('id')
             .single();
         if (error) throw new Error(`Failed to create obra for tower: ${error.message}`);
+
+        const ctx = await towerContext(towerId);
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'obra_link',
+                entityId: created.id,
+                entityLabel: towerName,
+                action: 'create',
+                newValue: created.id,
+                metadata: { towerId },
+            });
+        }
 
         await this.linkTowerToObra(towerId, created.id);
         return created.id;
@@ -436,6 +657,22 @@ export const empreendimentoService = {
             await this.updateUnit(unit.id, { commercial_property_id: prop.id });
         }
 
+        // Lote: um evento resumo, não um por unidade publicada.
+        await empreendimentoAuditService.record({
+            empreendimentoId,
+            organizationId,
+            entityType: 'commercial',
+            entityId: null,
+            entityLabel: 'Espelho de Vendas',
+            action: 'publish',
+            source: 'comercial',
+            metadata: {
+                emLote: true,
+                publicadas: unpublished.length,
+                jaPublicadas: units.length - unpublished.length,
+            },
+        });
+
         return { published: unpublished.length, alreadyPublished: units.length - unpublished.length };
     },
 
@@ -479,6 +716,24 @@ export const empreendimentoService = {
             }
         }
         await Promise.all(updates);
+
+        // Lote: um evento resumo do que voltou do Comercial.
+        await empreendimentoAuditService.record({
+            empreendimentoId,
+            organizationId,
+            entityType: 'commercial',
+            entityId: null,
+            entityLabel: 'Espelho de Vendas',
+            action: 'pull',
+            source: 'comercial',
+            metadata: {
+                emLote: true,
+                statusAtualizados: report.statusUpdated,
+                semEquivalente: report.skippedUnmappable,
+                naoVinculadas: report.unlinked,
+            },
+        });
+
         return report;
     },
 
@@ -635,6 +890,22 @@ export const empreendimentoService = {
             } as any);
             await this.updateUnit(unit.id, { rental_property_id: prop.id });
         }
+
+        // Lote: um evento resumo, não um por unidade publicada.
+        await empreendimentoAuditService.record({
+            empreendimentoId,
+            organizationId,
+            entityType: 'rental',
+            entityId: null,
+            entityLabel: 'Espelho de Locações',
+            action: 'publish',
+            source: 'locacao',
+            metadata: {
+                emLote: true,
+                publicadas: unpublished.length,
+                jaPublicadas: units.length - unpublished.length,
+            },
+        });
 
         return { published: unpublished.length, alreadyPublished: units.length - unpublished.length };
     },
@@ -822,6 +1093,24 @@ export const empreendimentoService = {
             }
         }
         await Promise.all(updates);
+
+        // Lote: um evento resumo do que voltou de Locações.
+        await empreendimentoAuditService.record({
+            empreendimentoId,
+            organizationId,
+            entityType: 'rental',
+            entityId: null,
+            entityLabel: 'Espelho de Locações',
+            action: 'pull',
+            source: 'locacao',
+            metadata: {
+                emLote: true,
+                statusAtualizados: report.statusUpdated,
+                semEquivalente: report.skippedUnmappable,
+                naoVinculadas: report.unlinked,
+            },
+        });
+
         return report;
     },
 
@@ -844,10 +1133,34 @@ export const empreendimentoService = {
             .select(FLOOR_COLS)
             .single();
         if (error) throw new Error(`Failed to create floor: ${error.message}`);
+
+        const ctx = await towerContext(data.tower_id);
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'floor',
+                entityId: data.id,
+                entityLabel: data.name,
+                action: 'create',
+                metadata: { torre: ctx.towerName },
+            });
+        }
+
         return data;
     },
 
     async updateFloor(id: string, updates: EmpreendimentoFloorUpdate): Promise<EmpreendimentoFloor> {
+        let before: EmpreendimentoFloor | null = null;
+        try {
+            const { data: prev } = await supabase
+                .from('empreendimento_floors')
+                .select(FLOOR_COLS)
+                .eq('id', id)
+                .maybeSingle();
+            before = (prev as unknown as EmpreendimentoFloor) ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { data, error } = await supabase
             .from('empreendimento_floors')
             .update(updates)
@@ -855,17 +1168,70 @@ export const empreendimentoService = {
             .select(FLOOR_COLS)
             .single();
         if (error) throw new Error(`Failed to update floor: ${error.message}`);
+
+        const ctx = await towerContext(data.tower_id);
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.recordDiff(
+                {
+                    empreendimentoId: ctx.empreendimentoId,
+                    organizationId: ctx.organizationId,
+                    entityType: 'floor',
+                    entityId: id,
+                    entityLabel: data.name,
+                },
+                before as unknown as Record<string, unknown>,
+                updates as unknown as Record<string, unknown>,
+            );
+        }
+
         return data;
     },
 
     async deleteFloor(id: string): Promise<void> {
+        const ctx = await floorContext(id);
+
         const { error } = await supabase.from('empreendimento_floors').delete().eq('id', id);
         if (error) throw new Error(`Failed to delete floor: ${error.message}`);
+
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'floor',
+                entityId: id,
+                entityLabel: ctx.floorName,
+                action: 'delete',
+                metadata: { torre: ctx.towerName },
+            });
+        }
     },
 
     async deleteUnitsByTower(towerId: string): Promise<void> {
+        const ctx = await towerContext(towerId);
+        // Operação em LOTE: um evento resumo com o contador, nunca N eventos.
+        let removed = 0;
+        try {
+            const { count } = await supabase
+                .from('empreendimento_units')
+                .select('id', { count: 'exact', head: true })
+                .eq('tower_id', towerId);
+            removed = count ?? 0;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { error } = await supabase.from('empreendimento_units').delete().eq('tower_id', towerId);
         if (error) throw new Error(`Failed to delete units: ${error.message}`);
+
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'unit',
+                entityId: towerId,
+                entityLabel: ctx.towerName,
+                action: 'delete',
+                metadata: { emLote: true, unidadesExcluidas: removed, torre: ctx.towerName },
+            });
+        }
     },
 
     async generateUnitsFromFloors(tower: EmpreendimentoTower): Promise<EmpreendimentoUnit[]> {
@@ -919,7 +1285,35 @@ export const empreendimentoService = {
             .upsert(units, { onConflict: 'id' })
             .select(UNIT_COLS);
         if (error) throw new Error(`Failed to upsert units: ${error.message}`);
-        return data || [];
+
+        // Operação em LOTE (geração de unidades a partir dos pavimentos, sync):
+        // UM evento resumo. Uma linha por unidade tornaria a aba Histórico inútil.
+        const rows = data || [];
+        if (rows.length) {
+            const ctx = await towerContext(rows[0].tower_id);
+            if (ctx.empreendimentoId) {
+                // Insert não declara `id`; quem já tinha id na entrada é atualização.
+                const inputIds = new Set(units.map(i => (i as { id?: string }).id).filter(Boolean));
+                const created = rows.filter(u => !inputIds.has(u.id)).length;
+                await empreendimentoAuditService.record({
+                    empreendimentoId: ctx.empreendimentoId,
+                    organizationId: ctx.organizationId,
+                    entityType: 'unit',
+                    entityId: rows[0].tower_id,
+                    entityLabel: ctx.towerName,
+                    action: 'update',
+                    metadata: {
+                        emLote: true,
+                        unidadesGravadas: rows.length,
+                        unidadesCriadas: created,
+                        unidadesAtualizadas: rows.length - created,
+                        torre: ctx.towerName,
+                    },
+                });
+            }
+        }
+
+        return rows;
     },
 
     async createUnit(unit: EmpreendimentoUnitInsert): Promise<EmpreendimentoUnit> {
@@ -929,10 +1323,34 @@ export const empreendimentoService = {
             .select(UNIT_COLS)
             .single();
         if (error) throw new Error(`Failed to create unit: ${error.message}`);
+
+        const ctx = await towerContext(data.tower_id);
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'unit',
+                entityId: data.id,
+                entityLabel: data.name,
+                action: 'create',
+                metadata: { torre: ctx.towerName },
+            });
+        }
+
         return data;
     },
 
     async updateUnit(id: string, updates: EmpreendimentoUnitUpdate): Promise<EmpreendimentoUnit> {
+        let before: EmpreendimentoUnit | null = null;
+        try {
+            const { data: prev } = await supabase
+                .from('empreendimento_units')
+                .select(UNIT_COLS)
+                .eq('id', id)
+                .maybeSingle();
+            before = (prev as unknown as EmpreendimentoUnit) ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { data, error } = await supabase
             .from('empreendimento_units')
             .update(updates)
@@ -947,12 +1365,42 @@ export const empreendimentoService = {
         // push em TS aqui: seria escrita dupla e não cobriria os bypasses (sync
         // Imovib/Planta IA, aceite de proposta, SQL direto). Estado (status/ocupação)
         // continua NÃO propagando — o trigger também não toca nisso, de propósito.
+
+        const ctx = await towerContext(data.tower_id);
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.recordDiff(
+                {
+                    empreendimentoId: ctx.empreendimentoId,
+                    organizationId: ctx.organizationId,
+                    entityType: 'unit',
+                    entityId: id,
+                    entityLabel: data.name,
+                },
+                before as unknown as Record<string, unknown>,
+                updates as unknown as Record<string, unknown>,
+            );
+        }
+
         return data;
     },
 
     async deleteUnit(id: string): Promise<void> {
+        const ctx = await unitContext(id);
+
         const { error } = await supabase.from('empreendimento_units').delete().eq('id', id);
         if (error) throw new Error(`Failed to delete unit: ${error.message}`);
+
+        if (ctx.empreendimentoId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: ctx.empreendimentoId,
+                organizationId: ctx.organizationId,
+                entityType: 'unit',
+                entityId: id,
+                entityLabel: ctx.unitName,
+                action: 'delete',
+                metadata: { torre: ctx.towerName },
+            });
+        }
     },
 
     // ── Áreas comuns / lazer ─────────────────────────────────────────────────
@@ -974,6 +1422,15 @@ export const empreendimentoService = {
             .select(COMMON_AREA_COLS)
             .single();
         if (error) throw new Error(`Failed to create common area: ${error.message}`);
+
+        await empreendimentoAuditService.record({
+            empreendimentoId: data.empreendimento_id,
+            entityType: 'common_area',
+            entityId: data.id,
+            entityLabel: data.name,
+            action: 'create',
+        });
+
         return data;
     },
 
@@ -984,12 +1441,48 @@ export const empreendimentoService = {
             .upsert(areas, { onConflict: 'id' })
             .select(COMMON_AREA_COLS);
         if (error) throw new Error(`Failed to upsert common areas: ${error.message}`);
-        return data || [];
+
+        // Operação em LOTE: um evento resumo com o contador.
+        const rows = data || [];
+        if (rows.length) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: rows[0].empreendimento_id,
+                entityType: 'common_area',
+                entityId: null,
+                entityLabel: 'Áreas comuns',
+                action: 'update',
+                metadata: { emLote: true, areasGravadas: rows.length },
+            });
+        }
+
+        return rows;
     },
 
     async deleteCommonArea(id: string): Promise<void> {
+        let empId: string | null = null;
+        let label: string | null = null;
+        try {
+            const { data } = await supabase
+                .from('empreendimento_common_areas')
+                .select('name, empreendimento_id')
+                .eq('id', id)
+                .maybeSingle();
+            empId = (data as any)?.empreendimento_id ?? null;
+            label = (data as any)?.name ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { error } = await supabase.from('empreendimento_common_areas').delete().eq('id', id);
         if (error) throw new Error(`Failed to delete common area: ${error.message}`);
+
+        if (empId) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: empId,
+                entityType: 'common_area',
+                entityId: id,
+                entityLabel: label,
+                action: 'delete',
+            });
+        }
     },
 
     // ── Mapa Regulatório (mora no empreendimento — fonte única) ───────────────
@@ -1030,17 +1523,72 @@ export const empreendimentoService = {
         const { data, error } = await supabase
             .from('empreendimento_regulatory_zones').insert(zone).select(REGULATORY_ZONE_COLS).single();
         if (error) throw new Error(`Falha ao criar zona regulatória: ${error.message}`);
+
+        await empreendimentoAuditService.record({
+            empreendimentoId: data.empreendimento_id,
+            organizationId: data.organization_id,
+            entityType: 'regulatory_zone',
+            entityId: data.id,
+            entityLabel: data.zona || data.macroarea || null,
+            action: 'create',
+        });
+
         return data;
     },
 
     async updateRegulatoryZone(id: string, updates: EmpreendimentoRegulatoryZoneUpdate): Promise<void> {
+        let before: EmpreendimentoRegulatoryZone | null = null;
+        try {
+            const { data: prev } = await supabase
+                .from('empreendimento_regulatory_zones')
+                .select(REGULATORY_ZONE_COLS)
+                .eq('id', id)
+                .maybeSingle();
+            before = (prev as unknown as EmpreendimentoRegulatoryZone) ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { error } = await supabase.from('empreendimento_regulatory_zones').update(updates).eq('id', id);
         if (error) throw new Error(`Falha ao atualizar zona regulatória: ${error.message}`);
+
+        if (before?.empreendimento_id) {
+            await empreendimentoAuditService.recordDiff(
+                {
+                    empreendimentoId: before.empreendimento_id,
+                    organizationId: before.organization_id,
+                    entityType: 'regulatory_zone',
+                    entityId: id,
+                    entityLabel: before.zona || before.macroarea || null,
+                },
+                before as unknown as Record<string, unknown>,
+                updates as unknown as Record<string, unknown>,
+            );
+        }
     },
 
     async deleteRegulatoryZone(id: string): Promise<void> {
+        let before: { empreendimento_id?: string; organization_id?: string; zona?: string; macroarea?: string } | null = null;
+        try {
+            const { data } = await supabase
+                .from('empreendimento_regulatory_zones')
+                .select('empreendimento_id, organization_id, zona, macroarea')
+                .eq('id', id)
+                .maybeSingle();
+            before = (data as any) ?? null;
+        } catch { /* histórico não bloqueia a operação */ }
+
         const { error } = await supabase.from('empreendimento_regulatory_zones').delete().eq('id', id);
         if (error) throw new Error(`Falha ao excluir zona regulatória: ${error.message}`);
+
+        if (before?.empreendimento_id) {
+            await empreendimentoAuditService.record({
+                empreendimentoId: before.empreendimento_id,
+                organizationId: before.organization_id,
+                entityType: 'regulatory_zone',
+                entityId: id,
+                entityLabel: before.zona || before.macroarea || null,
+                action: 'delete',
+            });
+        }
     },
 
     // ── Sincronização com o estudo Imovib (vínculo vivo) ─────────────────────
@@ -1069,7 +1617,32 @@ export const empreendimentoService = {
         // aplicada), falha aqui, sem ter escrito creates/fills parciais.
         await empreendimentoProposalService.materializeConflicts(empreendimentoId, organizationId, plan.conflicts);
         await applyPlan(plan);
-        return planToReport(plan);
+        const report = planToReport(plan);
+
+        // Sync mexe em centenas de linhas: UM evento resumo com os contadores.
+        // As escritas de unidade em si passam por bulkUpsertUnits, que já resume.
+        await empreendimentoAuditService.record({
+            empreendimentoId,
+            organizationId,
+            entityType: 'study_link',
+            entityId: null,
+            entityLabel: 'Estudo de Viabilidade (Imovib)',
+            action: 'sync',
+            source: 'sync_imovib',
+            metadata: {
+                torresCriadas: report.towersCreated,
+                torresAtualizadas: report.towersUpdated,
+                unidadesCriadas: report.unitsCreated,
+                unidadesAtualizadas: report.unitsUpdated,
+                areasComuns: report.commonAreasUpserted,
+                torresOrfas: report.orphanTowers.length,
+                unidadesOrfas: report.orphanUnits.length,
+                conflitosParaCuradoria: plan.conflicts.length,
+                avisos: report.warnings.length,
+            },
+        });
+
+        return report;
     },
 
     // ── Escrita reversa: Empreendimento → Viabilidade (Imovib) ───────────────

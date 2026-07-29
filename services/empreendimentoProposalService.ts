@@ -9,6 +9,7 @@
 import { supabase } from '../lib/supabase';
 import { proposalHash } from './sync/hash';
 import { FieldChange, SyncOrigin, SyncEntity } from './sync/types';
+import { empreendimentoAuditService } from './empreendimentoAuditService';
 
 export type ProposalStatus = 'pending' | 'applied' | 'rejected' | 'superseded';
 
@@ -149,8 +150,27 @@ export const empreendimentoProposalService = {
             .update({ status: 'rejected', decided_at: new Date().toISOString(), decision_reason: reason ?? null })
             .in('id', ids)
             .eq('status', 'pending')     // só decide o que ainda está pendente
-            .select('id');
+            .select(COLS);
         if (error) throw new Error(`Falha ao rejeitar propostas: ${error.message}`);
+
+        // Histórico: uma decisão de curadoria é um evento por campo (aba Histórico).
+        await empreendimentoAuditService.recordMany(
+            ((data ?? []) as FieldProposal[]).map(p => ({
+                empreendimentoId: p.empreendimento_id,
+                organizationId: p.organization_id,
+                entityType: 'proposal' as const,
+                entityId: p.entity_id,
+                entityLabel: p.label ?? p.field,
+                action: 'reject' as const,
+                fieldName: p.field,
+                oldValue: p.current_value,
+                newValue: p.proposed_value,
+                reason: reason ?? null,
+                source: 'curadoria' as const,
+                metadata: { entidade: p.entity, origem: p.origin },
+            })),
+        );
+
         return data?.length ?? 0;
     },
 
@@ -199,6 +219,21 @@ export const empreendimentoProposalService = {
                     .update({ status: 'applied', applied_value: p.proposed_value, decided_at: new Date().toISOString() })
                     .eq('id', p.id).eq('status', 'pending');
                 outcome.applied.push(p.id);
+
+                // Histórico: registra a mudança que a proposta efetivou no destino.
+                await empreendimentoAuditService.record({
+                    empreendimentoId: p.empreendimento_id,
+                    organizationId: p.organization_id,
+                    entityType: 'proposal',
+                    entityId: p.entity_id,
+                    entityLabel: p.label ?? p.field,
+                    action: 'approve',
+                    fieldName: p.field,
+                    oldValue: p.current_value,
+                    newValue: p.proposed_value,
+                    source: 'curadoria',
+                    metadata: { entidade: p.entity, origem: p.origin },
+                });
             } catch (e: any) {
                 outcome.failed.push({ id: p.id, error: e.message });
             }

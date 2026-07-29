@@ -285,3 +285,58 @@ export interface PlantaAiWriteBackReport {
     /** Unidades reais sem proveniência no Planta IA (criadas à mão ou vindas do Imovib). */
     unitsWithoutPlantaOrigin: number;
 }
+
+// ── Histórico / trilha de auditoria ─────────────────────────────────────────
+// Tabela empreendimento_audit_logs (migration 20270839000000). Imutável: o app
+// só insere e lê. Escrita em services/empreendimentoAuditService.ts.
+
+export type EmpreendimentoAuditEntity =
+    | 'empreendimento' | 'tower' | 'floor' | 'unit' | 'common_area'
+    | 'regulatory_zone' | 'obra_link' | 'area_project' | 'study_link'
+    | 'commercial' | 'rental' | 'proposal';
+
+export type EmpreendimentoAuditAction =
+    | 'create' | 'update' | 'delete' | 'link' | 'unlink'
+    | 'sync' | 'publish' | 'pull' | 'approve' | 'reject' | 'export';
+
+export type EmpreendimentoAuditSource =
+    | 'app' | 'sync_imovib' | 'sync_planta' | 'curadoria'
+    | 'comercial' | 'locacao' | 'area_engine';
+
+export interface EmpreendimentoAuditLog {
+    id: string;
+    organization_id: string;
+    empreendimento_id: string;
+    entity_type: EmpreendimentoAuditEntity;
+    entity_id: string | null;
+    /** Nome legível no momento do evento — a entidade pode não existir mais. */
+    entity_label: string | null;
+    action: EmpreendimentoAuditAction;
+    /** Preenchido só em 'update': um evento por campo alterado. */
+    field_name: string | null;
+    old_value: unknown;
+    new_value: unknown;
+    metadata: Record<string, unknown>;
+    reason: string | null;
+    source: EmpreendimentoAuditSource;
+    user_id: string | null;
+    user_email: string | null;
+    created_at: string;
+}
+
+/** Entrada de escrita. `organization_id` e o usuário são resolvidos pelo service. */
+export interface EmpreendimentoAuditInput {
+    empreendimentoId: string;
+    /** Opcional: se ausente, o service busca (com cache) a org do empreendimento. */
+    organizationId?: string | null;
+    entityType: EmpreendimentoAuditEntity;
+    entityId?: string | null;
+    entityLabel?: string | null;
+    action: EmpreendimentoAuditAction;
+    fieldName?: string | null;
+    oldValue?: unknown;
+    newValue?: unknown;
+    metadata?: Record<string, unknown>;
+    reason?: string | null;
+    source?: EmpreendimentoAuditSource;
+}

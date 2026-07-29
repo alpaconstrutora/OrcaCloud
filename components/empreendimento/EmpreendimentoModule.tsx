@@ -13,6 +13,8 @@ import EmpreendimentoDetail from './EmpreendimentoDetail';
 interface Props {
   activeOrganizationId: string | null;
   onChangeView: (view: string) => void;
+  /** `handleLoadProject` do App — abre um projeto já carregado (aba Vinculações). */
+  onLoadProject?: (id: string, targetView?: string | null) => Promise<void>;
 }
 
 const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
@@ -40,7 +42,7 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) => {
+export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, onChangeView, onLoadProject }) => {
   // "Todas as organizações" não bloqueia o cadastro: o modal pede a org num seletor próprio.
   const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
   const orgIdParam = isAllOrgs ? undefined : (activeOrganizationId as string);
@@ -162,6 +164,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           onBack={() => setSelected(null)}
           onEdit={() => { setEditing(selected); setIsFormOpen(true); }}
           onGoToStudy={selected.imovib_study_id ? () => onChangeView('imovib') : undefined}
+          onOpenProject={onLoadProject}
+          onChangeView={onChangeView}
           onSynced={async () => {
             try {
               const refreshed = await empreendimentoService.getById(selected.id) as Empreendimento | null;

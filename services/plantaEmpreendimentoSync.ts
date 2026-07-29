@@ -37,6 +37,7 @@ import { buildPlan } from './sync/planner';
 import { applyPlan } from './sync/applier';
 import { loadPlantaSide } from './sync/plantaAdapter';
 import { CanonicalSide, SyncPlan, TargetState } from './sync/types';
+import { empreendimentoAuditService } from './empreendimentoAuditService';
 
 interface PlantaSync {
     side: CanonicalSide;
@@ -99,7 +100,30 @@ export const plantaEmpreendimentoSync = {
             empreendimentoId, sync.side.empreendimento.organization_id, sync.plan.conflicts,
         );
         await applyPlan(sync.plan);
-        return planToReport(sync);
+        const report = planToReport(sync);
+
+        // Lote: UM evento resumo (o sync mexe em centenas de unidades).
+        await empreendimentoAuditService.record({
+            empreendimentoId,
+            organizationId: sync.side.empreendimento.organization_id,
+            entityType: 'study_link',
+            entityId: null,
+            entityLabel: 'Estudo da Planta IA',
+            action: 'sync',
+            source: 'sync_planta',
+            metadata: {
+                torresCriadas: report.towersCreated,
+                torresAtualizadas: report.towersUpdated,
+                unidadesCriadas: report.unitsCreated,
+                unidadesAtualizadas: report.unitsUpdated,
+                unidadesDoCenario: report.scenarioUnits,
+                torresOrfas: report.orphanTowers.length,
+                unidadesOrfas: report.orphanUnits.length,
+                conflitosParaCuradoria: sync.plan.conflicts.length,
+            },
+        });
+
+        return report;
     },
 
     // ── Empreendimento → Planta IA (só agregados estruturais) ───────────────
@@ -126,6 +150,24 @@ export const plantaEmpreendimentoSync = {
             const { error } = await supabase.from('plant_scenarios').update(patch).eq('id', r.scenarioId);
             if (error) throw new Error(`Falha ao atualizar o cenário "${r.scenarioName}": ${error.message}`);
         }
+
+        const alterados = reports.filter(r => r.changes.length > 0);
+        if (alterados.length) {
+            await empreendimentoAuditService.record({
+                empreendimentoId,
+                organizationId: side.empreendimento.organization_id,
+                entityType: 'study_link',
+                entityId: null,
+                entityLabel: 'Estudo da Planta IA',
+                action: 'export',
+                source: 'sync_planta',
+                metadata: {
+                    cenariosAtualizados: alterados.length,
+                    camposAlterados: alterados.reduce((n, r) => n + r.changes.length, 0),
+                },
+            });
+        }
+
         return reports;
     },
 };

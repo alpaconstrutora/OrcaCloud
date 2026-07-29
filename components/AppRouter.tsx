@@ -494,6 +494,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <EmpreendimentoModule
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
+            // Aba Vinculações: abrir obra/orçamento/planejamento/contratos/financeiro
+            // exige o projeto CARREGADO — setActiveView sozinho não basta.
+            onLoadProject={handleLoadProject}
           />
         </React.Suspense>
       );

@@ -459,25 +459,30 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                 const snap = u.commercial_property_id ? commSnaps[u.commercial_property_id] : null;
                 const busy = busyId === u.id;
                 const isOrphan = !!u.commercial_property_id && !!orphanIds.has(u.commercial_property_id);
+                const published = !!snap || isOrphan;
                 const mappedStatus = snap ? mapCommercialToEmpr(snap.status) : null;
                 const isUnmappable = snap ? UNMAPPABLE_COMMERCIAL_STATUSES.has(snap.status) : false;
                 const statusDiverge = snap && !isUnmappable && mappedStatus !== u.status;
                 return (
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
                     <td className="py-2.5 px-4">
-                      {snap || isOrphan ? (
-                        <span className="text-sm font-normal text-gray-300">—</span>
-                      ) : (
-                        <label className="relative inline-flex items-center cursor-pointer" title={`Marcar "${u.name}" para publicar`}>
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={selectedIds.has(u.id)}
-                            onChange={() => toggleSelected(u.id)}
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                      )}
+                      {/* Switch sempre visível para a coluna não "sumir" quando tudo já está
+                          publicado; desabilitado quando não há o que publicar naquela linha. */}
+                      <label
+                        className={`relative inline-flex items-center ${published ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
+                        title={published
+                          ? (isOrphan ? 'Vínculo quebrado — limpe o vínculo antes de republicar' : `"${u.name}" já está publicada no Comercial`)
+                          : `Marcar "${u.name}" para publicar`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={!published && selectedIds.has(u.id)}
+                          disabled={published}
+                          onChange={() => toggleSelected(u.id)}
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
                     </td>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u._tower_name}</td>

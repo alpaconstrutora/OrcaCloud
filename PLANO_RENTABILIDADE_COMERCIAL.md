@@ -130,9 +130,61 @@ por imóvel usa **receita líquida** como denominador (linha 988); o KPI
 (`(totalRevenue - totalExpenses) / totalRevenue`, linha ~1070). Duas telas, dois
 valores, mesmo rótulo.
 
+**3.4 — Substituir o casamento por NOME pela hierarquia real.** É o maior dos
+quatro, e o único que exige migration.
+
+O casamento de parcela↔obra por `includes()` de nome
+(`utils/commercialInstallments.ts`, `mergeInstallments`) foi escrito em
+fev/2024, quando não existiam Empreendimento nem Torre. O módulo de
+Empreendimentos (dez/2026) trouxe o modelo correto, com FK, e o código nunca
+foi atualizado. A hierarquia de domínio já está no banco:
+
+```
+empreendimentos                                    ← raiz
+  └── empreendimento_towers                        ← "Torres / Blocos (= obra)"
+        ├── empreendimento_id → empreendimentos
+        ├── project_id        → projects           ← A OBRA
+        └── empreendimento_units
+              ├── commercial_property_id → commercial_properties   (venda)
+              └── rental_property_id     → commercial_properties   (locação)
+```
+
+E `parcela.propertyId = deal.property_id` → `commercial_properties.id`
+(`commercialFinanceService.ts:122`), fechando o caminho determinístico:
+
+```
+parcela.propertyId → empreendimento_units → tower → project_id (obra) / empreendimento_id
+```
+
+**Ação:** view `vw_unit_property_map` (`commercial_property_id`,
+`rental_property_id`, `unit_id`, `tower_id`, `project_id`, `empreendimento_id`,
+`organization_id`) + resolvedor que substitui o `isNameMatch`. Migration só
+cria a view — DDL em tabela quente do módulo deadlocka (ver histórico do
+Empreendimento).
+
+**Consequência esperada, e desejada:** o caminho determinístico vai casar
+MENOS parcelas do que o nome casa hoje — porque o nome casa coisas que não
+deveria. Não resolverão: unidade não publicada no Comercial (ambos os
+`*_property_id` nulos), deal anterior ao módulo de Empreendimentos, e vínculo
+órfão (as FKs são `ON DELETE SET NULL`; já existe botão manual de limpeza de
+órfãos no espelho por causa disso).
+
+**Regra:** quando não resolver, **não** cair de volta no nome. Exibir a parcela
+como "sem vínculo de unidade", em linha própria, para alguém corrigir o
+cadastro. O casamento por nome é justamente o que hoje esconde esses casos —
+soma no lugar aproximadamente certo e ninguém descobre que o vínculo quebrou.
+
+**Efeito colateral bom:** com a hierarquia disponível, o agrupamento de
+`computeProfitabilityByProperty` pode passar a ser por `unit_id` /
+`empreendimento_id` em vez de string de `propertyName`, o que dissolve também
+os defeitos 3.1 e 3.2 (as chaves de fallback e a contaminação por `id === ''`).
+
+---
+
 Cada correção vai em commit próprio, com o painel da Fase 2 mostrando o antes e
 o depois — aqui a diferença **deixa** de ser zero, e é isso que se quer ver.
-O 3.3 precisa de decisão sua: padronizar em líquida ou em bruta.
+O 3.3 precisa de decisão sua: padronizar em líquida ou em bruta. O 3.4 precisa
+de uma medição antes (quantas parcelas hoje casam só por nome).
 
 ---
 

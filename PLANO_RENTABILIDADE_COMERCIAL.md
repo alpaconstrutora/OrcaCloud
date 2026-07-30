@@ -103,6 +103,24 @@ margem).
 O caso 6 é obrigatório porque o seletor em "Todas" faz `activeOrganizationId`
 chegar `null`, e essa tela tem caminho próprio para `selectedOrgId === 'ALL'`.
 
+### ⚠️ CORREÇÃO (30/07/2026) — a comparação de VALORES é vazia nesta base
+
+Medição de status das parcelas: **166 de 166 estão `PENDING`. Nenhuma `PAID`.**
+
+Como a receita só soma `if (i.status === 'PAID')`, os dois lados do painel
+calculam **zero** em receita, líquida e margem — e marcam IGUAL sem ter testado
+nada. É o mesmo "IGUAL vacuamente verdadeiro" que este plano alertava para
+recortes sem dado; não previmos que aconteceria por *status*.
+
+**O que ainda vale como prova:** a linha de contagem do cabeçalho,
+`Parcelas: legado N × extraído M`. Ela testa de verdade a fusão das cinco
+fontes, a deduplicação e a tradução `mode`/`matchVaultToScope` — que é
+exatamente o que a Fase 1 mexeu.
+
+**Portão revisado:** conferir a linha de contagem nos modos COMERCIAL e OBRA.
+O veredito IGUAL/DIVERGENTE das colunas de dinheiro é ignorável enquanto não
+houver parcela `PAID`. Quando houver, revalidar.
+
 ---
 
 ## Fase 3 — Corrigir os defeitos encontrados (explicitamente, depois do portão)
@@ -203,10 +221,44 @@ os defeitos 3.1 e 3.2 (as chaves de fallback e a contaminação por `id === ''`)
 
 ---
 
+**3.5 — "Déficit" onde não houve movimento.** O status da linha é
+`p.revenue > p.expense ? 'Lucro' : 'Déficit'`. Com receita e custo zerados a
+comparação é falsa e cai em Déficit — a tela afirma **prejuízo** em imóveis
+onde não houve movimento nenhum. Hoje isso vale para TODAS as linhas, porque
+nenhuma parcela está `PAID` (ver correção da Fase 2). Ausência de dado e
+prejuízo não podem ter o mesmo rótulo: precisa de um terceiro estado
+("Sem movimento"), e o mesmo raciocínio vale para a margem `0,0%`.
+
+**3.6 — A tela esconde o contratado a receber.** ⚠️ **Decisão de produto, e
+provavelmente mais importante que 3.1–3.3.**
+
+Existem **R$ 2.525.116 contratados** (166 parcelas `PENDING`) e a tela de
+Rentabilidade não os menciona em lugar nenhum — nem coluna, nem total, nem
+gráfico. Ela responde apenas "quanto entrou", que hoje é zero.
+
+Não é bug de implementação, é limite do desenho: uma rentabilidade de carteira
+imobiliária que ignora o contratado fica **vazia durante toda a fase de
+vendas** — justamente quando a informação é mais necessária. O print de
+30/07/2026 mostra onze imóveis, todos com R$ 0,00 e "Déficit", enquanto a
+carteira tem R$ 2,5 mi vendidos.
+
+Proposta: duas bases lado a lado — **Contratado** e **Recebido** — com a margem
+declarando qual das duas está usando. Depende de decidir 3.3 antes (líquida ×
+bruta), porque passam a ser quatro combinações possíveis.
+
+---
+
 Cada correção vai em commit próprio, com o painel da Fase 2 mostrando o antes e
 o depois — aqui a diferença **deixa** de ser zero, e é isso que se quer ver.
-O 3.3 precisa de decisão sua: padronizar em líquida ou em bruta. O 3.4 precisa
-de uma medição antes (quantas parcelas hoje casam só por nome).
+Duas dependem de decisão sua: **3.3** (margem sobre líquida ou bruta) e **3.6**
+(exibir o contratado ao lado do recebido) — e 3.6 deveria vir primeiro, porque
+muda o que a tela responde, não o quanto ela erra. O **3.4** já teve sua
+medição: 100% de cobertura, risco zero.
+
+⚠️ **3.1 e 3.2 provavelmente deixam de existir depois do 3.4:** ambos nascem do
+agrupamento por *string* (`propertyId || propertyName || fallback`). Com o
+resolvedor da view, a chave passa a ser `unit_id`/`empreendimento_id` — UUID
+real, nunca vazio — e as duas causas somem. Reavaliar antes de implementá-los.
 
 ---
 

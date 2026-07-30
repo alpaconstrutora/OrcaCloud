@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
-  FileText, Search, RefreshCw, CheckCircle2, Clock, ArrowLeft, Plus,
+  FileText, Search, RefreshCw, CheckCircle2, Clock, ArrowLeft, Plus, ShoppingCart,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
+import { MissingCodeError } from '../../services/orderNumberingService';
 import type { NfeInvoice, NfeInvoiceWithItems } from '../../types/fiscal';
 import { supabase } from '../../lib/supabase';
 import { validateNfe, summarizeAlerts } from '../../services/taxValidationService';
@@ -325,6 +326,113 @@ function ApproveModal({
   );
 }
 
+// ── Modal: Gerar Pedido de Compra (standalone, sem lançamento financeiro) ────
+function GenerateOrderModal({
+  invoice,
+  projects,
+  onClose,
+  onSuccess,
+}: {
+  invoice: NfeInvoice;
+  projects: { id: string; name: string }[];
+  onClose: () => void;
+  onSuccess: (updated: NfeInvoice, orderNumber: string) => void;
+}) {
+  const confirm = useConfirm();
+  const [projectId, setProjectId] = useState(invoice.project_id ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleGenerate() {
+    if (!projectId) { setError('Selecione uma obra.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const doCreate = async (autoCreate: boolean) => createOrderFromNfe({
+        invoiceId: invoice.id,
+        projectId,
+        userId: user?.id ?? '',
+        autoCreateSupplier: autoCreate,
+      });
+
+      let updated: NfeInvoice;
+      try {
+        updated = await doCreate(false);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message === 'SUPPLIER_NOT_FOUND') {
+          const ok = await confirm({
+            title: 'Fornecedor não encontrado',
+            message: 'Fornecedor (emissor da NF-e) não encontrado. Deseja cadastrá-lo automaticamente e prosseguir?',
+            variant: 'default',
+            confirmLabel: 'Cadastrar e prosseguir',
+          });
+          if (!ok) { setSaving(false); return; }
+          updated = await doCreate(true);
+        } else {
+          throw err;
+        }
+      }
+
+      const { data: order } = await supabase
+        .from('purchase_orders')
+        .select('id, number')
+        .eq('id', updated.purchase_order_id!)
+        .single<{ id: string; number: string }>();
+
+      onSuccess(updated, order?.number ?? '');
+    } catch (e: unknown) {
+      setError(e instanceof MissingCodeError ? e.message : e instanceof Error ? e.message : 'Erro ao gerar pedido');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
+  const labelCls = 'text-xs font-semibold text-slate-500 block mb-1';
+
+  return (
+    <Modal open onClose={onClose} size="md">
+      <ModalHeader
+        title="Gerar pedido de compra"
+        description={`${invoice.issuer_name} — ${fmt(invoice.total_value)}`}
+        onClose={onClose}
+      />
+      <ModalBody>
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className={labelCls}>Obra / Projeto *</label>
+            <select value={projectId} onChange={e => setProjectId(e.target.value)} className={inputCls}>
+              <option value="">Selecione...</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="text-xs text-gray-500">
+            Um pedido de compra será gerado copiando os itens desta NF-e.
+          </div>
+        </div>
+        {error && <div className="text-sm font-medium text-red-600 mt-3">{error}</div>}
+      </ModalBody>
+      <ModalFooter>
+        <button
+          className="h-9 px-4 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all disabled:opacity-50"
+          onClick={onClose}
+          disabled={saving}
+        >
+          Cancelar
+        </button>
+        <button
+          className="h-9 px-4 rounded-[6px] text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all disabled:opacity-50"
+          onClick={handleGenerate}
+          disabled={saving}
+        >
+          {saving ? 'Gerando…' : 'Gerar pedido'}
+        </button>
+      </ModalFooter>
+    </Modal>
+  );
+}
+
 // ── Detalhe da NF-e ──────────────────────────────────────────────────────────
 function DocumentDetail({
   invoice: initialInvoice,
@@ -332,18 +440,21 @@ function DocumentDetail({
   organizationId,
   onBack,
   onToast,
+  onViewOrder,
 }: {
   invoice: NfeInvoice;
   projects: { id: string; name: string }[];
   organizationId: string;
   onBack: () => void;
   onToast: (msg: string, type: 'ok' | 'err') => void;
+  onViewOrder?: (orderId: string) => void;
 }) {
   const [invoice, setInvoice] = useState(initialInvoice);
   const [tab, setTab] = useState<'data' | 'items' | 'validation' | 'logs'>('data');
   const [detail, setDetail] = useState<NfeInvoiceWithItems | null>(null);
   const [loading, setLoading] = useState(false);
   const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showGenerateOrderModal, setShowGenerateOrderModal] = useState(false);
   const [alerts, setAlerts] = useState<ReturnType<typeof validateNfe>>([]);
 
   useEffect(() => {
@@ -404,6 +515,23 @@ function DocumentDetail({
               title="Ver alertas tributários"
             >
               {alertSummary.warning} atenção
+            </button>
+          )}
+          {invoice.purchase_order_id ? (
+            onViewOrder && (
+              <button
+                onClick={() => onViewOrder(invoice.purchase_order_id!)}
+                className="text-sm font-medium text-blue-600 hover:underline"
+              >
+                Ver pedido de compra
+              </button>
+            )
+          ) : (
+            <button
+              onClick={() => setShowGenerateOrderModal(true)}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+            >
+              <ShoppingCart className="w-[15px] h-[15px]" /> Gerar pedido de compra
             </button>
           )}
           {canApprove && (
@@ -575,6 +703,19 @@ function DocumentDetail({
           }}
         />
       )}
+
+      {showGenerateOrderModal && (
+        <GenerateOrderModal
+          invoice={invoice}
+          projects={projects}
+          onClose={() => setShowGenerateOrderModal(false)}
+          onSuccess={updated => {
+            setInvoice(updated);
+            setShowGenerateOrderModal(false);
+            onToast('Pedido de compra gerado com sucesso!', 'ok');
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -587,6 +728,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<NfeInvoice | null>(null);
+  const [generatingOrderFor, setGeneratingOrderFor] = useState<NfeInvoice | null>(null);
   const [searchTerm, setSearchTerm] = usePersistedState<string>('fiscalDocuments:search', '');
   const tableColumns = useTableColumns(COLUMNS, 'fiscalDocumentsColumns');
   const confirm = useConfirm();
@@ -646,6 +788,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
         organizationId={selected.organization_id}
         onBack={() => setSelected(null)}
         onToast={onToast}
+        onViewOrder={onViewOrder}
       />
     );
   }
@@ -886,6 +1029,15 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                         >
                           Ver detalhes
                         </button>
+                        {!inv.purchase_order_id && (
+                          <button
+                            onClick={() => setGeneratingOrderFor(inv)}
+                            title="Gerar pedido de compra"
+                            className="text-gray-600 hover:text-blue-600 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                          </button>
+                        )}
                         <ActionIconButton kind="delete" title="Excluir NF-e" onClick={() => handleDelete(inv)} />
                       </div>
                     </td>
@@ -897,6 +1049,22 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
           </div>
         )}
       </div>
+
+      {generatingOrderFor && (
+        <GenerateOrderModal
+          invoice={generatingOrderFor}
+          projects={projects}
+          onClose={() => setGeneratingOrderFor(null)}
+          onSuccess={(updated, orderNumber) => {
+            setInvoices(prev => prev.map(i => i.id === updated.id ? updated : i));
+            if (updated.purchase_order_id) {
+              setOrderNumbers(prev => ({ ...prev, [updated.purchase_order_id!]: orderNumber }));
+            }
+            setGeneratingOrderFor(null);
+            onToast('Pedido de compra gerado com sucesso!', 'ok');
+          }}
+        />
+      )}
     </div>
   );
 }

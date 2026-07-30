@@ -156,11 +156,18 @@ E `parcela.propertyId = deal.property_id` → `commercial_properties.id`
 parcela.propertyId → empreendimento_units → tower → project_id (obra) / empreendimento_id
 ```
 
-**Ação:** view `vw_unit_property_map` (`commercial_property_id`,
-`rental_property_id`, `unit_id`, `tower_id`, `project_id`, `empreendimento_id`,
-`organization_id`) + resolvedor que substitui o `isNameMatch`. Migration só
-cria a view — DDL em tabela quente do módulo deadlocka (ver histórico do
-Empreendimento).
+**Ação:** view `vw_unit_property_map` + resolvedor que substitui o
+`isNameMatch`. Migration só cria a view — DDL em tabela quente do módulo
+deadlocka (ver histórico do Empreendimento).
+
+✅ **`20270842000000_vw_unit_property_map.sql` APLICADA e VERIFICADA em
+30/07/2026.** As três checagens do rodapé da migration passaram: resolve
+166/166 parcelas até a obra, `anon` sem grant (`role_table_grants` vazio),
+e `reloptions = {security_invoker=on}`. A view existe e não é consumida por
+ninguém ainda — nenhum comportamento mudou.
+
+**Falta o resolvedor (código):** `mergeInstallments` continua usando o
+`isNameMatch`. A troca só entra depois do portão da Fase 2.
 
 ### Medição feita em 30/07/2026 — risco ZERO nesta base
 

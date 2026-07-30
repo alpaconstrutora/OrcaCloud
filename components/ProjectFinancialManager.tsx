@@ -1607,7 +1607,11 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         { key: 'rentabilidade', label: 'Rentabilidade' },
         { key: 'extrato', label: 'Extrato' },
         { key: 'conciliacao', label: 'Conciliação' },
-        { key: 'boletos', label: 'Boletos' },
+        /* "Boletos a Pagar" e não só "Boletos": esta aba é o BoletoManager
+           (boleto de fornecedor capturado por PDF, direction DEBIT). O
+           "Boletos ao Cliente" do menu é outra coisa — cobrança emitida via
+           Asaas (client_charges), a receber. */
+        { key: 'boletos', label: 'Boletos a Pagar' },
         { key: 'contas_pagar', label: 'Contas a Pagar' },
     ];
 

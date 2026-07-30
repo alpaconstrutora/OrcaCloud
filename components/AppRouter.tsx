@@ -1316,7 +1316,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     // ── Cobranças / Boletos ao cliente ─────────────────────────────────────────
     case 'financial-boletos':
-    case 'client-charges':
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <ClientChargesModule

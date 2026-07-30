@@ -1176,6 +1176,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </button>
                         </>
                     )}
+                    {/* Ações de emissão — escopo da aba Emissão (§5.3) */}
+                    {activeTab === 'emissao' && (
+                        <>
+                            <button
+                                onClick={() => setEmitModalOpen(true)}
+                                disabled={loading}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-50"
+                            >
+                                <FileDown className="w-[15px] h-[15px]" />
+                                Emitir Contrato (.docx)
+                            </button>
+                            <button
+                                onClick={() => setDocxManagerOpen(true)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                            >
+                                <FileText className="w-[15px] h-[15px]" />
+                                Modelos de Documento
+                            </button>
+                        </>
+                    )}
                     {contractTemplates.length > 0 && (
                         <button
                             onClick={() => setTemplatePdfModal(true)}
@@ -1990,25 +2010,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Tab: Emissão */}
             {activeTab === 'emissao' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    {/* Ações de emissão */}
-                    <div className="flex flex-wrap gap-3">
-                        <Button
-                            onClick={() => setEmitModalOpen(true)}
-                            disabled={loading}
-                            className="rounded-[6px]"
-                        >
-                            <FileDown className="w-4 h-4" />
-                            Emitir Contrato (.docx)
-                        </Button>
-                        <button
-                            onClick={() => setDocxManagerOpen(true)}
-                            className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-600 rounded-[10px] hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-all font-medium text-[13px] shadow-sm active:scale-95"
-                        >
-                            <FileText className="w-4 h-4" />
-                            Modelos de Documento
-                        </button>
-                    </div>
-
                     {/* GED: signed contract card */}
                     <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                         <h4 className="text-xs font-medium text-gray-400 px-2">Documentos (GED)</h4>

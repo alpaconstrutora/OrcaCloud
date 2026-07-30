@@ -152,6 +152,8 @@ interface ContractDetailViewProps {
 
 const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp, onEdit }) => {
     const confirm = useConfirm();
+    // Usado pelas abas Retenção de Garantia, Penalidades e Avaliação de Desempenho.
+    const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
     const [contract, setContract] = React.useState<Contract | null>(null);
     const [items, setItems] = React.useState<ContractItem[]>([]);
     const [addendums, setAddendums] = React.useState<ContractAddendum[]>([]);
@@ -160,7 +162,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [projectBudget, setProjectBudget] = React.useState<BudgetEntry[]>([]);
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao'>('overview');
+    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao'>('overview');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
@@ -1137,11 +1139,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
                         { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
                         { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+                        { id: 'retention', label: 'Retenção de Garantia', icon: HandCoins },
+                        { id: 'penalties', label: 'Penalidades', icon: AlertCircle },
+                        { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
                     ]).map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao')}
+                            onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao')}
                             className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-400 hover:text-gray-600'
@@ -2662,7 +2667,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Financeiro (lançamentos gerados pelo contrato) */}
             {activeTab === 'financeiro' && (() => {
-                const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
                 const statusLabel: Record<string, string> = {
                     PENDING: 'Pendente', PAID: 'Pago', CONCILIATED: 'Conciliado', CANCELLED: 'Cancelado'
                 };
@@ -2796,178 +2800,227 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             )}
                         </div>
-
-                        {/* Retenção faseada (Fase 5.2 — CP-08/Cl.18) */}
-                        {contract && (
-                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                                        <HandCoins className="w-4 h-4 text-amber-500" /> Retenção de Garantia
-                                    </h3>
-                                    <button
-                                        type="button"
-                                        onClick={() => setReleaseModal(true)}
-                                        disabled={!retentionLedger || retentionLedger.balance <= 0}
-                                        className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-300 disabled:cursor-not-allowed"
-                                    >
-                                        Liberar Retenção
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div className="bg-gray-50 p-4 rounded-[10px] space-y-1">
-                                        <p className="text-xs font-medium text-gray-400">Retido</p>
-                                        <p className="text-lg font-medium text-gray-900 tracking-tighter">R$ {fmt(retentionLedger?.total_retained ?? 0)}</p>
-                                    </div>
-                                    <div className="bg-gray-50 p-4 rounded-[10px] space-y-1">
-                                        <p className="text-xs font-medium text-gray-400">Liberado</p>
-                                        <p className="text-lg font-medium text-emerald-600 tracking-tighter">R$ {fmt(retentionLedger?.total_released ?? 0)}</p>
-                                    </div>
-                                    <div className="bg-amber-50 p-4 rounded-[10px] space-y-1">
-                                        <p className="text-xs font-medium text-amber-600">Saldo Retido</p>
-                                        <p className="text-lg font-medium text-amber-700 tracking-tighter">R$ {fmt(retentionLedger?.balance ?? 0)}</p>
-                                    </div>
-                                </div>
-                                {retentionReleases.length > 0 && (
-                                    <div className="pt-2 space-y-1.5">
-                                        {retentionReleases.map(r => (
-                                            <div key={r.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-[6px] text-xs">
-                                                <span className="text-gray-500">
-                                                    {r.kind === 'PROVISORIO' ? 'Provisório' : r.kind === 'DEFINITIVO' ? 'Definitivo' : 'Manual'} — {new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                                </span>
-                                                <span className="font-medium text-gray-700">R$ {fmt(r.amount)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Penalidades (Fase 5.3 — CP-09/CP-10/Cl.23/Cl.31) */}
-                        {contract && (
-                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-red-500" /> Penalidades
-                                    </h3>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPenaltyModal(true)}
-                                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
-                                    >
-                                        + Notificar Penalidade
-                                    </button>
-                                </div>
-                                {penalties.length === 0 ? (
-                                    <p className="text-xs text-gray-400">Nenhuma penalidade registrada.</p>
-                                ) : (
-                                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Motivo</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
-                                                    <th className="px-6 py-2 border-r border-gray-100 text-right">Valor</th>
-                                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-50">
-                                                {penalties.map(p => {
-                                                    const penaltyStatusColor: Record<string, string> = {
-                                                        NOTIFICADA: 'text-amber-700', EM_CURA: 'text-blue-700',
-                                                        APLICADA: 'text-red-600', CANCELADA: 'text-gray-500',
-                                                    };
-                                                    const penaltyStatusLabel: Record<string, string> = {
-                                                        NOTIFICADA: 'Notificada', EM_CURA: 'Em Cura', APLICADA: 'Aplicada', CANCELADA: 'Cancelada',
-                                                    };
-                                                    return (
-                                                        <tr key={p.id} className="hover:bg-red-50/20 transition-all">
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-700">{PENALTY_KIND_LABELS[p.kind]}</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-700 max-w-xs truncate">{p.reason}</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                <span className={`text-sm font-normal ${penaltyStatusColor[p.status]}`}>{penaltyStatusLabel[p.status]}</span>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-900">R$ {fmt(p.amount)}</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                                                <div className="flex items-center justify-end gap-2">
-                                                                    {p.status === 'NOTIFICADA' && (
-                                                                        <>
-                                                                            <button
-                                                                                onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.cure(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
-                                                                                disabled={fase5Busy}
-                                                                                className="text-xs font-medium text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
-                                                                            >
-                                                                                Aceitar Cura
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.apply(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
-                                                                                disabled={fase5Busy}
-                                                                                className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
-                                                                            >
-                                                                                Aplicar
-                                                                            </button>
-                                                                        </>
-                                                                    )}
-                                                                    {(p.status === 'NOTIFICADA' || p.status === 'CANCELADA') && (
-                                                                        <button
-                                                                            onClick={async () => {
-                                                                                const ok = await confirm({
-                                                                                    title: 'Excluir penalidade?',
-                                                                                    message: `"${PENALTY_KIND_LABELS[p.kind]}" de R$ ${fmt(p.amount)}. Esta ação não pode ser desfeita.`,
-                                                                                    variant: 'danger',
-                                                                                    confirmLabel: 'Excluir',
-                                                                                });
-                                                                                if (!ok) return;
-                                                                                setFase5Busy(true);
-                                                                                try { await contractPenaltyService.remove(p.id); await loadContractData(); }
-                                                                                finally { setFase5Busy(false); }
-                                                                            }}
-                                                                            disabled={fase5Busy}
-                                                                            className="text-xs font-medium text-gray-400 hover:text-red-600 disabled:opacity-50"
-                                                                        >
-                                                                            Excluir
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Avaliação de Desempenho (Fase 7.3 — Manual §17) */}
-                        {contract && (
-                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                                        <BarChart3 className="w-4 h-4 text-violet-500" /> Avaliação de Desempenho
-                                    </h3>
-                                    <button type="button" onClick={() => setEvaluationModal(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
-                                        + Nova Avaliação
-                                    </button>
-                                </div>
-                                {evaluations.length === 0 ? (
-                                    <p className="text-xs text-gray-400">Nenhuma avaliação registrada.</p>
-                                ) : (
-                                    <div className="space-y-1.5">
-                                        {evaluations.map(ev => (
-                                            <div key={ev.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-[6px]">
-                                                <span className="text-xs text-gray-500">{ev.period || '—'}{ev.critical_occurrence ? ' · ocorrência crítica' : ''}</span>
-                                                <span className={`text-sm font-normal ${ev.weighted < 2 ? 'text-red-600' : ev.weighted < 3 ? 'text-amber-600' : 'text-emerald-600'}`}>{ev.weighted.toFixed(2)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                 );
             })()}
+
+            {/* Tab: Retenção de Garantia (Fase 5.2 — CP-08/Cl.18) */}
+            {activeTab === 'retention' && contract && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    <div className="mb-2">
+                        <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
+                            <HandCoins className="w-5 h-5 text-amber-500" /> Retenção de Garantia
+                        </h3>
+                        <p className="text-xs font-medium text-gray-400 mt-1">Valores retidos do contrato até liberação (provisória ou definitiva).</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                        <KpiCard label="RETIDO" value={`R$ ${fmt(retentionLedger?.total_retained ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="gray" />
+                        <KpiCard label="LIBERADO" value={`R$ ${fmt(retentionLedger?.total_released ?? 0)}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                        <KpiCard label="SALDO RETIDO" value={`R$ ${fmt(retentionLedger?.balance ?? 0)}`} icon={<HandCoins className="w-5 h-5" />} color="amber" />
+                    </div>
+
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setReleaseModal(true)}
+                                disabled={!retentionLedger || retentionLedger.balance <= 0}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-40"
+                            >
+                                Liberar Retenção
+                            </button>
+                        </div>
+                        {retentionReleases.length === 0 ? (
+                            <div className="text-center py-12">
+                                <HandCoins className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma liberação registrada</h3>
+                                <p className="text-sm text-gray-500">Use "Liberar Retenção" quando houver saldo retido.</p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Data</th>
+                                        <th className="px-6 py-2 text-right">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {retentionReleases.map(r => (
+                                        <tr key={r.id} className="hover:bg-blue-50/50 transition-colors">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                {r.kind === 'PROVISORIO' ? 'Provisório' : r.kind === 'DEFINITIVO' ? 'Definitivo' : 'Manual'}
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                {new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                            </td>
+                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">R$ {fmt(r.amount)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Tab: Penalidades (Fase 5.3 — CP-09/CP-10/Cl.23/Cl.31) */}
+            {activeTab === 'penalties' && contract && (() => {
+                const penaltyStatusColor: Record<string, string> = {
+                    NOTIFICADA: 'text-amber-700', EM_CURA: 'text-blue-700',
+                    APLICADA: 'text-red-600', CANCELADA: 'text-gray-500',
+                };
+                const penaltyStatusLabel: Record<string, string> = {
+                    NOTIFICADA: 'Notificada', EM_CURA: 'Em Cura', APLICADA: 'Aplicada', CANCELADA: 'Cancelada',
+                };
+                return (
+                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                        <div className="mb-2">
+                            <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-500" /> Penalidades <span className="text-sm font-normal text-red-600">{penalties.length} registro(s)</span>
+                            </h3>
+                            <p className="text-xs font-medium text-gray-400 mt-1">Moratórias, compensatórias e ocorrências de SST/compliance deste contrato.</p>
+                        </div>
+
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setPenaltyModal(true)}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" /> Notificar Penalidade
+                                </button>
+                            </div>
+                            {penalties.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma penalidade registrada</h3>
+                                    <p className="text-sm text-gray-500">Use "Notificar Penalidade" para abrir uma ocorrência.</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-left">Motivo</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-right">Valor</th>
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {penalties.map(p => (
+                                            <tr key={p.id} className="hover:bg-red-50/20 transition-all">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{PENALTY_KIND_LABELS[p.kind]}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-xs truncate">{p.reason}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                    <span className={`text-sm font-normal ${penaltyStatusColor[p.status]}`}>{penaltyStatusLabel[p.status]}</span>
+                                                </td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">R$ {fmt(p.amount)}</td>
+                                                <td className="px-6 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                        {p.status === 'NOTIFICADA' && (
+                                                            <>
+                                                                <button
+                                                                    onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.cure(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
+                                                                    disabled={fase5Busy}
+                                                                    className="text-xs font-medium text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                                                                >
+                                                                    Aceitar Cura
+                                                                </button>
+                                                                <button
+                                                                    onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.apply(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
+                                                                    disabled={fase5Busy}
+                                                                    className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                                                                >
+                                                                    Aplicar
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        {(p.status === 'NOTIFICADA' || p.status === 'CANCELADA') && (
+                                                            <ActionIconButton
+                                                                kind="delete"
+                                                                title="Excluir Penalidade"
+                                                                disabled={fase5Busy}
+                                                                onClick={async () => {
+                                                                    const ok = await confirm({
+                                                                        title: 'Excluir penalidade?',
+                                                                        message: `"${PENALTY_KIND_LABELS[p.kind]}" de R$ ${fmt(p.amount)}. Esta ação não pode ser desfeita.`,
+                                                                        variant: 'danger',
+                                                                        confirmLabel: 'Excluir',
+                                                                    });
+                                                                    if (!ok) return;
+                                                                    setFase5Busy(true);
+                                                                    try { await contractPenaltyService.remove(p.id); await loadContractData(); }
+                                                                    finally { setFase5Busy(false); }
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* Tab: Avaliação de Desempenho (Fase 7.3 — Manual §17) */}
+            {activeTab === 'evaluation' && contract && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    <div className="mb-2">
+                        <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
+                            <BarChart3 className="w-5 h-5 text-violet-500" /> Avaliação de Desempenho <span className="text-sm font-normal text-violet-600">{evaluations.length} registro(s)</span>
+                        </h3>
+                        <p className="text-xs font-medium text-gray-400 mt-1">Notas periódicas de desempenho do fornecedor neste contrato.</p>
+                    </div>
+
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setEvaluationModal(true)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                            >
+                                <Plus className="w-[15px] h-[15px]" /> Nova Avaliação
+                            </button>
+                        </div>
+                        {evaluations.length === 0 ? (
+                            <div className="text-center py-12">
+                                <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma avaliação registrada</h3>
+                                <p className="text-sm text-gray-500">Use "Nova Avaliação" para registrar uma nota periódica.</p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Período</th>
+                                        <th className="px-6 py-2 text-right">Nota</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {evaluations.map(ev => (
+                                        <tr key={ev.id} className="hover:bg-blue-50/50 transition-colors">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                                                {ev.period || '—'}{ev.critical_occurrence ? ' · ocorrência crítica' : ''}
+                                            </td>
+                                            <td className="px-6 py-2.5 text-right">
+                                                <span className={`text-sm font-normal ${ev.weighted < 2 ? 'text-red-600' : ev.weighted < 3 ? 'text-amber-600' : 'text-emerald-600'}`}>{ev.weighted.toFixed(2)}</span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Tab: Faturas de Consumo */}
             {activeTab === 'utility_bills' && (

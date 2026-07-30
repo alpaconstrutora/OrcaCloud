@@ -201,6 +201,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     }[]>([]);
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
+    // §3 — busca persistida (nunca useState simples para termo de busca)
+    const [financeSearch, setFinanceSearch] = usePersistedState<string>('contractFinance:search', '');
     const itemsColumns = useTableColumns(ITEMS_COLUMNS, 'contractItemsColumns');
     // §3 — busca persistida (nunca useState simples para termo de busca)
     const [itemsSearch, setItemsSearch] = usePersistedState<string>('contractItems:search', '');
@@ -2684,8 +2686,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 const totalPago = financialEntries.filter(e => e.status === 'PAID' || e.status === 'CONCILIATED').reduce((s, e) => s + (e.amount || 0), 0);
                 const totalPendente = financialEntries.filter(e => e.status === 'PENDING').reduce((s, e) => s + (e.amount || 0), 0);
 
+                // §5.1 — busca por descrição, origem e status.
+                const termo = financeSearch.trim().toLowerCase();
+                const filteredEntries = termo
+                    ? financialEntries.filter(e =>
+                        (e.description || '').toLowerCase().includes(termo) ||
+                        (sourceLabel[e.source_system] || e.source_system).toLowerCase().includes(termo) ||
+                        (statusLabel[e.status] || e.status).toLowerCase().includes(termo))
+                    : financialEntries;
+
                 // §6.3 — toda coluna de valor único ordena pelo cabeçalho.
-                const sortedEntries = [...financialEntries].sort((a, b) => {
+                const sortedEntries = [...filteredEntries].sort((a, b) => {
                     const col = financeColumns.sortColumn;
                     const dir = financeColumns.sortDirection === 'asc' ? 1 : -1;
                     if (!col) return a.transaction_date.localeCompare(b.transaction_date);
@@ -2720,9 +2731,19 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <KpiCard label="PENDENTE" value={`R$ ${fmt(totalPendente)}`} icon={<Clock className="w-5 h-5" />} color="amber" />
                         </div>
 
-                        {/* §5.2 — toolbar acoplada: régua de colunas e tabela num único card */}
+                        {/* §5.2 — toolbar acoplada: busca à esquerda, colunas à direita, tabela no mesmo card */}
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                            <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                                <div className="flex-1 relative w-full">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por descrição, origem ou status..."
+                                        value={financeSearch}
+                                        onChange={(e) => setFinanceSearch(e.target.value)}
+                                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    />
+                                </div>
                                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                     <ColumnConfigButton
                                         columns={FINANCE_COLUMNS}
@@ -2745,6 +2766,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum lançamento financeiro</h3>
                                     <p className="text-sm text-gray-500">Use "Lançar Financeiro" na barra de ações para gerar as parcelas/boletos.</p>
+                                </div>
+                            ) : sortedEntries.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum lançamento encontrado</h3>
+                                    <p className="text-sm text-gray-500">Tente ajustar o termo da busca.</p>
                                 </div>
                             ) : (
                                 <div className="overflow-auto max-h-[70vh]">

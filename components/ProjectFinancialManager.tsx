@@ -119,7 +119,11 @@ const fmtShort = (v: unknown): string => {
     return fmt(v);
 };
 
-type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar';
+type TabKey = 'resumo' | 'receitas' | 'despesas' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar';
+
+/** Abas que já existiram e foram removidas. Quem tinha uma delas persistida em
+ *  `localStorage` cairia numa aba inexistente (tela vazia) — cai no Resumo. */
+const RETIRED_TABS = ['fluxo'];
 
 const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, organizations = [], userEmail, onOrgChange, onUpdateSettings, budget = [], dealTypeFilter, initialTab }) => {
     const confirm = useConfirm();
@@ -129,9 +133,12 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
     };
-    const [activeTab, setActiveTab] = useState<TabKey>(
-        initialTab || (localStorage.getItem('financial_active_tab') as TabKey) || 'resumo'
-    );
+    const [activeTab, setActiveTab] = useState<TabKey>(() => {
+        if (initialTab) return initialTab;
+        const saved = localStorage.getItem('financial_active_tab');
+        if (!saved || RETIRED_TABS.includes(saved)) return 'resumo';
+        return saved as TabKey;
+    });
     // Rota explícita sempre ganha da aba persistida — inclusive quando o
     // componente já está montado (AppRouter não remonta ao trocar de view).
     useEffect(() => {
@@ -1456,19 +1463,6 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         </div>
     );
 
-    const renderFluxo = () => (
-        <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 h-80">
-                <h3 className="text-sm font-normal mb-4">Evolução Mensal do Saldo</h3>
-                <ResponsiveContainer><AreaChart data={cashFlowData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis tickFormatter={fmtShort} /><Tooltip formatter={fmt} /><Area type="monotone" dataKey="saldo" stroke="#10b981" fill="#10b981" fillOpacity={0.1} /></AreaChart></ResponsiveContainer>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                <table className="w-full text-left text-sm"><thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200"><tr><th className="px-4 py-2">MÊS</th><th className="px-4 py-2 text-right">RECEITA</th><th className="px-4 py-2 text-right">DESPESA</th><th className="px-4 py-2 text-right">SALDO ACUM.</th></tr></thead><tbody className="divide-y divide-gray-50">{cashFlowData.map((r, i: number) => <tr key={i} className="hover:bg-gray-50"><td className="px-4 py-2 font-normal">{r.name}</td><td className="px-4 py-2 text-right text-emerald-600 font-normal">{fmt(r.receita)}</td><td className="px-4 py-2 text-right text-red-500 font-normal">{fmt(r.despesa)}</td><td className={`px-4 py-2 text-right font-normal ${r.saldo >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmt(r.saldo)}</td></tr>)}</tbody></table>
-            </div>
-        </div>
-    );
-
-
     const renderRentabilidade = () => (
         <div className="space-y-6 animate-in fade-in duration-300">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1603,7 +1597,10 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         { key: 'resumo', label: 'Resumo' },
         { key: 'receitas', label: 'Receitas' },
         { key: 'despesas', label: 'Despesas' },
-        { key: 'fluxo', label: 'Fluxo' },
+        /* Aba "Fluxo" aposentada: o fluxo de caixa vive na Controladoria (aba
+           Fluxo de Caixa, agregada no servidor) e no FP&A (projetado). Aqui era
+           uma quarta versão, calculada em memória e sem recorte de período. O
+           gráfico do Resumo segue usando `cashFlowData`. */
         { key: 'rentabilidade', label: 'Rentabilidade' },
         { key: 'extrato', label: 'Extrato' },
         { key: 'conciliacao', label: 'Conciliação' },
@@ -1623,14 +1620,14 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     const exportButtons = (
         <div className="flex items-center gap-2 shrink-0">
             <button
-                onClick={() => handleExport('PDF', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
+                onClick={() => handleExport('PDF', 'EXTRATO')}
                 className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
             >
                 <FileText className="w-[15px] h-[15px] text-red-500" />
                 PDF
             </button>
             <button
-                onClick={() => handleExport('EXCEL', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
+                onClick={() => handleExport('EXCEL', 'EXTRATO')}
                 className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95"
             >
                 <FileDown className="w-[15px] h-[15px]" />
@@ -1722,7 +1719,6 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             {activeTab === 'resumo' && renderResumo()}
             {activeTab === 'receitas' && renderReceitas()}
             {activeTab === 'despesas' && renderDespesas()}
-            {activeTab === 'fluxo' && renderFluxo()}
             {activeTab === 'rentabilidade' && renderRentabilidade()}
             { activeTab === 'extrato' && renderExtrato() }
             { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }

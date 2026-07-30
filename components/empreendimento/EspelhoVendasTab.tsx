@@ -55,8 +55,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const [publishingAll, setPublishingAll] = React.useState(false);
   const [regrouping, setRegrouping] = React.useState(false);
   const [orphanIds, setOrphanIds] = React.useState<Set<string>>(new Set());
-  // Coluna "Publicar": switch por linha marca a unidade para o lote de publicação.
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  // Coluna "Publicar": o switch é o estado DESEJADO de publicação, não uma seleção.
+  // Ligado = deve estar no Comercial. A cada carga ele parte do estado real do banco;
+  // o botão aplica só a diferença (ligar = publicar, desligar = desvincular).
+  const [desiredIds, setDesiredIds] = React.useState<Set<string>>(new Set());
   // §13: toast no lugar de alert() nativo
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -69,10 +71,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     try {
       const all = await empreendimentoService.listAllUnitsForEmpreendimento(e.id);
       setUnits(all);
-      // Só faz sentido manter marcada uma unidade que continua existindo e não publicada.
-      setSelectedIds(prev => new Set(
-        [...prev].filter(id => all.some(u => u.id === id && !u.commercial_property_id)),
-      ));
+      // Reflete o estado real: switch ligado nas que estão publicadas. Qualquer alteração
+      // pendente do usuário é descartada aqui de propósito — o load só roda depois de
+      // aplicar o lote (ou ao abrir a aba), então nunca há mudança não salva para perder.
+      setDesiredIds(new Set(all.filter(u => !!u.commercial_property_id).map(u => u.id)));
 
       const ids = all.map(u => u.commercial_property_id).filter(Boolean) as string[];
       if (ids.length) {
@@ -259,36 +261,44 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     } finally { setSyncingAddress(false); }
   };
 
-  // Publica o lote: se houver unidades marcadas na coluna "Publicar", publica SÓ essas;
-  // sem nenhuma marcada, o botão vale para todas as não vinculadas.
-  const handlePublishAll = async () => {
-    const localUnpublished = units.filter(u => !u.commercial_property_id);
-    const scoped = selectedIds.size > 0
-      ? localUnpublished.filter(u => selectedIds.has(u.id))
-      : localUnpublished;
-    if (!scoped.length) { notify('Todas as unidades já estão publicadas no Comercial.'); return; }
+  // Aplica a coluna "Publicar": publica o que foi ligado e desvincula o que foi desligado.
+  // Desvincular NÃO exclui o imóvel no Comercial (mesma semântica do ícone da linha) —
+  // por isso a confirmação diz isso em voz alta antes de agir.
+  const handleApplyPublish = async () => {
+    if (!pendingCount) { notify('Nenhuma alteração pendente na coluna Publicar.'); return; }
+    const parts = [
+      toPublish.length ? `${toPublish.length} unidade(s) serão publicadas no Comercial (Venda de Ativos), agrupadas sob o edifício do empreendimento.` : '',
+      toUnpublish.length ? `${toUnpublish.length} unidade(s) serão desvinculadas — o imóvel correspondente NÃO será excluído do Comercial.` : '',
+    ].filter(Boolean);
     if (!await confirm({
-      title: selectedIds.size > 0 ? 'Publicar as unidades marcadas?' : 'Publicar no Comercial?',
-      message: `${scoped.length} unidade(s) serão criadas no Comercial (Venda de Ativos), agrupadas sob o edifício do empreendimento.`,
-      confirmLabel: 'Publicar',
+      title: toUnpublish.length ? 'Aplicar alterações de publicação?' : 'Publicar no Comercial?',
+      message: parts.join('\n\n'),
+      confirmLabel: 'Aplicar',
       variant: 'warning',
     })) return;
     setPublishingAll(true);
     try {
-      // A publicação em lote vive no service (revalida no banco antes de criar, para não
-      // duplicar properties de unidades já publicadas) — o Centro de Sincronização usa a mesma.
-      const r = await empreendimentoService.publishAllToCommercial(
-        e.id, organizationId,
-        selectedIds.size > 0 ? scoped.map(u => u.id) : undefined,
-      );
-      await load();
-      if (!r.published) {
-        notify('Todas as unidades já estão publicadas no Comercial — a lista foi atualizada.');
-        return;
+      let published = 0;
+      if (toPublish.length) {
+        // A publicação em lote vive no service (revalida no banco antes de criar, para não
+        // duplicar properties de unidades já publicadas) — o Centro de Sincronização usa a mesma.
+        const r = await empreendimentoService.publishAllToCommercial(
+          e.id, organizationId, toPublish.map(u => u.id),
+        );
+        published = r.published;
       }
-      notify(`${r.published} unidade${r.published > 1 ? 's' : ''} publicada${r.published > 1 ? 's' : ''} no Comercial com sucesso.`);
+      if (toUnpublish.length) {
+        await Promise.all(toUnpublish.map(u =>
+          empreendimentoService.updateUnit(u.id, { commercial_property_id: null })));
+      }
+      await load();
+      const msg = [
+        published ? `${published} publicada(s)` : '',
+        toUnpublish.length ? `${toUnpublish.length} desvinculada(s)` : '',
+      ].filter(Boolean).join(' · ');
+      notify(msg ? `Alterações aplicadas: ${msg}.` : 'Nada a fazer — a lista foi atualizada.');
     } catch (err: any) {
-      notify(`Erro ao publicar: ${err.message}`, 'error');
+      notify(`Erro ao aplicar alterações: ${err.message}`, 'error');
     } finally { setPublishingAll(false); }
   };
 
@@ -310,17 +320,19 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     : 0;
   const linkedCount = units.filter(u => !!u.commercial_property_id).length;
 
-  // ── Seleção para publicar ─────────────────────────────────────────────────
-  // Só unidades ainda não vinculadas podem ser marcadas (as demais já estão no Comercial).
-  const publishableIds = units.filter(u => !u.commercial_property_id).map(u => u.id);
-  const selectedCount = publishableIds.filter(id => selectedIds.has(id)).length;
-  const allPublishableSelected = publishableIds.length > 0 && selectedCount === publishableIds.length;
-  const toggleSelected = (id: string) => setSelectedIds(prev => {
+  // ── Coluna "Publicar": diferença entre desejado (switch) e real (banco) ────
+  // Ligar um switch de unidade não publicada → publicar. Desligar o de uma publicada →
+  // desvincular. O botão só habilita quando existe alguma diferença pendente.
+  const toPublish = units.filter(u => !u.commercial_property_id && desiredIds.has(u.id));
+  const toUnpublish = units.filter(u => !!u.commercial_property_id && !desiredIds.has(u.id));
+  const pendingCount = toPublish.length + toUnpublish.length;
+  const allDesired = units.length > 0 && units.every(u => desiredIds.has(u.id));
+  const toggleDesired = (id: string) => setDesiredIds(prev => {
     const next = new Set(prev);
-    next.has(id) ? next.delete(id) : next.add(id);
+    if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const toggleAllPublishable = () => setSelectedIds(allPublishableSelected ? new Set() : new Set(publishableIds));
+  const toggleAllDesired = () => setDesiredIds(allDesired ? new Set() : new Set(units.map(u => u.id)));
 
   if (loading) return (
     <div className="text-center py-12">
@@ -391,15 +403,19 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
               Sync do Comercial
             </button>
             <button
-              onClick={handlePublishAll}
-              disabled={publishingAll || publishableIds.length === 0}
+              onClick={handleApplyPublish}
+              disabled={publishingAll || pendingCount === 0}
               className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-blue-600 hover:bg-blue-700 text-white font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
-              title={selectedCount > 0
-                ? 'Publica apenas as unidades marcadas na coluna "Publicar"'
-                : 'Publica todas as unidades ainda não vinculadas ao Comercial'}
+              title={pendingCount === 0
+                ? 'Altere um switch da coluna "Publicar" para habilitar'
+                : `${toPublish.length} a publicar · ${toUnpublish.length} a desvincular`}
             >
               {publishingAll ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Upload className="w-[15px] h-[15px]" />}
-              {selectedCount > 0 ? `Publicar marcadas (${selectedCount})` : 'Publicar todas'}
+              {pendingCount === 0
+                ? 'Publicar'
+                : toUnpublish.length === 0
+                  ? `Publicar (${toPublish.length})`
+                  : `Aplicar (${pendingCount})`}
             </button>
           </div>
         </div>
@@ -431,13 +447,13 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
               <tr className="border-b border-gray-200 text-gray-500 font-semibold text-xs bg-gray-50">
                 {/* Marca as unidades do lote de publicação — o botão "Publicar marcadas" usa esta seleção */}
                 <th className="py-2 px-4 w-28">
-                  <label className="flex items-center gap-2 cursor-pointer" title={allPublishableSelected ? 'Desmarcar todas' : 'Marcar todas as não publicadas'}>
+                  <label className="flex items-center gap-2 cursor-pointer" title={allDesired ? 'Desligar todas' : 'Ligar todas'}>
                     <input
                       type="checkbox"
                       className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
-                      checked={allPublishableSelected}
-                      disabled={publishableIds.length === 0}
-                      onChange={toggleAllPublishable}
+                      checked={allDesired}
+                      disabled={units.length === 0}
+                      onChange={toggleAllDesired}
                     />
                     Publicar
                   </label>
@@ -466,22 +482,23 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                 return (
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
                     <td className="py-2.5 px-4">
-                      {/* Switch sempre visível para a coluna não "sumir" quando tudo já está
-                          publicado; desabilitado quando não há o que publicar naquela linha. */}
+                      {/* Switch sempre editável: é o estado desejado, não uma seleção.
+                          Anel âmbar marca a linha com alteração ainda não aplicada. */}
                       <label
-                        className={`relative inline-flex items-center ${published ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
-                        title={published
-                          ? (isOrphan ? 'Vínculo quebrado — limpe o vínculo antes de republicar' : `"${u.name}" já está publicada no Comercial`)
-                          : `Marcar "${u.name}" para publicar`}
+                        className="relative inline-flex items-center cursor-pointer"
+                        title={desiredIds.has(u.id)
+                          ? (published ? `"${u.name}" está publicada no Comercial` : `"${u.name}" será publicada ao aplicar`)
+                          : (published ? `"${u.name}" será desvinculada do Comercial ao aplicar` : `"${u.name}" não será publicada`)}
                       >
                         <input
                           type="checkbox"
                           className="sr-only peer"
-                          checked={!published && selectedIds.has(u.id)}
-                          disabled={published}
-                          onChange={() => toggleSelected(u.id)}
+                          checked={desiredIds.has(u.id)}
+                          onChange={() => toggleDesired(u.id)}
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${
+                          desiredIds.has(u.id) !== published ? 'ring-2 ring-amber-400 ring-offset-1' : ''
+                        }`}></div>
                       </label>
                     </td>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>

@@ -41,7 +41,7 @@ import ContractEvaluationModal from './ContractEvaluationModal';
 import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
 import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 // Aba Itens do contrato — planilha de itens contratados (ui_ux_guia_unificado.md §2).
 // "(C)" = contratado, "(O)" = orçado (WBS) — siglas ficam maiúsculas mesmo em
@@ -200,6 +200,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
     const itemsColumns = useTableColumns(ITEMS_COLUMNS, 'contractItemsColumns');
+    // §3 — busca persistida (nunca useState simples para termo de busca)
+    const [itemsSearch, setItemsSearch] = usePersistedState<string>('contractItems:search', '');
 
     // Fase 5 — Seguros/Garantias, Penalidades e Retenção faseada (PLANO_MODULO_CONTRATOS_GAPS.md)
     const [guarantees, setGuarantees] = React.useState<ContractGuarantee[]>([]);
@@ -287,10 +289,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             }
         };
 
+        const termo = itemsSearch.trim().toLowerCase();
+        const base = termo
+            ? items.filter(i =>
+                (i.description || '').toLowerCase().includes(termo) ||
+                (i.budget_item_id || '').toLowerCase().includes(termo) ||
+                (i.unit || '').toLowerCase().includes(termo))
+            : items;
+
         const col = itemsColumns.sortColumn;
-        if (!col) return items;
+        if (!col) return base;
         const dir = itemsColumns.sortDirection === 'asc' ? 1 : -1;
-        return [...items].sort((a, b) => {
+        return [...base].sort((a, b) => {
             const va = value(a, col);
             const vb = value(b, col);
             // Itens sem vínculo com o orçamento (—) vão sempre para o fim, em
@@ -301,7 +311,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
             return String(va).localeCompare(String(vb)) * dir;
         });
-    }, [items, activeBudget, itemsColumns.sortColumn, itemsColumns.sortDirection]);
+    }, [items, activeBudget, itemsSearch, itemsColumns.sortColumn, itemsColumns.sortDirection]);
 
     const vi = itemsColumns.visibleColumns;
 
@@ -1083,7 +1093,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     }
 
     return (
-        <div className="space-y-3 animate-in fade-in duration-500 pb-4">
+        /* §20.1 — 24px do cabeçalho até o cromo; as barras de cromo empilhadas
+           (abas §19.1 → botões §5.3) levam mb-3 entre si. */
+        <div className="space-y-6 animate-in fade-in duration-500 pb-4">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
@@ -1103,14 +1115,67 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">{contract.title}</h1>
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex flex-col items-end mr-4">
-                        <p className="text-xs font-medium text-gray-400">Saldo contratual</p>
-                        <p className="text-lg font-medium text-gray-900 tracking-tight">
-                            R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </p>
-                    </div>
+                <div className="flex flex-col items-end">
+                    <p className="text-xs font-medium text-gray-400">Saldo contratual</p>
+                    <p className="text-lg font-medium text-gray-900 tracking-tight">
+                        R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                </div>
+            </div>
 
+            {/* §19.1 — trilho cinza DENTRO de card branco, flex-wrap (nunca
+                overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
+                (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
+            <div className="bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3 sticky top-4 z-40">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {(contract.is_recurring ? [
+                        { id: 'overview', label: 'Visão Geral', icon: Layers },
+                        { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
+                    ] : [
+                        { id: 'overview', label: 'Visão Geral', icon: Layers },
+                        { id: 'items', label: 'Itens do Contrato', icon: FileText },
+                        { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
+                        { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
+                        { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+                        { id: 'emissao', label: 'Emissão', icon: FileDown },
+                    ]).map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao')}
+                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-gray-400 hover:text-gray-600'
+                                }`}
+                        >
+                            <tab.icon className="w-3.5 h-3.5" />
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* §5.3 — toolbar de botões: ações do contrato à esquerda, ação
+                primária (única azul sólida) à direita. Antes ficavam soltas ao
+                lado do <h1>, o que o §17/§20 não permitem. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Ações da planilha de itens — escopo da aba ativa (§5.3) */}
+                    {activeTab === 'items' && (
+                        <>
+                            <button
+                                onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                            >
+                                <Package className="w-[15px] h-[15px]" /> Item avulso
+                            </button>
+                            <button
+                                onClick={() => setIsBudgetPickerOpen(true)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                            >
+                                <PlusCircle className="w-[15px] h-[15px]" /> Importar do orçamento
+                            </button>
+                        </>
+                    )}
                     {contractTemplates.length > 0 && (
                         <button
                             onClick={() => setTemplatePdfModal(true)}
@@ -1143,19 +1208,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
                     </button>
 
-                    {/* §17: ação primária compacta. Não usar o <Button> compartilhado
-                        aqui — a classe BASE dele herda font-black uppercase
-                        tracking-widest + shadow pesado, que o §17 removeu. */}
-                    <button
-                        onClick={() => handleSendWebhook()}
-                        disabled={loading}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
-                        title="Enviar para Automação (Make.com)"
-                    >
-                        <Zap className="w-[15px] h-[15px]" />
-                        Enviar automação
-                    </button>
-
                     {/* Gerar Obra — visível apenas para contratos OUTGOING assinados/ativos sem obra vinculada */}
                     {(contract as any).direction === 'OUTGOING' && !contract.project_id && ['Assinado', 'Ativo'].includes(contract.status) && (
                         <button
@@ -1181,37 +1233,20 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             Gerar Obra
                         </button>
                     )}
-
                 </div>
-            </div>
 
-            {/* §19.1 — trilho cinza dentro de card branco, flex-wrap (nunca
-                overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
-                (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit max-w-full sticky top-4 z-40">
-                {(contract.is_recurring ? [
-                    { id: 'overview', label: 'Visão Geral', icon: Layers },
-                    { id: 'utility_bills', label: 'Faturas de Consumo', icon: BarChart3 }
-                ] : [
-                    { id: 'overview', label: 'Visão Geral', icon: Layers },
-                    { id: 'items', label: 'Itens do Contrato', icon: FileText },
-                    { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
-                    { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
-                    { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
-                    { id: 'emissao', label: 'Emissão', icon: FileDown },
-                ]).map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao')}
-                        className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-400 hover:text-gray-600'
-                            }`}
-                    >
-                        <tab.icon className="w-3.5 h-3.5" />
-                        {tab.label}
-                    </button>
-                ))}
+                {/* §17: ação primária compacta, única azul sólida da tela. Não usar
+                    o <Button> compartilhado aqui — a classe BASE dele herda
+                    font-black uppercase tracking-widest + shadow pesado. */}
+                <button
+                    onClick={() => handleSendWebhook()}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
+                    title="Enviar para Automação (Make.com)"
+                >
+                    <Zap className="w-[15px] h-[15px]" />
+                    Enviar automação
+                </button>
             </div>
 
             {hasDivergence && (
@@ -2092,36 +2127,29 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                     {/* §5.2 — toolbar e tabela num único card (escala compacta §16) */}
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-                        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row md:justify-between md:items-center gap-2.5 bg-white">
-                            <div>
-                                <h3 className="text-sm font-semibold text-gray-900">Planilha de itens contratados</h3>
-                                <p className="text-xs font-medium text-gray-400 mt-0.5">Vínculo direto com o orçamento da obra (WBS)</p>
+                        {/* §5.2 — toolbar acoplada: busca à esquerda, controles de
+                            coluna à direita. As ações da planilha moram na barra de
+                            botões §5.3, acima. */}
+                        <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por código WBS, descrição ou unidade..."
+                                    value={itemsSearch}
+                                    onChange={(e) => setItemsSearch(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
                             </div>
-                            {/* §17 — ação primária é a única azul sólida; a secundária é neutra */}
-                            <div className="flex items-center gap-2">
-                                {/* §5.1 — configuração de colunas junto dos controles da tabela */}
-                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                                    <ColumnConfigButton
-                                        columns={ITEMS_COLUMNS.filter(c => c.key !== 'actions')}
-                                        visibleColumns={itemsColumns.visibleColumns}
-                                        showColumnConfig={itemsColumns.showColumnConfig}
-                                        onToggleShow={() => itemsColumns.setShowColumnConfig(!itemsColumns.showColumnConfig)}
-                                        onToggleColumn={itemsColumns.toggleColumn}
-                                        onReset={itemsColumns.resetColumns}
-                                    />
-                                </div>
-                                <button
-                                    onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
-                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                                >
-                                    <Package className="w-[15px] h-[15px]" /> Item avulso
-                                </button>
-                                <button
-                                    onClick={() => setIsBudgetPickerOpen(true)}
-                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                                >
-                                    <PlusCircle className="w-[15px] h-[15px]" /> Importar do orçamento
-                                </button>
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={ITEMS_COLUMNS.filter(c => c.key !== 'actions')}
+                                    visibleColumns={itemsColumns.visibleColumns}
+                                    showColumnConfig={itemsColumns.showColumnConfig}
+                                    onToggleShow={() => itemsColumns.setShowColumnConfig(!itemsColumns.showColumnConfig)}
+                                    onToggleColumn={itemsColumns.toggleColumn}
+                                    onReset={itemsColumns.resetColumns}
+                                />
                             </div>
                         </div>
 
@@ -2135,6 +2163,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <button onClick={() => setIsBudgetPickerOpen(true)} className="text-blue-600 text-sm font-medium hover:underline">
                                     Adicionar primeiro item
                                 </button>
+                            </div>
+                        ) : sortedItems.length === 0 ? (
+                            <div className="text-center py-12">
+                                <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item encontrado</h3>
+                                <p className="text-sm text-gray-500">Tente ajustar o termo da busca.</p>
                             </div>
                         ) : (
                         /* §6.5 — rolagem própria para o thead sticky funcionar */
@@ -2666,21 +2700,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                 return (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                        <div className="flex justify-between items-center mb-2">
-                            <div>
-                                <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                                    Lançamentos Financeiros <span className="text-sm font-normal text-emerald-600">{financialEntries.length} registro(s)</span>
-                                </h3>
-                                <p className="text-xs font-medium text-gray-400 mt-1">Boletos, parcelas e valores gerados a partir deste contrato no módulo Financeiro.</p>
-                            </div>
-                            <button
-                                onClick={handleSyncFinance}
-                                disabled={syncingFinance}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-emerald-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 transition-all active:scale-95 font-medium text-[13px] shadow-sm disabled:opacity-50 shrink-0"
-                            >
-                                <DollarSign className="w-[15px] h-[15px]" />
-                                {syncingFinance ? 'Lançando...' : 'Lançar / Atualizar'}
-                            </button>
+                        {/* §18 — a ação de lançar mora na barra de botões §5.3
+                            ("Lançar Financeiro"); repetir aqui era o mesmo botão duas vezes. */}
+                        <div className="mb-2">
+                            <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
+                                Lançamentos Financeiros <span className="text-sm font-normal text-emerald-600">{financialEntries.length} registro(s)</span>
+                            </h3>
+                            <p className="text-xs font-medium text-gray-400 mt-1">Boletos, parcelas e valores gerados a partir deste contrato no módulo Financeiro.</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
@@ -2713,7 +2739,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <div className="text-center py-12">
                                     <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum lançamento financeiro</h3>
-                                    <p className="text-sm text-gray-500">Use "Lançar / Atualizar" para gerar as parcelas/boletos no Financeiro.</p>
+                                    <p className="text-sm text-gray-500">Use "Lançar Financeiro" na barra de ações para gerar as parcelas/boletos.</p>
                                 </div>
                             ) : (
                                 <div className="overflow-auto max-h-[70vh]">

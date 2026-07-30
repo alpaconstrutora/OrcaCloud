@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase } from 'lucide-react';
+import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric } from '../services/payrollService';
 import { orgGovernanceService } from '../services/orgGovernanceService';
@@ -246,51 +246,51 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
 
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-700">
-                    <div>
-                        <h2 className="text-lg font-black text-white">
-                            {isEditing ? 'Editar Colaborador' : 'Novo Colaborador'}
-                        </h2>
-                        <p className="text-indigo-200 text-xs mt-0.5">
-                            {isEditing ? 'Atualize os dados do colaborador' : 'Preencha os dados para cadastrar'}
-                        </p>
-                    </div>
-                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+    const renderTabs = () => (
+        <>
+            {([
+                { id: 'geral', label: 'Geral', icon: User },
+                { id: 'pessoal', label: 'Pessoal', icon: Users },
+                { id: 'documentos', label: 'Docs', icon: FileText },
+                { id: 'endereco', label: 'Endereço', icon: MapPin },
+                { id: 'organizacional', label: 'Org.', icon: Briefcase },
+                { id: 'bancario', label: 'Banco', icon: CreditCard },
+                { id: 'folha', label: 'Folha', icon: Wallet },
+                { id: 'checklist', label: 'Checklist', icon: CheckSquare }
+            ] as const).map(tab => (
+                <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${
+                        activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                    }`}
+                >
+                    <tab.icon className="w-3 h-3" />
+                    {tab.label}
+                </button>
+            ))}
+        </>
+    );
 
-                {/* Body with Tabs */}
-                <div className="flex border-b border-slate-100 mb-0 sticky top-0 bg-white z-10 px-6 shrink-0">
-                    {([
-                        { id: 'geral', label: 'Geral', icon: User },
-                        { id: 'pessoal', label: 'Pessoal', icon: Users },
-                        { id: 'documentos', label: 'Docs', icon: FileText },
-                        { id: 'endereco', label: 'Endereço', icon: MapPin },
-                        { id: 'organizacional', label: 'Org.', icon: Briefcase },
-                        { id: 'bancario', label: 'Banco', icon: CreditCard },
-                        { id: 'folha', label: 'Folha', icon: Wallet },
-                        { id: 'checklist', label: 'Checklist', icon: CheckSquare }
-                    ] as const).map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-3 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${
-                                activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'
-                            }`}
-                        >
-                            <tab.icon className="w-3 h-3" />
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+    const renderFooter = () => (
+        <>
+            <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+                Cancelar
+            </button>
+            <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {saving ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Cadastrar Colaborador')}
+            </button>
+        </>
+    );
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {activeTab === 'geral' && (
+    const renderTabContent = () => (
+        <>
+            {activeTab === 'geral' && (
                         <>
                     {/* Dados Pessoais */}
                     <div>
@@ -902,21 +902,66 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                             </InputGroup>
                         </div>
                     )}
+        </>
+    );
+
+    if (isEditing) {
+        return (
+            <div className="fixed inset-0 z-50 bg-white flex flex-col">
+                {/* Header - tela dedicada */}
+                <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-700 shrink-0">
+                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div>
+                        <h2 className="text-lg font-black text-white">Editar Colaborador</h2>
+                        <p className="text-indigo-200 text-xs mt-0.5">Atualize os dados do colaborador</p>
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex border-b border-slate-100 mb-0 sticky top-0 bg-white z-10 px-6 shrink-0 max-w-3xl w-full mx-auto">
+                    {renderTabs()}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-3xl w-full mx-auto">
+                    {renderTabContent()}
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50 shrink-0">
+                    {renderFooter()}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-700">
+                    <div>
+                        <h2 className="text-lg font-black text-white">Novo Colaborador</h2>
+                        <p className="text-indigo-200 text-xs mt-0.5">Preencha os dados para cadastrar</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex border-b border-slate-100 mb-0 sticky top-0 bg-white z-10 px-6 shrink-0">
+                    {renderTabs()}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {renderTabContent()}
                 </div>
 
                 {/* Footer */}
                 <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-                        Cancelar
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        {saving ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Cadastrar Colaborador')}
-                    </button>
+                    {renderFooter()}
                 </div>
             </div>
         </div>

@@ -43,6 +43,34 @@ import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
+// Aba Itens do contrato — planilha de itens contratados (ui_ux_guia_unificado.md §2).
+// "(C)" = contratado, "(O)" = orçado (WBS) — siglas ficam maiúsculas mesmo em
+// sentence case, exceção do §6.2.
+const ITEMS_COLUMNS: ColumnConfig[] = [
+    { key: 'wbs', label: 'WBS / item', sortable: true },
+    { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'unit', label: 'Unid.', sortable: true },
+    { key: 'quantity', label: 'Qtd.', sortable: true },
+    { key: 'unit_c', label: 'Unit. (C)', sortable: true },
+    { key: 'unit_o', label: 'Unit. (O)', sortable: true },
+    { key: 'total_c', label: 'Total (C)', sortable: true },
+    { key: 'total_o', label: 'Total (O)', sortable: true },
+    { key: 'saving', label: 'Economia', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+// Alinhamento e realce de coluna da planilha de itens — o realce distingue o
+// que é contratado (neutro) do que vem do orçamento (azul) e do saldo (verde).
+const ITEM_COL_ALIGN: Record<string, string> = {
+    unit: 'text-center', quantity: 'text-right', unit_c: 'text-right',
+    unit_o: 'text-right', total_c: 'text-right', total_o: 'text-right', saving: 'text-right',
+};
+const ITEM_COL_TINT: Record<string, string> = {
+    unit_o: 'text-blue-600 bg-blue-50/30',
+    total_o: 'text-blue-600 bg-blue-50/30',
+    saving: 'text-emerald-600 bg-emerald-50/30',
+};
+
 // Aba Financeiro — tabela "Lançamentos Financeiros" (ui_ux_guia_unificado.md §2).
 const FINANCE_COLUMNS: ColumnConfig[] = [
     { key: 'date', label: 'Data', sortable: true },
@@ -148,7 +176,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [exporting, setExporting] = React.useState(false);
     const [syncingFinance, setSyncingFinance] = React.useState(false);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-    const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
     const [contractTemplates, setContractTemplates] = React.useState<DBContractTemplate[]>([]);
     const [docxTemplates, setDocxTemplates] = React.useState<DocumentTemplate[]>([]);
     const [emitModalOpen, setEmitModalOpen] = React.useState(false);
@@ -172,6 +199,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     }[]>([]);
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
+    const itemsColumns = useTableColumns(ITEMS_COLUMNS, 'contractItemsColumns');
 
     // Fase 5 — Seguros/Garantias, Penalidades e Retenção faseada (PLANO_MODULO_CONTRATOS_GAPS.md)
     const [guarantees, setGuarantees] = React.useState<ContractGuarantee[]>([]);
@@ -212,10 +240,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         setTimeout(() => setNotification(null), 4500);
     };
 
-    const askConfirm = (message: string, onConfirm: () => void) => {
-        setPendingConfirm({ message, onConfirm });
-    };
-
     React.useEffect(() => {
         let cancelled = false;
         const run = async () => {
@@ -240,6 +264,46 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
         return { totalBudgeted: budgeted, totalContracted: contracted, hasDivergence: div };
     }, [items, activeBudget, contract]);
+
+    // §6.3 — a planilha de itens ordena por qualquer coluna de valor único,
+    // inclusive as derivadas do orçamento (Unit./Total (O), Economia).
+    const sortedItems = React.useMemo(() => {
+        const unitBudgeted = (item: ContractItem) =>
+            activeBudget.find(b => b.id === item.budget_item_id)?.sinapiItem.price ?? null;
+
+        const value = (item: ContractItem, col: string): string | number | null => {
+            const uo = unitBudgeted(item);
+            switch (col) {
+                case 'wbs': return (!item.budget_item_id || item.budget_item_id === 'AVULSO') ? 'Avulso' : item.budget_item_id;
+                case 'description': return item.description || '';
+                case 'unit': return item.unit || '';
+                case 'quantity': return item.quantity;
+                case 'unit_c': return item.unit_price;
+                case 'total_c': return item.total_price;
+                case 'unit_o': return uo;
+                case 'total_o': return uo === null ? null : uo * item.quantity;
+                case 'saving': return uo === null ? null : (uo - item.unit_price) * item.quantity;
+                default: return null;
+            }
+        };
+
+        const col = itemsColumns.sortColumn;
+        if (!col) return items;
+        const dir = itemsColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...items].sort((a, b) => {
+            const va = value(a, col);
+            const vb = value(b, col);
+            // Itens sem vínculo com o orçamento (—) vão sempre para o fim, em
+            // qualquer direção — ordenar "vazio" junto com número mente sobre o dado.
+            if (va === null && vb === null) return 0;
+            if (va === null) return 1;
+            if (vb === null) return -1;
+            if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+            return String(va).localeCompare(String(vb)) * dir;
+        });
+    }, [items, activeBudget, itemsColumns.sortColumn, itemsColumns.sortDirection]);
+
+    const vi = itemsColumns.visibleColumns;
 
     const budgetDifferences = React.useMemo(() => {
         if (!contract || !contract.budget_snapshot || projectBudget.length === 0) return [];
@@ -449,20 +513,22 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         }
     };
 
-    const handleApproveAddendum = (id: string) => {
-        askConfirm("Deseja aprovar este aditivo? Isso alterará permanentemente o valor/prazo do contrato.", () => {
-            setPendingConfirm(null);
-            (async () => {
-                try {
-                    await contractService.approveAddendum(id, 'Admin');
-                    await loadContractData();
-                    notify("Aditivo aprovado com sucesso!", "success");
-                } catch (error) {
-                    console.error("Erro ao aprovar aditivo:", error);
-                    notify("Erro ao aprovar aditivo.", "error");
-                }
-            })();
+    const handleApproveAddendum = async (id: string) => {
+        const ok = await confirm({
+            title: 'Aprovar aditivo?',
+            message: 'Isso alterará permanentemente o valor/prazo do contrato.',
+            variant: 'warning',
+            confirmLabel: 'Aprovar',
         });
+        if (!ok) return;
+        try {
+            await contractService.approveAddendum(id, 'Admin');
+            await loadContractData();
+            notify("Aditivo aprovado com sucesso!", "success");
+        } catch (error) {
+            console.error("Erro ao aprovar aditivo:", error);
+            notify("Erro ao aprovar aditivo.", "error");
+        }
     };
 
     const handleExportReport = async () => {
@@ -582,13 +648,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             setSelectedHistoryItem(item);
         } catch (error) {
             console.error("Erro ao carregar histórico do item:", error);
-            alert("Erro ao carregar histórico.");
+            notify("Erro ao carregar histórico.", "error"); // §13 — toast, não alert() nativo
         } finally {
             setLoading(false);
         }
     };
 
-    const handleAdjustToBudget = () => {
+    const handleAdjustToBudget = async () => {
         if (!contract) return;
 
         if (items.length === 0) {
@@ -604,59 +670,64 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             totalBudgeted += bItem ? (bItem.sinapiItem.price * item.quantity) : item.total_price;
         });
 
-        askConfirm(`Isso irá ajustar todos os itens do contrato para os valores originais do orçamento (WBS). Novo Total do Contrato: R$ ${totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Deseja continuar?`, () => {
-            setPendingConfirm(null);
-            (async () => {
-                try {
-                    setLoading(true);
-
-                    const updatePromises = items.map(item => {
-                        const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                        if (!bItem) return Promise.resolve();
-                        const newPrice = bItem.sinapiItem.price;
-                        const newTotal = newPrice * item.quantity;
-                        return contractService.updateContractItem(item.id, {
-                            unit_price: newPrice,
-                            total_price: newTotal
-                        });
-                    });
-
-                    await Promise.all(updatePromises);
-
-                    await contractService.updateContract(contract.id, {
-                        original_value: totalBudgeted,
-                        current_value: totalBudgeted
-                    });
-
-                    await loadContractData();
-                    notify("Contrato ajustado com sucesso pelo orçamento!", "success");
-                } catch (error) {
-                    console.error("Erro ao ajustar contrato:", error);
-                    notify("Erro ao ajustar contrato.", "error");
-                } finally {
-                    setLoading(false);
-                }
-            })();
+        const ok = await confirm({
+            title: 'Ajustar itens pelo orçamento?',
+            message: `Todos os itens do contrato voltam aos valores originais do orçamento (WBS). Novo total do contrato: R$ ${totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+            variant: 'warning',
+            confirmLabel: 'Ajustar',
         });
+        if (!ok) return;
+        try {
+            setLoading(true);
+
+            const updatePromises = items.map(item => {
+                const bItem = activeBudget.find(b => b.id === item.budget_item_id);
+                if (!bItem) return Promise.resolve();
+                const newPrice = bItem.sinapiItem.price;
+                const newTotal = newPrice * item.quantity;
+                return contractService.updateContractItem(item.id, {
+                    unit_price: newPrice,
+                    total_price: newTotal
+                });
+            });
+
+            await Promise.all(updatePromises);
+
+            await contractService.updateContract(contract.id, {
+                original_value: totalBudgeted,
+                current_value: totalBudgeted
+            });
+
+            await loadContractData();
+            notify("Contrato ajustado com sucesso pelo orçamento!", "success");
+        } catch (error) {
+            console.error("Erro ao ajustar contrato:", error);
+            notify("Erro ao ajustar contrato.", "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleDeleteItem = (itemId: string) => {
-        askConfirm("Tem certeza que deseja remover este item do contrato? Esta ação afetará o saldo contratual.", () => {
-            setPendingConfirm(null);
-            (async () => {
-                try {
-                    setLoading(true);
-                    await contractService.deleteContractItem(itemId);
-                    await loadContractData();
-                    notify("Item removido com sucesso!", "success");
-                } catch (error) {
-                    console.error("Erro ao remover item do contrato:", error);
-                    notify("Erro ao remover item. Tente novamente.", "error");
-                } finally {
-                    setLoading(false);
-                }
-            })();
+    // §14 — useConfirm() global, não o modal local askConfirm/pendingConfirm.
+    // §22 — remove do array local em vez de recarregar o contrato inteiro; os
+    // totais da aba (orçado/contratado/economia) derivam de `items`, e
+    // `deleteContractItem` é um DELETE puro, sem trigger que recalcule o contrato.
+    const handleDeleteItem = async (itemId: string) => {
+        const ok = await confirm({
+            title: 'Remover item do contrato?',
+            message: 'Esta ação afetará o saldo contratual e não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Remover',
         });
+        if (!ok) return;
+        try {
+            await contractService.deleteContractItem(itemId);
+            setItems(prev => prev.filter(i => i.id !== itemId));
+            notify("Item removido com sucesso!", "success");
+        } catch (error) {
+            console.error("Erro ao remover item do contrato:", error);
+            notify("Erro ao remover item. Tente novamente.", "error");
+        }
     };
 
     const handleSelectBudgetItem = async (budgetItems: BudgetEntry[]) => {
@@ -843,7 +914,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         }
     };
 
-    const handleSendWebhook = (template?: ContractTemplate) => {
+    const handleSendWebhook = async (template?: ContractTemplate) => {
         if (!contract) {
             notify("Dados insuficientes para enviar o contrato.", "error");
             return;
@@ -858,44 +929,46 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         const party = (contract as any).direction === 'OUTGOING' ? 'cliente' : 'fornecedor';
         const confirmMessage = contract.status === 'Enviado'
             ? `Este contrato já foi enviado. Deseja enviar novamente para o ${party} via automação?`
-            : `Deseja enviar o contrato para o ${party} via automação? Isso atualizará o status para 'Enviado'.`;
+            : `O status do contrato passa para 'Enviado'.`;
 
-        askConfirm(confirmMessage, () => {
-            setPendingConfirm(null);
-            (async () => {
-                try {
-                    setLoading(true);
-
-                    let supplierData = null;
-                    if (contract.supplier_id) {
-                        supplierData = await supplierService.getById(contract.supplier_id);
-                    }
-
-                    await webhookService.triggerContractSentWebhook(
-                        contract,
-                        supplierData ?? undefined,
-                        projectSettings ?? undefined,
-                        false,
-                        template
-                    );
-
-                    if (contract.status !== 'Enviado' && contract.status !== 'Ativo') {
-                        await contractService.updateContract(contract.id, {
-                            status: 'Enviado'
-                        });
-                    }
-
-                    await loadContractData();
-                    setIsTemplateModalOpen(false);
-                    notify("Contrato enviado via automação com sucesso!", "success");
-                } catch (error: unknown) {
-                    console.error("Erro ao enviar contrato:", error);
-                    notify(`Erro na operação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, "error");
-                } finally {
-                    setLoading(false);
-                }
-            })();
+        const ok = await confirm({
+            title: contract.status === 'Enviado' ? 'Enviar novamente?' : `Enviar contrato para o ${party}?`,
+            message: confirmMessage,
+            variant: 'warning',
+            confirmLabel: 'Enviar',
         });
+        if (!ok) return;
+        try {
+            setLoading(true);
+
+            let supplierData = null;
+            if (contract.supplier_id) {
+                supplierData = await supplierService.getById(contract.supplier_id);
+            }
+
+            await webhookService.triggerContractSentWebhook(
+                contract,
+                supplierData ?? undefined,
+                projectSettings ?? undefined,
+                false,
+                template
+            );
+
+            if (contract.status !== 'Enviado' && contract.status !== 'Ativo') {
+                await contractService.updateContract(contract.id, {
+                    status: 'Enviado'
+                });
+            }
+
+            await loadContractData();
+            setIsTemplateModalOpen(false);
+            notify("Contrato enviado via automação com sucesso!", "success");
+        } catch (error: unknown) {
+            console.error("Erro ao enviar contrato:", error);
+            notify(`Erro na operação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const renderTemplateModal = () => {
@@ -2026,6 +2099,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </div>
                             {/* §17 — ação primária é a única azul sólida; a secundária é neutra */}
                             <div className="flex items-center gap-2">
+                                {/* §5.1 — configuração de colunas junto dos controles da tabela */}
+                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                    <ColumnConfigButton
+                                        columns={ITEMS_COLUMNS.filter(c => c.key !== 'actions')}
+                                        visibleColumns={itemsColumns.visibleColumns}
+                                        showColumnConfig={itemsColumns.showColumnConfig}
+                                        onToggleShow={() => itemsColumns.setShowColumnConfig(!itemsColumns.showColumnConfig)}
+                                        onToggleColumn={itemsColumns.toggleColumn}
+                                        onReset={itemsColumns.resetColumns}
+                                    />
+                                </div>
                                 <button
                                     onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
                                     className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
@@ -2041,114 +2125,137 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </div>
                         </div>
 
-                        {/* §6.5 — rolagem própria para o thead sticky funcionar */}
+                        {/* §12 — empty state fora da tabela: dentro do card acoplado (§5.2)
+                            vai sem moldura própria, e fora da célula não conflita com o §7 */}
+                        {items.length === 0 ? (
+                            <div className="text-center py-12">
+                                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item vinculado a este contrato</h3>
+                                <p className="text-sm text-gray-500 mb-6">Importe do orçamento da obra ou cadastre um item avulso.</p>
+                                <button onClick={() => setIsBudgetPickerOpen(true)} className="text-blue-600 text-sm font-medium hover:underline">
+                                    Adicionar primeiro item
+                                </button>
+                            </div>
+                        ) : (
+                        /* §6.5 — rolagem própria para o thead sticky funcionar */
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
-                                {/* §6.2 sentence case + §6.6 px-6 e border-r em todo cabeçalho.
-                                    Siglas (WBS, C, O) seguem maiúsculas — exceção do §6.2. */}
+                                {/* §6.2 sentence case + §6.3 toda coluna ordenável + §6.6 px-6 e
+                                    border-r em todo cabeçalho. Siglas (WBS, C, O) seguem
+                                    maiúsculas — exceção do §6.2. */}
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">WBS / item</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Descrição</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-center">Unid.</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd.</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Unit. (C)</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/30">Unit. (O)</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Total (C)</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/30">Total (O)</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right text-emerald-600 bg-emerald-50/30">Economia</th>
-                                        <th className="px-6 py-2 text-right">Ações</th>
+                                        {ITEMS_COLUMNS.filter(c => c.key !== 'actions' && vi.includes(c.key)).map(c => (
+                                            <SortableHeader
+                                                key={c.key}
+                                                colKey={c.key}
+                                                label={c.label}
+                                                uppercase={false}
+                                                sortColumn={itemsColumns.sortColumn}
+                                                sortDirection={itemsColumns.sortDirection}
+                                                onSort={itemsColumns.handleColumnSort}
+                                                className={`px-6 py-2 border-r border-gray-100 ${ITEM_COL_ALIGN[c.key] || 'text-left'} ${ITEM_COL_TINT[c.key] || ''}`}
+                                            />
+                                        ))}
+                                        {/* §6 — "Ações" é <th> cru: precisa repetir text-table-header/font-semibold */}
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                    {items.length === 0 ? (
-                                        <tr>
-                                            {/* §12 — empty state canônico */}
-                                            <td colSpan={10} className="text-center py-12">
-                                                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item vinculado a este contrato</h3>
-                                                <p className="text-sm text-gray-500 mb-6">Importe do orçamento da obra ou cadastre um item avulso.</p>
-                                                <button onClick={() => setIsBudgetPickerOpen(true)} className="text-blue-600 font-bold hover:underline">
-                                                    Adicionar primeiro item
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ) : items.map((item) => (
+                                    {sortedItems.map((item) => (
                                         <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
                                             {/* §8: código/AVULSO viram texto simples — sem pílula, fundo ou uppercase */}
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
-                                                {item.budget_item_id === 'AVULSO' || (!item.budget_item_id) ? (
-                                                    <span className="flex items-center gap-1.5 text-orange-600">
-                                                        <Package className="w-3.5 h-3.5 shrink-0" /> Avulso
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-600">{item.budget_item_id}</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                <div className="flex flex-col">
-                                                    <p className="text-sm font-normal text-gray-700 leading-tight">{item.description}</p>
-                                                    <div className="flex items-center gap-3 mt-1">
-                                                        <p className="text-xs text-gray-400 font-medium">ID: {item.id.slice(0, 8)}</p>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleViewItemHistory(item);
-                                                            }}
-                                                            className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-                                                            title="Ver Histórico de Medições"
-                                                        >
-                                                            <History className="w-3 h-3" /> Histórico
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-gray-600">
-                                                {item.unit}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
-                                                {item.quantity.toLocaleString()}
-                                            </td>
-                                            {/* §7: valor financeiro é o único caso com font-medium */}
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
-                                                R$ {item.unit_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-blue-50/10 text-sm font-medium text-blue-600">
-                                                {(() => {
-                                                    const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                                                    if (!bItem) return <span className="font-normal text-gray-400">—</span>;
-                                                    return <>R$ {bItem.sinapiItem.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>;
-                                                })()}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
-                                                R$ {item.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-blue-50/10 text-sm font-medium text-blue-600">
-                                                {(() => {
-                                                    const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                                                    if (!bItem) return <span className="font-normal text-gray-400">—</span>;
-                                                    const totalBudgeted = bItem.sinapiItem.price * item.quantity;
-                                                    return <>R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>;
-                                                })()}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-emerald-50/10">
-                                                {(() => {
-                                                    const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                                                    if (!bItem) return <span className="text-sm font-normal text-gray-400">—</span>;
-                                                    const saving = (bItem.sinapiItem.price - item.unit_price) * item.quantity;
-                                                    const percent = ((bItem.sinapiItem.price - item.unit_price) / bItem.sinapiItem.price) * 100;
-                                                    return (
-                                                        <div className="flex flex-col items-end">
-                                                            <p className={`text-sm font-medium ${saving >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                                {saving >= 0 ? '+' : ''} R$ {saving.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                            </p>
-                                                            <p className={`text-xs font-medium ${saving >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                                                {saving >= 0 ? '↓' : '↑'} {Math.abs(percent).toFixed(1)}%
-                                                            </p>
+                                            {vi.includes('wbs') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
+                                                    {item.budget_item_id === 'AVULSO' || (!item.budget_item_id) ? (
+                                                        <span className="flex items-center gap-1.5 text-orange-600">
+                                                            <Package className="w-3.5 h-3.5 shrink-0" /> Avulso
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-600">{item.budget_item_id}</span>
+                                                    )}
+                                                </td>
+                                            )}
+                                            {vi.includes('description') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                    <div className="flex flex-col">
+                                                        <p className="text-sm font-normal text-gray-700 leading-tight">{item.description}</p>
+                                                        <div className="flex items-center gap-3 mt-1">
+                                                            <p className="text-xs text-gray-400 font-medium">ID: {item.id.slice(0, 8)}</p>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleViewItemHistory(item);
+                                                                }}
+                                                                className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                                                                title="Ver Histórico de Medições"
+                                                            >
+                                                                <History className="w-3 h-3" /> Histórico
+                                                            </button>
                                                         </div>
-                                                    );
-                                                })()}
-                                            </td>
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {vi.includes('unit') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-gray-600">
+                                                    {item.unit}
+                                                </td>
+                                            )}
+                                            {vi.includes('quantity') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
+                                                    {item.quantity.toLocaleString()}
+                                                </td>
+                                            )}
+                                            {/* §7: valor financeiro é o único caso com font-medium */}
+                                            {vi.includes('unit_c') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                                    R$ {item.unit_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </td>
+                                            )}
+                                            {vi.includes('unit_o') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-blue-50/10 text-sm font-medium text-blue-600">
+                                                    {(() => {
+                                                        const bItem = activeBudget.find(b => b.id === item.budget_item_id);
+                                                        if (!bItem) return <span className="font-normal text-gray-400">—</span>;
+                                                        return <>R$ {bItem.sinapiItem.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>;
+                                                    })()}
+                                                </td>
+                                            )}
+                                            {vi.includes('total_c') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                                    R$ {item.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </td>
+                                            )}
+                                            {vi.includes('total_o') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-blue-50/10 text-sm font-medium text-blue-600">
+                                                    {(() => {
+                                                        const bItem = activeBudget.find(b => b.id === item.budget_item_id);
+                                                        if (!bItem) return <span className="font-normal text-gray-400">—</span>;
+                                                        const totalBudgeted = bItem.sinapiItem.price * item.quantity;
+                                                        return <>R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>;
+                                                    })()}
+                                                </td>
+                                            )}
+                                            {vi.includes('saving') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right bg-emerald-50/10">
+                                                    {(() => {
+                                                        const bItem = activeBudget.find(b => b.id === item.budget_item_id);
+                                                        if (!bItem) return <span className="text-sm font-normal text-gray-400">—</span>;
+                                                        const saving = (bItem.sinapiItem.price - item.unit_price) * item.quantity;
+                                                        const percent = ((bItem.sinapiItem.price - item.unit_price) / bItem.sinapiItem.price) * 100;
+                                                        return (
+                                                            <div className="flex flex-col items-end">
+                                                                <p className={`text-sm font-medium ${saving >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                                    {saving >= 0 ? '+' : ''} R$ {saving.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                </p>
+                                                                <p className={`text-xs font-medium ${saving >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                                    {saving >= 0 ? '↓' : '↑'} {Math.abs(percent).toFixed(1)}%
+                                                                </p>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            )}
                                             {/* §9 — coluna de ações SEMPRE visível (nada de opacity-0 group-hover) */}
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -2180,6 +2287,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </tbody>
                             </table>
                         </div>
+                        )}
                     </div>
 
                     {/* Matriz de Fornecimento (Fase 8.1 — Anexo II, Cl.11) */}
@@ -2775,14 +2883,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                                     )}
                                                                     {(p.status === 'NOTIFICADA' || p.status === 'CANCELADA') && (
                                                                         <button
-                                                                            onClick={() => askConfirm(
-                                                                                `Excluir a penalidade "${PENALTY_KIND_LABELS[p.kind]}" de R$ ${fmt(p.amount)}? Esta ação não pode ser desfeita.`,
-                                                                                async () => {
-                                                                                    setFase5Busy(true);
-                                                                                    try { await contractPenaltyService.remove(p.id); await loadContractData(); }
-                                                                                    finally { setFase5Busy(false); }
-                                                                                }
-                                                                            )}
+                                                                            onClick={async () => {
+                                                                                const ok = await confirm({
+                                                                                    title: 'Excluir penalidade?',
+                                                                                    message: `"${PENALTY_KIND_LABELS[p.kind]}" de R$ ${fmt(p.amount)}. Esta ação não pode ser desfeita.`,
+                                                                                    variant: 'danger',
+                                                                                    confirmLabel: 'Excluir',
+                                                                                });
+                                                                                if (!ok) return;
+                                                                                setFase5Busy(true);
+                                                                                try { await contractPenaltyService.remove(p.id); await loadContractData(); }
+                                                                                finally { setFase5Busy(false); }
+                                                                            }}
                                                                             disabled={fase5Busy}
                                                                             className="text-xs font-medium text-gray-400 hover:text-red-600 disabled:opacity-50"
                                                                         >
@@ -3225,34 +3337,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 </div>
             )}
 
-            {/* Inline confirm dialog */}
-            {pendingConfirm && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[10px] shadow-2xl p-8 max-w-md w-full space-y-6 border border-gray-100 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-start gap-4">
-                            <div className="p-3 bg-amber-100 rounded-[10px] shrink-0">
-                                <AlertCircle className="w-6 h-6 text-amber-600" />
-                            </div>
-                            <p className="text-sm font-medium text-gray-700 leading-relaxed">{pendingConfirm.message}</p>
-                        </div>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={() => setPendingConfirm(null)}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-[6px] font-medium text-[13px] hover:bg-gray-200 transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <Button
-                                variant="danger"
-                                onClick={pendingConfirm.onConfirm}
-                                className="shadow-lg shadow-red-200"
-                            >
-                                Confirmar
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* §14 — a confirmação destrutiva é o useConfirm() global; o modal
+                inline `pendingConfirm` que existia aqui foi removido. */}
 
             {isTemplateModalOpen && renderTemplateModal()}
 

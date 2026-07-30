@@ -73,6 +73,8 @@ import { orderService } from '../services/orderService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
+import { KpiCard } from './ui/KpiCard';
 import { isObra } from '../utils/projectClassification';
 
 interface ClientAreaProps {
@@ -108,7 +110,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
-    const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
+    // §3 — viewMode persistido (sobrevive a navegação/reload). A tela não tem busca
+    // nem filtro para persistir: o único controle de recorte é este toggle.
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('clientArea:viewMode', 'list');
     const [selectedEntry, setSelectedEntry] = React.useState<DiaryEntry | null>(null);
     const [showGenerator, setShowGenerator] = React.useState(false);
     const [genConfig, setGenConfig] = React.useState({
@@ -380,7 +384,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return (new Date(c.reajuste_proximo + 'T12:00:00').getTime() - Date.now()) / 86400000 <= 30;
         });
 
-        const STATUS_COLOR: Record<string, string> = { Aberto: 'bg-amber-100 text-amber-700', 'Em Andamento': 'bg-blue-100 text-blue-700', Aguardando: 'bg-purple-100 text-purple-700', Resolvido: 'bg-emerald-100 text-emerald-700', Cancelado: 'bg-gray-100 text-gray-400' };
         const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
@@ -451,7 +454,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* Chamados recentes */}
                     {recentRequests.length > 0 && <div className="px-4 mt-4 pb-6 space-y-2">
                         <div className="flex items-center justify-between mb-2"><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Últimos Chamados</p>{enabledTabIds.includes('manutencao') && <button onClick={() => setActiveTab('manutencao')} className="text-xs font-black text-blue-500 uppercase tracking-widest">Ver todos</button>}</div>
-                        {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 mt-0.5">{req.category}</p></div><span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase shrink-0 ${STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-400'}`}>{req.status}</span></div>))}
+                        {recentRequests.map(req => (<div key={req.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-sm font-black text-gray-900 truncate">{req.title}</p><p className="text-xs font-bold text-gray-400 mt-0.5">{req.category}</p></div><span className={`shrink-0 text-sm font-normal ${STATUS_TEXT_COLOR[req.status] ?? 'text-gray-500'}`}>{req.status}</span></div>))}
                     </div>}
                     {/* Empty state + atalhos */}
                     {recentRequests.length === 0 && (
@@ -497,6 +500,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             </button>
                         ))}
                     </div>
+                    {/* §19.3 — abas depois dos KPIs desta aba */}
+                    {desktopTabsBar}
                     {/* Alerta reajuste */}
                     {reajusteAlert && <div className="flex items-start gap-3 p-5 bg-amber-50 border border-amber-200 rounded-2xl"><AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" /><div><p className="text-sm font-black text-amber-800 uppercase tracking-tight">Reajuste contratual próximo</p><p className="text-xs text-amber-600 mt-0.5">{reajusteAlert.title} — índice {reajusteAlert.reajuste_index || '—'} em {new Date(reajusteAlert.reajuste_proximo! + 'T12:00:00').toLocaleDateString('pt-BR')}</p></div></div>}
                     {/* Duas colunas: chamados + contratos */}
@@ -530,7 +535,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     {/* Hero */}
                     <div className="-mx-4 bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-10">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1.5"><span className="text-xs font-black text-white uppercase tracking-widest">Serviços</span></div>
+                            <div className="flex items-center gap-2"><span className="text-sm font-medium text-white">Serviços</span></div>
                             <div className="flex items-center gap-2">
                                 {portalToken && (<button onClick={() => setShowNotifications(n => !n)} className="relative w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white"><Bell className="w-3.5 h-3.5" />{unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-orange-400 text-white text-xs font-black rounded-full flex items-center justify-center">{unreadCount > 9 ? '9+' : unreadCount}</span>}</button>)}
                                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-600 font-black text-sm shadow">{(clientProfile?.name || '?').charAt(0)}</div>
@@ -576,7 +581,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <p className="text-sm font-black text-gray-900 truncate">{c.title}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">{c.contract_type}</span>
-                                            <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${badge.cls}`}>{badge.label}</span>
+                                            <span className={`text-sm font-normal ${badge.textCls}`}>{badge.label}</span>
                                         </div>
                                     </div>
                                     <span className="text-sm font-black text-gray-900 tabular-nums shrink-0">R$ {(c.current_value || c.original_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</span>
@@ -610,6 +615,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <p className="text-xs text-indigo-200 font-bold mt-0.5">{activeContracts.length} contrato{activeContracts.length !== 1 ? 's' : ''} ativo{activeContracts.length !== 1 ? 's' : ''}</p>
                         </div>
                     </div>
+                    {/* §19.3 — abas depois dos KPIs desta aba */}
+                    {desktopTabsBar}
                     {/* Contratos */}
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
@@ -840,6 +847,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
+            {desktopTabsBar}
 
             {/* ══ MOBILE ══ */}
             <div className="md:hidden -mx-4">
@@ -875,7 +884,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase ${isSigned ? 'bg-emerald-100 text-emerald-700' : contract.status === 'Ativo' ? 'bg-blue-100 text-blue-700' : contract.status === 'Minuta' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        <span className={`text-sm font-normal ${isSigned ? 'text-emerald-700' : contract.status === 'Ativo' ? 'text-blue-700' : contract.status === 'Minuta' ? 'text-purple-700' : 'text-amber-600'}`}>
                                             {isSigned ? 'Assinado' : contract.status === 'Minuta' ? 'Minuta' : (contract.status || 'Ativo')}
                                         </span>
                                         <ChevronRight className="w-4 h-4 text-gray-300" />
@@ -1229,17 +1238,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* Financial Summary Cards */}
-                    {[
-                        { label: 'Valor Total do Contrato', value: displayTotalValue, sub: String(financialInfo.paymentMethod ?? 'Não Definido'), color: 'text-gray-900', icon: <DollarSign className="w-5 h-5 text-indigo-500" />, editable: true },
-                        { label: 'Total Pago até o momento', value: totalPaid, sub: `${paidPercentage.toFixed(1)}% concluído`, color: 'text-emerald-600', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, progress: paidPercentage },
-                        { label: 'Saldo Remanescente', value: balanceRemaining, sub: 'Incluindo parcelas futuras', color: 'text-amber-600', icon: <Clock className="w-5 h-5 text-amber-500" /> }
-                    ].map((card, i) => (
-                        <div key={i} className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 relative overflow-hidden group hover:shadow-xl hover:shadow-gray-200/40 transition-all">
-                            {isAdmin && card.editable && (
-                                <button
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* §4 — KpiCard canônico; §20.1 mb-3 (KPIs e cromo são um bloco só) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                    <div className="relative">
+                        <KpiCard
+                            label="Valor total do contrato"
+                            value={fmtBRL(displayTotalValue)}
+                            sub={String(financialInfo.paymentMethod ?? 'Não Definido')}
+                            icon={<DollarSign className="w-5 h-5" />}
+                            color="indigo"
+                        />
+                        {isAdmin && (
+                            <div className="absolute top-2 right-2">
+                                <ActionIconButton
+                                    kind="edit"
+                                    title="Editar valor total e forma de pagamento"
                                     onClick={() => {
                                         const newVal = prompt('Novo Valor Total:', financialInfo.totalValue.toString());
                                         const newMethod = prompt('Nova Forma de Pagamento:', financialInfo.paymentMethod);
@@ -1255,51 +1269,43 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             onUpdateSettings({ ...settings, financialInfo: newFinInfo });
                                         }
                                     }}
-                                    className="absolute top-4 right-4 p-2 bg-indigo-50 text-indigo-600 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-indigo-600 hover:text-white transition-all z-20"
-                                >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                            <div className="relative z-10">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-2.5 bg-gray-50 rounded-xl group-hover:bg-white transition-colors">
-                                        {card.icon}
-                                    </div>
-                                    <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">{card.label}</span>
-                                </div>
-                                <div className={`text-3xl font-black ${card.color} tracking-tight mb-2`}>
-                                    R$ {card.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </div>
-                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest">{card.sub}</div>
-                                {card.progress !== undefined && (
-                                    <div className="mt-4 w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                                        <div className="bg-emerald-500 h-full transition-all duration-1000" style={{ width: `${card.progress}%` }} />
-                                    </div>
-                                )}
+                                />
                             </div>
-                        </div>
-                    ))}
+                        )}
+                    </div>
+                    <KpiCard
+                        label="Total pago até o momento"
+                        value={fmtBRL(totalPaid)}
+                        sub={`${paidPercentage.toFixed(1)}% concluído`}
+                        icon={<CheckCircle2 className="w-5 h-5" />}
+                        color="emerald"
+                    />
+                    <KpiCard
+                        label="Saldo remanescente"
+                        value={fmtBRL(balanceRemaining)}
+                        sub="Incluindo parcelas futuras"
+                        icon={<Clock className="w-5 h-5" />}
+                        color="amber"
+                    />
                 </div>
 
-                <div className="space-y-8">
-                    {/* Financial Planning Card */}
-                    <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-                            <div className="flex items-center gap-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-14 h-14 bg-indigo-50 rounded-[1.5rem] flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
-                                        <Clock className="w-7 h-7" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Planejamento de Pagamentos</h3>
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Gestão de parcelas e fluxo de caixa</p>
-                                    </div>
+                {/* §19.3 — abas depois dos KPIs desta aba */}
+                {desktopTabsBar}
+
+                <div>
+                    {/* §5.2 — toolbar acoplada: cabeçalho + controles e conteúdo num único card */}
+                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2.5">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-900">Planejamento de pagamentos</h3>
+                                    <p className="text-xs text-gray-400 font-medium mt-0.5">Gestão de parcelas e fluxo de caixa</p>
                                 </div>
-                                <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                     <button
                                         onClick={() => setViewMode('grid')}
-                                        className={`p-1.5 rounded-md transition-all ${viewMode === 'grid'
-                                            ? 'bg-white text-indigo-600 shadow-sm'
+                                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
+                                            ? 'bg-blue-600 text-white'
                                             : 'text-gray-400 hover:text-gray-600'
                                             }`}
                                         title="Visualização em Grade"
@@ -1308,8 +1314,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </button>
                                     <button
                                         onClick={() => setViewMode('list')}
-                                        className={`p-1.5 rounded-md transition-all ${viewMode === 'list'
-                                            ? 'bg-white text-indigo-600 shadow-sm'
+                                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
+                                            ? 'bg-blue-600 text-white'
                                             : 'text-gray-400 hover:text-gray-600'
                                             }`}
                                         title="Visualização em Lista"
@@ -1319,17 +1325,19 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
                             </div>
                             {isAdmin && (
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => setShowGenerator(!showGenerator)}
-                                        className={`flex items-center gap-3 px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-[0.15em] transition-all border shadow-sm
-                                                        ${showGenerator ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100'}
+                                        className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 border
+                                                        ${showGenerator ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}
                                                     `}
                                     >
-                                        <TrendingUp className="w-4 h-4" />
-                                        {showGenerator ? 'Cancelar Geração' : 'Gerar Automático'}
+                                        <TrendingUp className="w-[15px] h-[15px]" />
+                                        {showGenerator ? 'Cancelar geração' : 'Gerar automático'}
                                     </button>
+                                    {/* §17 — ação primária compacta */}
                                     <button
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                                         onClick={() => {
                                             const desc = prompt('Descrição da parcela:');
                                             const val = prompt('Valor (R$):');
@@ -1350,30 +1358,30 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 }
                                             }
                                         }}
-                                        className="p-3.5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
                                     >
-                                        <Plus className="w-5 h-5" />
+                                        <Plus className="w-[15px] h-[15px]" />
+                                        Nova parcela
                                     </button>
                                 </div>
                             )}
                         </div>
                         {showGenerator && (
-                            <div className="mb-10 p-8 bg-indigo-50/30 rounded-[2rem] border border-indigo-100 animate-in zoom-in-95 duration-300">
-                                <div className="flex gap-4 mb-8">
+                            <div className="p-4 border-b border-gray-100 bg-gray-50 animate-in fade-in duration-200">
+                                <div className="flex gap-2.5 mb-4">
                                     {['VISTA', 'PARCELADO'].map((t) => (
                                         <button
                                             key={t}
                                             onClick={() => setGenConfig({ ...genConfig, type: t as 'VISTA' | 'PARCELADO' })}
-                                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all
-                                                ${genConfig.type === t ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-400 border border-gray-100 hover:border-indigo-200'}
+                                            className={`flex-1 h-9 rounded-[6px] text-[13px] font-medium transition-all
+                                                ${genConfig.type === t ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'}
                                             `}
                                         >
-                                            {t}
+                                            {t === 'VISTA' ? 'À vista' : 'Parcelado'}
                                         </button>
                                     ))}
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-2 gap-4">
                                     {genConfig.type === 'VISTA' ? (
                                         <div className="col-span-2">
                                             <label className="block text-xs font-semibold text-slate-500 mb-2">Data do Pagamento</label>
@@ -1381,7 +1389,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 type="date"
                                                 value={genConfig.startDate}
                                                 onChange={(e) => setGenConfig({ ...genConfig, startDate: e.target.value })}
-                                                className="w-full p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                             />
                                         </div>
                                     ) : (
@@ -1392,7 +1400,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     type="number"
                                                     value={genConfig.sinal}
                                                     onChange={(e) => setGenConfig({ ...genConfig, sinal: parseFloat(e.target.value) || 0 })}
-                                                    className="w-full p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
                                             <div>
@@ -1401,7 +1409,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     type="number"
                                                     value={genConfig.chaves}
                                                     onChange={(e) => setGenConfig({ ...genConfig, chaves: parseFloat(e.target.value) || 0 })}
-                                                    className="w-full p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
                                             <div>
@@ -1410,7 +1418,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     type="number"
                                                     value={genConfig.numMensais}
                                                     onChange={(e) => setGenConfig({ ...genConfig, numMensais: parseInt(e.target.value) || 0 })}
-                                                    className="w-full p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
                                             <div>
@@ -1419,7 +1427,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     type="date"
                                                     value={genConfig.startDate}
                                                     onChange={(e) => setGenConfig({ ...genConfig, startDate: e.target.value })}
-                                                    className="w-full p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
                                             <div>
@@ -1430,14 +1438,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         placeholder="Qtd"
                                                         value={genConfig.numSeme}
                                                         onChange={(e) => setGenConfig({ ...genConfig, numSeme: parseInt(e.target.value) || 0 })}
-                                                        className="w-16 p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                        className="w-16 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
                                                     <input
                                                         type="number"
                                                         placeholder="Valor"
                                                         value={genConfig.valSeme}
                                                         onChange={(e) => setGenConfig({ ...genConfig, valSeme: parseFloat(e.target.value) || 0 })}
-                                                        className="flex-1 p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                        className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
                                                 </div>
                                             </div>
@@ -1449,14 +1457,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         placeholder="Qtd"
                                                         value={genConfig.numAnual}
                                                         onChange={(e) => setGenConfig({ ...genConfig, numAnual: parseInt(e.target.value) || 0 })}
-                                                        className="w-16 p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                        className="w-16 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
                                                     <input
                                                         type="number"
                                                         placeholder="Valor"
                                                         value={genConfig.valAnual}
                                                         onChange={(e) => setGenConfig({ ...genConfig, valAnual: parseFloat(e.target.value) || 0 })}
-                                                        className="flex-1 p-4 bg-white border border-gray-100 rounded-xl font-bold text-gray-900"
+                                                        className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
                                                 </div>
                                             </div>
@@ -1465,10 +1473,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 </div>
 
                                 {genConfig.type === 'PARCELADO' && genConfig.numMensais > 0 && (
-                                    <div className="mt-6 p-4 bg-white rounded-xl border border-indigo-100">
-                                        <div className="flex justify-between items-center text-xs font-black text-indigo-600 uppercase tracking-widest">
-                                            <span>Mensalidade Estimada:</span>
-                                            <span className="text-sm">
+                                    <div className="mt-4 p-3 bg-white rounded-[6px] border border-gray-200">
+                                        <div className="flex justify-between items-center text-sm font-medium text-gray-600">
+                                            <span>Mensalidade estimada:</span>
+                                            <span className="text-sm font-medium text-gray-800">
                                                 R$ {((financialInfo.totalValue - genConfig.sinal - genConfig.chaves - (genConfig.numSeme * genConfig.valSeme) - (genConfig.numAnual * genConfig.valAnual)) / genConfig.numMensais).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </span>
                                         </div>
@@ -1554,35 +1562,35 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         }
                                         setShowGenerator(false);
                                     }}
-                                    className="w-full mt-8 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95"
+                                    className="mt-4 flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                                 >
-                                    Confirmar e Gerar Parcelas
+                                    Confirmar e gerar parcelas
                                 </button>
                             </div>
                         )}
-                        <div className="space-y-6">
+                        <div>
                             {(!financialInfo.installments || financialInfo.installments.length === 0) ? (
-                                <div className="text-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-100">
-                                    <DollarSign className="w-16 h-16 text-gray-200 mx-auto mb-6" />
-                                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest">Nenhum plano cadastrado</p>
+                                /* §12 — empty state sem moldura própria (o card acoplado §5.2 já supre) */
+                                <div className="text-center py-12">
+                                    <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum plano cadastrado</h3>
+                                    <p className="text-sm text-gray-500">As parcelas aparecem aqui depois de geradas.</p>
                                 </div>
                             ) : viewMode === 'grid' ? (
-                                financialInfo.installments.map((inst, idx) => (
-                                    <div key={inst.id} className="group bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-100/30 hover:border-indigo-100 transition-all duration-500 relative overflow-hidden">
-                                        {/* Background Decor */}
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-full blur-3xl -mr-16 -mt-16 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-
-                                        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                            <div className="flex flex-col gap-2">
-                                                <h4 className="text-lg font-black text-gray-900 tracking-tight uppercase underline decoration-indigo-200/50 underline-offset-4">{String(inst.description ?? '')}</h4>
-                                                <div className="flex items-center gap-3 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
-                                                    <Calendar className="w-4 h-4 text-indigo-500" />
-                                                    VENCIMENTO: {inst.dueDate ? new Date(String(inst.dueDate) + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                                {financialInfo.installments.map((inst, idx) => (
+                                    <div key={inst.id} className="group bg-white p-4 rounded-[10px] border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-100 transition-all relative">
+                                        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                            <div className="flex flex-col gap-1">
+                                                <h4 className="text-sm font-semibold text-gray-900">{String(inst.description ?? '')}</h4>
+                                                <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+                                                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                                    Vencimento: {inst.dueDate ? new Date(String(inst.dueDate) + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                                 </div>
                                             </div>
 
-                                            <div className="flex flex-col md:items-end gap-3">
-                                                <div className="text-3xl font-black text-gray-900 tracking-tighter">
+                                            <div className="flex flex-col md:items-end gap-1.5">
+                                                <div className="text-lg font-bold text-gray-900">
                                                     R$ {(Number(inst.value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </div>
                                                 <button
@@ -1597,29 +1605,29 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         }
                                                     }}
                                                     className={`text-sm font-normal w-fit transition-all
-                                                                ${inst.status === 'PAID' ? 'text-indigo-600' : 'text-amber-600'}
+                                                                ${inst.status === 'PAID' ? 'text-blue-600' : 'text-amber-600'}
                                                                 ${isAdmin ? 'hover:underline cursor-pointer' : 'cursor-default'}
                                                             `}>
-                                                    {inst.status === 'PAID' ? 'LIQUIDADO' : 'AGUARDANDO'}
+                                                    {inst.status === 'PAID' ? 'Liquidado' : 'Aguardando'}
                                                 </button>
                                             </div>
                                         </div>
 
-                                        {/* Action Bar */}
+                                        {/* §9/§9.2 — ações sempre visíveis, via ActionIconButton */}
                                         {isAdmin && (
-                                            <div className="absolute top-8 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                                            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-end gap-1.5">
                                                 {inst.receiptUrl ? (
-                                                    <a
-                                                        href={inst.receiptUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="p-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-md border border-gray-100"
-                                                        title="Ver Comprovante Anexado"
-                                                    >
-                                                        <FileText className="w-4 h-4" />
-                                                    </a>
+                                                    <ActionIconButton
+                                                        kind="view"
+                                                        title="Ver comprovante anexado"
+                                                        icon={<FileText className="w-4 h-4" />}
+                                                        onClick={() => window.open(inst.receiptUrl, '_blank')}
+                                                    />
                                                 ) : (
-                                                    <button
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        title="Vincular comprovante externo"
+                                                        icon={<Plus className="w-4 h-4" />}
                                                         onClick={() => {
                                                             const url = prompt('URL do Comprovante Externo (Opcional):', inst.receiptUrl || '');
                                                             if (url !== null) {
@@ -1629,25 +1637,21 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                 handleUpdateFinancial(newInsts);
                                                             }
                                                         }}
-                                                        className="p-3 bg-white text-gray-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-md border border-gray-100"
-                                                        title="Vincular Comprovante Externo"
-                                                    >
-                                                        <Plus className="w-4 h-4" />
-                                                    </button>
+                                                    />
                                                 )}
                                                 {inst.status === 'PAID' && (
-                                                    <button
+                                                    <ActionIconButton
+                                                        kind="download"
+                                                        title="Gerar recibo PDF"
+                                                        icon={<FileDown className="w-4 h-4" />}
                                                         onClick={(e) => {
-                                                            e.stopPropagation();
+                                                            e?.stopPropagation();
                                                             exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
                                                         }}
-                                                        className="p-3 bg-white text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-md border border-emerald-100"
-                                                        title="Gerar Recibo PDF"
-                                                    >
-                                                        <FileDown className="w-4 h-4" />
-                                                    </button>
+                                                    />
                                                 )}
-                                                <button
+                                                <ActionIconButton
+                                                    kind="edit"
                                                     onClick={() => {
                                                         const desc = prompt('Nova descrição:', inst.description);
                                                         const val = prompt('Novo valor:', inst.value.toString());
@@ -1656,57 +1660,52 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         );
                                                         handleUpdateFinancial(newInsts);
                                                     }}
-                                                    className="p-3 bg-white text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-md border border-gray-100"
-                                                    title="Editar"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
-                                                <button
+                                                />
+                                                <ActionIconButton
+                                                    kind="delete"
                                                     onClick={async () => {
                                                         if (await confirm({ title: 'Remover esta parcela?', variant: 'danger', confirmLabel: 'Remover' })) {
                                                             const newInsts = financialInfo.installments.filter(i => i.id !== inst.id);
                                                             handleUpdateFinancial(newInsts);
                                                         }
                                                     }}
-                                                    className="p-3 bg-white text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-md border border-gray-100"
-                                                    title="Excluir"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
+                                                />
                                             </div>
                                         )}
                                     </div>
-                                ))
+                                ))}
+                                </div>
                             ) : (
-                                <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-gray-50/50 border-b border-gray-100">
-                                            <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
-                                                <th className="px-8 py-5">Descrição</th>
-                                                <th className="px-8 py-5">Vencimento</th>
-                                                <th className="px-8 py-5">Valor</th>
-                                                <th className="px-8 py-5 text-center">Status</th>
-                                                <th className="px-8 py-5 text-right">Ações</th>
+                                // §6.5 — cabeçalho fixo; §5.2 — sem moldura própria dentro do card acoplado
+                                <div className="overflow-auto max-h-[70vh]">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                                                <th className="px-6 py-2 border-r border-gray-100">Vencimento</th>
+                                                <th className="px-6 py-2 border-r border-gray-100">Valor</th>
+                                                <th className="px-6 py-2 border-r border-gray-100 text-center">Status</th>
+                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-50">
+                                        <tbody className="divide-y divide-gray-200">
                                             {financialInfo.installments.map((inst, idx) => (
-                                                <tr key={inst.id} className="hover:bg-indigo-50/30 transition-colors group">
-                                                    <td className="px-8 py-4">
+                                                <tr key={inst.id} className="hover:bg-blue-50/50 transition-colors group">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100">
                                                         <span className="text-sm font-normal text-gray-700">{String(inst.description ?? '')}</span>
                                                     </td>
-                                                    <td className="px-8 py-4">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100">
                                                         <div className="flex items-center gap-2 text-sm font-normal text-gray-600 tabular-nums">
-                                                            <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
                                                             {inst.dueDate ? new Date(String(inst.dueDate) + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
                                                         </div>
                                                     </td>
-                                                    <td className="px-8 py-4">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100">
                                                         <span className="text-sm font-medium text-gray-800 tabular-nums">
                                                             R$ {(Number(inst.value) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </td>
-                                                    <td className="px-8 py-4 text-center">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-center">
                                                         <button
                                                             disabled={!isAdmin}
                                                             onClick={() => {
@@ -1719,37 +1718,36 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                 }
                                                             }}
                                                             className={`text-sm font-normal transition-all
-                                                                        ${inst.status === 'PAID' ? 'text-indigo-600' : 'text-amber-600'} ${isAdmin ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
+                                                                        ${inst.status === 'PAID' ? 'text-blue-600' : 'text-amber-600'} ${isAdmin ? 'hover:underline cursor-pointer' : 'cursor-default'}`}
                                                         >
-                                                            {inst.status === 'PAID' ? 'LIQUIDADO' : 'AGUARDANDO'}
+                                                            {inst.status === 'PAID' ? 'Liquidado' : 'Aguardando'}
                                                         </button>
                                                     </td>
-                                                    <td className="px-8 py-4 text-right">
-                                                        <div className="flex justify-end gap-1">
+                                                    <td className="px-6 py-2.5 text-right">
+                                                        <div className="flex justify-end gap-1.5">
                                                             {inst.receiptUrl && (
-                                                                <button
+                                                                <ActionIconButton
+                                                                    kind="view"
+                                                                    title="Acessar comprovante anexado"
+                                                                    icon={<FileText className="w-4 h-4" />}
                                                                     onClick={() => window.open(inst.receiptUrl, '_blank')}
-                                                                    className="p-2 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl transition-all"
-                                                                    title="Acessar Comprovante Anexado"
-                                                                >
-                                                                    <FileText className="w-4 h-4" />
-                                                                </button>
+                                                                />
                                                             )}
                                                             {inst.status === 'PAID' && (
-                                                                <button
+                                                                <ActionIconButton
+                                                                    kind="download"
+                                                                    title={isAdmin ? 'Gerar recibo PDF' : 'Baixar recibo PDF'}
+                                                                    icon={<FileDown className="w-4 h-4" />}
                                                                     onClick={(e) => {
-                                                                        e.stopPropagation();
+                                                                        e?.stopPropagation();
                                                                         exportService.generateReceiptPDF(inst, settings, { name: clientProfile?.name || 'OPURA' });
                                                                     }}
-                                                                    className="p-2 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all"
-                                                                    title={isAdmin ? "Gerar Recibo PDF" : "Baixar Recibo PDF"}
-                                                                >
-                                                                    <FileDown className="w-4 h-4" />
-                                                                </button>
+                                                                />
                                                             )}
                                                             {isAdmin && (
                                                                 <>
-                                                                    <button
+                                                                    <ActionIconButton
+                                                                        kind="edit"
                                                                         onClick={() => {
                                                                             const desc = prompt('Nova descrição:', inst.description);
                                                                             const val = prompt('Novo valor:', inst.value.toString());
@@ -1758,21 +1756,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                             );
                                                                             handleUpdateFinancial(newInsts);
                                                                         }}
-                                                                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
-                                                                    >
-                                                                        <Pencil className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button
+                                                                    />
+                                                                    <ActionIconButton
+                                                                        kind="delete"
                                                                         onClick={async () => {
                                                                             if (await confirm({ title: 'Remover esta parcela?', variant: 'danger', confirmLabel: 'Remover' })) {
                                                                                 const newInsts = financialInfo.installments.filter(i => i.id !== inst.id);
                                                                                 handleUpdateFinancial(newInsts);
                                                                             }
                                                                         }}
-                                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                                                                    >
-                                                                        <X className="w-4 h-4" />
-                                                                    </button>
+                                                                    />
                                                                 </>
                                                             )}
                                                         </div>
@@ -1878,6 +1871,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     ))}
                 </div>
+
+                {/* §19.3 — abas depois dos KPIs desta aba */}
+                {desktopTabsBar}
 
                 <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
@@ -2078,6 +2074,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     ))}
                 </div>
 
+                {/* §19.3 — abas depois dos KPIs desta aba */}
+                {desktopTabsBar}
+
                 <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="flex items-center justify-between px-8 py-6 border-b border-gray-50">
                         <div>
@@ -2197,18 +2196,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         if (planningLoadedKey && !pv) {
             return (
+                <>
+                {desktopTabsBar}
                 <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
                     <HardHat className="w-16 h-16 text-gray-200 mb-6" />
                     <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Cronograma ainda não disponível</p>
                     <p className="text-sm font-bold text-gray-300 uppercase tracking-wider mt-2 text-center">O acompanhamento da obra aparecerá aqui assim que o planejamento for publicado.</p>
                 </div>
+                </>
             );
         }
         if (!pv) {
             return (
+                <>
+                {desktopTabsBar}
                 <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center py-20">
                     <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+                </>
             );
         }
 
@@ -2224,7 +2229,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <h3 className="text-2xl font-black tracking-tight uppercase">Acompanhe sua Obra</h3>
                             <p className="text-blue-200 text-sm font-medium mt-1">Avanço físico e cronograma em tempo real.</p>
                         </div>
-                        <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest ${onTrack ? 'bg-emerald-400/20 text-emerald-200' : 'bg-amber-400/20 text-amber-100'}`}>
+                        <div className={`flex items-center gap-2 text-sm font-normal ${onTrack ? 'text-emerald-200' : 'text-amber-100'}`}>
                             <div className={`w-2 h-2 rounded-full ${onTrack ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
                             {onTrack ? 'No prazo' : 'Atenção ao ritmo'}
                         </div>
@@ -2254,6 +2259,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     </div>
                 </div>
+
+                {/* §19.3 — abas depois dos KPIs desta aba */}
+                {desktopTabsBar}
 
                 {/* Curva S */}
                 {pv.sCurve.length > 0 && (
@@ -2328,18 +2336,24 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
         if (planningLoadedKey && !pv?.financial) {
             return (
+                <>
+                {desktopTabsBar}
                 <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
                     <TrendingUp className="w-16 h-16 text-gray-200 mb-6" />
                     <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Cronograma físico-financeiro ainda não disponível</p>
                     <p className="text-sm font-bold text-gray-300 uppercase tracking-wider mt-2 text-center">Ele aparecerá aqui assim que o planejamento com valores for publicado.</p>
                 </div>
+                </>
             );
         }
         if (!pv?.financial) {
             return (
+                <>
+                {desktopTabsBar}
                 <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center py-20">
                     <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+                </>
             );
         }
 
@@ -2378,6 +2392,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     </div>
                 </div>
+
+                {/* §19.3 — abas depois dos KPIs desta aba */}
+                {desktopTabsBar}
 
                 {fv.curve.length > 0 && (
                     <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
@@ -2446,6 +2463,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const schedule = getPhaseSchedule(settings, budget);
 
         return (
+            <>
+            {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
+            {desktopTabsBar}
             <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex justify-between items-center mb-12">
                     <div className="flex flex-col gap-2">
@@ -2541,6 +2561,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     )}
                 </div>
             </div >
+            </>
         );
     };
 
@@ -2594,6 +2615,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         )}
                     </div>
                 </div>
+
+                {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
+                {desktopTabsBar}
 
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block">
@@ -2983,6 +3007,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                 </div>
 
+                {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
+                {desktopTabsBar}
+
                 {/* ══ DESKTOP ══ */}
                 <div className="hidden md:block bg-white p-10 rounded-[2.5rem] shadow-sm border border-gray-100">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
@@ -3341,7 +3368,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <p className="text-sm font-black text-gray-900">
                                                     R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                                                 </p>
-                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-50 text-emerald-600' : isOverdue ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                                                <span className={`text-sm font-normal ${isPaid ? 'text-emerald-600' : isOverdue ? 'text-red-500' : 'text-amber-600'}`}>
                                                     {isPaid ? 'Pago' : isOverdue ? 'Vencido' : 'Pendente'}
                                                 </span>
                                             </div>
@@ -3502,7 +3529,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <p className="text-sm font-black text-gray-900">
                                                     R$ {inst.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                                                 </p>
-                                                <span className={`inline-block mt-0.5 text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-50 text-emerald-600' : isOverdue ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                                                <span className={`inline-block mt-0.5 text-sm font-normal ${isPaid ? 'text-emerald-600' : isOverdue ? 'text-red-500' : 'text-amber-600'}`}>
                                                     {isPaid ? 'Pago' : isOverdue ? 'Vencido' : 'Pendente'}
                                                 </span>
                                             </div>
@@ -3614,6 +3641,41 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // No app autenticado a navegação já vem do Layout global — não duplicar.
     const isStandalone = !!portalToken;
     const clientDisplayName = clientProfile?.name || settings.name || 'Cliente';
+
+    // §19.3/§19.4 — `chromeSlot`: a barra de abas é montada UMA vez aqui e
+    // renderizada DENTRO de cada aba, na posição que a anatomia pede
+    // (título → KPIs → abas). Antes ela era desenhada no topo do portal, o que
+    // colocava as abas antes dos KPIs de toda aba que tem KPI próprio.
+    // Abas sem faixa de KPI recebem o slot no início do próprio conteúdo.
+    // Só desktop: no mobile a navegação é a barra inferior fixa.
+    const desktopTabsBar = (
+        <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                {desktopNavTabs.map(tab => {
+                    const isVisible = enabledTabIds.includes(tab.id);
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                            className={`
+                                flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all
+                                ${activeTab === tab.id
+                                    ? 'bg-white text-blue-600 shadow-sm'
+                                    : isAdmin && !isVisible
+                                        ? 'text-gray-300 hover:text-gray-400'
+                                        : 'text-gray-400 hover:text-gray-600'
+                                }
+                            `}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                            {isAdmin && !isVisible && <EyeOff className="w-3 h-3 ml-1 text-gray-300" />}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
 
     const toggleTabVisibility = async (tabId: string) => {
         const current = enabledTabIds;
@@ -3759,7 +3821,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             )}
 
             {/* Main Header — escondido no mobile quando dashboard tem hero próprio (Locação/Serviços) */}
-            <div className={`bg-white md:rounded-3xl p-4 md:p-10 shadow-sm border-b md:border border-gray-100 relative overflow-hidden ${activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') ? 'hidden md:block' : ''}`}>
+            <div className={`bg-white md:rounded-[10px] p-4 md:p-6 shadow-sm border-b md:border border-gray-100 relative overflow-hidden ${activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') ? 'hidden md:block' : ''}`}>
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
                 <div className="relative flex items-center justify-between gap-4">
@@ -3776,7 +3838,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         : `Olá, ${clientProfile.name.split(' ')[0]}`
                                     : 'Área do Cliente'}
                             </h1>
-                            <p className="text-xs md:text-sm font-medium text-gray-400">
+                            <p className="text-xs md:text-sm font-medium text-gray-400 mt-1.5">
                                 {clientCategory === 'Locação' ? 'Locação' : clientCategory === 'Serviços' ? 'Serviços' : 'Bem-vindo à sua área exclusiva'}
                             </p>
                         </div>
@@ -3853,37 +3915,36 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {clientProfile && (
                             <button
                                 onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
-                                className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl md:rounded-2xl text-xs md:text-button font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
                             >
-                                <UserCircle className="w-4 h-4" />
-                                <span className="hidden sm:inline">Meus Dados</span>
+                                <UserCircle className="w-[15px] h-[15px]" />
+                                <span className="hidden sm:inline">Meus dados</span>
                             </button>
                         )}
                         {isAdmin && clientProfile && (
-                            <button
+                            <ActionIconButton
+                                kind="view"
                                 onClick={() => setShowMobilePreview(true)}
                                 title="Visualizar como o cliente vê no celular"
-                                className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
-                            >
-                                <Smartphone className="w-4 h-4" />
-                            </button>
+                                icon={<Smartphone className="w-4 h-4" />}
+                                className="hidden md:block"
+                            />
                         )}
                         {isAdmin && onUpdateSettings && (
-                            <button
+                            <ActionIconButton
+                                kind="settings"
                                 onClick={() => setShowTabConfig(true)}
                                 title="Configurar abas"
-                                className="p-2 md:p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
-                            >
-                                <Settings2 className="w-4 h-4" />
-                            </button>
+                                icon={<Settings2 className="w-4 h-4" />}
+                            />
                         )}
                         {isAdmin && clientProfile && (
                             <button
                                 onClick={() => onClientSelect?.(null!)}
-                                className="hidden md:flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 rounded-2xl text-button font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
+                                className="hidden md:flex items-center gap-1.5 h-9 px-3.5 bg-white hover:bg-gray-50 text-gray-600 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 border border-gray-200"
                             >
-                                <Users className="w-4 h-4" />
-                                Trocar Cliente
+                                <Users className="w-[15px] h-[15px]" />
+                                Trocar cliente
                             </button>
                         )}
                     </div>
@@ -4072,34 +4133,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 </div>
             )}
 
-            {/* Desktop Navigation Tabs — ocultas no modo link público (a sidebar navega) */}
-            <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} items-center gap-3 flex-wrap`}>
-                <div className="flex flex-wrap gap-2 md:gap-4 p-1.5 bg-white border border-gray-100 rounded-2xl shadow-sm">
-                    {desktopNavTabs.map(tab => {
-                        const isVisible = enabledTabIds.includes(tab.id);
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                                className={`
-                                    flex items-center gap-2 px-6 py-2.5 rounded-xl text-button font-bold transition-all duration-300
-                                    ${activeTab === tab.id
-                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-105'
-                                        : isAdmin && !isVisible
-                                            ? 'text-gray-300 hover:bg-gray-50 hover:text-gray-400 opacity-50'
-                                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-                                    }
-                                `}
-                            >
-                                {tab.icon}
-                                {tab.label}
-                                {isAdmin && !isVisible && <EyeOff className="w-3 h-3 ml-1 text-gray-300" />}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-
             {/* Mobile Bottom Navigation — máx. 5 slots; excedente vai pro sheet "Mais" */}
             {(() => {
                 const MAX_BAR = 5;
@@ -4265,6 +4298,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                         {/* Desktop: dashboard original */}
                         <div className="hidden md:block">
+                            {/* §19.3 — o dashboard não tem faixa de KPI própria: as abas abrem o conteúdo */}
+                            {desktopTabsBar}
                             <div className="space-y-10">
                                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                                     <div className="lg:col-span-3">{renderDashboard()}</div>
@@ -4292,9 +4327,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {activeTab === 'jornada' && renderJornada()}
                 {activeTab === 'obra' && renderObra()}
                 {activeTab === 'cronograma-ff' && renderCronogramaFinanceiro()}
-                {activeTab === 'personalizacao' && <FinishSelection />}
+                {activeTab === 'personalizacao' && (
+                    <>
+                        {/* §19.3 — conteúdo vem de FinishSelection (componente externo): as abas abrem a aba */}
+                        {desktopTabsBar}
+                        <FinishSelection />
+                    </>
+                )}
                 {activeTab === 'visual' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
+                        {desktopTabsBar}
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex flex-col gap-2">
                                 <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Visão Real da Obra</h3>
@@ -4346,6 +4389,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 )}
                 {activeTab === 'suporte' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
+                        {desktopTabsBar}
                         {/* ══ MOBILE ══ */}
                         <div className="md:hidden -mx-4">
                             <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-blue-600 px-5 pt-4 pb-8">
@@ -4412,6 +4457,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </div>
                                 ))}
                             </div>
+
+                            {/* §19.3 — abas depois dos KPIs desta aba */}
+                            {desktopTabsBar}
 
                             {requestsLoading ? (
                                 <div className="flex justify-center py-12"><div className="w-6 h-6 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>

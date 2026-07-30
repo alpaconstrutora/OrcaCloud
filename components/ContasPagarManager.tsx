@@ -172,10 +172,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
             if (visao === 'parcelas') {
                 // orgId undefined = "Todas as Organizações": o service não filtra e a
                 // RLS recorta o que o usuário pode ver (REGRA #5 — leitura não bloqueia).
-                const data = await payableService.list(orgId, {
-                    dueFrom: vencDe || undefined,
-                    dueTo: vencAte || undefined,
-                });
+                // Período NÃO vai como filtro de servidor: `due_date >= x` exclui
+                // NULL por definição em SQL, e 489 dos ~1367 lançamentos DEBIT não
+                // têm vencimento — eles desapareceriam sem aviso. A visão de notas
+                // sempre filtrou data no cliente tolerando nulo
+                // (`if (vencDe && inv.dueDate && ...)`); a de parcelas faz igual,
+                // em ContasPagarParcelas.
+                const data = await payableService.list(orgId);
                 setPayables(data);
             } else {
                 const data = await invoiceService.listAll(orgId);
@@ -189,7 +192,9 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         }
     }
 
-    useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, visao, vencDe, vencAte]);
+    // Sem vencDe/vencAte nas deps: o período é recorte de cliente nas duas visões,
+    // recarregar do servidor a cada mudança de data seria consulta jogada fora.
+    useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, visao]);
 
     function handleOrgChange(id: string) {
         setSelectedOrgId(id);
@@ -523,6 +528,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                     {visao === 'parcelas' ? (
                         <ContasPagarParcelas
                             rows={payables}
+                            vencDe={vencDe}
+                            vencAte={vencAte}
                             loading={loading}
                             error={error}
                             onReload={() => carregar(effectiveOrgId)}

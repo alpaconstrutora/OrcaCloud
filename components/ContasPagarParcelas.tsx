@@ -77,6 +77,13 @@ function diasAtraso(dueDate: string): number {
 
 interface Props {
     rows: Payable[];
+    /**
+     * Período de vencimento (escopo, vem do pai). Recorte de CLIENTE de propósito:
+     * como filtro de servidor, `due_date >= x` descartaria silenciosamente toda
+     * parcela sem vencimento — e há centenas delas.
+     */
+    vencDe: string;
+    vencAte: string;
     loading: boolean;
     error: string | null;
     onReload: () => void;
@@ -86,7 +93,7 @@ interface Props {
     notify: (message: string, type?: 'success' | 'error') => void;
 }
 
-export default function ContasPagarParcelas({ rows, loading, error, onReload, onRowChanged, onRowRemoved, notify }: Props) {
+export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
@@ -102,6 +109,10 @@ export default function ContasPagarParcelas({ rows, loading, error, onReload, on
     const filtered = useMemo(() => {
         let result = rows.filter(r => {
             if (statusFiltro !== 'all' && r.effective_status !== statusFiltro) return false;
+            // Parcela sem vencimento passa pelo período (mesma semântica da visão de
+            // notas): esconder o que não tem data é pior do que mostrar fora do filtro.
+            if (vencDe && r.due_date && r.due_date < vencDe) return false;
+            if (vencAte && r.due_date && r.due_date > vencAte) return false;
             if (search) {
                 const termo = search.toLowerCase();
                 const hit = payableParty(r).toLowerCase().includes(termo)
@@ -133,7 +144,7 @@ export default function ContasPagarParcelas({ rows, loading, error, onReload, on
             });
         }
         return result;
-    }, [rows, search, statusFiltro, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rows, search, statusFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // colunas visíveis + espaçador + ações
     const totalColunas = PARCELAS_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).length + 2;

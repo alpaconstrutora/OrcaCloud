@@ -67,6 +67,8 @@ export interface Property {
     view_type?: 'NONE' | 'PARTIAL' | 'FULL';
     sun_orientation?: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST';
     visible_to_broker?: boolean;
+    /** false = oculta nas telas de oferta (switch "Publicar" do Espelho de Vendas). */
+    visible_in_sales?: boolean;
     created_at?: string;
 }
 

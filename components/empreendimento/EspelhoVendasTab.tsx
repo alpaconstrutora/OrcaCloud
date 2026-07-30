@@ -35,6 +35,8 @@ interface CommercialSnap {
   price: number;
   name: string;
   specs?: Record<string, unknown>;
+  /** false = publicada mas oculta nas telas de oferta (switch "Publicar" desligado). */
+  visible_in_sales?: boolean | null;
 }
 
 // Mapeamentos de status e rótulos vivem em utils/empreendimentoComercial.ts (fonte única).
@@ -71,19 +73,15 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     try {
       const all = await empreendimentoService.listAllUnitsForEmpreendimento(e.id);
       setUnits(all);
-      // Reflete o estado real: switch ligado nas que estão publicadas. Qualquer alteração
-      // pendente do usuário é descartada aqui de propósito — o load só roda depois de
-      // aplicar o lote (ou ao abrir a aba), então nunca há mudança não salva para perder.
-      setDesiredIds(new Set(all.filter(u => !!u.commercial_property_id).map(u => u.id)));
 
       const ids = all.map(u => u.commercial_property_id).filter(Boolean) as string[];
+      const map: Record<string, CommercialSnap> = {};
       if (ids.length) {
         const { data } = await supabase
           .from('commercial_properties')
-          .select('id, name, status, price, specs')
+          .select('id, name, status, price, specs, visible_in_sales')
           .eq('organization_id', organizationId)
           .in('id', ids);
-        const map: Record<string, CommercialSnap> = {};
         (data || []).forEach(p => { map[p.id] = p; });
         setCommSnaps(map);
         // Vínculo aponta para property inexistente ou de outra org → órfão
@@ -92,6 +90,14 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
         setCommSnaps({});
         setOrphanIds(new Set());
       }
+
+      // Reflete o estado real: switch ligado = publicada E visível nas telas de oferta.
+      // Qualquer alteração pendente do usuário é descartada aqui de propósito — o load
+      // só roda ao abrir a aba ou depois de aplicar, então não há mudança a perder.
+      setDesiredIds(new Set(all.filter(u => {
+        const snap = u.commercial_property_id ? map[u.commercial_property_id] : null;
+        return !!snap && snap.visible_in_sales !== false;
+      }).map(u => u.id)));
     } catch (err) {
       console.error('[EspelhoVendas] erro ao carregar:', err);
     } finally {
@@ -261,40 +267,57 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     } finally { setSyncingAddress(false); }
   };
 
-  // Aplica a coluna "Publicar": publica o que foi ligado e desvincula o que foi desligado.
-  // Desvincular NÃO exclui o imóvel no Comercial (mesma semântica do ícone da linha) —
-  // por isso a confirmação diz isso em voz alta antes de agir.
+  // Aplica a coluna "Publicar": publica/reexibe o que foi ligado e oculta o que foi
+  // desligado. Ocultar NUNCA desvincula nem exclui — o vínculo fica, então ligar de
+  // volta sobrescreve a MESMA property em vez de criar outra no Comercial.
   const handleApplyPublish = async () => {
     if (!pendingCount) { notify('Nenhuma alteração pendente na coluna Publicar.'); return; }
     const parts = [
-      toPublish.length ? `${toPublish.length} unidade(s) serão publicadas no Comercial (Venda de Ativos), agrupadas sob o edifício do empreendimento.` : '',
-      toUnpublish.length ? `${toUnpublish.length} unidade(s) serão desvinculadas — o imóvel correspondente NÃO será excluído do Comercial.` : '',
+      toPublish.length ? `${toPublish.length} unidade(s) serão publicadas/atualizadas no Comercial (Venda de Ativos) e passam a aparecer nas telas de oferta.` : '',
+      toHide.length ? `${toHide.length} unidade(s) serão ocultadas da Venda de Ativos e do Portal do Corretor. O imóvel não é excluído nem desvinculado — basta religar o switch para exibir de novo.` : '',
     ].filter(Boolean);
     if (!await confirm({
-      title: toUnpublish.length ? 'Aplicar alterações de publicação?' : 'Publicar no Comercial?',
+      title: toHide.length ? 'Aplicar alterações de publicação?' : 'Publicar no Comercial?',
       message: parts.join('\n\n'),
       confirmLabel: 'Aplicar',
       variant: 'warning',
     })) return;
     setPublishingAll(true);
     try {
-      let published = 0;
+      let created = 0;
+      let updated = 0;
       if (toPublish.length) {
-        // A publicação em lote vive no service (revalida no banco antes de criar, para não
-        // duplicar properties de unidades já publicadas) — o Centro de Sincronização usa a mesma.
+        // A publicação em lote vive no service: revalida no banco e faz upsert — unidade
+        // já vinculada tem a property sobrescrita (mesmo id), nunca duplicada.
         const r = await empreendimentoService.publishAllToCommercial(
           e.id, organizationId, toPublish.map(u => u.id),
         );
-        published = r.published;
+        created = r.published;
+        updated = r.updated;
+        // Republicar tem que desfazer um "ocultar" anterior.
+        const reshowIds = toPublish.map(u => u.commercial_property_id).filter(Boolean) as string[];
+        if (reshowIds.length) {
+          await supabase.from('commercial_properties')
+            .update({ visible_in_sales: true, visible_to_broker: true })
+            .in('id', reshowIds);
+        }
       }
-      if (toUnpublish.length) {
-        await Promise.all(toUnpublish.map(u =>
-          empreendimentoService.updateUnit(u.id, { commercial_property_id: null })));
+      if (toHide.length) {
+        // visible_to_broker junto: o corte do Portal do Corretor já roda por esse campo
+        // nas RPCs públicas, então esconder nos dois lugares não exige mexer em RPC.
+        const hideIds = toHide.map(u => u.commercial_property_id).filter(Boolean) as string[];
+        if (hideIds.length) {
+          const { error } = await supabase.from('commercial_properties')
+            .update({ visible_in_sales: false, visible_to_broker: false })
+            .in('id', hideIds);
+          if (error) throw error;
+        }
       }
       await load();
       const msg = [
-        published ? `${published} publicada(s)` : '',
-        toUnpublish.length ? `${toUnpublish.length} desvinculada(s)` : '',
+        created ? `${created} publicada(s)` : '',
+        updated ? `${updated} atualizada(s)` : '',
+        toHide.length ? `${toHide.length} ocultada(s)` : '',
       ].filter(Boolean).join(' · ');
       notify(msg ? `Alterações aplicadas: ${msg}.` : 'Nada a fazer — a lista foi atualizada.');
     } catch (err: any) {
@@ -321,11 +344,16 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const linkedCount = units.filter(u => !!u.commercial_property_id).length;
 
   // ── Coluna "Publicar": diferença entre desejado (switch) e real (banco) ────
-  // Ligar um switch de unidade não publicada → publicar. Desligar o de uma publicada →
-  // desvincular. O botão só habilita quando existe alguma diferença pendente.
-  const toPublish = units.filter(u => !u.commercial_property_id && desiredIds.has(u.id));
-  const toUnpublish = units.filter(u => !!u.commercial_property_id && !desiredIds.has(u.id));
-  const pendingCount = toPublish.length + toUnpublish.length;
+  // Ligado = publicada e visível nas telas de oferta. Ligar publica (criando ou
+  // SOBRESCREVENDO a property existente) e reexibe; desligar apenas oculta, mantendo o
+  // vínculo — é o que garante que republicar não gere imóvel duplicado no Comercial.
+  const isVisible = (u: UnitWithTower) => {
+    const snap = u.commercial_property_id ? commSnaps[u.commercial_property_id] : null;
+    return !!snap && snap.visible_in_sales !== false;
+  };
+  const toPublish = units.filter(u => desiredIds.has(u.id) && !isVisible(u));
+  const toHide = units.filter(u => !desiredIds.has(u.id) && isVisible(u));
+  const pendingCount = toPublish.length + toHide.length;
   const allDesired = units.length > 0 && units.every(u => desiredIds.has(u.id));
   const toggleDesired = (id: string) => setDesiredIds(prev => {
     const next = new Set(prev);
@@ -408,12 +436,12 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
               className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-blue-600 hover:bg-blue-700 text-white font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
               title={pendingCount === 0
                 ? 'Altere um switch da coluna "Publicar" para habilitar'
-                : `${toPublish.length} a publicar · ${toUnpublish.length} a desvincular`}
+                : `${toPublish.length} a publicar · ${toHide.length} a ocultar`}
             >
               {publishingAll ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Upload className="w-[15px] h-[15px]" />}
               {pendingCount === 0
                 ? 'Publicar'
-                : toUnpublish.length === 0
+                : toHide.length === 0
                   ? `Publicar (${toPublish.length})`
                   : `Aplicar (${pendingCount})`}
             </button>
@@ -445,7 +473,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-gray-200 text-gray-500 font-semibold text-xs bg-gray-50">
-                {/* Marca as unidades do lote de publicação — o botão "Publicar marcadas" usa esta seleção */}
+                {/* Switch = estado desejado de publicação; o botão do topo aplica a diferença */}
                 <th className="py-2 px-4 w-28">
                   <label className="flex items-center gap-2 cursor-pointer" title={allDesired ? 'Desligar todas' : 'Ligar todas'}>
                     <input
@@ -476,6 +504,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                 const busy = busyId === u.id;
                 const isOrphan = !!u.commercial_property_id && !!orphanIds.has(u.commercial_property_id);
                 const published = !!snap || isOrphan;
+                const visible = isVisible(u);
                 const mappedStatus = snap ? mapCommercialToEmpr(snap.status) : null;
                 const isUnmappable = snap ? UNMAPPABLE_COMMERCIAL_STATUSES.has(snap.status) : false;
                 const statusDiverge = snap && !isUnmappable && mappedStatus !== u.status;
@@ -487,8 +516,12 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                       <label
                         className="relative inline-flex items-center cursor-pointer"
                         title={desiredIds.has(u.id)
-                          ? (published ? `"${u.name}" está publicada no Comercial` : `"${u.name}" será publicada ao aplicar`)
-                          : (published ? `"${u.name}" será desvinculada do Comercial ao aplicar` : `"${u.name}" não será publicada`)}
+                          ? (visible
+                              ? `"${u.name}" está publicada e visível na Venda de Ativos`
+                              : `"${u.name}" será ${published ? 'reexibida (property sobrescrita, sem duplicar)' : 'publicada'} ao aplicar`)
+                          : (visible
+                              ? `"${u.name}" será ocultada da Venda de Ativos e do Portal ao aplicar — sem excluir nem desvincular`
+                              : `"${u.name}" não aparece nas telas de oferta`)}
                       >
                         <input
                           type="checkbox"
@@ -497,7 +530,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                           onChange={() => toggleDesired(u.id)}
                         />
                         <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${
-                          desiredIds.has(u.id) !== published ? 'ring-2 ring-amber-400 ring-offset-1' : ''
+                          desiredIds.has(u.id) !== visible ? 'ring-2 ring-amber-400 ring-offset-1' : ''
                         }`}></div>
                       </label>
                     </td>
@@ -527,6 +560,11 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                           {statusDiverge && (
                             <span title="Status diverge do Empreendimento — use 'Sync do Comercial' para atualizar">
                               <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                            </span>
+                          )}
+                          {!visible && (
+                            <span className="text-xs font-normal text-gray-400" title="Publicada, mas oculta na Venda de Ativos e no Portal do Corretor">
+                              · oculta
                             </span>
                           )}
                         </div>

@@ -85,12 +85,23 @@ export function dealUnitsTotal(units: DealUnit[] | undefined): number {
 }
 
 export const commercialService = {
-    async listProperties(organizationId?: string, projectId?: string, purpose?: 'SALE' | 'RENTAL' | 'BOTH') {
-        console.log('[commercialService] API Call: listProperties', { organizationId, projectId, purpose });
+    /**
+     * `includeHidden` traz também as unidades ocultadas pelo switch "Publicar" do
+     * Espelho de Vendas (`visible_in_sales = false`). Default `false`: as telas de
+     * oferta (Venda de Ativos, proposta, Portal) não devem mostrar unidade oculta —
+     * o vínculo com o Empreendimento continua lá, só não aparece.
+     */
+    async listProperties(organizationId?: string, projectId?: string, purpose?: 'SALE' | 'RENTAL' | 'BOTH', includeHidden = false) {
+        console.log('[commercialService] API Call: listProperties', { organizationId, projectId, purpose, includeHidden });
         let query = supabase
             .from('commercial_properties')
-            .select('id, organization_id, project_id, parent_id, client_id, name, number, type, purpose, address, street, complement, neighborhood, city, state, zip_code, area, private_area, common_area, total_area, price, rental_price, current_price, initial_price, table_price, bedrooms, bathrooms, parking_spaces, status, specs, block, floor, typology, position_type, view_type, sun_orientation, features, images, visible_to_broker, created_at, updated_at')
+            .select('id, organization_id, project_id, parent_id, client_id, name, number, type, purpose, address, street, complement, neighborhood, city, state, zip_code, area, private_area, common_area, total_area, price, rental_price, current_price, initial_price, table_price, bedrooms, bathrooms, parking_spaces, status, specs, block, floor, typology, position_type, view_type, sun_orientation, features, images, visible_to_broker, visible_in_sales, created_at, updated_at')
             .order('name', { ascending: true });
+
+        // `is not false` cobre NULL (linhas anteriores à migration) além de TRUE.
+        if (!includeHidden) {
+            query = query.not('visible_in_sales', 'is', false);
+        }
 
         if (organizationId) {
             query = query.eq('organization_id', organizationId);

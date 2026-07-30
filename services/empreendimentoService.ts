@@ -44,7 +44,11 @@ export interface EmpreendimentoOrphanSummary {
 
 // Resultado de Empreendimento → Comercial (publicação em lote).
 export interface CommercialPublishReport {
+    /** Properties criadas no Comercial (unidade sem vínculo vivo). */
     published: number;
+    /** Properties já existentes sobrescritas — publicar de novo nunca duplica. */
+    updated: number;
+    /** @deprecated mesmo número de `updated`; mantido pelos consumidores antigos. */
     alreadyPublished: number;
 }
 
@@ -608,9 +612,16 @@ export const empreendimentoService = {
     // confirmação e o aviso ficam na UI; aqui só a operação + relatório.
 
     /**
-     * Empreendimento → Comercial: publica as unidades ainda não vinculadas.
-     * `unitIds` restringe o lote às unidades marcadas na tela (coluna "Publicar" do
-     * Espelho de Vendas); omitido = todas as não publicadas.
+     * Empreendimento → Comercial: publica as unidades.
+     *
+     * **Publicar é upsert, nunca duplicata.** Unidade já vinculada tem a property
+     * existente SOBRESCRITA (mesmo id) — republicar é reenviar os dados do
+     * Empreendimento por cima, não criar outro imóvel no Comercial. Só quem não tem
+     * vínculo (ou tem vínculo órfão, apontando para property inexistente) ganha
+     * registro novo.
+     *
+     * `unitIds` restringe o lote às unidades marcadas na coluna "Publicar" do Espelho
+     * de Vendas; omitido = todas as unidades do empreendimento.
      */
     async publishAllToCommercial(
         empreendimentoId: string,
@@ -620,21 +631,37 @@ export const empreendimentoService = {
         const emp = await this.getById(empreendimentoId) as Empreendimento | null;
         if (!emp) throw new Error('Empreendimento não encontrado.');
 
-        // Revalida no banco: o estado da tela pode estar obsoleto e recriaria properties
-        // duplicadas para unidades já publicadas.
+        // Revalida no banco: o estado da tela pode estar obsoleto, e é daqui que sai a
+        // decisão entre sobrescrever (id existente) e criar.
         const all = await this.listAllUnitsForEmpreendimento(empreendimentoId);
         const scope = unitIds?.length ? new Set(unitIds) : null;
         const units = scope ? all.filter(u => scope.has(u.id)) : all;
-        const unpublished = units.filter(u => !u.commercial_property_id);
-        if (!unpublished.length) {
-            return { published: 0, alreadyPublished: units.length };
+        if (!units.length) return { published: 0, updated: 0, alreadyPublished: 0 };
+
+        // Vínculo que aponta para property inexistente/de outra org é órfão: tratar como
+        // não publicado (senão o update silencioso não afetaria linha nenhuma).
+        const linkedIds = units.map(u => u.commercial_property_id).filter(Boolean) as string[];
+        const alive = new Set<string>();
+        if (linkedIds.length) {
+            const { data } = await supabase
+                .from('commercial_properties')
+                .select('id')
+                .eq('organization_id', organizationId)
+                .in('id', linkedIds);
+            (data || []).forEach(p => alive.add(p.id));
         }
 
         const buildingId = await this.ensureCommercialBuilding(emp, organizationId);
         const addressFields = buildCommercialAddressFields(emp);
+        let created = 0;
+        let updated = 0;
 
-        for (const unit of unpublished) {
+        for (const unit of units) {
+            const existingId = unit.commercial_property_id && alive.has(unit.commercial_property_id)
+                ? unit.commercial_property_id
+                : null;
             const prop = await commercialService.saveProperty({
+                ...(existingId ? { id: existingId } : {}),
                 organization_id: organizationId,
                 name: unit.name,
                 type: 'APARTMENT',
@@ -661,7 +688,12 @@ export const empreendimentoService = {
                     ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
                 },
             } as any);
-            await this.updateUnit(unit.id, { commercial_property_id: prop.id });
+            if (existingId) {
+                updated++;
+            } else {
+                created++;
+                await this.updateUnit(unit.id, { commercial_property_id: prop.id });
+            }
         }
 
         // Lote: um evento resumo, não um por unidade publicada.
@@ -675,12 +707,12 @@ export const empreendimentoService = {
             source: 'comercial',
             metadata: {
                 emLote: true,
-                publicadas: unpublished.length,
-                jaPublicadas: units.length - unpublished.length,
+                publicadas: created,
+                sobrescritas: updated,
             },
         });
 
-        return { published: unpublished.length, alreadyPublished: units.length - unpublished.length };
+        return { published: created, updated, alreadyPublished: updated };
     },
 
     /**
@@ -859,7 +891,7 @@ export const empreendimentoService = {
         const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
         const unpublished = units.filter(u => !u.rental_property_id);
         if (!unpublished.length) {
-            return { published: 0, alreadyPublished: units.length };
+            return { published: 0, updated: 0, alreadyPublished: units.length };
         }
 
         const buildingId = await this.ensureCommercialRentalBuilding(emp, organizationId);
@@ -914,7 +946,7 @@ export const empreendimentoService = {
             },
         });
 
-        return { published: unpublished.length, alreadyPublished: units.length - unpublished.length };
+        return { published: unpublished.length, updated: 0, alreadyPublished: units.length - unpublished.length };
     },
 
     /**

@@ -92,6 +92,31 @@ interface FluxoRow {
     saldo: number;
 }
 
+/**
+ * Linha já traduzida para exibição (credor/status em português, valores
+ * formatados pelo chamador) — mesmo padrão de ExtratoRow/FluxoRow: o service
+ * só formata e escreve o arquivo, quem conhece o domínio (rótulos de origem,
+ * de status) é a tela. Evita duplicar ORIGEM_PT/STATUS_PT aqui.
+ */
+interface PayableExportRow {
+    credor: string;
+    descricao: string;
+    origem: string;
+    obra: string;
+    vencimento?: string;
+    valor: number;
+    status: string;
+}
+
+interface InvoiceExportRow {
+    fornecedor: string;
+    arquivo: string;
+    origem: string;
+    valor: number;
+    vencimento?: string;
+    status: string;
+}
+
 // Typed rows for milestone/SCurve reports
 interface MilestoneRow {
     label: string;
@@ -307,6 +332,137 @@ export const exportService = {
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Financeiro");
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+        saveAs(blob, `${options.fileName}.xlsx`);
+    },
+
+    /**
+     * Contas a Pagar — Parcelas. Cabeçalho genérico (sem "DADOS DO
+     * PROJETO/CONTRATO" da generateFinancialPDF): a lista cruza várias obras e
+     * contratos, não pertence a um único `ProjectSettings`.
+     */
+    generatePayablesPDF(rows: PayableExportRow[], options: { organization?: Organization; fileName: string; title: string }) {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const primaryColor: [number, number, number] = [30, 41, 59];
+
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 0, pageWidth, 35, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text(options.title.toUpperCase(), 15, 22);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${options.organization?.name || 'OPURA'} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 15, 30);
+
+        autoTable(doc, {
+            startY: 45,
+            head: [['Credor', 'Descrição', 'Origem', 'Obra', 'Vencimento', 'Valor', 'Status']],
+            body: rows.map(r => [
+                r.credor, r.descricao, r.origem, r.obra || '—',
+                r.vencimento ? new Date(r.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—',
+                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.valor),
+                r.status,
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: primaryColor, fontSize: 9 },
+            styles: { fontSize: 8 },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+        });
+
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
+        const total = rows.reduce((s, r) => s + r.valor, 0);
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}`, 15, finalY);
+
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Relatório gerado via Opura Financial Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+        doc.save(`${options.fileName}.pdf`);
+    },
+
+    generatePayablesExcel(rows: PayableExportRow[], options: { fileName: string }) {
+        const exportData = rows.map(r => ({
+            'Credor': r.credor,
+            'Descrição': r.descricao,
+            'Origem': r.origem,
+            'Obra': r.obra || '-',
+            'Vencimento': r.vencimento ? new Date(r.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-',
+            'Valor': r.valor,
+            'Status': r.status,
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Contas a Pagar");
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+        saveAs(blob, `${options.fileName}.xlsx`);
+    },
+
+    /** Contas a Pagar — Notas Fiscais (a visão que era a única antes de 2026-07-29). */
+    generateInvoicesPDF(rows: InvoiceExportRow[], options: { organization?: Organization; fileName: string; title: string }) {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const primaryColor: [number, number, number] = [30, 41, 59];
+
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 0, pageWidth, 35, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text(options.title.toUpperCase(), 15, 22);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${options.organization?.name || 'OPURA'} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 15, 30);
+
+        autoTable(doc, {
+            startY: 45,
+            head: [['Fornecedor', 'Arquivo', 'Origem', 'Vencimento', 'Valor', 'Status']],
+            body: rows.map(r => [
+                r.fornecedor, r.arquivo, r.origem,
+                r.vencimento ? new Date(r.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—',
+                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(r.valor),
+                r.status,
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: primaryColor, fontSize: 9 },
+            styles: { fontSize: 8 },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+        });
+
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
+        const total = rows.reduce((s, r) => s + r.valor, 0);
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(total)}`, 15, finalY);
+
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Relatório gerado via Opura Financial Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+        doc.save(`${options.fileName}.pdf`);
+    },
+
+    generateInvoicesExcel(rows: InvoiceExportRow[], options: { fileName: string }) {
+        const exportData = rows.map(r => ({
+            'Fornecedor': r.fornecedor,
+            'Arquivo': r.arquivo,
+            'Origem': r.origem,
+            'Vencimento': r.vencimento ? new Date(r.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '-',
+            'Valor': r.valor,
+            'Status': r.status,
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Notas Fiscais");
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
         saveAs(blob, `${options.fileName}.xlsx`);

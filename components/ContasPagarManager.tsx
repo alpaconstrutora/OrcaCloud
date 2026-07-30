@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown,
-    Clock, ExternalLink, FileText, Landmark, Loader2, RefreshCw,
+    Clock, ExternalLink, FileDown, FileText, Landmark, Loader2, RefreshCw,
     Search, X, DollarSign, AlertTriangle, MoveHorizontal,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
-import { payableService } from '../services/payableService';
+import { payableService, payableParty } from '../services/payableService';
+import { exportService } from '../services/exportService';
 import { Invoice, Payable } from '../types/financial';
 import type { Organization } from '../types';
-import ContasPagarParcelas from './ContasPagarParcelas';
+import ContasPagarParcelas, { origemLabel as payableOrigemLabel, STATUS_PT as PAYABLE_STATUS_PT } from './ContasPagarParcelas';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
@@ -132,6 +133,9 @@ const VISAO_HEADERS: Record<Visao, { titulo: string; subtitulo: string }> = {
 export default function ContasPagarManager({ organizationId, organizations, onOrgChange, tabsSlot }: Props) {
     const [visao, setVisao] = usePersistedState<Visao>('contasPagarManager:visao', 'parcelas');
     const [payables, setPayables] = useState<Payable[]>([]);
+    // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
+    // o export (abaixo) sair igual ao que a tabela mostra, não a lista inteira.
+    const [payablesVisible, setPayablesVisible] = useState<Payable[]>([]);
     const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -401,6 +405,96 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const summary = visao === 'parcelas' ? summaryParcelas : summaryNotas;
     const header = VISAO_HEADERS[visao];
 
+    // Organização do cabeçalho do PDF: a do filtro ativo, ou nenhuma em "Todas".
+    const orgAtual = organizations?.find(o => o.id === selectedOrgId);
+
+    /**
+     * Exporta exatamente o que a tabela mostra na visão ativa — não a lista
+     * inteira nem o Extrato/Fluxo do projeto (era o que os botões faziam antes
+     * de virem para cá: exportavam dados de outra tela, sem relação com
+     * Contas a Pagar). `payablesVisible`/`filtered` já refletem busca, status e
+     * período.
+     */
+    function exportarPDF() {
+        if (visao === 'parcelas') {
+            exportService.generatePayablesPDF(
+                payablesVisible.map(p => ({
+                    credor: payableParty(p),
+                    descricao: p.description ?? '',
+                    origem: payableOrigemLabel(p.source_system),
+                    obra: p.project_name ?? '',
+                    vencimento: p.due_date,
+                    valor: p.amount ?? 0,
+                    status: PAYABLE_STATUS_PT[p.effective_status] ?? p.effective_status,
+                })),
+                { organization: orgAtual, fileName: 'ContasAPagar_Parcelas', title: 'Contas a Pagar — Parcelas' },
+            );
+        } else {
+            exportService.generateInvoicesPDF(
+                filtered.map(inv => ({
+                    fornecedor: inv.supplierName ?? '—',
+                    arquivo: inv.fileName,
+                    origem: (inv.notes ?? '').includes('[boleto:') ? 'Boleto' : 'Manual',
+                    vencimento: inv.dueDate,
+                    valor: inv.amount ?? 0,
+                    status: isOverdue(inv) ? 'Atrasado' : (STATUS_PT[inv.status] ?? inv.status),
+                })),
+                { organization: orgAtual, fileName: 'ContasAPagar_NotasFiscais', title: 'Contas a Pagar — Notas Fiscais' },
+            );
+        }
+    }
+
+    function exportarExcel() {
+        if (visao === 'parcelas') {
+            exportService.generatePayablesExcel(
+                payablesVisible.map(p => ({
+                    credor: payableParty(p),
+                    descricao: p.description ?? '',
+                    origem: payableOrigemLabel(p.source_system),
+                    obra: p.project_name ?? '',
+                    vencimento: p.due_date,
+                    valor: p.amount ?? 0,
+                    status: PAYABLE_STATUS_PT[p.effective_status] ?? p.effective_status,
+                })),
+                { fileName: 'ContasAPagar_Parcelas' },
+            );
+        } else {
+            exportService.generateInvoicesExcel(
+                filtered.map(inv => ({
+                    fornecedor: inv.supplierName ?? '—',
+                    arquivo: inv.fileName,
+                    origem: (inv.notes ?? '').includes('[boleto:') ? 'Boleto' : 'Manual',
+                    vencimento: inv.dueDate,
+                    valor: inv.amount ?? 0,
+                    status: isOverdue(inv) ? 'Atrasado' : (STATUS_PT[inv.status] ?? inv.status),
+                })),
+                { fileName: 'ContasAPagar_NotasFiscais' },
+            );
+        }
+    }
+
+    /* Export — toolbar de botões (§5.3), h-9 + rounded-[6px] + font-medium
+       sentence case (§17), mesmo estilo do que ProjectFinancialManager usava
+       antes de o export vir para cá amarrado aos dados reais desta tela. */
+    const exportButtons = (
+        <div className="flex items-center gap-2 shrink-0">
+            <button
+                onClick={exportarPDF}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
+            >
+                <FileText className="w-[15px] h-[15px] text-red-500" />
+                PDF
+            </button>
+            <button
+                onClick={exportarExcel}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95"
+            >
+                <FileDown className="w-[15px] h-[15px]" />
+                Excel
+            </button>
+        </div>
+    );
+
     return (
         <div className="space-y-6">
             {/* Cabeçalho de tela — ui_ux_guia_unificado.md §20 */}
@@ -450,13 +544,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         aqui (ver prop `tabsSlot`). */}
                     {tabsSlot}
 
-                    {/* Toolbar de botões (§4) — controles de ESCOPO: sobre qual recorte de
-                        dados a tela está olhando (organização, período de vencimento). Barra
-                        própria acima da busca, porque muda o escopo, não o filtro — a §4 é
-                        explícita em não fundir escopo com busca ("qual organização/mês?" é
-                        pergunta diferente de "qual linha?"). Esta tela não tem ação primária
-                        (invoice nasce da aprovação de boleto), então o lado direito fica só
-                        com o resumo do recorte. */}
+                    {/* Toolbar de botões (§5.3) — controles de ESCOPO: sobre qual recorte de
+                        dados a tela está olhando (visão, organização, período de vencimento).
+                        Barra própria acima da busca, porque muda o escopo, não o filtro — a
+                        §5.3 é explícita em não fundir escopo com busca ("qual organização/mês?"
+                        é pergunta diferente de "qual linha?"). Export (PDF/Excel) do módulo pai
+                        entra aqui via `actionsSlot`, não colado na barra de abas (§19.1) — abas
+                        são navegação, export é ação. */}
                     <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                         <div className="flex flex-wrap items-center gap-2">
                             {/* Seletor de conjunto de dados — escopo, não filtro (§5.3):
@@ -518,11 +612,14 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             )}
                         </div>
 
-                        <span className="text-sm font-normal text-gray-400 shrink-0">
-                            {visao === 'parcelas'
-                                ? `${payables.length} parcela${payables.length !== 1 ? 's' : ''}`
-                                : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
-                        </span>
+                        <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-sm font-normal text-gray-400">
+                                {visao === 'parcelas'
+                                    ? `${payables.length} parcela${payables.length !== 1 ? 's' : ''}`
+                                    : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
+                            </span>
+                            {exportButtons}
+                        </div>
                     </div>
 
                     {visao === 'parcelas' ? (
@@ -535,6 +632,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             onReload={() => carregar(effectiveOrgId)}
                             onRowChanged={row => setPayables(prev => prev.map(p => p.id === row.id ? row : p))}
                             onRowRemoved={id => setPayables(prev => prev.filter(p => p.id !== id))}
+                            onVisibleRowsChange={setPayablesVisible}
                             notify={notify}
                         />
                     ) : (

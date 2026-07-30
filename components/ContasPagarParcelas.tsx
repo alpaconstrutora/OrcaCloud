@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, FileText, Loader2, MoveHorizontal, RefreshCw, Search, X,
 } from 'lucide-react';
@@ -14,16 +14,16 @@ import ActionIconButton from './ui/ActionIconButton';
  * parcela veio", e por isso mostra Pedido/Contrato/Medição separadamente em vez
  * de agrupar tudo como "Suprimentos".
  */
-const ORIGEM_PT: Record<string, string> = {
+export const ORIGEM_PT: Record<string, string> = {
     PURCHASE_ORDER: 'Pedido de compra',
     CONTRACT_PARCELADO: 'Contrato',
     CONTRACT_MEASUREMENT: 'Medição',
     PROJECT: 'Obra',
     MANUAL: 'Manual',
 };
-const origemLabel = (sourceSystem: string) => ORIGEM_PT[sourceSystem] ?? sourceSystem;
+export const origemLabel = (sourceSystem: string) => ORIGEM_PT[sourceSystem] ?? sourceSystem;
 
-const STATUS_PT: Record<string, string> = {
+export const STATUS_PT: Record<string, string> = {
     PREVISTO: 'Previsto',
     APROVADO: 'Aprovado',
     VENCIDO: 'Vencido',
@@ -53,7 +53,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const PARCELAS_COLUMNS: ColumnConfig[] = [
-    { key: 'fornecedor', label: 'Fornecedor / Descrição', sortable: true },
+    { key: 'credor', label: 'Credor', sortable: true },
+    { key: 'descricao', label: 'Descrição', sortable: true },
     { key: 'origem', label: 'Origem', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'valor', label: 'Valor', sortable: true },
@@ -62,7 +63,7 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    fornecedor: 260, origem: 150, obra: 160, valor: 140, vencimento: 130, status: 120, actions: 200,
+    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 130, status: 120, actions: 200,
 };
 
 const STATUS_FILTROS = ['all', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
@@ -91,9 +92,15 @@ interface Props {
     onRowChanged: (row: Payable) => void;
     onRowRemoved: (id: string) => void;
     notify: (message: string, type?: 'success' | 'error') => void;
+    /**
+     * Reporta ao pai o recorte atualmente visível (após busca/status/período),
+     * para a exportação (PDF/Excel na toolbar de botões do pai) exportar
+     * exatamente o que a tela mostra — não a lista inteira nem outro recorte.
+     */
+    onVisibleRowsChange?: (rows: Payable[]) => void;
 }
 
-export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify }: Props) {
+export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
@@ -127,7 +134,8 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
             const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
             const valor = (r: Payable): string | number => {
                 switch (tableColumns.sortColumn) {
-                    case 'fornecedor': return payableParty(r).toLowerCase();
+                    case 'credor':     return payableParty(r).toLowerCase();
+                    case 'descricao':  return (r.description ?? '').toLowerCase();
                     case 'origem':     return origemLabel(r.source_system).toLowerCase();
                     case 'obra':       return (r.project_name ?? '').toLowerCase();
                     case 'valor':      return r.amount ?? 0;
@@ -145,6 +153,8 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
         }
         return result;
     }, [rows, search, statusFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
 
     // colunas visíveis + espaçador + ações
     const totalColunas = PARCELAS_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).length + 2;
@@ -199,7 +209,7 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
                         <input
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Buscar fornecedor, descrição ou obra..."
+                            placeholder="Buscar credor, descrição ou obra..."
                             className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                         {search && (
@@ -328,10 +338,14 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
                                     const quitado = ['PAGO', 'CANCELADO'].includes(row.effective_status);
                                     return (
                                         <tr key={row.id} className={`hover:bg-blue-50/50 transition-colors ${vencido ? 'bg-red-50/30' : ''}`}>
-                                            {tableColumns.visibleColumns.includes('fornecedor') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <p className="text-sm font-normal text-gray-700 truncate">{payableParty(row)}</p>
-                                                    <p className="text-xs text-gray-400 truncate">{row.description}</p>
+                                            {tableColumns.visibleColumns.includes('credor') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
+                                                    {payableParty(row)}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('descricao') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">
+                                                    {row.description || '—'}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('origem') && (

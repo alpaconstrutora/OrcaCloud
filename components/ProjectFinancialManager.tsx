@@ -1598,6 +1598,30 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         { key: 'contas_pagar', label: 'Contas a Pagar' },
     ];
 
+    /* Botões de exportação — extraídos da barra de abas para poder ir tanto aqui
+       (telas que ainda recebem tudo junto) quanto isolados no `actionsSlot` de
+       um filho que tem sua PRÓPRIA toolbar de botões (§5.3) — caso de
+       ContasPagarManager: abas (§19.1) e ação primária (§5.3/§17) são barras
+       diferentes, não deveriam vir coladas no mesmo `tabsSlot`. */
+    const exportButtons = (
+        <div className="flex items-center gap-2 shrink-0">
+            <button
+                onClick={() => handleExport('PDF', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
+            >
+                <FileText className="w-[15px] h-[15px] text-red-500" />
+                PDF
+            </button>
+            <button
+                onClick={() => handleExport('EXCEL', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95"
+            >
+                <FileDown className="w-[15px] h-[15px]" />
+                Excel
+            </button>
+        </div>
+    );
+
     /* Toolbar de abas — ui_ux_guia_unificado.md §19.1. Trilho dentro de card branco, igual à
        tela de referência (Extrato/BankReconciliation:3253). Export à direita no §8:
        h-9 + rounded-[6px] + font-medium sentence case. */
@@ -1613,22 +1637,23 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 </TabsList>
             </Tabs>
 
-            <div className="flex items-center gap-2 shrink-0">
-                <button
-                    onClick={() => handleExport('PDF', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
-                >
-                    <FileText className="w-[15px] h-[15px] text-red-500" />
-                    PDF
-                </button>
-                <button
-                    onClick={() => handleExport('EXCEL', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95"
-                >
-                    <FileDown className="w-[15px] h-[15px]" />
-                    Excel
-                </button>
-            </div>
+            {exportButtons}
+        </div>
+    );
+
+    /* Só as abas, sem export — para o filho que tem toolbar de botões própria
+       (ContasPagarManager) e posiciona o export ali, não colado na navegação. */
+    const tabsOnlyBar = (
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+                <TabsList>
+                    {tabs.map((tab) => (
+                        <TabsTrigger key={tab.key} value={tab.key}>
+                            {tab.label}
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+            </Tabs>
         </div>
     );
 
@@ -1685,7 +1710,10 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             { activeTab === 'extrato' && renderExtrato() }
             { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }
             { activeTab === 'boletos' && <BoletoManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} userEmail={userEmail} organizations={organizations} onOrgChange={onOrgChange || (() => {})} tabsSlot={tabsBar} /> }
-            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} tabsSlot={tabsBar} /> }
+            {/* Sem actionsSlot: ContasPagarManager tem export próprio, amarrado às
+                parcelas/notas realmente exibidas — não ao Extrato/Fluxo do projeto
+                que `exportButtons` gera (dado errado para esta tela). */}
+            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} tabsSlot={tabsOnlyBar} /> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}
 

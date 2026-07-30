@@ -41,6 +41,16 @@ import ContractEvaluationModal from './ContractEvaluationModal';
 import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
 import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+
+// Aba Financeiro — tabela "Lançamentos Financeiros" (ui_ux_guia_unificado.md §2).
+const FINANCE_COLUMNS: ColumnConfig[] = [
+    { key: 'date', label: 'Data', sortable: true },
+    { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'source', label: 'Origem', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'amount', label: 'Valor', sortable: true },
+];
 
 // Só as modalidades de OBRA/suprimentos. As de locação (seguro-fiança, cessão
 // fiduciária, sem garantia) têm tela própria — Gerenciar Negociação › Garantias
@@ -161,6 +171,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         description: string | null; category: string | null; status: string;
     }[]>([]);
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
+    const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
 
     // Fase 5 — Seguros/Garantias, Penalidades e Retenção faseada (PLANO_MODULO_CONTRATOS_GAPS.md)
     const [guarantees, setGuarantees] = React.useState<ContractGuarantee[]>([]);
@@ -2512,11 +2523,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 const statusLabel: Record<string, string> = {
                     PENDING: 'Pendente', PAID: 'Pago', CONCILIATED: 'Conciliado', CANCELLED: 'Cancelado'
                 };
+                // §8 — status é texto colorido simples: sem pílula, sem fundo, sem uppercase.
                 const statusClass: Record<string, string> = {
-                    PENDING: 'bg-amber-100 text-amber-800',
-                    PAID: 'bg-green-100 text-green-800',
-                    CONCILIATED: 'bg-blue-100 text-blue-800',
-                    CANCELLED: 'bg-gray-100 text-gray-500',
+                    PENDING: 'text-amber-700',
+                    PAID: 'text-green-800',
+                    CONCILIATED: 'text-blue-700',
+                    CANCELLED: 'text-gray-500',
                 };
                 const sourceLabel: Record<string, string> = {
                     CONTRACT_AVISTA: 'À Vista', CONTRACT_PARCELADO: 'Parcela', CONTRACT_RECURRING: 'Recorrência', CONTRACT_MEASUREMENT: 'Medição',
@@ -2524,6 +2536,25 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 const totalGeral = financialEntries.reduce((s, e) => s + (e.amount || 0), 0);
                 const totalPago = financialEntries.filter(e => e.status === 'PAID' || e.status === 'CONCILIATED').reduce((s, e) => s + (e.amount || 0), 0);
                 const totalPendente = financialEntries.filter(e => e.status === 'PENDING').reduce((s, e) => s + (e.amount || 0), 0);
+
+                // §6.3 — toda coluna de valor único ordena pelo cabeçalho.
+                const sortedEntries = [...financialEntries].sort((a, b) => {
+                    const col = financeColumns.sortColumn;
+                    const dir = financeColumns.sortDirection === 'asc' ? 1 : -1;
+                    if (!col) return a.transaction_date.localeCompare(b.transaction_date);
+                    if (col === 'amount') return (a.amount - b.amount) * dir;
+                    if (col === 'date') return a.transaction_date.localeCompare(b.transaction_date) * dir;
+                    const txt: Record<string, string> = {
+                        description: (a.description || ''), source: sourceLabel[a.source_system] || a.source_system,
+                        status: statusLabel[a.status] || a.status,
+                    };
+                    const txtB: Record<string, string> = {
+                        description: (b.description || ''), source: sourceLabel[b.source_system] || b.source_system,
+                        status: statusLabel[b.status] || b.status,
+                    };
+                    return (txt[col] || '').localeCompare(txtB[col] || '') * dir;
+                });
+                const visibleFinCols = financeColumns.visibleColumns;
 
                 return (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
@@ -2537,70 +2568,98 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <button
                                 onClick={handleSyncFinance}
                                 disabled={syncingFinance}
-                                className="flex items-center gap-2 px-6 py-3 bg-white border border-emerald-200 text-emerald-700 rounded-[10px] hover:bg-emerald-50 transition-all font-medium text-[13px] shadow-sm disabled:opacity-50"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-emerald-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 transition-all active:scale-95 font-medium text-[13px] shadow-sm disabled:opacity-50 shrink-0"
                             >
-                                <DollarSign className="w-4 h-4" />
+                                <DollarSign className="w-[15px] h-[15px]" />
                                 {syncingFinance ? 'Lançando...' : 'Lançar / Atualizar'}
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
-                                <p className="text-xs font-medium text-gray-400">Total Lançado</p>
-                                <p className="text-xl font-medium text-gray-900 tracking-tighter">R$ {fmt(totalGeral)}</p>
-                            </div>
-                            <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
-                                <p className="text-xs font-medium text-gray-400">Pago / Conciliado</p>
-                                <p className="text-xl font-medium text-emerald-600 tracking-tighter">R$ {fmt(totalPago)}</p>
-                            </div>
-                            <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
-                                <p className="text-xs font-medium text-gray-400">Pendente</p>
-                                <p className="text-xl font-medium text-amber-600 tracking-tighter">R$ {fmt(totalPendente)}</p>
-                            </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                            <KpiCard label="TOTAL LANÇADO" value={`R$ ${fmt(totalGeral)}`} icon={<DollarSign className="w-5 h-5" />} color="blue" />
+                            <KpiCard label="PAGO / CONCILIADO" value={`R$ ${fmt(totalPago)}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                            <KpiCard label="PENDENTE" value={`R$ ${fmt(totalPendente)}`} icon={<Clock className="w-5 h-5" />} color="amber" />
                         </div>
 
-                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Data</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Descrição</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Origem</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
-                                        <th className="px-6 py-2 text-right">Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50 text-gray-700">
-                                    {loadingFinancialEntries ? (
-                                        <tr><td colSpan={5} className="px-8 py-20 text-center text-sm font-medium text-gray-400">Carregando lançamentos...</td></tr>
-                                    ) : financialEntries.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={5} className="px-8 py-20 text-center">
-                                                <p className="text-sm font-normal text-gray-400">Nenhum lançamento financeiro gerado para este contrato ainda.</p>
-                                                <p className="text-xs text-gray-400 mt-1">Use "Lançar / Atualizar" para gerar as parcelas/boletos no Financeiro.</p>
-                                            </td>
-                                        </tr>
-                                    ) : financialEntries.map((e) => (
-                                        <tr key={e.id} className="hover:bg-blue-50/20 transition-all group">
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-700">
-                                                {new Date(e.transaction_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-700">{e.description || '—'}</td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <span className="text-xs font-medium text-gray-500">{sourceLabel[e.source_system] || e.source_system}</span>
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <span className={`inline-flex px-2 py-1 rounded-lg text-[13px] font-medium w-fit ${statusClass[e.status] || 'bg-gray-100 text-gray-500'}`}>
-                                                    {statusLabel[e.status] || e.status}
-                                                </span>
-                                            </td>
-                                            <td className={`px-6 py-2.5 text-right text-sm font-medium ${e.direction === 'CREDIT' ? 'text-emerald-600' : 'text-gray-900'}`}>
-                                                {e.direction === 'DEBIT' ? '- ' : ''}R$ {fmt(e.amount)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        {/* §5.2 — toolbar acoplada: régua de colunas e tabela num único card */}
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                    <ColumnConfigButton
+                                        columns={FINANCE_COLUMNS}
+                                        visibleColumns={financeColumns.visibleColumns}
+                                        showColumnConfig={financeColumns.showColumnConfig}
+                                        onToggleShow={() => financeColumns.setShowColumnConfig(!financeColumns.showColumnConfig)}
+                                        onToggleColumn={financeColumns.toggleColumn}
+                                        onReset={financeColumns.resetColumns}
+                                    />
+                                </div>
+                            </div>
+
+                            {loadingFinancialEntries ? (
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                    <p className="mt-2 text-gray-500">Carregando...</p>
+                                </div>
+                            ) : financialEntries.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <DollarSign className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum lançamento financeiro</h3>
+                                    <p className="text-sm text-gray-500">Use "Lançar / Atualizar" para gerar as parcelas/boletos no Financeiro.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-auto max-h-[70vh]">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                {FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
+                                                    <SortableHeader
+                                                        key={c.key}
+                                                        colKey={c.key}
+                                                        label={c.label}
+                                                        uppercase={false}
+                                                        sortColumn={financeColumns.sortColumn}
+                                                        sortDirection={financeColumns.sortDirection}
+                                                        onSort={financeColumns.handleColumnSort}
+                                                        className={`px-6 py-2 border-r border-gray-100 last:border-r-0 ${c.key === 'amount' ? 'text-right' : 'text-left'}`}
+                                                    />
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                            {sortedEntries.map((e) => (
+                                                <tr key={e.id} className="hover:bg-blue-50/50 transition-colors group">
+                                                    {visibleFinCols.includes('date') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                            {new Date(e.transaction_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                        </td>
+                                                    )}
+                                                    {visibleFinCols.includes('description') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{e.description || '—'}</td>
+                                                    )}
+                                                    {visibleFinCols.includes('source') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                            {sourceLabel[e.source_system] || e.source_system}
+                                                        </td>
+                                                    )}
+                                                    {visibleFinCols.includes('status') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <span className={`text-sm font-normal ${statusClass[e.status] || 'text-gray-600'}`}>
+                                                                {statusLabel[e.status] || e.status}
+                                                            </span>
+                                                        </td>
+                                                    )}
+                                                    {visibleFinCols.includes('amount') && (
+                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium ${e.direction === 'CREDIT' ? 'text-emerald-600' : 'text-gray-800'}`}>
+                                                            {e.direction === 'DEBIT' ? '- ' : ''}R$ {fmt(e.amount)}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
 
                         {/* Retenção faseada (Fase 5.2 — CP-08/Cl.18) */}

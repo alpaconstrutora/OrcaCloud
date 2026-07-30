@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Check, FileText, Loader2, MoveHorizontal, RefreshCw, Search, X,
+    AlertCircle, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus } from '../types/financial';
 import { payableService, payableParty } from '../services/payableService';
@@ -69,6 +69,10 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 const STATUS_FILTROS = ['all', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
 type StatusFiltro = typeof STATUS_FILTROS[number];
 
+// Origens possíveis de uma parcela — mesmo vocabulário de `ORIGEM_PT` acima.
+const ORIGEM_FILTROS = ['all', ...Object.keys(ORIGEM_PT)] as const;
+type OrigemFiltro = typeof ORIGEM_FILTROS[number];
+
 const hoje = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
 /** Dias de atraso — a data vem 'YYYY-MM-DD', então parseia com hora fixa (bug de fuso). */
@@ -104,6 +108,7 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
+    const [origemFiltro, setOrigemFiltro] = usePersistedState<OrigemFiltro>('contasPagarParcelas:origem', 'all');
     const [salvando, setSalvando] = useState<string | null>(null);
 
     const tableColumns = useTableColumns(PARCELAS_COLUMNS, 'contasPagarParcelasColumns');
@@ -116,6 +121,7 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
     const filtered = useMemo(() => {
         let result = rows.filter(r => {
             if (statusFiltro !== 'all' && r.effective_status !== statusFiltro) return false;
+            if (origemFiltro !== 'all' && r.source_system !== origemFiltro) return false;
             // Parcela sem vencimento passa pelo período (mesma semântica da visão de
             // notas): esconder o que não tem data é pior do que mostrar fora do filtro.
             if (vencDe && r.due_date && r.due_date < vencDe) return false;
@@ -152,7 +158,7 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
             });
         }
         return result;
-    }, [rows, search, statusFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rows, search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
 
@@ -233,6 +239,25 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
                                 </button>
                             );
                         })}
+                    </div>
+
+                    {/* Origem — filtro de FONTE do título (Pedido de compra, Contrato,
+                        Medição, Manual), não escopo (§5.3): não muda "quais títulos devo?",
+                        só recorta de onde vieram. Dropdown, não segmentado — 5 opções
+                        não cabem como pílulas sem quebrar linha. */}
+                    <div className="relative flex items-center shrink-0">
+                        <Tag className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                        <select
+                            value={origemFiltro}
+                            onChange={e => setOrigemFiltro(e.target.value as OrigemFiltro)}
+                            className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="all">Todas as origens</option>
+                            {ORIGEM_FILTROS.filter(o => o !== 'all').map(o => (
+                                <option key={o} value={o}>{origemLabel(o)}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
                     </div>
 
                     <button

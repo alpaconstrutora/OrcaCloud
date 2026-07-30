@@ -148,6 +148,22 @@ por imóvel usa **receita líquida** como denominador (linha 988); o KPI
 (`(totalRevenue - totalExpenses) / totalRevenue`, linha ~1070). Duas telas, dois
 valores, mesmo rótulo.
 
+**✅ DECIDIDO em 30/07/2026 — comissão deduzida nas DUAS margens.**
+`commissionRate` sai da receita antes do cálculo, tanto na projetada quanto na
+realizada. Comissão é custo de venda: uma margem projetada que ignora a
+comissão já contratada superestima o resultado exatamente na fase em que esta
+tela é mais consultada. Preserva o `netRevenue` atual e o estende ao
+contratado.
+
+Consequência: o KPI "Rentabilidade" do Resumo passa a usar a mesma base
+líquida, encerrando a divergência com a tabela. Fórmulas finais:
+
+```
+margem projetada = (contratado_líquido − custo) / contratado_líquido
+margem realizada = (recebido_líquido   − custo) / recebido_líquido
+onde  líquido = valor − (valor × commissionRate / 100)
+```
+
 **3.4 — Substituir o casamento por NOME pela hierarquia real.** É o maior dos
 quatro, e o único que exige migration.
 

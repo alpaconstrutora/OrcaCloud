@@ -607,17 +607,24 @@ export const empreendimentoService = {
     // e alert embutidos) para que o Centro de Sincronização também possa dispará-los. A
     // confirmação e o aviso ficam na UI; aqui só a operação + relatório.
 
-    /** Empreendimento → Comercial: publica as unidades ainda não vinculadas. */
+    /**
+     * Empreendimento → Comercial: publica as unidades ainda não vinculadas.
+     * `unitIds` restringe o lote às unidades marcadas na tela (coluna "Publicar" do
+     * Espelho de Vendas); omitido = todas as não publicadas.
+     */
     async publishAllToCommercial(
         empreendimentoId: string,
         organizationId: string,
+        unitIds?: string[],
     ): Promise<CommercialPublishReport> {
         const emp = await this.getById(empreendimentoId) as Empreendimento | null;
         if (!emp) throw new Error('Empreendimento não encontrado.');
 
         // Revalida no banco: o estado da tela pode estar obsoleto e recriaria properties
         // duplicadas para unidades já publicadas.
-        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const all = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const scope = unitIds?.length ? new Set(unitIds) : null;
+        const units = scope ? all.filter(u => scope.has(u.id)) : all;
         const unpublished = units.filter(u => !u.commercial_property_id);
         if (!unpublished.length) {
             return { published: 0, alreadyPublished: units.length };

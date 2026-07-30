@@ -242,9 +242,43 @@ vendas** — justamente quando a informação é mais necessária. O print de
 30/07/2026 mostra onze imóveis, todos com R$ 0,00 e "Déficit", enquanto a
 carteira tem R$ 2,5 mi vendidos.
 
-Proposta: duas bases lado a lado — **Contratado** e **Recebido** — com a margem
-declarando qual das duas está usando. Depende de decidir 3.3 antes (líquida ×
-bruta), porque passam a ser quatro combinações possíveis.
+**✅ DECIDIDO em 30/07/2026 — duas margens (projetada × realizada).**
+
+```
+IMÓVEL      CONTRATADO   RECEBIDO    CUSTO      MARG. PROJ.  MARG. REAL.  STATUS
+002         R$ 320.000   R$ 0,00     R$ 0,00     100,0%       —           Sem movimento
+Sala - 304  R$ 180.000   R$ 45.000   R$ 12.000    93,3%      73,3%        Lucro
+Loja - 101  R$ 240.000   R$ 240.000  R$ 30.000    87,5%      87,5%        Lucro
+```
+
+Definições (fechar na implementação, sem improviso):
+
+| Campo | Regra |
+|---|---|
+| **Contratado** | soma das parcelas **exceto `CANCELLED`** (inclui `PENDING` e `OVERDUE`) |
+| **Recebido** | soma das parcelas `PAID` — é a "Receita Acum." de hoje |
+| **Margem projetada** | `(contratado − custo) / contratado` |
+| **Margem realizada** | `(recebido − custo) / recebido`; exibe `—` quando recebido = 0 |
+| **Status** | `Sem movimento` quando recebido = 0 **e** custo = 0; senão Lucro/Déficit pela base **realizada** |
+
+As duas margens **convergem quando o contrato é 100% recebido** — é o sinal
+visual de contrato liquidado. E a distância entre elas é a exposição da
+carteira ao que ainda não entrou.
+
+**3.3 continua valendo, agora aplicada às duas margens:** a comissão de
+corretagem (`commissionRate`) deve ser descontada da receita antes da margem?
+Recomendação: **sim, nas duas** — comissão é custo de venda, e uma margem
+projetada que ignora a comissão contratada superestima o resultado justamente
+na fase em que a tela é mais usada. Isso mantém o comportamento atual
+(`netRevenue`) e o estende ao contratado.
+
+**3.7 (novo, achado ao especificar 3.6) — `CANCELLED` entra na Receita Total.**
+`totalInstallments` soma **todas** as parcelas sem filtrar status
+(`displayInstallments.reduce((s, i) => s + i.value, 0)`), então parcela
+cancelada infla o KPI "Receita Total" do Resumo e o "Saldo em Aberto" derivado
+dele. Passou despercebido porque a tabela de Rentabilidade só contava `PAID` —
+o KPI e a tabela nunca bateram, e ninguém comparou. A definição de
+**Contratado** acima obriga a resolver isso.
 
 ---
 

@@ -23,7 +23,10 @@
 set -u
 
 # Arquivos que legitimamente mencionam o nome literal.
-ALLOWLIST_REGEX='^(utils/systemProjects\.ts|scripts/check-system-projects\.sh|services/commercialFinanceService\.ts|components/ProjectFinancialManager\.tsx|components/AppRouter\.tsx|components/BrokerModal\.tsx|components/ImovibCapexForm\.tsx|components/BankReconciliation\.tsx|components/ClientArea\.tsx|supabase/migrations/.*)$'
+# TEMPORÁRIO: utils/__validation__/profitabilityLegacy\.ts reproduz o pipeline
+# legado (commit ba3df7d) para o painel de comparação da Fase 2 do
+# PLANO_RENTABILIDADE_COMERCIAL.md. Sai da allowlist junto com o harness.
+ALLOWLIST_REGEX='^(utils/systemProjects\.ts|scripts/check-system-projects\.sh|utils/__validation__/profitabilityLegacy\.ts|services/commercialFinanceService\.ts|components/ProjectFinancialManager\.tsx|components/AppRouter\.tsx|components/BrokerModal\.tsx|components/ImovibCapexForm\.tsx|components/BankReconciliation\.tsx|components/ClientArea\.tsx|supabase/migrations/.*)$'
 
 # Padrão proibido: comparar o nome do projeto com o literal, em qualquer direção.
 FORBIDDEN="(!==|===|!=|==)[[:space:]]*['\"]Gestão Comercial['\"]|neq\(['\"]name['\"],[[:space:]]*['\"]Gestão Comercial['\"]\)"

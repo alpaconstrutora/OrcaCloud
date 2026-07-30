@@ -76,6 +76,9 @@ import { getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
+import { mergeInstallments, computeProfitabilityByProperty, type MergeInstallmentsInput } from '../utils/commercialInstallments';
+// Harness temporário da Fase 2 — remover junto com o painel após o portão.
+import ProfitabilityDiffPanel, { isProfitabilityDebugOn } from './__validation__/ProfitabilityDiffPanel';
 
 interface ProjectFinancialManagerProps {
     settings: ProjectSettings;
@@ -361,68 +364,24 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
     const effectiveDealTypeFilter = dealTypeFilter || localDealTypeFilter;
 
-    const displayInstallments = useMemo(() => {
-        let list = [
-            ...(financialInfo.installments || []),
-            ...linkedInstallments
-        ];
+    /* Pipeline extraído para utils/commercialInstallments.ts (Fase 1 do
+       PLANO_RENTABILIDADE_COMERCIAL.md). A detecção de modo fica AQUI, não na
+       função pura: comparar nome de projeto de sistema é responsabilidade do
+       chamador — ver REGRA OBRIGATÓRIA #2 no CLAUDE.md. */
+    const mergeArgs = useMemo((): MergeInstallmentsInput => ({
+        local: financialInfo.installments || [],
+        linked: linkedInstallments,
+        satellites: satelliteProjects,
+        commercialVault: commercialProject
+            ? { id: commercialProject.id, installments: (commercialProject.settings?.financialInfo?.installments || []) as RichInstallment[] }
+            : null,
+        mode: settings.name === 'Gestão Comercial' ? 'COMERCIAL' : 'OBRA',
+        matchVaultToScope: settings.name !== 'Acompanhamento de Obras',
+        scope: { projectId: projectId || settings.id, projectName: settings.name || '' },
+        dealTypeFilter: effectiveDealTypeFilter,
+    }), [financialInfo.installments, linkedInstallments, commercialProject, satelliteProjects, projectId, settings.id, settings.name, effectiveDealTypeFilter]);
 
-        // Se estamos em modo Gestão Comercial, buscar parcelas de todos os "Projetos Satélites"
-        if (settings.name === 'Gestão Comercial') {
-            satelliteProjects.forEach((sat: SatelliteProject) => {
-                const satInstallments = (sat.settings?.financialInfo?.installments || [])
-                    .map((i: PaymentInstallment) => ({ ...i, isCommercial: true, sourceProjectId: sat.id }));
-                list.push(...satInstallments);
-            });
-            
-            console.log(`[FINANCIAL-UI] List before deduplication: ${list.length} items. Searching for Waldir #972a9afa...`);
-            const waldirCheck = list.filter(i => (i.id || '').includes('972a9afa') || (i.description || '').includes('Waldir'));
-            console.log(`[FINANCIAL-UI] Waldir items found: ${waldirCheck.length}`);
-
-            // Deduplicação por ID para evitar mostrar a mesma parcela se ela estiver em dois lugares
-            const seenIds = new Set();
-            list = list.filter(i => {
-                const id = i.id || `${i.description}-${i.value}-${i.dueDate}`;
-                if (seenIds.has(id)) return false;
-                seenIds.add(id);
-                return true;
-            });
-            
-            console.log(`[FINANCIAL-UI] List after deduplication: ${list.length} items.`);
-        }
-
-        // Se estamos em um projeto comum, incluir também parcelas da Gestão Comercial 
-        // que referenciam este imóvel/projeto
-        if (commercialProject && settings.name !== 'Gestão Comercial' && settings.name !== 'Acompanhamento de Obras') {
-            const comm = commercialProject.settings?.financialInfo?.installments || [];
-            const sName = (settings.name || '').toLowerCase().trim();
-            const workingId = projectId || settings.id;
-
-            const linkedFromComm = comm.filter((i: RichInstallment) => {
-                const isIdMatch = workingId && (i.linkedProjectId === workingId || i.propertyId === workingId);
-                const pName = (i.propertyName || '').toLowerCase().trim();
-                const isNameMatch = sName !== '' && (pName === sName || pName.includes(sName) || sName.includes(pName));
-                return isIdMatch || isNameMatch;
-            }).map((i: RichInstallment) => ({ ...i, isCommercial: true, sourceProjectId: commercialProject.id }));
-            
-            if (linkedFromComm.length > 0) {
-                console.log(`[FINANCE-DEBUG] Linked ${linkedFromComm.length} installments from Commercial Vault for project ${settings.name}`);
-            }
-            
-            list.push(...linkedFromComm);
-        }
-
-        if (effectiveDealTypeFilter !== 'ALL') {
-            list = list.filter(i => {
-                if (i.dealType) return i.dealType === effectiveDealTypeFilter;
-                const desc = (i.description || '').toLowerCase();
-                if (effectiveDealTypeFilter === 'SALE') return desc.includes('venda') || desc.includes('entrada') || desc.includes('balão') || desc.includes('intermediária') || desc.includes('parcela');
-                if (effectiveDealTypeFilter === 'RENTAL') return desc.includes('aluguel') || desc.includes('locação') || desc.includes('condomínio') || desc.includes('iptu');
-                return true;
-            });
-        }
-        return list;
-    }, [financialInfo.installments, linkedInstallments, commercialProject, satelliteProjects, projectId, settings.id, settings.name, effectiveDealTypeFilter]);
+    const displayInstallments = useMemo(() => mergeInstallments(mergeArgs), [mergeArgs]);
 
     /* debugMessage removido */
     // Removed console.error causing user concern
@@ -957,38 +916,9 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         return result;
     }, [displayInstallments, transactions, orderExpenses, effectiveDealTypeFilter, settings.name]);
 
-    const profitabilityByProperty = useMemo(() => {
-        const properties: Record<string, { id: string; name: string; revenue: number; expense: number }> = {};
-
-        displayInstallments.forEach(i => {
-            const key = i.propertyId || i.propertyName || 'Indefinido';
-            if (!properties[key]) properties[key] = { id: i.propertyId || '', name: i.propertyName || 'Indefinido', revenue: 0, expense: 0 };
-            if (i.status === 'PAID') properties[key].revenue += i.value;
-        });
-
-        transactions.forEach(t => {
-            if (t.type !== 'EXPENSE' || t.status === 'CANCELLED') return;
-            const rt = t as RichTransaction;
-            const key = rt.propertyId || rt.propertyName || 'Geral';
-            if (!properties[key]) properties[key] = { id: rt.propertyId || '', name: rt.propertyName || 'Geral', revenue: 0, expense: 0 };
-            properties[key].expense += t.value;
-        });
-
-        return Object.values(properties).map(p => {
-            const netRevenue = displayInstallments
-                .filter(i => (i.propertyId === p.id || i.propertyName === p.name) && i.status === 'PAID')
-                .reduce((s, i) => {
-                    const comm = (i.value * (i.commissionRate || 0)) / 100;
-                    return s + (i.value - comm);
-                }, 0);
-
-            return {
-                ...p,
-                netRevenue,
-                margin: netRevenue > 0 ? ((netRevenue - p.expense) / netRevenue) * 100 : 0
-            };
-        }).sort((a, b) => b.revenue - a.revenue);
-    }, [displayInstallments, transactions]);
+    const profitabilityByProperty = useMemo(
+        () => computeProfitabilityByProperty(displayInstallments, transactions),
+        [displayInstallments, transactions]);
 
     const filteredExpenses = useMemo(() => {
         let manual = transactions.filter(t => t.type === 'EXPENSE').map(t => ({
@@ -1465,6 +1395,23 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
     const renderRentabilidade = () => (
         <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Fase 2 do PLANO_RENTABILIDADE_COMERCIAL.md — só aparece com
+                localStorage.orca_debug_profitability === '1'. Remover no portão. */}
+            {isProfitabilityDebugOn() && (
+                <ProfitabilityDiffPanel
+                    legacyInput={{
+                        financialInfo,
+                        linkedInstallments,
+                        settings: { id: settings.id, name: settings.name },
+                        satelliteProjects,
+                        commercialProject,
+                        projectId,
+                        effectiveDealTypeFilter,
+                    }}
+                    extractedInput={mergeArgs}
+                    transactions={transactions}
+                />
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">

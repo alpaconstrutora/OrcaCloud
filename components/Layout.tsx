@@ -162,7 +162,7 @@ const Layout: React.FC<LayoutProps> = ({
   isNotificationOpen = false,
   setIsNotificationOpen = () => { }
 }) => {
-  const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab } = useStore();
+  const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab, projectId, setProjectId } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
   const [isHeaderEmpresaDropdownOpen, setIsHeaderEmpresaDropdownOpen] = React.useState(false);
@@ -1370,8 +1370,26 @@ const Layout: React.FC<LayoutProps> = ({
                 </span>
                 <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isHeaderEmpresaDropdownOpen ? 'rotate-90' : ''}`} />
               </button>
-              {isHeaderEmpresaDropdownOpen && companies.length > 0 && (
+              {isHeaderEmpresaDropdownOpen && (companies.length > 0 || projectId) && (
                 <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                  {/* Saída da obra. Antes do "Coronel Lambert 345" ficar preso na
+                      tela, o `projectId` só era limpo em três lugares: um botão
+                      dentro de UMA tela, o excluir-obra (destrutivo) e um caminho
+                      interno de sincronização. Como ele é persistido em
+                      localStorage, quem abrisse uma obra ficava nela para sempre —
+                      e telas como a Gestão Financeira mostram conteúdo
+                      completamente diferente conforme esse estado invisível. */}
+                  {projectId && (
+                    <button
+                      type="button"
+                      onClick={() => { setProjectId(null); setIsHeaderEmpresaDropdownOpen(false); }}
+                      className="flex w-full items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      title="Sai da obra e volta à visão consolidada, sem apagar nada"
+                    >
+                      <Layers className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span className="min-w-0 flex-1 truncate">Consolidado (sair da obra)</span>
+                    </button>
+                  )}
                   {companies.map(c => (
                     <button
                       key={c.id}

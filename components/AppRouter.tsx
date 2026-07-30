@@ -784,6 +784,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           budget={budget}
           onUpdateSettings={handleUpdateSettings}
           onViewOrder={(id: string) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }}
+          /* `contas-a-pagar` é rota explícita (item de menu "Contas a pagar" e
+             deep-link do Fiscal): abre na aba certa em vez da última visitada.
+             `project-financial` é a tela consolidada — respeita o localStorage. */
+          initialTab={activeView === 'contas-a-pagar' ? 'contas_pagar' : undefined}
         />
       );
 

@@ -88,6 +88,14 @@ interface ProjectFinancialManagerProps {
     budget?: BudgetEntry[];
     dealTypeFilter?: 'SALE' | 'RENTAL';
     onViewOrder?: (id: string) => void;
+    /**
+     * Aba a abrir quando a rota é explícita sobre o destino (ex.: o item de menu
+     * "Contas a pagar" navega para `contas-a-pagar`). Tem precedência sobre a
+     * aba persistida em `localStorage` — sem isso, clicar em "Contas a pagar"
+     * abria na última aba visitada (Rentabilidade, Fluxo...), o que fazia a tela
+     * parecer um módulo duplicado.
+     */
+    initialTab?: TabKey;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -113,7 +121,7 @@ const fmtShort = (v: unknown): string => {
 
 type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar';
 
-const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, organizations = [], userEmail, onOrgChange, onUpdateSettings, budget = [], dealTypeFilter }) => {
+const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, organizations = [], userEmail, onOrgChange, onUpdateSettings, budget = [], dealTypeFilter, initialTab }) => {
     const confirm = useConfirm();
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -122,8 +130,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         setTimeout(() => setNotification(null), 4500);
     };
     const [activeTab, setActiveTab] = useState<TabKey>(
-        (localStorage.getItem('financial_active_tab') as TabKey) || 'resumo'
+        initialTab || (localStorage.getItem('financial_active_tab') as TabKey) || 'resumo'
     );
+    // Rota explícita sempre ganha da aba persistida — inclusive quando o
+    // componente já está montado (AppRouter não remonta ao trocar de view).
+    useEffect(() => {
+        if (initialTab) setActiveTab(initialTab);
+    }, [initialTab]);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isAddingTransaction, setIsAddingTransaction] = useState(false);

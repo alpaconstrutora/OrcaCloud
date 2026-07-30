@@ -482,7 +482,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const systemConfigViews = ['settings','master-data'];
@@ -516,7 +516,8 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'supplies-quotations', label: 'Cotações', group: 'Suprimentos', icon: FileText },
       { id: 'supplies-orders', label: 'Pedidos', group: 'Suprimentos', icon: Package },
       { id: 'financial-dashboard', label: 'Dashboard financeiro', group: 'Financeiro', icon: DollarSign },
-      { id: 'project-financial', label: 'Contas a pagar', group: 'Financeiro', icon: DollarSign },
+      { id: 'contas-a-pagar', label: 'Contas a pagar', group: 'Financeiro', icon: DollarSign },
+      { id: 'project-financial', label: 'Gestão financeira', group: 'Financeiro', icon: BarChart3 },
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
       { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
@@ -1083,11 +1084,14 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="fpa-module" label="FP&A" icon={Calculator} />
                         <DropdownItem id="contas-a-receber" label="Contas a Receber" icon={TrendingUp} />
                         <DropdownItem id="financial-boletos" label="Boletos ao Cliente" icon={Receipt} />
-                        <DropdownItem id="project-financial" label="Contas a Pagar" icon={DollarSign} />
+                        <DropdownItem id="contas-a-pagar" label="Contas a Pagar" icon={DollarSign} />
                         <DropdownItem id="tributos-a-pagar" label="Tributos a Pagar" icon={Percent} />
                         <DropdownItem id="boletos-pagar" label="Captura de Boletos" icon={Banknote} />
-                        <DropdownItem id="extrato-bancario" label="Extrato Bancário" icon={FileText} />
+                        {/* `extrato-bancario` foi removido do menu: caía no mesmo
+                            BankReconciliation de "Conciliação Bancária" (rota duplicada).
+                            A rota segue viva no AppRouter para links antigos. */}
                         <DropdownItem id="bank-reconciliation" label="Conciliação Bancária" icon={ArrowRightLeft} />
+                        <DropdownItem id="project-financial" label="Gestão Financeira" icon={BarChart3} />
                         <DropdownItem id="financial-calendar" label="Calendário" icon={Calendar} />
                         <DropdownItem id="dunning" label="Cobrança Auto." icon={Bell} />
                         <DropdownItem id="financial-approval" label="Aprovações" icon={Shield} />

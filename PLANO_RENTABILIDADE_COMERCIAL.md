@@ -162,17 +162,32 @@ parcela.propertyId → empreendimento_units → tower → project_id (obra) / em
 cria a view — DDL em tabela quente do módulo deadlocka (ver histórico do
 Empreendimento).
 
-**Consequência esperada, e desejada:** o caminho determinístico vai casar
-MENOS parcelas do que o nome casa hoje — porque o nome casa coisas que não
-deveria. Não resolverão: unidade não publicada no Comercial (ambos os
-`*_property_id` nulos), deal anterior ao módulo de Empreendimentos, e vínculo
-órfão (as FKs são `ON DELETE SET NULL`; já existe botão manual de limpeza de
-órfãos no espelho por causa disso).
+### Medição feita em 30/07/2026 — risco ZERO nesta base
 
-**Regra:** quando não resolver, **não** cair de volta no nome. Exibir a parcela
-como "sem vínculo de unidade", em linha própria, para alguém corrigir o
-cadastro. O casamento por nome é justamente o que hoje esconde esses casos —
-soma no lugar aproximadamente certo e ninguém descobre que o vínculo quebrou.
+`scripts/diagnostico-vinculo-parcela-unidade.sql`, rodado em produção:
+
+| | qtd | valor |
+|---|---|---|
+| Parcelas comerciais (total) | **166** | R$ 2.525.116 |
+| sem `propertyId` / com lixo não-UUID | 0 | — |
+| **resolvem por FK até a unidade** | **166 (100%)** | R$ 2.525.116 |
+| chegam na obra pela TORRE (`towers.project_id`) | 0 | — |
+| **chegam na obra pelo EMPREENDIMENTO (`empreendimentos.project_id`)** | **166 (100%)** | R$ 2.525.116 |
+| não chegam por nenhum dos dois | 0 | — |
+
+As três ressalvas previstas (unidade não publicada, deal legado, vínculo
+órfão) medem **zero**. Não há mutirão de cadastro: a 3.4 é só código.
+
+⚠️ **O vínculo com a obra mora em `empreendimentos.project_id`, não em
+`empreendimento_towers.project_id`.** O campo da torre existe para o caso
+multi-torre e está vazio (corretamente — os empreendimentos atuais são de torre
+única). O resolvedor precisa nascer com os **dois**, torre com precedência
+sobre empreendimento, senão quebra no primeiro multi-torre cadastrado.
+
+**Regra mantida:** se um dia não resolver, **não** cair de volta no nome —
+exibir "sem vínculo de unidade" para alguém corrigir o cadastro. O casamento
+por nome é justamente o que esconde vínculo quebrado: soma no lugar
+aproximadamente certo e ninguém descobre.
 
 **Efeito colateral bom:** com a hierarquia disponível, o agrupamento de
 `computeProfitabilityByProperty` pode passar a ser por `unit_id` /

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, useResizableColumns } from './ui/TableUtils';
 import { paymentTypeService } from '../services/paymentTypeService';
 import {
     DEFAULT_PAYMENT_TYPES,
@@ -277,6 +277,19 @@ interface DealModalProps {
 // Mesmas colunas nas duas séries da aba Parcelas (plano de pagamento e parcelas
 // do contrato) — ver comentário em torno de contractEntries: elas têm que ler
 // igual, então compartilham a mesma configuração de colunas visíveis.
+/** Larguras iniciais das colunas da aba Parcelas (§6.1). Chutes de partida — o
+ *  botão de auto-ajuste (§6.1.2) mede o conteúdo real e corrige. */
+const PARCELAS_COL_WIDTHS: Record<string, number> = {
+    vencimento: 150,
+    valor: 120,
+    desconto: 170,
+    valor_final: 120,
+    tipo: 150,
+    forma_pagto: 150,
+    descricao: 220,
+    actions: 110,
+};
+
 const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'vencimento', label: 'Vencimento', sortable: false },
     { key: 'valor', label: 'Valor', sortable: false },
@@ -420,6 +433,39 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // Colunas visíveis da aba Parcelas — compartilhada pelas duas tabelas (plano
     // de pagamento e parcelas do contrato), guia §5.2 (toolbar acoplada).
     const parcelasCols = useTableColumns(PARCELAS_COLUMNS, 'dealModalParcelasColumns');
+    /* Redimensionamento (§6.1) das colunas da aba Parcelas. Uma instância só
+       serve as DUAS tabelas (plano de pagamento e série do contrato) porque elas
+       são ramos de um ternário: nunca estão montadas ao mesmo tempo, então só
+       existe um `tableRef` vivo por vez — e a largura escolhida vale para as
+       duas, que têm exatamente as mesmas colunas. */
+    const parcelasResize = useResizableColumns(PARCELAS_COL_WIDTHS, 'dealModalParcelasColWidths');
+    /** Largura da tabela = soma exata das colunas visíveis (§6.1: nunca w-full).
+     *  Checkbox (40) e "#" (48) são estruturais, largura fixa. */
+    const parcelasTableWidth = 40 + 48
+        + PARCELAS_COLUMNS
+            .filter(c => c.key !== 'actions' && parcelasCols.visibleColumns.includes(c.key))
+            .reduce((s, c) => s + parcelasResize.getWidth(c.key), 0)
+        + (parcelasCols.visibleColumns.includes('actions') ? parcelasResize.getWidth('actions') : 0);
+
+    /** colgroup das duas tabelas — mesma ordem das células de cabeçalho e de
+     *  dado, com o espaçador ANTES de "Ações" (§6.1.1) para a folga não empurrar
+     *  a última coluna. (Sem escrever as tags aqui: o check-ui-standard.sh lê
+     *  comentário como código e a tag literal liga o detector de §7.) */
+    const parcelasColGroup = (
+        <colgroup>
+            <col style={{ width: '40px' }} />
+            <col style={{ width: '48px' }} />
+            {PARCELAS_COLUMNS
+                .filter(c => c.key !== 'actions' && parcelasCols.visibleColumns.includes(c.key))
+                .map(c => (
+                    <col key={c.key} data-col-key={c.key} style={{ width: `${parcelasResize.getWidth(c.key)}px` }} />
+                ))}
+            <col />
+            {parcelasCols.visibleColumns.includes('actions') && (
+                <col data-col-key="actions" style={{ width: `${parcelasResize.getWidth('actions')}px` }} />
+            )}
+        </colgroup>
+    );
     const [showInstallmentLoteModal, setShowInstallmentLoteModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
@@ -2331,54 +2377,73 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                         const alvoVisualizado = generateTargets.find(t => t.id === viewTarget);
 
+                        /* Seletor de série. O plano de pagamento da negociação e as parcelas
+                           do contrato são origens DIFERENTES (a segunda vive em Contas a
+                           Receber) — sem este seletor, as parcelas de uma renovação eram
+                           geradas e não apareciam em lugar nenhum. Mora dentro da toolbar
+                           acoplada (§5.2), à esquerda, junto da descrição da série que ele
+                           escolhe; solto acima do card era mais uma barra flutuante. */
+                        const seletorSerie = generateTargets.length > 0 && (
+                            <div className="flex items-center gap-2 shrink-0">
+                                <label className="text-xs font-semibold text-slate-500 shrink-0">Ver parcelas de</label>
+                                <select
+                                    value={viewTarget}
+                                    onChange={(e) => setViewTarget(e.target.value)}
+                                    className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
+                                >
+                                    <option value="DEAL">Negociação — plano de pagamento</option>
+                                    {generateTargets.filter(t => t.kind === 'CONTRACT').map(t => (
+                                        <option key={t.id} value={t.id}>{t.label} — Contas a Receber</option>
+                                    ))}
+                                </select>
+                            </div>
+                        );
+
                         return (
                             <div className="space-y-6">
-                                {/* Seletor de série. O plano de pagamento da negociação e as
-                                    parcelas do contrato são origens DIFERENTES (a segunda vive
-                                    em Contas a Receber) — sem este seletor, as parcelas de uma
-                                    renovação eram geradas e não apareciam em lugar nenhum. */}
-                                {generateTargets.length > 0 && (
-                                    <div className="flex flex-col md:flex-row md:items-center gap-2.5">
-                                        <label className="text-xs font-semibold text-slate-500 shrink-0">Ver parcelas de</label>
-                                        <select
-                                            value={viewTarget}
-                                            onChange={(e) => setViewTarget(e.target.value)}
-                                            className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
-                                        >
-                                            <option value="DEAL">Negociação — plano de pagamento</option>
-                                            {generateTargets.filter(t => t.kind === 'CONTRACT').map(t => (
-                                                <option key={t.id} value={t.id}>{t.label} — Contas a Receber</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-
                                 {alvoVisualizado ? (
-                                    <>
-                                    {/* Toolbar §5.3. Ficava só no ramo do plano de pagamento: ao
-                                        escolher um contrato no seletor, "Gerar parcelas" sumia da
-                                        tela — e o estado vazio abaixo mandava usar exatamente esse
-                                        botão. Aqui ele já abre o modal com este contrato escolhido. */}
-                                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                                        <p className="text-sm text-gray-500">
-                                            Parcelas lançadas em Contas a Receber por {alvoVisualizado.label}. Valor e vencimento são editáveis aqui.
-                                        </p>
-                                        <button type="button" onClick={() => handleOpenGenerateModal(alvoVisualizado.id)} disabled={loading}
-                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
-                                            <Plus className="w-[15px] h-[15px]" />
-                                            {loading ? 'Gerando…' : 'Gerar parcelas'}
-                                        </button>
-                                    </div>
+                                    /* §5.2 — toolbar acoplada: barra e tabela dividem UM card
+                                       (border/rounded/shadow só no pai; a barra separada apenas
+                                       pelo border-b). Antes eram dois cards soltos empilhados. */
                                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                                        <div className="p-3 border-b border-gray-100 bg-white flex items-center justify-end">
-                                            <ColumnConfigButton
-                                                columns={PARCELAS_COLUMNS}
-                                                visibleColumns={parcelasCols.visibleColumns}
-                                                showColumnConfig={parcelasCols.showColumnConfig}
-                                                onToggleShow={() => parcelasCols.setShowColumnConfig(!parcelasCols.showColumnConfig)}
-                                                onToggleColumn={parcelasCols.toggleColumn}
-                                                onReset={parcelasCols.resetColumns}
-                                            />
+                                        <div className="p-3 border-b border-gray-100 bg-white flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
+                                            <div className="flex flex-col md:flex-row md:items-center gap-2.5 min-w-0">
+                                                {seletorSerie}
+                                                <p className="text-sm text-gray-500 truncate">
+                                                    Lançadas em Contas a Receber. Valor e vencimento são editáveis aqui.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                                    <ColumnConfigButton
+                                                        columns={PARCELAS_COLUMNS}
+                                                        visibleColumns={parcelasCols.visibleColumns}
+                                                        showColumnConfig={parcelasCols.showColumnConfig}
+                                                        onToggleShow={() => parcelasCols.setShowColumnConfig(!parcelasCols.showColumnConfig)}
+                                                        onToggleColumn={parcelasCols.toggleColumn}
+                                                        onReset={parcelasCols.resetColumns}
+                                                    />
+                                                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => parcelasResize.autoFit()}
+                                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                                        title="Ajustar largura das colunas ao conteúdo"
+                                                    >
+                                                        <MoveHorizontal className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                                {/* Ação primária (§17). Ficava só no ramo do plano de
+                                                    pagamento: ao escolher um contrato no seletor,
+                                                    "Gerar parcelas" sumia — e o estado vazio abaixo
+                                                    mandava usar exatamente este botão. Já abre o modal
+                                                    com este contrato escolhido. */}
+                                                <button type="button" onClick={() => handleOpenGenerateModal(alvoVisualizado.id)} disabled={loading}
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
+                                                    <Plus className="w-[15px] h-[15px]" />
+                                                    {loading ? 'Gerando…' : 'Gerar parcelas'}
+                                                </button>
+                                            </div>
                                         </div>
                                         {loadingEntries ? (
                                             <div className="text-center py-12">
@@ -2400,7 +2465,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     — desconto, tipo e forma de pagamento — aparece como "—"
                                                     em vez de sumir a coluna: coluna que muda de lugar
                                                     conforme a origem obriga a reaprender a tabela. */}
-                                                <table className="w-full text-left border-collapse">
+                                                <table ref={parcelasResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: parcelasTableWidth }}>
+{parcelasColGroup}
                                                     <thead>
                                                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                             <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -2421,28 +2487,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             </th>
                                                             <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
                                                             {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento<parcelasResize.ResizeHandle colKey="vencimento" /></th>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('valor') && (
-                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor<parcelasResize.ResizeHandle colKey="valor" /></th>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('desconto') && (
-                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto<parcelasResize.ResizeHandle colKey="desconto" /></th>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final<parcelasResize.ResizeHandle colKey="valor_final" /></th>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('tipo') && (
-                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo<parcelasResize.ResizeHandle colKey="tipo" /></th>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.<parcelasResize.ResizeHandle colKey="forma_pagto" /></th>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('descricao') && (
-                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição<parcelasResize.ResizeHandle colKey="descricao" /></th>
                                                             )}
+                                                            <th aria-hidden="true" className="border-r border-gray-100"></th>
                                                             {parcelasCols.visibleColumns.includes('actions') && (
-                                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                                <th className="relative overflow-hidden px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações<parcelasResize.ResizeHandle colKey="actions" /></th>
                                                             )}
                                                         </tr>
                                                     </thead>
@@ -2578,6 +2645,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                                 />
                                                                             </td>
                                                                         )}
+                                                                        <td aria-hidden="true"></td>
                                                                         {parcelasCols.visibleColumns.includes('actions') && (
                                                                             <td className="px-6 py-2.5 text-right">
                                                                                 <div className="flex items-center justify-end gap-1.5">
@@ -2604,50 +2672,61 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         )}
                                     </div>
-                                    </>
                                 ) : (
                                 <>
                                 {/* Sem KPIs (removidos a pedido): o rodapé de totais da própria
                                     tabela de parcelas já mostra soma, desconto e líquido. */}
 
-                                {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita */}
-                                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                                    <p className="text-sm text-gray-500">
-                                        {formData.payment_method === 'INSTALLMENTS'
-                                            ? 'Cada linha é uma cobrança. Data, valor, desconto e forma de pagamento são editáveis aqui.'
-                                            : 'A forma de pagamento atual não é parcelada — troque em "Forma de Pagamento" para montar um plano.'}
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                        {parcelas.some(i => i.installmentType && i.installmentType !== 'AVULSA') && (
-                                            <button type="button" onClick={handleOpenRecalcModal}
-                                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all">
-                                                <RefreshCw className="w-4 h-4" /> Recalcular
-                                            </button>
-                                        )}
-                                        <button type="button" onClick={handleOpenAddAdhocModal}
-                                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
-                                            <Plus className="w-4 h-4" /> Parcela avulsa
-                                        </button>
-                                        <button type="button" onClick={() => handleOpenGenerateModal()} disabled={loading}
-                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
-                                            <Plus className="w-[15px] h-[15px]" />
-                                            {loading ? 'Verificando…' : 'Gerar parcelas'}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Tabela acoplada — §5.2: toolbar interna (só o botão de colunas,
-                                    sem moldura própria) + tabela, um único card. */}
+                                {/* §5.2 — toolbar acoplada: descrição, colunas e ações dividem UM
+                                    card com a tabela, separados só pelo border-b. Antes a barra de
+                                    ações era um card à parte (§5.3) e a tabela trazia outra faixa
+                                    só com o botão de colunas — três molduras para um bloco só. */}
                                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                                    <div className="p-3 border-b border-gray-100 bg-white flex items-center justify-end">
-                                        <ColumnConfigButton
-                                            columns={PARCELAS_COLUMNS}
-                                            visibleColumns={parcelasCols.visibleColumns}
-                                            showColumnConfig={parcelasCols.showColumnConfig}
-                                            onToggleShow={() => parcelasCols.setShowColumnConfig(!parcelasCols.showColumnConfig)}
-                                            onToggleColumn={parcelasCols.toggleColumn}
-                                            onReset={parcelasCols.resetColumns}
-                                        />
+                                    <div className="p-3 border-b border-gray-100 bg-white flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
+                                        <div className="flex flex-col md:flex-row md:items-center gap-2.5 min-w-0">
+                                            {seletorSerie}
+                                            <p className="text-sm text-gray-500 truncate">
+                                                {formData.payment_method === 'INSTALLMENTS'
+                                                    ? 'Cada linha é uma cobrança. Data, valor e desconto são editáveis aqui.'
+                                                    : 'A forma de pagamento atual não é parcelada — troque em "Forma de Pagamento" para montar um plano.'}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                                <ColumnConfigButton
+                                                    columns={PARCELAS_COLUMNS}
+                                                    visibleColumns={parcelasCols.visibleColumns}
+                                                    showColumnConfig={parcelasCols.showColumnConfig}
+                                                    onToggleShow={() => parcelasCols.setShowColumnConfig(!parcelasCols.showColumnConfig)}
+                                                    onToggleColumn={parcelasCols.toggleColumn}
+                                                    onReset={parcelasCols.resetColumns}
+                                                />
+                                                <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => parcelasResize.autoFit()}
+                                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                                    title="Ajustar largura das colunas ao conteúdo"
+                                                >
+                                                    <MoveHorizontal className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            {parcelas.some(i => i.installmentType && i.installmentType !== 'AVULSA') && (
+                                                <button type="button" onClick={handleOpenRecalcModal}
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all">
+                                                    <RefreshCw className="w-4 h-4" /> Recalcular
+                                                </button>
+                                            )}
+                                            <button type="button" onClick={handleOpenAddAdhocModal}
+                                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
+                                                <Plus className="w-4 h-4" /> Parcela avulsa
+                                            </button>
+                                            <button type="button" onClick={() => handleOpenGenerateModal()} disabled={loading}
+                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
+                                                <Plus className="w-[15px] h-[15px]" />
+                                                {loading ? 'Verificando…' : 'Gerar parcelas'}
+                                            </button>
+                                        </div>
                                     </div>
                                     {parcelas.length === 0 && entrada <= 0 ? (
                                         /* Empty state — §12 (sem moldura própria dentro do card) */
@@ -2660,7 +2739,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     ) : (
                                         <div className="overflow-auto max-h-[60vh]">
-                                            <table className="w-full text-left border-collapse">
+                                            <table ref={parcelasResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: parcelasTableWidth }}>
+{parcelasColGroup}
                                                 <thead>
                                                     {/* Sticky §6.5, sentence case §6.2, px-6 + border-r §6.6.
                                                         Sem SortableHeader (§6.3): a ORDEM é o cronograma — a
@@ -2680,28 +2760,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         </th>
                                                         <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
                                                         {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento<parcelasResize.ResizeHandle colKey="vencimento" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('valor') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor<parcelasResize.ResizeHandle colKey="valor" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('desconto') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto<parcelasResize.ResizeHandle colKey="desconto" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final<parcelasResize.ResizeHandle colKey="valor_final" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('tipo') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo<parcelasResize.ResizeHandle colKey="tipo" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.<parcelasResize.ResizeHandle colKey="forma_pagto" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('descricao') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição<parcelasResize.ResizeHandle colKey="descricao" /></th>
                                                         )}
+                                                        <th aria-hidden="true" className="border-r border-gray-100"></th>
                                                         {parcelasCols.visibleColumns.includes('actions') && (
-                                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                            <th className="relative overflow-hidden px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações<parcelasResize.ResizeHandle colKey="actions" /></th>
                                                         )}
                                                     </tr>
                                                 </thead>
@@ -2770,6 +2851,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         placeholder="Descrição / observação" className={CELL} />
                                                                 </td>
                                                             )}
+                                                            <td aria-hidden="true"></td>
                                                             {parcelasCols.visibleColumns.includes('actions') && (
                                                                 <td className="px-6 py-2.5"></td>
                                                             )}
@@ -2909,6 +2991,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                     />
                                                                 </td>
                                                             )}
+                                                            <td aria-hidden="true"></td>
                                                             {parcelasCols.visibleColumns.includes('actions') && (
                                                                 <td className="px-6 py-2.5 text-right">
                                                                     <div className="flex items-center justify-end gap-1.5">

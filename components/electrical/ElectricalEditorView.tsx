@@ -1450,24 +1450,30 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             </button>
           )}
           
-          {plan?.fileUrl && (
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl">
-              <button
-                onClick={() => setShowBackground(!showBackground)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
-                  showBackground ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {showBackground ? 'Ocultar Planta' : 'Mostrar Planta'}
-              </button>
-              <button
-                onClick={() => setShowRooms(!showRooms)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ml-2 ${
-                  showRooms ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {showRooms ? 'Ocultar Ambientes' : 'Mostrar Ambientes'}
-              </button>
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+            {plan?.fileUrl && (
+              <>
+                <button
+                  onClick={() => setShowBackground(!showBackground)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                    showBackground ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {showBackground ? 'Ocultar Planta' : 'Mostrar Planta'}
+                </button>
+              </>
+            )}
+            
+            <button
+              onClick={() => setShowRooms(!showRooms)}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${plan?.fileUrl ? 'ml-2' : ''} ${
+                showRooms ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {showRooms ? 'Ocultar Ambientes' : 'Mostrar Ambientes'}
+            </button>
+            
+            {plan?.fileUrl && (
               <button
                 onClick={async () => {
                   if (confirm('Tem certeza que deseja remover a planta de fundo? Os elementos desenhados não serão perdidos.')) {
@@ -1481,13 +1487,13 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                     }
                   }
                 }}
-                className="px-2 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="px-2 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-2"
                 title="Remover planta importada"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
           <label className="cursor-pointer inline-flex items-center justify-center rounded-xl font-black uppercase tracking-widest transition-all active:scale-95 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 h-9 px-4 text-sm gap-2">
             <Upload className="w-4 h-4 mr-2 text-slate-500" />

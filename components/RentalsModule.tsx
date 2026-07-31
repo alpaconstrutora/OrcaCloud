@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { supabase } from '../lib/supabase';
 import { brokerService } from '../services/brokerService';
 import { Property, PropertyStatus, PropertyDeal, Client, BrokerProfile } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, useResizableColumns, usePersistedState, SortableHeader } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 
@@ -66,6 +66,17 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Larguras padrão do redimensionamento de colunas (§6.1) da tabela de Unidades.
+const PROPERTY_DEFAULT_COL_WIDTHS: Record<string, number> = {
+    name: 240, address: 240, occupancy: 140, block: 100, floor: 90,
+    private_area: 120, price: 150, status: 130, actions: 130,
+};
+
+// Colunas de dado aplicáveis a cada modo da tabela (edifícios × unidades de um
+// edifício) — usado para somar a largura total (§6.1) e montar o colgroup.
+const buildingModeColumnKeys = ['name', 'address', 'price', 'occupancy', 'status'] as const;
+const unitModeColumnKeys = ['name', 'block', 'floor', 'private_area', 'price', 'status'] as const;
+
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<RentalsTab>(
         (localStorage.getItem('rentals_active_tab') as RentalsTab) || 'inventory'
@@ -100,6 +111,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         ? { key: unitsTableColumns.sortColumn, direction: unitsTableColumns.sortDirection }
         : null;
     const handleSort = unitsTableColumns.handleColumnSort;
+    // Redimensionamento de colunas (§6.1) — a tabela troca de colunas conforme o
+    // modo (edifícios × unidades de um edifício), por isso a largura total soma
+    // só as colunas de dado do modo ativo, além de "Ações".
+    const unitsCols = useResizableColumns(PROPERTY_DEFAULT_COL_WIDTHS, 'rentalsUnitsColWidths');
+    const unitsModeColumnKeys = selectedBuildingId ? unitModeColumnKeys : buildingModeColumnKeys;
+    const unitsTableTotalWidth = unitsModeColumnKeys
+        .filter(key => unitsTableColumns.visibleColumns.includes(key))
+        .reduce((sum, key) => sum + unitsCols.getWidth(key), 0)
+        + unitsCols.getWidth('actions');
     const [dealSortConfig, setDealSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
     const handleDealSort = (key: string) => {
         setDealSortConfig(prev => prev?.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
@@ -934,8 +954,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 esquerda como ação secundária, a ação primária (criar) à direita.
                 Oculta na aba Corretores: "Novo imóvel/edifício" e "Relatórios" não
                 são ações desta aba — o cadastro de corretor é centralizado em
-                Fornecedores (aviso já na própria aba), sem ação primária própria aqui. */}
-            {activeTab !== 'brokers' && (
+                Fornecedores (aviso já na própria aba), sem ação primária própria aqui.
+                Oculta também na visão mestre "Gestão de Locações" (sem edifício
+                selecionado) — só aparece dentro de "Gestão de Unidades". */}
+            {activeTab !== 'brokers' && selectedBuildingId && (
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
                     <Maximize2 className="w-4 h-4" />
@@ -1000,6 +1022,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         onToggleColumn={unitsTableColumns.toggleColumn}
                                         onReset={unitsTableColumns.resetColumns}
                                     />
+                                    {/* Ajustar largura ao conteúdo (§6.1.2) — sob comando explícito, nunca
+                                        automático. Duplo clique no divisor da coluna já significa "restaurar padrão". */}
+                                    <button
+                                        onClick={() => unitsCols.autoFit()}
+                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                        title="Ajustar largura das colunas ao conteúdo"
+                                    >
+                                        <MoveHorizontal className="w-4 h-4" />
+                                    </button>
                                     <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                                 </>
                             )}
@@ -1049,50 +1080,85 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
                             {viewMode === 'list' && (
                                 <div className="overflow-auto max-h-[70vh]">
-                                    <table className="w-full text-left border-collapse">
+                                    <table ref={unitsCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: unitsTableTotalWidth }}>
+                                        <colgroup>
+                                            {unitsModeColumnKeys.map(key => (
+                                                unitsTableColumns.visibleColumns.includes(key) && (
+                                                    <col key={key} data-col-key={key} style={{ width: `${unitsCols.getWidth(key)}px` }} />
+                                                )
+                                            ))}
+                                            {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                                borda de "Ações" não andar a cada redimensionamento. */}
+                                            <col />
+                                            <col data-col-key="actions" style={{ width: `${unitsCols.getWidth('actions')}px` }} />
+                                        </colgroup>
                                         {/* thead em sentence case (§6.2) — escala compacta; colunas ordenáveis
                                             ligadas ao sortConfig que já filtrava filteredProperties (§6.3).
                                             Visibilidade por coluna vem do ColumnConfigButton (§5.2/unitsTableColumns). */}
                                         <thead>
                                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                 {unitsTableColumns.visibleColumns.includes('name') && (
-                                                    <SortableHeader colKey="name" label="Imóvel" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                                    <SortableHeader colKey="name" label="Imóvel" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <unitsCols.ResizeHandle colKey="name" />
+                                                    </SortableHeader>
                                                 )}
                                                 {!selectedBuildingId ? (
                                                     <>
                                                         {unitsTableColumns.visibleColumns.includes('address') && (
-                                                            <SortableHeader colKey="address" label="Endereço / referência" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                                            <SortableHeader colKey="address" label="Endereço / referência" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                                <unitsCols.ResizeHandle colKey="address" />
+                                                            </SortableHeader>
                                                         )}
                                                         {unitsTableColumns.visibleColumns.includes('price') && (
-                                                            <SortableHeader colKey="price" label="Patrimônio" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right" />
+                                                            <SortableHeader colKey="price" label="Patrimônio" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
+                                                                <unitsCols.ResizeHandle colKey="price" />
+                                                            </SortableHeader>
                                                         )}
                                                         {/* Ocupação é agregado das unidades filhas — sem campo único no
                                                             registro do edifício; mesma exceção do §6.3 usada em "Contato"
                                                             (SupplierList.tsx): coluna composta, não decisão por preguiça. */}
                                                         {unitsTableColumns.visibleColumns.includes('occupancy') && (
-                                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center text-sm font-semibold text-gray-500">Ocupação</th>
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-center text-sm font-semibold text-gray-500 relative overflow-hidden">
+                                                                Ocupação
+                                                                <unitsCols.ResizeHandle colKey="occupancy" />
+                                                            </th>
                                                         )}
                                                     </>
                                                 ) : (
                                                     <>
                                                         {unitsTableColumns.visibleColumns.includes('block') && (
-                                                            <SortableHeader colKey="block" label="Bloco" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
+                                                            <SortableHeader colKey="block" label="Bloco" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
+                                                                <unitsCols.ResizeHandle colKey="block" />
+                                                            </SortableHeader>
                                                         )}
                                                         {unitsTableColumns.visibleColumns.includes('floor') && (
-                                                            <SortableHeader colKey="floor" label="Pav." uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
+                                                            <SortableHeader colKey="floor" label="Pav." uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
+                                                                <unitsCols.ResizeHandle colKey="floor" />
+                                                            </SortableHeader>
                                                         )}
                                                         {unitsTableColumns.visibleColumns.includes('private_area') && (
-                                                            <SortableHeader colKey="private_area" label="Á. priv." uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap" />
+                                                            <SortableHeader colKey="private_area" label="Á. priv." uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden">
+                                                                <unitsCols.ResizeHandle colKey="private_area" />
+                                                            </SortableHeader>
                                                         )}
                                                         {unitsTableColumns.visibleColumns.includes('price') && (
-                                                            <SortableHeader colKey="price" label="Aluguel base" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />
+                                                            <SortableHeader colKey="price" label="Aluguel base" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
+                                                                <unitsCols.ResizeHandle colKey="price" />
+                                                            </SortableHeader>
                                                         )}
                                                     </>
                                                 )}
                                                 {unitsTableColumns.visibleColumns.includes('status') && (
-                                                    <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
+                                                    <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
+                                                        <unitsCols.ResizeHandle colKey="status" />
+                                                    </SortableHeader>
                                                 )}
-                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                                <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                    Ações
+                                                    <unitsCols.ResizeHandle colKey="actions" />
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
@@ -1184,6 +1250,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                             </span>
                                                         </td>
                                                     )}
+                                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <button

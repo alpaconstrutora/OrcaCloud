@@ -1418,7 +1418,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <ContasReceberManager
             organizationId={activeOrganizationId || ''}
             organizations={organizations}
-            onOrgChange={(id) => setActiveOrganizationId(id)}
           />
         </React.Suspense>
       );

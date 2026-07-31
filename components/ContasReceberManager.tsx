@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, ChevronUp,
+    AlertCircle, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
     FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle,
 } from 'lucide-react';
@@ -607,11 +607,9 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
 interface Props {
     organizationId?: string;
     organizations?: Organization[];
-    onOrgChange?: (id: string) => void;
 }
 
-export default function ContasReceberManager({ organizationId, organizations, onOrgChange }: Props) {
-    const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
+export default function ContasReceberManager({ organizationId, organizations }: Props) {
     const [rows, setRows]         = useState<Receivable[]>([]);
     const [inadimplencia, setInad] = useState<InadimplenciaFaixa[]>([]);
     const [loading, setLoading]   = useState(true);
@@ -645,9 +643,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
     const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading]   = useState(false);
 
-    const effectiveOrgId = selectedOrgId === 'ALL'
-        ? (organizationId || organizations?.[0]?.id || '')
-        : selectedOrgId;
+    const effectiveOrgId = organizationId || organizations?.[0]?.id || '';
 
     const load = useCallback(async () => {
         if (!effectiveOrgId) return;
@@ -671,11 +667,6 @@ export default function ContasReceberManager({ organizationId, organizations, on
     }, [effectiveOrgId, search, statusFilter, dueFrom, dueTo]);
 
     useEffect(() => { load(); }, [load]);
-
-    function handleOrgChange(id: string) {
-        setSelectedOrgId(id);
-        if (id !== 'ALL') onOrgChange?.(id);
-    }
 
     async function handleBaixa(receivable: Receivable) {
         const ok = await confirm({
@@ -941,21 +932,19 @@ export default function ContasReceberManager({ organizationId, organizations, on
                             )}
                         </div>
 
-                        {/* Status pills — filtro rápido, não ordenação (§6.4) */}
-                        <div className="flex items-center h-9 gap-1 overflow-x-auto">
-                            {STATUS_OPTIONS.map(s => (
-                                <button
-                                    key={s}
-                                    onClick={() => setStatusFilter(s)}
-                                    className={`h-9 px-3 rounded-[6px] text-xs font-semibold transition-all whitespace-nowrap ${
-                                        statusFilter === s
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                                >
-                                    {s === 'all' ? 'Todos' : STATUS_LABEL[s]}
-                                </button>
-                            ))}
+                        {/* Status — dropdown em vez de pills, para não competir por espaço
+                            com os demais controles da toolbar (§5.3) */}
+                        <div className="relative flex items-center h-9 shrink-0">
+                            <select
+                                value={statusFilter}
+                                onChange={e => setStatusFilter(e.target.value as StatusFilter)}
+                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
+                            >
+                                {STATUS_OPTIONS.map(s => (
+                                    <option key={s} value={s}>{s === 'all' ? 'Todos' : STATUS_LABEL[s]}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
                         </div>
 
                         <button
@@ -968,24 +957,6 @@ export default function ContasReceberManager({ organizationId, organizations, on
                         <div className="flex items-center h-9">
                             <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                         </div>
-
-                        {/* Org selector — só quando há mais de uma organização */}
-                        {organizations && organizations.length > 1 && (
-                            <div className="relative flex items-center h-9">
-                                <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                <select
-                                    value={selectedOrgId}
-                                    onChange={e => handleOrgChange(e.target.value)}
-                                    className="h-9 pl-9 pr-7 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
-                                >
-                                    <option value="ALL">Todas as Organizações</option>
-                                    {organizations.map(o => (
-                                        <option key={o.id} value={o.id}>{o.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
-                            </div>
-                        )}
 
                         <button
                             onClick={load}
@@ -1064,7 +1035,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                 força uppercase internamente por padrão. */}
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="w-10 px-4 py-2 text-center">
+                                    <th className="w-10 px-6 py-2 text-center border-r border-gray-100">
                                         <input
                                             type="checkbox"
                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
@@ -1077,35 +1048,35 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                     {tableColumns.visibleColumns.includes('party_name') && (
                                         <SortableHeader label="Cliente / Parte" colKey="party_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('description') && (
                                         <SortableHeader label="Descrição" colKey="description" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('project_name') && (
                                         <SortableHeader label="Obra" colKey="project_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('due_date') && (
                                         <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('amount') && (
                                         <SortableHeader label="Valor" colKey="amount" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
                                         <SortableHeader label="Status" colKey="status" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-4 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
                                 </tr>
                             </thead>
@@ -1118,7 +1089,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                     const isManual = r.source_system === 'MANUAL';
                                     return (
                                         <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
-                                            <td className="w-10 px-4 py-2.5 text-center">
+                                            <td className="w-10 px-6 py-2.5 text-center border-r border-gray-100">
                                                 {isSelectable(r) ? (
                                                     <input
                                                         type="checkbox"
@@ -1130,37 +1101,37 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                 ) : null}
                                             </td>
                                             {tableColumns.visibleColumns.includes('party_name') && (
-                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-900 max-w-[160px] truncate">
+                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-700 max-w-[160px] truncate border-r border-gray-100 last:border-r-0">
                                                     {r.party_name ?? <span className="text-gray-400 italic">—</span>}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('description') && (
-                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-700 max-w-[200px] truncate">
+                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-700 max-w-[200px] truncate border-r border-gray-100 last:border-r-0">
                                                     {r.description ?? '—'}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('project_name') && (
-                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-600 max-w-[140px] truncate">
+                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-600 max-w-[140px] truncate border-r border-gray-100 last:border-r-0">
                                                     {r.project_name ?? '—'}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('due_date') && (
-                                                <td className={`px-4 py-2.5 text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
+                                                <td className={`px-6 py-2.5 text-sm font-normal whitespace-nowrap border-r border-gray-100 last:border-r-0 ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
                                                     {fmtDate(r.due_date)}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('amount') && (
-                                                <td className="px-4 py-2.5 text-sm font-medium text-gray-900 whitespace-nowrap">
+                                                <td className="px-6 py-2.5 text-sm font-medium text-gray-800 whitespace-nowrap border-r border-gray-100 last:border-r-0">
                                                     {fmt(r.amount)}
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-4 py-2.5">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <StatusBadge status={r.effective_status} />
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('actions') && (
-                                            <td className="px-4 py-2.5">
+                                            <td className="px-6 py-2.5">
                                                 <div className="flex items-center gap-1.5">
                                                     {!isRecebido && (
                                                         <button

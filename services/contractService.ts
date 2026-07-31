@@ -712,13 +712,13 @@ async function syncRecurringToFinance(contract: Contract) {
  */
 export async function generateRecurringInstallmentsForPeriod(
     contract: Contract,
-    opts: { fromDate: string; toDate: string; amount: number; label?: string },
+    opts: { fromDate: string; toDate: string; amount: number; label?: string; maxCount?: number },
 ): Promise<{ inserted: number; skipped: number; dueDates: string[] }> {
-    const { fromDate, toDate, amount } = opts;
+    const { fromDate, toDate, amount, maxCount } = opts;
     if (!contract.is_recurring) throw new Error('Geração por período só se aplica a contrato recorrente.');
     if (!(amount > 0)) throw new Error('Valor da parcela deve ser maior que zero.');
 
-    const dueDates = buildRecurringDueDates({
+    let dueDates = buildRecurringDueDates({
         startDate: contract.start_date,
         from: fromDate,
         to: toDate,
@@ -726,6 +726,12 @@ export async function generateRecurringInstallmentsForPeriod(
         billingCycle: contract.billing_cycle,
         paymentDays: contract.payment_days,
     });
+    // Quem chama pode mandar o Nº de Parcelas explicitamente (campo da aba Forma
+    // de Pagamento). Nesse caso ele MANDA sobre a janela: a vigência só define
+    // onde a série começa e a cadência, e ficamos com os N primeiros
+    // vencimentos. Sem isso, um contrato de 12 meses com 6 parcelas acordadas
+    // gerava 12 cobranças.
+    if (maxCount && maxCount > 0) dueDates = dueDates.slice(0, Math.floor(maxCount));
     // Janela sem nenhum vencimento é quase sempre erro de cadastro (ciclo ou dia
     // de vencimento ausente, janela invertida) — retornar 0 calado deixava a tela
     // dizendo "nada gerado" sem dizer por quê.

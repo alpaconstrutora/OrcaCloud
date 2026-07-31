@@ -343,30 +343,30 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     }, [initialData, isOpen]);
 
     /**
-     * Locação — Forma de Pagamento: o Valor Total do Contrato é derivado
-     * (mensal × parcelas), mas o usuário pode digitar outro (desconto,
-     * carência, mês proporcional). Quando digita, vira override e para de
-     * recalcular. Na reabertura o override é redescoberto comparando o valor
-     * salvo com o produto — não existe flag no banco (e não precisa: a
-     * divergência JÁ é a informação).
+     * Locação — Forma de Pagamento: o Valor Total do Contrato é SEMPRE
+     * mensal × parcelas, e por isso é read-only. Digitar um total que
+     * contradiz os outros dois campos não é um caso real: na assinatura o
+     * total É o produto. A única forma legítima de divergir nasce depois, ao
+     * aplicar desconto numa parcela já lançada — e aí quem grava é a pergunta
+     * `perguntarCorrigirTotalContrato`, com o usuário decidindo.
+     *
+     * Consequência assumida: mexer no mensal ou no nº de parcelas depois de um
+     * desconto reescreve o total pelo produto. É o certo — mudou o que foi
+     * acordado, o desconto anterior não vale mais como base.
      */
     const rentalComputedTotal = (d: Partial<PropertyDeal>) =>
         Number((((d.installment_value || 0) * (d.installments || 0))).toFixed(2));
-    const [rentalTotalOverridden, setRentalTotalOverridden] = useState(false);
 
-    useEffect(() => {
-        if (!isOpen) return;
-        const saved = initialData?.contract_total_value;
-        setRentalTotalOverridden(
-            saved != null && Math.abs(saved - rentalComputedTotal(initialData || {})) > 0.01
-        );
-    }, [initialData, isOpen]);
+    /** Total salvo ≠ mensal × parcelas: só acontece via desconto nas parcelas. */
+    const divergeDoProduto = formData.type === 'RENTAL'
+        && (formData.contract_total_value ?? 0) > 0
+        && Math.abs((formData.contract_total_value ?? 0) - rentalComputedTotal(formData)) > 0.01;
 
     const handleRentalMonthlyChange = (raw: string) => {
         const monthly = raw === '' ? undefined : parseFloat(raw) || 0;
         setFormData(prev => {
             const next = { ...prev, installment_value: monthly };
-            return rentalTotalOverridden ? next : { ...next, contract_total_value: rentalComputedTotal(next) };
+            return { ...next, contract_total_value: rentalComputedTotal(next) };
         });
     };
 
@@ -374,7 +374,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         const n = raw === '' ? undefined : Math.max(1, Math.floor(Number(raw) || 1));
         setFormData(prev => {
             const next = { ...prev, installments: n };
-            return rentalTotalOverridden ? next : { ...next, contract_total_value: rentalComputedTotal(next) };
+            return { ...next, contract_total_value: rentalComputedTotal(next) };
         });
     };
 
@@ -479,6 +479,32 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             cancelLabel: 'Manter valor',
         });
         if (ok) setFormData(prev => ({ ...prev, value: Number(liquido.toFixed(2)) }));
+    };
+
+    /**
+     * Pergunta se o Valor Total do Contrato deve acompanhar o desconto.
+     *
+     * Na geração o total é sempre mensal × parcelas — não há como divergir. A
+     * divergência só nasce DEPOIS, quando o usuário aplica um desconto numa
+     * parcela já lançada: aí a soma do que será cobrado deixa de bater com o
+     * total acordado. Quem decide é o usuário, pela mesma razão do
+     * perguntarCorrigirFechamento: desconto comercial baixa o total; desconto
+     * pontual (pagamento antecipado, acerto de um mês) não mexe no contrato.
+     */
+    const perguntarCorrigirTotalContrato = async (somaCobrada: number) => {
+        const atual = Number(formData.contract_total_value) || 0;
+        if (!(atual > 0) || Math.abs(somaCobrada - atual) < 0.01) return;
+        const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+        const ok = await confirm({
+            title: 'Ajustar o Valor Total do Contrato?',
+            message: `Com o desconto, a soma das parcelas passa a ser ${fmt(somaCobrada)}, e o Valor Total do Contrato é ${fmt(atual)}. `
+                + `Atualizar o total para ${fmt(somaCobrada)}? `
+                + 'Mantenha como está se o desconto for pontual e o valor acordado não mudou.',
+            variant: 'default',
+            confirmLabel: 'Atualizar total',
+            cancelLabel: 'Manter valor',
+        });
+        if (ok) setFormData(prev => ({ ...prev, contract_total_value: Number(somaCobrada.toFixed(2)) }));
     };
 
     /** Soma líquida do plano (parcelas com desconto aplicado + entrada). */
@@ -895,11 +921,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // a linha é relida depois; os demais campos ficam com o estado otimista.
         const recalcula = patch.amount != null
             || patch.discount_type !== undefined || patch.discount_amount !== undefined;
+        // Desconto muda o que será COBRADO; o total acordado é decisão do usuário.
+        const mexeuNoDesconto = patch.discount_type !== undefined || patch.discount_amount !== undefined;
         void contractService.updateFinancialEntry(entryId, patch)
             .then(async () => {
                 if (!recalcula) return;
                 const alvo = generateTargets.find(t => t.id === viewTarget);
-                if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
+                if (!alvo) return;
+                const rows = await contractService.listFinancialEntries(alvo.contract);
+                setContractEntries(rows);
+                if (mexeuNoDesconto) {
+                    await perguntarCorrigirTotalContrato(
+                        rows.reduce((s, r) => s + (Number(r.amount) || 0), 0));
+                }
             })
             .catch(async (err) => {
                 setContractError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
@@ -947,7 +981,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 });
             }
             const alvo = generateTargets.find(t => t.id === viewTarget);
-            if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
+            if (alvo) {
+                const rows = await contractService.listFinancialEntries(alvo.contract);
+                setContractEntries(rows);
+                // Mesmo desvio do desconto avulso: a soma cobrada deixa de bater
+                // com o total acordado, e quem decide é o usuário.
+                await perguntarCorrigirTotalContrato(
+                    rows.reduce((s, r) => s + (Number(r.amount) || 0), 0));
+            }
             setSelectedEntryIds(new Set());
         } catch (err) {
             setContractError(err instanceof Error ? err.message : 'Erro ao editar as parcelas em lote.');
@@ -1032,17 +1073,39 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     };
 
     /**
+     * Valor e quantidade da geração no contrato — vêm dos campos da aba Forma de
+     * Pagamento (Valor Mensal do Contrato e Número de Parcelas), que são o que o
+     * usuário negociou. O valor do próprio contrato (current/original_value) fica
+     * só como fallback de contrato antigo, cadastrado antes desses campos.
+     * O Valor Total é sempre mensal × parcelas — não entra como terceiro input
+     * porque divergir dele aqui seria contradição; a divergência só nasce depois,
+     * ao aplicar desconto numa parcela (ver perguntarCorrigirTotalContrato).
+     */
+    const geracaoContrato = (target: GenerateTarget) => {
+        const mensal = Number(formData.installment_value) || 0;
+        const parcelas = Math.floor(Number(formData.installments) || 0);
+        return {
+            amount: mensal > 0 ? mensal : target.amount,
+            maxCount: parcelas > 0 ? parcelas : undefined,
+            usouCampos: mensal > 0,
+        };
+    };
+
+    /**
      * Gera as parcelas de um CONTRATO ou de um ADITIVO — cadência (ciclo, dia de
-     * vencimento) vem do contrato; janela e valor, do alvo escolhido.
+     * vencimento) vem do contrato; a janela, do alvo escolhido; valor e
+     * quantidade, dos campos da aba Forma de Pagamento.
      * Idempotente por data: repetir não duplica.
      */
     const handleGenerateForContract = async (target: GenerateTarget) => {
         setLoading(true);
         try {
+            const { amount, maxCount } = geracaoContrato(target);
             const r = await generateRecurringInstallmentsForPeriod(target.contract, {
                 fromDate: target.fromDate,
                 toDate: target.toDate,
-                amount: target.amount,
+                amount,
+                maxCount,
                 label: target.label,
             });
             // O modal continua ABERTO com o resultado: as parcelas de contrato vão
@@ -1057,7 +1120,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // mensagem sozinha esconde — sem isso, "não gerou" fica indepurável.
             console.error('[DealModal] Falha ao gerar parcelas do contrato:', {
                 alvo: target.label, contrato: target.contract.number,
-                janela: [target.fromDate, target.toDate], valor: target.amount,
+                janela: [target.fromDate, target.toDate],
+                valor: geracaoContrato(target).amount,
+                parcelas: geracaoContrato(target).maxCount,
                 ciclo: target.contract.billing_cycle, dia: target.contract.due_day,
                 erro: e,
             });
@@ -2034,8 +2099,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                 {/* Locação — o valor negociado pode divergir do sugerido pelas
                                     unidades. Mensal e nº de parcelas são digitados; o Total é
-                                    calculado (mensal × parcelas) mas permanece editável para
-                                    desconto/carência (então vira override e para de recalcular). */}
+                                    derivado (mensal × parcelas) e read-only: a única divergência
+                                    legítima nasce do desconto nas parcelas, e aí quem grava é a
+                                    pergunta perguntarCorrigirTotalContrato. */}
                                 {formData.type === 'RENTAL' && (
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="space-y-2">
@@ -2070,35 +2136,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <div className="relative">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
                                                 <input
-                                                    type="number"
-                                                    min="0"
-                                                    step="0.01"
-                                                    value={formData.contract_total_value ?? ''}
-                                                    onChange={(e) => {
-                                                        setRentalTotalOverridden(true);
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            contract_total_value: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0
-                                                        }));
-                                                    }}
-                                                    className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    type="text"
+                                                    readOnly
+                                                    value={(formData.contract_total_value ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    className="w-full h-9 pl-12 pr-3 bg-gray-50 border border-gray-200 rounded-[6px] outline-none text-sm font-medium text-gray-800 cursor-default"
                                                     placeholder="0,00"
                                                 />
                                             </div>
-                                            {rentalTotalOverridden ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setRentalTotalOverridden(false);
-                                                        setFormData(prev => ({ ...prev, contract_total_value: rentalComputedTotal(prev) }));
-                                                    }}
-                                                    className="text-xs text-gray-400 hover:text-blue-600 px-1 transition-colors"
-                                                >
-                                                    Valor manual — recalcular (mensal × parcelas)
-                                                </button>
-                                            ) : (
-                                                <span className="block text-xs text-gray-400 px-1">Mensal × parcelas — editável</span>
-                                            )}
+                                            <span className="block text-xs text-gray-400 px-1">
+                                                {divergeDoProduto
+                                                    ? 'Ajustado por desconto nas parcelas — some ou refaça as parcelas para voltar a mensal × parcelas.'
+                                                    : 'Mensal × parcelas. Só muda ao aplicar desconto nas parcelas.'}
+                                            </span>
                                         </div>
                                     </div>
                                 )}
@@ -3483,11 +3532,41 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </select>
                                         <p className="text-xs text-gray-400 mt-1">
                                             {alvoSelecionado
-                                                ? `Usa a vigência e a cadência do contrato (${alvoSelecionado.contract.billing_cycle ?? 'Mensal'}, dia ${alvoSelecionado.contract.due_day ?? '—'}), no valor de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(alvoSelecionado.amount)}. Repetir não duplica: vencimentos já lançados são pulados.`
+                                                ? `Usa a cadência do contrato (${alvoSelecionado.contract.billing_cycle ?? 'Mensal'}, dia ${alvoSelecionado.contract.due_day ?? '—'}) a partir de ${fmtDateBR(alvoSelecionado.fromDate)}. Repetir não duplica: vencimentos já lançados são pulados.`
                                                 : 'As parcelas entram no plano de pagamento desta negociação.'}
                                         </p>
                                     </div>
                                 )}
+
+                                {/* Conferência do que vai ser gerado. Os três valores são os
+                                    campos da aba Forma de Pagamento — aqui só se lê, para o
+                                    usuário não ter que confiar de memória no que digitou lá. */}
+                                {alvoSelecionado && (() => {
+                                    const { amount, maxCount, usouCampos } = geracaoContrato(alvoSelecionado);
+                                    const n = maxCount ?? 0;
+                                    const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+                                    return (
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {[
+                                                    { label: 'Valor mensal', value: fmt(amount) },
+                                                    { label: 'Nº de parcelas', value: n > 0 ? String(n) : 'Toda a vigência' },
+                                                    { label: 'Valor total', value: n > 0 ? fmt(amount * n) : '—' },
+                                                ].map(c => (
+                                                    <div key={c.label} className="p-3 bg-gray-50 rounded-[6px] border border-gray-100">
+                                                        <p className="text-xs font-semibold text-slate-500">{c.label}</p>
+                                                        <p className="text-sm font-medium text-gray-800 mt-0.5">{c.value}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-gray-400">
+                                                {usouCampos
+                                                    ? 'Valores da aba Forma de Pagamento — altere lá para gerar diferente.'
+                                                    : 'O Valor Mensal do Contrato está vazio na aba Forma de Pagamento; usando o valor cadastrado no contrato.'}
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
 
                                 {!alvoSelecionado && (
                                 <>

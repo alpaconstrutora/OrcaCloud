@@ -207,8 +207,9 @@ export interface PropertyDeal {
     /** Locação: valor mensal do contrato (a parcela). `value` é a soma das
      *  unidades — no aluguel ela funciona como valor mensal SUGERIDO. */
     installment_value?: number;
-    /** Locação: valor total do contrato. Calculado como
-     *  `installment_value * installments`, mas editável (desconto, carência).
+    /** Locação: valor total do contrato. SEMPRE `installment_value * installments`
+     *  (campo read-only na UI). A única exceção é o ajuste por desconto aplicado
+     *  em parcelas já lançadas, confirmado pelo usuário.
      *  Coluna própria porque `value` é reescrita pela soma das unidades. */
     contract_total_value?: number;
     down_payment?: number;

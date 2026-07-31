@@ -190,6 +190,19 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return () => observer.disconnect();
   }, []);
 
+  const getSafeOrgId = () => {
+    let orgId = project?.organizationId || organizationId;
+    if (!orgId) {
+      try {
+        const stored = localStorage.getItem('opura_auth_state');
+        if (stored) {
+          orgId = JSON.parse(stored).state?.organizationId;
+        }
+      } catch (e) {}
+    }
+    return orgId || '';
+  };
+
   useEffect(() => {
     loadData();
   }, [electricalProjectId]);
@@ -809,7 +822,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
       try {
           const newPoint = await electricalProjectService.createPoint({
-              organizationId: project?.organizationId || organizationId,
+              organizationId: getSafeOrgId(),
               roomId: targetRoomId,
               pointType: selectedToolboxItem,
               powerW: pointDef.defaultPower,
@@ -879,7 +892,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const newRoom = await electricalProjectService.createRoom({
-        organizationId: project?.organizationId || organizationId,
+        organizationId: getSafeOrgId(),
         planId: plan.id,
         name: roomName,
         polygonPoints: pts,
@@ -924,7 +937,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
         try {
             const newRoom = await electricalProjectService.createRoom({
-                organizationId: project?.organizationId || organizationId,
+                organizationId: getSafeOrgId(),
                 planId: plan.id,
                 name: `Ambiente ${rooms.length + newRoomsToCreate.length + 1}`,
                 polygonPoints: pts,
@@ -973,7 +986,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const newWall = await electricalProjectService.createWall({
-        organizationId: project?.organizationId || organizationId,
+        organizationId: getSafeOrgId(),
         planId: plan.id,
         points: pts,
         thicknessM: 0.15
@@ -1011,7 +1024,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const newElement = await electricalProjectService.createElement({
-        organizationId: project?.organizationId || organizationId,
+        organizationId: getSafeOrgId(),
         planId: plan.id,
         type: dbType,
         points: [x1, y1, x2, y2]
@@ -1094,7 +1107,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         
         const newWalls = await Promise.all(wallPoints.map(pts => 
             electricalProjectService.createWall({
-                organizationId: project?.organizationId || organizationId,
+                organizationId: getSafeOrgId(),
                 planId: plan.id,
                 points: pts,
                 thicknessM: 0.15

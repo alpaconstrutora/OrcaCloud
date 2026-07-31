@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Building2, ChevronLeft, ChevronRight, Loader2, MapPin, Info, Image as ImageIcon } from 'lucide-react';
+import { Building2, ChevronLeft, Loader2, MapPin, Info, Image as ImageIcon, X } from 'lucide-react';
 import { commercialPriceTableService } from '../../services/commercialPriceTableService';
 import type { CommercialPriceTable, CommercialPriceTableItem } from '../../services/commercialPriceTableService';
 import { rentalPriceTableService } from '../../services/rentalPriceTableService';
@@ -308,11 +308,18 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
         setItemSort(prev => prev.col === col ? { col: col as SortKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col: col as SortKey, dir: 'asc' });
     };
 
-    const handleRowClick = (propertyId: string) => {
+    // Ação da linha virou botão explícito na coluna de Ações (guia §9): desde que
+    // a coluna Foto existe, a linha passou a ter duas ações prováveis (ampliar a
+    // imagem × iniciar proposta), então o clique na linha inteira deixou de ser
+    // inequívoco — condição que a §9.1 exige para o padrão de linha clicável.
+    const handleMakeProposal = (propertyId: string) => {
         const unit = units.find(u => u.id === propertyId);
         if (!unit) return;
         onMakeProposal(unit);
     };
+
+    // Foto ampliada — mesmo padrão de components/investor/PhotoGallery.tsx.
+    const [lightbox, setLightbox] = useState<string | null>(null);
 
     // ── Master: lista de empreendimentos ────────────────────────────────────
     if (!selectedBuilding) {
@@ -495,6 +502,10 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                         por org (broker_portal_price_columns), que espelha as 13
                                         colunas de dados da tabela de preços. */}
                                     {onToggleUnit && <th className="px-4 py-2 w-10" />}
+                                    {/* Ações (§9) — sempre visível, fora do config de colunas:
+                                        se o admin pudesse desmarcar, o corretor ficaria sem
+                                        como iniciar uma proposta. */}
+                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -503,22 +514,26 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                     return (
                                         <tr
                                             key={item.id}
-                                            className={`transition-colors group ${clickable ? 'hover:bg-blue-50/50 cursor-pointer' : 'opacity-60'}`}
-                                            onClick={() => clickable && handleRowClick(item.property_id)}
-                                            title={clickable ? 'Clique para iniciar uma proposta com esta unidade' : 'Unidade não disponível no estoque atual'}
+                                            className={`transition-colors group ${clickable ? 'hover:bg-blue-50/50' : 'opacity-60'}`}
+                                            title={clickable ? undefined : 'Unidade não disponível no estoque atual'}
                                         >
                                             {isCol('photo') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
                                                     {item.photo_url
-                                                        ? <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                                                        ? <img
+                                                            src={item.photo_url}
+                                                            alt={`Foto da unidade ${item.property_name || ''}`}
+                                                            title="Clique para ampliar"
+                                                            className="w-full h-full object-cover cursor-zoom-in transition-transform duration-300 hover:scale-105"
+                                                            onClick={() => setLightbox(item.photo_url!)}
+                                                        />
                                                         : <ImageIcon className="w-4 h-4 text-gray-300" />}
                                                 </div>
                                             </td>}
+                                            {/* Sem chevron: ele sinalizava "clique na linha", que saiu
+                                                em favor do botão da coluna de Ações (§9). */}
                                             {isCol('unit') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                <span className="group-hover:text-blue-700 flex items-center gap-1.5">
-                                                    {item.property_name || '—'}
-                                                    {clickable && <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />}
-                                                </span>
+                                                {item.property_name || '—'}
                                             </td>}
                                             {isCol('status') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <UnitStatusBadge status={item.property_status} />
@@ -578,12 +593,45 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                                     />
                                                 </td>
                                             )}
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end">
+                                                    <button
+                                                        onClick={() => handleMakeProposal(item.property_id)}
+                                                        disabled={!clickable}
+                                                        title={clickable ? undefined : 'Unidade não disponível no estoque atual'}
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all whitespace-nowrap disabled:text-gray-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                                                    >
+                                                        Fazer Proposta
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                         </table>
                     </div>
+                </div>
+            )}
+
+            {/* Foto ampliada — padrão de components/investor/PhotoGallery.tsx */}
+            {lightbox && (
+                <div
+                    className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4"
+                    onClick={() => setLightbox(null)}
+                >
+                    <button
+                        className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
+                        onClick={() => setLightbox(null)}
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                    <img
+                        src={lightbox}
+                        alt="Foto ampliada"
+                        className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                    />
                 </div>
             )}
         </div>

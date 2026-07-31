@@ -718,29 +718,38 @@ export async function generateRecurringInstallmentsForPeriod(
     if (!contract.is_recurring) throw new Error('Geração por período só se aplica a contrato recorrente.');
     if (!(amount > 0)) throw new Error('Valor da parcela deve ser maior que zero.');
 
+    // Quem chama pode mandar o Nº de Parcelas explicitamente (campo da aba Forma
+    // de Pagamento). Nesse caso ele MANDA sobre a janela: a vigência define só
+    // onde a série COMEÇA e a cadência, e a série vai até completar N parcelas,
+    // podendo passar de `toDate`. Sem isso, um contrato com end_date curto (ou
+    // sem end_date, virando janela de poucos meses) truncava a série: 60
+    // parcelas acordadas geravam 6.
+    const n = maxCount && maxCount > 0 ? Math.floor(maxCount) : 0;
     let dueDates = buildRecurringDueDates({
         startDate: contract.start_date,
         from: fromDate,
-        to: toDate,
+        // HORIZONTE_ABERTO: com N definido, quem corta a série é o slice abaixo,
+        // não a data final. O laço de buildRecurringDueDates já tem guarda de
+        // 1200 iterações, então isso não é loop infinito.
+        to: n > 0 ? '9999-12-31' : toDate,
         dueDay: contract.due_day,
         billingCycle: contract.billing_cycle,
         paymentDays: contract.payment_days,
     });
-    // Quem chama pode mandar o Nº de Parcelas explicitamente (campo da aba Forma
-    // de Pagamento). Nesse caso ele MANDA sobre a janela: a vigência só define
-    // onde a série começa e a cadência, e ficamos com os N primeiros
-    // vencimentos. Sem isso, um contrato de 12 meses com 6 parcelas acordadas
-    // gerava 12 cobranças.
-    if (maxCount && maxCount > 0) dueDates = dueDates.slice(0, Math.floor(maxCount));
+    if (n > 0) dueDates = dueDates.slice(0, n);
     // Janela sem nenhum vencimento é quase sempre erro de cadastro (ciclo ou dia
     // de vencimento ausente, janela invertida) — retornar 0 calado deixava a tela
     // dizendo "nada gerado" sem dizer por quê.
     if (dueDates.length === 0) {
         throw new Error(
-            `Nenhum vencimento cai entre ${fromDate} e ${toDate} com a cadência do contrato `
+            `Nenhum vencimento cai a partir de ${fromDate} com a cadência do contrato `
             + `(${contract.billing_cycle ?? 'sem periodicidade'}, dia ${contract.due_day ?? 'não definido'}). `
             + 'Confira periodicidade, dia de vencimento e o período informado.');
     }
+    // A checagem de duplicidade tem que cobrir a série REAL, não a janela pedida:
+    // com N mandando, o último vencimento pode ser depois de `toDate`, e consultar
+    // só até lá faria a repetição reinserir as parcelas do excedente.
+    const rangeFim = dueDates[dueDates.length - 1] > toDate ? dueDates[dueDates.length - 1] : toDate;
 
     const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
     const label = opts.label || `Contrato ${contract.number || ''}`.trim();
@@ -784,7 +793,7 @@ export async function generateRecurringInstallmentsForPeriod(
         .eq('source_system', 'CONTRACT_RECURRING')
         .like('reference_id', `${contract.id}%`)
         .gte('due_date', fromDate)
-        .lte('due_date', toDate);
+        .lte('due_date', rangeFim);
     const existing = new Set((jaExistem || []).map(r => (r.due_date as string).slice(0, 10)));
 
     const novos = dueDates.filter(d => !existing.has(d));

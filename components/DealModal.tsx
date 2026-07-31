@@ -1112,9 +1112,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // para Contas a Receber (internal_transactions), NÃO para o plano de
             // pagamento desta negociação — fechar em silêncio dava a impressão de
             // que nada tinha sido gerado.
+            // Período REAL da série gerada — com o Nº de Parcelas mandando, o
+            // último vencimento pode passar do fim da vigência do contrato, e
+            // repetir a janela pedida aqui mentiria sobre o que foi lançado.
+            const ini = r.dueDates[0] ?? target.fromDate;
+            const fim = r.dueDates[r.dueDates.length - 1] ?? target.toDate;
             setGenerateResult(r.inserted > 0
-                ? { ok: true, msg: `${r.inserted} parcela(s) geradas em Contas a Receber para ${target.label}, de ${fmtDateBR(target.fromDate)} a ${fmtDateBR(target.toDate)}. Elas não aparecem na aba Parcelas: lá fica o plano de pagamento da negociação.` }
-                : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(target.fromDate)} a ${fmtDateBR(target.toDate)}) já existiam em Contas a Receber.` });
+                ? { ok: true, msg: `${r.inserted} parcela(s) geradas em Contas a Receber para ${target.label}, de ${fmtDateBR(ini)} a ${fmtDateBR(fim)}. Elas não aparecem na aba Parcelas: lá fica o plano de pagamento da negociação.` }
+                : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(ini)} a ${fmtDateBR(fim)}) já existiam em Contas a Receber.` });
         } catch (e) {
             // Log detalhado: o erro do PostgREST traz code/details/hint que a
             // mensagem sozinha esconde — sem isso, "não gerou" fica indepurável.

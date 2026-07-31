@@ -769,7 +769,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
       try {
           const newPoint = await electricalProjectService.createPoint({
-              organizationId: organizationId,
+              organizationId: project?.organizationId || organizationId,
               roomId: clickedRoom.id,
               pointType: selectedToolboxItem,
               powerW: pointDef.defaultPower,
@@ -839,7 +839,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const newRoom = await electricalProjectService.createRoom({
-        organizationId: organizationId,
+        organizationId: project?.organizationId || organizationId,
         planId: plan.id,
         name: roomName,
         polygonPoints: pts,
@@ -884,7 +884,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
         try {
             const newRoom = await electricalProjectService.createRoom({
-                organizationId: organizationId,
+                organizationId: project?.organizationId || organizationId,
                 planId: plan.id,
                 name: `Ambiente ${rooms.length + newRoomsToCreate.length + 1}`,
                 polygonPoints: pts,
@@ -933,7 +933,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     try {
       const newWall = await electricalProjectService.createWall({
-        organizationId: organizationId,
+        organizationId: project?.organizationId || organizationId,
         planId: plan.id,
         points: pts,
         thicknessM: 0.15
@@ -1054,7 +1054,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         
         const newWalls = await Promise.all(wallPoints.map(pts => 
             electricalProjectService.createWall({
-                organizationId: organizationId,
+                organizationId: project?.organizationId || organizationId,
                 planId: plan.id,
                 points: pts,
                 thicknessM: 0.15

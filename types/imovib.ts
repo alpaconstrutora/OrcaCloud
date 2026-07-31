@@ -204,7 +204,13 @@ export interface PropertyDeal {
     notes?: string;
     payment_method?: string;
     installments?: number;
+    /** Locação: valor mensal do contrato (a parcela). `value` é a soma das
+     *  unidades — no aluguel ela funciona como valor mensal SUGERIDO. */
     installment_value?: number;
+    /** Locação: valor total do contrato. Calculado como
+     *  `installment_value * installments`, mas editável (desconto, carência).
+     *  Coluna própria porque `value` é reescrita pela soma das unidades. */
+    contract_total_value?: number;
     down_payment?: number;
     /** Forma de pagamento, tipo de parcela e observação da Entrada — mesmos campos por parcela em custom_installments, espelhados aqui porque a Entrada não é um item do array (é o campo down_payment). */
     down_payment_payment_type?: PaymentInstallment['paymentType'];

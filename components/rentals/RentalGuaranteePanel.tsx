@@ -1,16 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    ShieldCheck, AlertTriangle, Plus, Loader2, Save, History, Landmark, Users,
+    AlertTriangle, Plus, Loader2, Save, History, Landmark, Users,
     FileCheck, RefreshCw,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
-import { KpiCard } from '../ui/KpiCard';
 import { useConfirm } from '../ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import Button from '../ui/Button';
 import {
     rentalGuaranteeService, RENTAL_KIND_LABELS, GUARANTEE_STATUS_LABELS,
-    DEPOSIT_EVENT_LABELS, checkLegalRules, computeCoverageIndex, monthlyRentOf,
+    DEPOSIT_EVENT_LABELS, checkLegalRules, monthlyRentOf,
 } from '../../services/rentalGuaranteeService';
 import {
     Contract, ContractGuarantee, ContractGuarantor, GuaranteeDocument,
@@ -187,11 +186,6 @@ const RentalGuaranteePanel: React.FC<Props> = ({ contract, onNotify }) => {
         guarantors,
     ), [kind, caucaoType, guaranteedValue, depositBank, depositAccount, policyNumber, rent, guarantors]);
 
-    const coverage = useMemo(() => computeCoverageIndex(
-        parseNum(guaranteedValue), rent,
-        { penaltyMonths: contract.rescission_penalty_months ?? 0 },
-    ), [guaranteedValue, rent, contract.rescission_penalty_months]);
-
     // A garantia venceu antes do contrato? (§5.4 — alerta, não bloqueio.)
     const vigenciaCurta = Boolean(
         validUntil && contract.end_date && validUntil < contract.end_date);
@@ -335,35 +329,9 @@ const RentalGuaranteePanel: React.FC<Props> = ({ contract, onNotify }) => {
 
     return (
         <div className="space-y-6">
-            {/* ── KPIs (§4) ─────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard shadow={false} size="sm" label="Modalidade"
-                    value={RENTAL_KIND_LABELS[kind]}
-                    icon={<ShieldCheck className="w-4 h-4" />}
-                    color={kind === 'SEM_GARANTIA' ? 'red' : 'blue'} />
-                <KpiCard shadow={false} size="sm" label="Situação"
-                    value={GUARANTEE_STATUS_LABELS[status] || status}
-                    icon={<FileCheck className="w-4 h-4" />}
-                    color={status === 'VIGENTE' ? 'emerald' : status === 'EM_ANALISE' ? 'indigo' : 'amber'} />
-                <KpiCard shadow={false} size="sm" label="Valor garantido"
-                    value={fmtCur(parseNum(guaranteedValue))}
-                    sub={rent > 0 ? `${(parseNum(guaranteedValue) / rent).toFixed(1)} aluguéis` : undefined}
-                    icon={<Landmark className="w-4 h-4" />} color="violet" />
-                {isCaucaoDinheiro ? (
-                    <KpiCard shadow={false} size="sm" label="Saldo da caução"
-                        value={fmtCur(saldoCaucao)} sub="A devolver ao locatário"
-                        icon={<Landmark className="w-4 h-4" />}
-                        color={saldoCaucao > 0 ? 'amber' : 'gray'} />
-                ) : (
-                    <KpiCard shadow={false} size="sm" label="Índice de cobertura"
-                        value={kind === 'SEM_GARANTIA' ? '—' : `${(coverage.ratio * 100).toFixed(0)}%`}
-                        sub={kind === 'SEM_GARANTIA' ? undefined : coverage.label}
-                        icon={<ShieldCheck className="w-4 h-4" />}
-                        color={coverage.band === 'CRITICA' ? 'red'
-                            : coverage.band === 'INSUFICIENTE' ? 'amber'
-                            : coverage.band === 'ADEQUADA' ? 'blue' : 'emerald'} />
-                )}
-            </div>
+            {/* Sem KPIs (removidos a pedido, junto com os das demais abas de
+                Gerenciar Negociação): modalidade, situação e valor garantido são
+                campos do próprio formulário abaixo. */}
 
             {/* ── Avisos legais e de consistência ───────────────────────── */}
             {(legal.blocking.length > 0 || legal.warnings.length > 0 || vigenciaCurta

@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
-import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton } from './ui/TableUtils';
 import { paymentTypeService } from '../services/paymentTypeService';
 import {
@@ -342,6 +341,42 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             setLastCheckedInstallmentIndex(null);
         }
     }, [initialData, isOpen]);
+
+    /**
+     * Locação — Forma de Pagamento: o Valor Total do Contrato é derivado
+     * (mensal × parcelas), mas o usuário pode digitar outro (desconto,
+     * carência, mês proporcional). Quando digita, vira override e para de
+     * recalcular. Na reabertura o override é redescoberto comparando o valor
+     * salvo com o produto — não existe flag no banco (e não precisa: a
+     * divergência JÁ é a informação).
+     */
+    const rentalComputedTotal = (d: Partial<PropertyDeal>) =>
+        Number((((d.installment_value || 0) * (d.installments || 0))).toFixed(2));
+    const [rentalTotalOverridden, setRentalTotalOverridden] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const saved = initialData?.contract_total_value;
+        setRentalTotalOverridden(
+            saved != null && Math.abs(saved - rentalComputedTotal(initialData || {})) > 0.01
+        );
+    }, [initialData, isOpen]);
+
+    const handleRentalMonthlyChange = (raw: string) => {
+        const monthly = raw === '' ? undefined : parseFloat(raw) || 0;
+        setFormData(prev => {
+            const next = { ...prev, installment_value: monthly };
+            return rentalTotalOverridden ? next : { ...next, contract_total_value: rentalComputedTotal(next) };
+        });
+    };
+
+    const handleRentalInstallmentsChange = (raw: string) => {
+        const n = raw === '' ? undefined : Math.max(1, Math.floor(Number(raw) || 1));
+        setFormData(prev => {
+            const next = { ...prev, installments: n };
+            return rentalTotalOverridden ? next : { ...next, contract_total_value: rentalComputedTotal(next) };
+        });
+    };
 
     const [properties, setProperties] = useState<Property[]>([]);
     /** Unidade cujo cartão de detalhe/specs está aberto na aba Unidades. */
@@ -1423,20 +1458,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // lugar do X. "Nova Negociação Comercial" (criação simples) continua modal.
     const isEditMode = !!formData.id;
 
-    // Rótulo da situação em sentence case (§8: sem uppercase, sem pílula).
-    const STATUS_LABELS: Record<string, string> = {
-        IN_NEGOTIATION: 'Em negociação',
-        PROPOSAL: 'Proposta',
-        RESERVED: 'Reservado',
-        WAITING_PAYMENT: 'Aguardando pagamento',
-        CONTRATO: 'Contrato',
-        ASSINATURA: 'Assinatura',
-        COMPLETED: 'Concluído',
-        CANCELLED: 'Cancelado',
-        PENDING: 'Pendente',
-    };
-    const statusLabel = STATUS_LABELS[formData.status || ''] || (formData.status || '—').replace(/_/g, ' ');
-
     // Antes um único hasMissingRequired cobria os dois campos na mesma aba;
     // divididos agora que cada um vive na sua própria aba, aponta exatamente
     // onde falta o dado (badge por aba, não mais genérico).
@@ -1516,7 +1537,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }>
 
                 {/* Cabeçalho — §20: h1 solto + subtítulo mt-1.5, sem card/banda colorida.
-                    Os blocos de métrica que moravam à direita do título viraram KpiCard (§4). */}
+                    Sem blocos de métrica: tela de edição não exibe KPI (ver abaixo). */}
                 <div className="px-8 pt-6 pb-3 shrink-0">
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
@@ -1578,25 +1599,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     </div>
                 </div>
 
-                {/* KPIs — §4: cor semântica por métrica, componente único */}
-                <div className="px-8 shrink-0">
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                        <KpiCard shadow={false} size="sm" label="Tipo de acordo"
-                            value={formData.type === 'SALE' ? 'Venda direta' : formData.type === 'RENTAL' ? 'Contrato locação' : 'Prestação de serviço'}
-                            icon={<TrendingUp className="w-4 h-4" />} color="blue" />
-                        <KpiCard shadow={false} size="sm" label="Situação"
-                            value={statusLabel}
-                            icon={<Briefcase className="w-4 h-4" />}
-                            color={formData.status === 'COMPLETED' ? 'emerald' : formData.status === 'CANCELLED' ? 'red' : 'indigo'} />
-                        <KpiCard shadow={false} size="sm" label="Valor total"
-                            value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(formData.value || 0)}
-                            icon={<DollarSign className="w-4 h-4" />} color="violet" />
-                        <KpiCard shadow={false} size="sm" label="Comissão do corretor"
-                            value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(formData.broker_commission_value || 0)}
-                            icon={<Percent className="w-4 h-4" />}
-                            color={(formData.broker_commission_value || 0) > 0 ? 'amber' : 'gray'} />
-                    </div>
-                </div>
+                {/* Sem KPIs no cabeçalho: esta é uma tela de EDIÇÃO, não um painel.
+                    Tipo/Situação/Valor/Comissão são campos editáveis logo abaixo —
+                    repeti-los como cartão só empurrava o formulário para baixo. */}
 
                 {/* Form content */}
                 <form
@@ -2005,7 +2010,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     Read-only de propósito: com N unidades no contrato, um
                                     total digitado à mão divergiria do rateio por unidade. */}
                                 <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-slate-500">Valor do Fechamento</label>
+                                    <label className="text-xs font-semibold text-slate-500">
+                                        {formData.type === 'RENTAL' ? 'Valor Mensal Sugerido' : 'Valor do Fechamento'}
+                                    </label>
                                     <div className="relative group">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
                                         <input
@@ -2024,6 +2031,77 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         Soma de {dealUnits.length} {dealUnits.length === 1 ? 'unidade' : 'unidades'} — editar na aba Unidade
                                     </button>
                                 </div>
+
+                                {/* Locação — o valor negociado pode divergir do sugerido pelas
+                                    unidades. Mensal e nº de parcelas são digitados; o Total é
+                                    calculado (mensal × parcelas) mas permanece editável para
+                                    desconto/carência (então vira override e para de recalcular). */}
+                                {formData.type === 'RENTAL' && (
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-slate-500">Valor Mensal do Contrato</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={formData.installment_value ?? ''}
+                                                    onChange={(e) => handleRentalMonthlyChange(e.target.value)}
+                                                    className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    placeholder="0,00"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-slate-500">Número de Parcelas</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value={formData.installments ?? ''}
+                                                onChange={(e) => handleRentalInstallmentsChange(e.target.value)}
+                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                placeholder="12"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={formData.contract_total_value ?? ''}
+                                                    onChange={(e) => {
+                                                        setRentalTotalOverridden(true);
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            contract_total_value: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0
+                                                        }));
+                                                    }}
+                                                    className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    placeholder="0,00"
+                                                />
+                                            </div>
+                                            {rentalTotalOverridden ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setRentalTotalOverridden(false);
+                                                        setFormData(prev => ({ ...prev, contract_total_value: rentalComputedTotal(prev) }));
+                                                    }}
+                                                    className="text-xs text-gray-400 hover:text-blue-600 px-1 transition-colors"
+                                                >
+                                                    Valor manual — recalcular (mensal × parcelas)
+                                                </button>
+                                            ) : (
+                                                <span className="block text-xs text-gray-400 px-1">Mensal × parcelas — editável</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Datas */}
                                 <div className="grid grid-cols-2 gap-4">
@@ -2124,8 +2202,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         const parcelas = formData.custom_installments || [];
                         const entrada = formData.down_payment || 0;
                         const somaBruta = parcelas.reduce((s, i) => s + (i.originalValue ?? i.value), 0) + entrada;
-                        const somaLiquida = parcelas.reduce((s, i) => s + i.value, 0) + entrada;
-                        const descontoTotal = somaBruta - somaLiquida;
                         const bate = Math.abs(somaBruta - (formData.value || 0)) < 0.01;
                         const todasSelecionadas = parcelas.length > 0 && parcelas.every(i => selectedInstallmentIds.has(i.id));
                         // Célula editável dentro de TD: mesma tipografia do texto (§7.1).
@@ -2398,21 +2474,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 ) : (
                                 <>
-                                {/* KPIs — §4: cor semântica por métrica, componente único */}
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                                    <KpiCard shadow={false} size="sm" label="Parcelas" value={parcelas.length}
-                                        icon={<Layers className="w-4 h-4" />} color="blue" />
-                                    <KpiCard shadow={false} size="sm" label="Soma das parcelas"
-                                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaBruta)}
-                                        sub={bate ? 'Confere com o fechamento' : 'Diverge do valor do fechamento'}
-                                        icon={<DollarSign className="w-4 h-4" />} color={bate ? 'emerald' : 'amber'} />
-                                    <KpiCard shadow={false} size="sm" label="Desconto"
-                                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(descontoTotal)}
-                                        icon={<Percent className="w-4 h-4" />} color={descontoTotal > 0 ? 'orange' : 'gray'} />
-                                    <KpiCard shadow={false} size="sm" label="Total a receber"
-                                        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(somaLiquida)}
-                                        icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
-                                </div>
+                                {/* Sem KPIs (removidos a pedido): o rodapé de totais da própria
+                                    tabela de parcelas já mostra soma, desconto e líquido. */}
 
                                 {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita */}
                                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">

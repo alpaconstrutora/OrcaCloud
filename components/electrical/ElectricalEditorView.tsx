@@ -2001,8 +2001,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
                                   
                                   {/* "Fechar" as paredes (caps) */}
-                                  <Line points={[0, -wallThick/2, 0, wallThick/2]} stroke="#1e293b" strokeWidth={2} />
-                                  <Line points={[dist, -wallThick/2, dist, wallThick/2]} stroke="#1e293b" strokeWidth={2} />
+                                  <Rect x={0} y={-wallThick/2} width={2} height={wallThick} fill="#1e293b" />
+                                  <Rect x={dist-2} y={-wallThick/2} width={2} height={wallThick} fill="#1e293b" />
 
                                   {/* Linhas tracejadas indicando o vão (padrão de projeto) */}
                                   <Line points={[0, -wallThick/2, dist, -wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />

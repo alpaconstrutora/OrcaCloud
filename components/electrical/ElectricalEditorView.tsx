@@ -2205,6 +2205,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   strokeWidth={2}
                                   closed
                                   tension={0}
+                                  listening={false}
                                 />
                                 <Text
                                   x={centerX - 50}

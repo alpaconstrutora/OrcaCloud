@@ -38,7 +38,9 @@ import LaborValeRefeicao from './LaborValeRefeicao';
 import LaborIncentivos from './LaborIncentivos';
 import LaborCargos from './LaborCargos';
 import LaborRemuneracaoSocietaria from './LaborRemuneracaoSocietaria';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
+import { laborKeys } from '../lib/queryKeys';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
 import Button from './ui/Button';
 
@@ -249,6 +251,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
         if (onChangeView) onChangeView(TAB_TO_SECTION[tab] || 'labor-dashboard');
     };
 
+    const queryClient = useQueryClient();
     const [editingEmployee, setEditingEmployee]= useState<Employee | null>(null);
     const [isEmployeeFormOpen, setIsEmployeeFormOpen] = useState(false);
     const [isMigrating, setIsMigrating]       = useState(false);
@@ -256,6 +259,22 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
     const [selectedOrgId, setSelectedOrgId]   = useState<string | undefined>(undefined);
 
     const currentOrgId = selectedOrgId;
+
+    // §22 do guia de UI — atualizar o cache local (React Query) em vez de
+    // refetch completo por 1 colaborador criado/editado.
+    const handleEmployeeSaved = (updated: Employee) => {
+        setIsEmployeeFormOpen(false);
+        setEditingEmployee(null);
+        queryClient.setQueryData<Employee[]>(laborKeys.employees(currentOrgId), prev => {
+            if (!prev) return prev;
+            // Se a lista está filtrada por organização e o colaborador mudou
+            // de organização, ele "vaza" da lista atual — remover, não inserir.
+            const combinaComOrg = !currentOrgId || updated.org_id === currentOrgId;
+            const existe = prev.some(e => e.id === updated.id);
+            if (!combinaComOrg) return prev.filter(e => e.id !== updated.id);
+            return existe ? prev.map(e => (e.id === updated.id ? updated : e)) : [updated, ...prev];
+        });
+    };
 
     // ── React Query: dados do módulo ──────────────────────────
     const {
@@ -698,7 +717,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     orgId={currentOrgId || activeOrganizationId || ''}
                     organizations={organizations as unknown as { id: string; name: string; [key: string]: unknown }[]}
                     onClose={() => { setIsEmployeeFormOpen(false); setEditingEmployee(null); }}
-                    onSaved={() => { setIsEmployeeFormOpen(false); setEditingEmployee(null); refetchAll(); }}
+                    onSaved={handleEmployeeSaved}
                 />
             )}
         </div>

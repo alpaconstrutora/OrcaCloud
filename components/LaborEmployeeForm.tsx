@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase } from 'lucide-react';
+import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase, AlertCircle } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import { payrollService, PayrollRubric } from '../services/payrollService';
 import { orgGovernanceService } from '../services/orgGovernanceService';
@@ -19,7 +19,7 @@ interface LaborEmployeeFormProps {
     orgId: string;
     organizations: OrganizationOption[];
     onClose: () => void;
-    onSaved: () => void;
+    onSaved: (employee: Employee) => void;
 }
 
 const ROLES = [
@@ -48,6 +48,11 @@ const inputCls = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded
 const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, organizations = [], onClose, onSaved }) => {
     const isEditing = !!employee;
     const [saving, setSaving] = useState(false);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'error') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
     const [activeTab, setActiveTab] = useState<'geral' | 'pessoal' | 'documentos' | 'endereco' | 'organizacional' | 'bancario' | 'checklist' | 'folha'>('geral');
     const [allRubrics, setAllRubrics] = useState<PayrollRubric[]>([]);
     const [recurringRubrics, setRecurringRubrics] = useState<string[]>([]);
@@ -202,10 +207,10 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     };
 
     const handleSave = async () => {
-        if (!form.name?.trim()) { alert('Nome é obrigatório.'); return; }
-        if (!form.role?.trim()) { alert('Função é obrigatória.'); return; }
+        if (!form.name?.trim()) { notify('Nome é obrigatório.'); return; }
+        if (!form.role?.trim()) { notify('Função é obrigatória.'); return; }
         if (form.cpf && form.cpf.replace(/\D/g, '').length === 11 && !validateCPF(form.cpf)) {
-            alert('CPF inválido. Verifique os dígitos informados.');
+            notify('CPF inválido. Verifique os dígitos informados.');
             return;
         }
         setSaving(true);
@@ -235,10 +240,10 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                 );
             }
 
-            onSaved();
+            onSaved(savedEmployee);
         } catch (err: any) {
             console.error(err);
-            alert('Erro ao salvar colaborador: ' + (err.message || 'Tente novamente.'));
+            notify('Erro ao salvar colaborador: ' + (err.message || 'Tente novamente.'));
         } finally {
             setSaving(false);
         }
@@ -258,6 +263,20 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         { id: 'folha', label: 'Folha de Pagamento' },
         { id: 'checklist', label: 'Checklist' },
     ] as const;
+
+    // Subtítulo por aba — §19.1: o cabeçalho acompanha a aba ativa mesmo
+    // quando o título ("Editar Colaborador") permanece o mesmo, pois todas as
+    // abas editam a mesma entidade, só mudando o grupo de campos.
+    const TAB_SUBTITLES: Record<typeof EMPLOYEE_TABS[number]['id'], string> = {
+        geral: 'Dados pessoais, vínculo, função e custo de mão de obra.',
+        pessoal: 'Filiação, nascimento, estado civil e demais dados pessoais.',
+        documentos: 'RG, CTPS, título de eleitor e documentação militar.',
+        endereco: 'Endereço residencial e telefone de contato.',
+        organizacional: 'Empresa, matrícula, departamento, CNH e dependentes.',
+        bancario: 'Conta bancária e chave PIX para pagamento.',
+        folha: 'Rubricas recorrentes incluídas automaticamente na folha.',
+        checklist: 'Checklist de admissão e observações extras.',
+    };
 
     const renderTabs = () => (
         <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
@@ -637,7 +656,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                                                 : [...prev, rubric.code]
                                                             );
                                                         }}
-                                                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border transition-all text-left group
+                                                        className={`flex items-center justify-between px-4 py-3 rounded-[10px] border transition-all text-left group
                                                             ${isSelected 
                                                                 ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
                                                                 : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300 shadow-sm'}`}
@@ -660,7 +679,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                                 );
                                             })
                                         ) : (
-                                            <div className="text-center py-10 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                                            <div className="text-center py-10 bg-slate-50 rounded-[10px] border border-dashed border-slate-200">
                                                 <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                                                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nenhuma rubrica automática customizada disponível.</p>
                                                 <p className="text-[9px] text-slate-400 mt-1 italic">Vá em Rubricas e certifique-se de que há rubricas marcadas como "Automática" mas não como "Padrão CLT".</p>
@@ -668,7 +687,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                         )}
                                     </div>
 
-                                    <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-start gap-3">
+                                    <div className="bg-amber-50 p-4 rounded-[10px] border border-amber-100 flex items-start gap-3">
                                         <AlertTriangle className="text-amber-600 mt-0.5" size={16} />
                                         <p className="text-[9px] font-bold text-amber-700 leading-tight">
                                             As rubricas marcadas como <strong className="uppercase">"Padrão CLT"</strong> na gestão de rubricas não aparecem nesta lista pois já são incluídas automaticamente para todos os colaboradores com contrato CLT.
@@ -825,7 +844,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
                     {activeTab === 'bancario' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
-                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-start gap-3">
+                            <div className="bg-emerald-50 p-4 rounded-[10px] border border-emerald-100 flex items-start gap-3">
                                 <CreditCard className="text-emerald-600 mt-0.5 shrink-0" size={18} />
                                 <div>
                                     <p className="text-xs font-black text-emerald-900">Dados Bancários para Pagamento</p>
@@ -887,7 +906,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                                 key={item}
                                                 type="button"
                                                 onClick={() => toggleChecklist(item)}
-                                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-sm font-medium text-left
+                                                className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] border transition-all text-sm font-medium text-left
                                                     ${checked ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
                                             >
                                                 {checked ? <CheckSquare className="w-4 h-4 text-indigo-600 shrink-0" /> : <Square className="w-4 h-4 text-slate-400 shrink-0" />}
@@ -911,6 +930,15 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         </>
     );
 
+    const renderToast = () => notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {notification.message}
+        </div>
+    );
+
     if (isEditing) {
         return (
             <div className="absolute inset-0 z-50 bg-white flex flex-col">
@@ -920,13 +948,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                         <button
                             type="button"
                             onClick={onClose}
-                            className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
+                            className="p-3 bg-white border border-gray-100 rounded-[6px] text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
                         >
                             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
                         </button>
                         <div>
                             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Editar Colaborador</h1>
-                            <p className="text-gray-400 text-sm mt-1.5 font-medium">Atualize as informações do colaborador selecionado.</p>
+                            <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_SUBTITLES[activeTab]}</p>
                         </div>
                     </div>
                 </div>
@@ -944,6 +972,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                 <div className="bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 px-6 py-4 shrink-0">
                     {renderFooter()}
                 </div>
+
+                {renderToast()}
             </div>
         );
     }
@@ -976,6 +1006,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     {renderFooter()}
                 </div>
             </div>
+
+            {renderToast()}
         </div>
     );
 };

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
-    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle,
+    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal,
 } from 'lucide-react';
 import { receivableService } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
@@ -11,7 +11,7 @@ import { clientService } from '../services/clientService';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
@@ -52,6 +52,10 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    party_name: 200, description: 220, project_name: 160, due_date: 130, amount: 140, status: 150, actions: 260,
+};
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Roda client-side
 // por cima de `rows`, que já vem filtrado no servidor (search/status/período).
@@ -625,6 +629,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // storageKey explícito — antes usava o default 'tableColumns' e colidia com
     // qualquer outro componente que também não passasse a chave.
     const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasReceberManagerColWidths');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'contasReceberManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
@@ -979,6 +984,14 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
 
                         {/* Novo — CTA compacto §17 (verde = accent semântico "recebível" do módulo) */}
@@ -1030,12 +1043,24 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                         </div>
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-sm text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: RECEBER_COLUMNS.reduce((sum, c) => sum + (c.key === 'actions' ? 0 : tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 40 + cols.getWidth('actions')), minWidth: '100%' }}>
+                            <colgroup>
+                                <col style={{ width: '40px' }} />
+                                {RECEBER_COLUMNS.filter(c => c.key !== 'actions').map(c => (
+                                    tableColumns.visibleColumns.includes(c.key)
+                                        ? <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
+                                        : null
+                                ))}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio,
+                                    para a borda de "Ações" não andar a cada redimensionamento. */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             {/* thead sentence case (§6.2) — uppercase={false} porque SortableHeader
                                 força uppercase internamente por padrão. */}
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="w-10 px-6 py-2 text-center border-r border-gray-100">
+                                    <th className="px-6 py-2 text-center border-r border-gray-100">
                                         <input
                                             type="checkbox"
                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
@@ -1048,35 +1073,52 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                     {tableColumns.visibleColumns.includes('party_name') && (
                                         <SortableHeader label="Cliente / Parte" colKey="party_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="party_name" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('description') && (
                                         <SortableHeader label="Descrição" colKey="description" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="description" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('project_name') && (
                                         <SortableHeader label="Obra" colKey="project_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="project_name" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('due_date') && (
                                         <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="due_date" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('amount') && (
                                         <SortableHeader label="Valor" colKey="amount" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="amount" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
                                         <SortableHeader label="Status" colKey="status" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="status" />
+                                        </SortableHeader>
                                     )}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 relative overflow-hidden">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
                                     )}
                                 </tr>
                             </thead>
@@ -1089,7 +1131,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                     const isManual = r.source_system === 'MANUAL';
                                     return (
                                         <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
-                                            <td className="w-10 px-6 py-2.5 text-center border-r border-gray-100">
+                                            <td className="px-6 py-2.5 text-center border-r border-gray-100">
                                                 {isSelectable(r) ? (
                                                     <input
                                                         type="checkbox"
@@ -1130,6 +1172,8 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                                     <StatusBadge status={r.effective_status} />
                                                 </td>
                                             )}
+                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5">
                                                 <div className="flex items-center gap-1.5">

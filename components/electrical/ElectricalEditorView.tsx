@@ -2269,7 +2269,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                      } else if (drawingConduitSource !== pt.id) {
                                        (async () => {
                                          try {
-                                           const nc = await electricalProjectService.createConduit(organizationId, plan!.id, drawingConduitSource, pt.id);
+                                           const nc = await electricalProjectService.createConduit(getSafeOrgId(), plan!.id, drawingConduitSource, pt.id);
                                            const newConduits = [...(conduits || []), nc];
                                            setConduits(newConduits);
                                            pushHistoryState({ walls, rooms, points, conduits: newConduits });

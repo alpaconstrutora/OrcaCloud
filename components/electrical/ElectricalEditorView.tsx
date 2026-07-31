@@ -2322,8 +2322,10 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           pushHistoryState({ walls, rooms, points: newPoints });
                           return newPoints;
                       });
+                      showToast('Propriedades do ponto salvas com sucesso!', 'success');
+                      setSelectedPointId(null); // Close sidebar after saving
                   } catch (err) {
-                      alert('Erro ao atualizar ponto.');
+                      showToast('Erro ao atualizar ponto.', 'error');
                   }
                 }}
                 onDelete={async () => {
@@ -2334,9 +2336,10 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           pushHistoryState({ walls, rooms, points: newPoints });
                           return newPoints;
                       });
+                      showToast('Ponto removido com sucesso!', 'success');
                       setSelectedPointId(null);
                   } catch (err) {
-                      alert('Erro ao deletar ponto.');
+                      showToast('Erro ao deletar ponto.', 'error');
                   }
                 }}
                 onClose={() => setSelectedPointId(null)}

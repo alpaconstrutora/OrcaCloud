@@ -1368,14 +1368,21 @@ const Layout: React.FC<LayoutProps> = ({
                 type="button"
                 onClick={() => { setIsHeaderEmpresaDropdownOpen(o => !o); setIsProfileMenuOpen(false); }}
                 className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
-                title="Empresa ou obra ativa"
+                title="Organização, empresa ou obra ativa"
               >
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }}
                 />
                 <span className="min-w-0 flex-1 truncate">
-                  {activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? (projectId ? projectName : undefined) ?? 'Contexto atual'}
+                  {/* Do mais específico para o mais amplo. Sem nenhuma seleção e
+                      sem org ativa, o contexto REAL é "Todas as organizações" —
+                      dizer isso é melhor que o genérico "Contexto atual". */}
+                  {activeEmpresa?.nome_fantasia
+                    ?? activeEmpresa?.razao_social
+                    ?? (projectId ? projectName : undefined)
+                    ?? activeOrg?.name
+                    ?? (organizations.length > 1 ? 'Todas as organizações' : 'Contexto atual')}
                 </span>
                 <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isHeaderEmpresaDropdownOpen ? 'rotate-90' : ''}`} />
               </button>
@@ -1391,6 +1398,17 @@ const Layout: React.FC<LayoutProps> = ({
                       <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                         Organização
                       </div>
+                      {/* Visão consolidada: activeOrganizationId null (sentinela
+                          'TODAS' no localStorage). As telas que leem por org
+                          deixam a RLS decidir o que aparece. */}
+                      <button
+                        type="button"
+                        onClick={() => { setActiveOrganizationId(null); setIsHeaderEmpresaDropdownOpen(false); }}
+                        className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 ${!activeOrganizationId ? 'bg-slate-100 text-slate-950 font-medium' : 'text-slate-700'}`}
+                      >
+                        <Layers className="h-4 w-4 shrink-0 text-slate-400" />
+                        <span className="min-w-0 flex-1 truncate">Todas as organizações</span>
+                      </button>
                       {organizations.map(org => (
                         <button
                           key={org.id}

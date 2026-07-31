@@ -1935,6 +1935,25 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             );
                           })}
 
+                          {/* 2. Camada Interna das Paredes (Preenchimento CAD) */}
+                          {walls.map(w => {
+                            if (selectedWallId === w.id) return null; // Paredes selecionadas ficam totalmente vermelhas
+                            const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
+                            const pts = w.points as number[];
+                            const isClosed = pts.length >= 6 && Math.abs(pts[0] - pts[pts.length - 2]) < 1 && Math.abs(pts[1] - pts[pts.length - 1]) < 1;
+                            return (
+                                <Line 
+                                  key={`inner-${w.id}`}
+                                  points={w.points} 
+                                  stroke="#f8fafc" 
+                                  strokeWidth={Math.max(1, widthPx - 4)} 
+                                  lineCap="square" 
+                                  lineJoin="miter" 
+                                  closed={isClosed}
+                                />
+                            );
+                          })}
+
                           {/* Elementos Arquitetonicos */}
                           {elements.map(el => {
                             const pts = el.points as number[];
@@ -1980,6 +1999,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                 <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
                                   {/* Máscara para "cortar" a parede */}
                                   <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
+                                  
+                                  {/* "Fechar" as paredes (caps) */}
+                                  <Line points={[0, -wallThick/2, 0, wallThick/2]} stroke="#1e293b" strokeWidth={2} />
+                                  <Line points={[dist, -wallThick/2, dist, wallThick/2]} stroke="#1e293b" strokeWidth={2} />
+
                                   {/* Linhas tracejadas indicando o vão (padrão de projeto) */}
                                   <Line points={[0, -wallThick/2, dist, -wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />
                                   <Line points={[0, wallThick/2, dist, wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />

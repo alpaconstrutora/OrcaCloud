@@ -1931,6 +1931,54 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   lineCap="square" 
                                   lineJoin="miter" 
                                   closed={isClosed}
+                                  onPointerDown={(e) => {
+                                    if (tool === 'select') {
+                                      e.cancelBubble = true;
+                                      setSelectedWallId(w.id);
+                                      setSelectedPointId(null);
+                                      setSelectedPoint(null);
+                                    } else if (['draw_door', 'draw_window', 'draw_opening'].includes(tool)) {
+                                      e.cancelBubble = true;
+                                      const stage = e.target.getStage();
+                                      const pos = stage?.getRelativePointerPosition();
+                                      if (pos) {
+                                        // Standard element insertion (80cm)
+                                        const length = 0.8 * (plan?.scaleFactor || 100);
+                                        const pts = w.points as number[];
+                                        let closestDist = Infinity;
+                                        let bestSeg = 0;
+                                        // Find segment closest to click
+                                        for(let i=0; i<pts.length-2; i+=2) {
+                                           const x1 = pts[i], y1 = pts[i+1], x2 = pts[i+2], y2 = pts[i+3];
+                                           const dist = Math.abs((x2-x1)*(y1-pos.y) - (x1-pos.x)*(y2-y1)) / Math.sqrt(Math.pow(x2-x1,2) + Math.pow(y2-y1,2));
+                                           if (dist < closestDist) { closestDist = dist; bestSeg = i; }
+                                        }
+                                        const x1 = pts[bestSeg], y1 = pts[bestSeg+1], x2 = pts[bestSeg+2], y2 = pts[bestSeg+3];
+                                        const segLen = Math.sqrt(Math.pow(x2-x1,2) + Math.pow(y2-y1,2));
+                                        if (segLen > length) {
+                                           const t = Math.max(0, Math.min(1 - length/segLen, Math.sqrt(Math.pow(pos.x-x1,2) + Math.pow(pos.y-y1,2)) / segLen));
+                                           const startX = x1 + t*(x2-x1);
+                                           const startY = y1 + t*(y2-y1);
+                                           const endX = startX + (x2-x1)*(length/segLen);
+                                           const endY = startY + (y2-y1)*(length/segLen);
+                                           finishElement(tool, startX, startY, endX, endY);
+                                           setTool('select');
+                                        }
+                                      }
+                                    }
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (tool === 'select' || ['draw_door', 'draw_window', 'draw_opening'].includes(tool)) {
+                                      const stage = e.target.getStage();
+                                      if (stage) stage.container().style.cursor = tool === 'select' ? 'pointer' : 'crosshair';
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (tool === 'select' || ['draw_door', 'draw_window', 'draw_opening'].includes(tool)) {
+                                      const stage = e.target.getStage();
+                                      if (stage) stage.container().style.cursor = 'default';
+                                    }
+                                  }}
                                 />
                             );
                           })}
@@ -2030,43 +2078,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             return null;
                           })}
                           
-                          {/* 2. Camada de Preenchimentos (Fills) */}
-                          {walls.map(w => {
-                            const widthPx = plan?.scaleFactor ? (w.thicknessM || 0.15) * plan.scaleFactor : 10;
-                            const pts = w.points as number[];
-                            const isClosed = pts.length >= 6 && Math.abs(pts[0] - pts[pts.length - 2]) < 1 && Math.abs(pts[1] - pts[pts.length - 1]) < 1;
-                            return (
-                                <Line 
-                                  key={`fill-${w.id}`}
-                                  points={w.points} 
-                                  stroke="#ffffff" 
-                                  strokeWidth={Math.max(1, widthPx - 4)} 
-                                  lineCap="square" 
-                                  lineJoin="miter" 
-                                  closed={isClosed}
-                                  onPointerDown={(e) => {
-                                    if (tool === 'select') {
-                                      e.cancelBubble = true;
-                                      setSelectedWallId(w.id);
-                                      setSelectedPointId(null);
-                                      setSelectedPoint(null);
-                                    }
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (tool === 'select') {
-                                      const stage = e.target.getStage();
-                                      if (stage) stage.container().style.cursor = 'pointer';
-                                    }
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (tool === 'select') {
-                                      const stage = e.target.getStage();
-                                      if (stage) stage.container().style.cursor = 'default';
-                                    }
-                                  }}
-                                />
-                            );
-                          })}
+                          {/* Camada superior removida para não ocultar os elementos */}
                           
                           {/* Removed preview from here to separate layer */}
                           

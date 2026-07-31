@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon, Upload, X } from 'lucide-react';
 import {
     commercialPriceTableService,
     CommercialPriceTable,

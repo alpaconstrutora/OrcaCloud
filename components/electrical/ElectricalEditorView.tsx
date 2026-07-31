@@ -455,6 +455,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         checkPoints(w.points as number[]);
       }
     });
+
+    // 3. Electrical Points Snapping
+    points.forEach(p => {
+      if (p.canvasX != null && p.canvasY != null) {
+        const dist = Math.sqrt(Math.pow(pointerPosition.x - p.canvasX, 2) + Math.pow(pointerPosition.y - p.canvasY, 2));
+        if (dist < closestDist) {
+          closestDist = dist;
+          snappedPos = { x: p.canvasX, y: p.canvasY };
+        }
+      }
+    });
     
     return snappedPos;
   };

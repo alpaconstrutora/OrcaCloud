@@ -12,6 +12,7 @@ import LaborScopeBar from './LaborScopeBar';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Colaborador', sortable: true },
+    { key: 'document', label: 'Documento', sortable: true },
     { key: 'role', label: 'Função', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
     { key: 'contract', label: 'Vínculo', sortable: true },
@@ -114,6 +115,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                 const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                 switch (tableColumns.sortColumn) {
                     case 'name': return dir * a.name.localeCompare(b.name);
+                    case 'document': return dir * (a.cpf || '').localeCompare(b.cpf || '');
                     case 'role': return dir * a.role.localeCompare(b.role);
                     case 'organization': return dir * orgName(a.org_id).localeCompare(orgName(b.org_id));
                     case 'contract': return dir * a.contract_type.localeCompare(b.contract_type);
@@ -176,7 +178,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <KpiCard label="Colaboradores" value={`${employees.length}`} sub={`${activeCount} ativos`} icon={<Users className="w-5 h-5" />} color="indigo" />
                 <KpiCard label="Ativos" value={`${activeCount}`} icon={<UserCheck className="w-5 h-5" />} color="emerald" />
                 <KpiCard label="Custo Diário (Ativos)" value={formatMoney(totalDailyCost)} icon={<Wallet className="w-5 h-5" />} color="rose" />
@@ -265,23 +267,26 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                 {tableColumns.visibleColumns.includes('name') && (
                                     <SortableHeader label="Colaborador" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
+                                {tableColumns.visibleColumns.includes('document') && (
+                                    <SortableHeader label="Documento" colKey="document" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                )}
                                 {tableColumns.visibleColumns.includes('role') && (
-                                    <SortableHeader label="Função" colKey="role" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Função" colKey="role" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
-                                    <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('contract') && (
-                                    <SortableHeader label="Vínculo" colKey="contract" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Vínculo" colKey="contract" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('status') && (
-                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('salary') && (
-                                    <SortableHeader label="Salário base" colKey="salary" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100 text-right" />
+                                    <SortableHeader label="Salário base" colKey="salary" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
                                 )}
                                 {tableColumns.visibleColumns.includes('cost') && (
-                                    <SortableHeader label="Custo/dia" colKey="cost" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100 text-right" />
+                                    <SortableHeader label="Custo/dia" colKey="cost" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
                                 )}
                                 {tableColumns.visibleColumns.includes('actions') && (
                                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
@@ -310,7 +315,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                                 </div>
                                                 <div className="min-w-0">
                                                     <div className="flex items-center gap-1.5">
-                                                        <p className="text-sm font-normal text-gray-900 truncate">{emp.name}</p>
+                                                        <p className="text-sm font-normal text-gray-700 truncate">{emp.name}</p>
                                                         {(emp.shared_orgs?.length ?? 0) > 0 && (
                                                             <span
                                                                 title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
@@ -321,18 +326,22 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {emp.cpf && <p className="text-xs text-gray-400">{emp.cpf}</p>}
                                                 </div>
                                             </div>
                                         </td>
                                     )}
+                                    {tableColumns.visibleColumns.includes('document') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                            {emp.cpf || <span className="text-gray-300">—</span>}
+                                        </td>
+                                    )}
                                     {tableColumns.visibleColumns.includes('role') && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                             {emp.role}
                                         </td>
                                     )}
                                     {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                             <div className="flex items-center gap-1.5 min-w-[120px]">
                                                 <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                                                 <span className="truncate" title={orgName(emp.org_id)}>{orgName(emp.org_id)}</span>
@@ -340,21 +349,21 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('contract') && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <span className={`text-sm font-normal ${CONTRACT_COLORS[emp.contract_type]}`}>
                                                 {CONTRACT_LABELS[emp.contract_type]}
                                             </span>
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <span className={`text-sm font-normal ${STATUS_COLORS[emp.status]}`}>
                                                 {STATUS_LABELS[emp.status]}
                                             </span>
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('salary') && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                             {emp.base_salary > 0 ? (
                                                 <span className="text-sm font-medium text-gray-800">{formatMoney(emp.base_salary)}</span>
                                             ) : (
@@ -363,15 +372,13 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('cost') && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                             <span className="text-sm font-medium text-gray-800">
                                                 {(emp.daily_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                {emp.hourly_cost > 0 && (
+                                                    <span className="text-gray-400 font-normal"> / {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h</span>
+                                                )}
                                             </span>
-                                            {emp.hourly_cost > 0 && (
-                                                <p className="text-xs font-normal text-gray-400">
-                                                    {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h
-                                                </p>
-                                            )}
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('actions') && (

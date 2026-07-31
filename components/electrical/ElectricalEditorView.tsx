@@ -48,6 +48,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [conduits, setConduits] = useState<OpuraElectricalConduit[]>([]);
   const [drawingConduitSource, setDrawingConduitSource] = useState<string | null>(null);
   const [selectedConduitId, setSelectedConduitId] = useState<string | null>(null);
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
   // Undo/Redo State
   const [history, setHistory] = useState<CanvasState[]>([]);
@@ -253,6 +254,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 return newWalls;
             });
             setSelectedWallId(null);
+      setSelectedElementId(null);
             showToast('Parede excluída');
           } catch(err) {
             showToast('Erro ao excluir parede', 'error');
@@ -280,7 +282,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [tool, currentWall, plan, organizationId, selectedWallId, selectedPointId, walls, rooms, points]);
+  }, [tool, currentWall, plan, organizationId, selectedWallId, selectedPointId, selectedElementId, walls, rooms, points, conduits, elements]);
 
   useEffect(() => {
     if (selectedWallId) {
@@ -884,6 +886,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         setSelectedPointId(null);
         setSelectedPoint(null);
         setSelectedWallId(null);
+      setSelectedElementId(null);
         setSelectedConduitId(null);
       }
       return;
@@ -1503,7 +1506,20 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return segments;
   };
 
+  
+  const handleElementClick = (e: any, id: string) => {
+    if (tool === 'select') {
+      e.cancelBubble = true;
+      setSelectedElementId(id);
+      setSelectedWallId(null);
+      setSelectedElementId(null);
+      setSelectedPointId(null);
+      setSelectedConduitId(null);
+    }
+  };
+
   if (loading) return <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
+
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -1559,6 +1575,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                       return newWalls;
                   });
                   setSelectedWallId(null);
+      setSelectedElementId(null);
                   showToast('Parede excluída com sucesso');
                 } catch (e) {
                   showToast('Erro ao excluir parede', 'error');
@@ -2055,54 +2072,69 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             const dist = Math.sqrt(dx*dx + dy*dy);
                             const angle = Math.atan2(dy, dx) * 180 / Math.PI;
                             
+                            const isSelected = selectedElementId === el.id;
+                            
+                            const elementProps = {
+                              key: `el-${el.id}`,
+                              x: x1,
+                              y: y1,
+                              rotation: angle,
+                              onClick: (e: any) => handleElementClick(e, el.id),
+                              onTap: (e: any) => handleElementClick(e, el.id),
+                              onMouseEnter: (e: any) => {
+                                if (tool === 'select') {
+                                  const container = e.target.getStage()?.container();
+                                  if (container) container.style.cursor = 'pointer';
+                                }
+                              },
+                              onMouseLeave: (e: any) => {
+                                const container = e.target.getStage()?.container();
+                                if (container) container.style.cursor = 'grab';
+                              }
+                            };
+                            
+                            const renderHighlight = () => {
+                              if (!isSelected) return null;
+                              const wallThick = plan?.scaleFactor ? 0.15 * plan.scaleFactor : 15;
+                              return <Rect x={0} y={-(wallThick + 2)/2 - 5} width={dist} height={wallThick + 12} stroke="#3b82f6" strokeWidth={2} dash={[5, 5]} />;
+                            };
+                            
                             if (el.type === 'door') {
-                              // Porta simples padrão (80cm)
                               const wallThick = plan?.scaleFactor ? 0.15 * plan.scaleFactor : 15;
                               return (
-                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
-                                  {/* Máscara para "cortar" a parede (uso de Rect garante renderização sobre a linha da parede) */}
+                                <Group {...elementProps}>
+                                  {renderHighlight()}
                                   <Rect x={0} y={-(wallThick + 2)/2} width={dist} height={wallThick + 2} fill="#f8fafc" />
-                                  
-                                  {/* Batentes da porta (uso de Rect para evitar bugs de stroke width em linhas verticais) */}
                                   <Rect x={0} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
                                   <Rect x={dist-4} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
-
-                                  {/* Folha da porta (batente esquerdo) */}
                                   <Line points={[0, 0, 0, -dist]} stroke="#0f172a" strokeWidth={3} />
-                                  
-                                  {/* Arco de abertura */}
                                   <Arc x={0} y={0} innerRadius={dist} outerRadius={dist} angle={90} rotation={-90} stroke="#64748b" strokeWidth={1} />
                                 </Group>
                               );
                             }
                             if (el.type === 'window') {
                               return (
-                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
+                                <Group {...elementProps}>
+                                  {renderHighlight()}
                                   <Rect x={0} y={-10} width={dist} height={20} stroke="#3b82f6" strokeWidth={2} fill="#eff6ff" />
                                   <Line points={[0, 0, dist, 0]} stroke="#3b82f6" strokeWidth={1} />
                                 </Group>
                               );
                             }
                             if (el.type === 'opening') {
-                              // Abertura/Vão (corta a parede)
                               const wallThick = plan?.scaleFactor ? 0.15 * plan.scaleFactor : 15;
                               return (
-                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
-                                  {/* Máscara para "cortar" a parede */}
+                                <Group {...elementProps}>
+                                  {renderHighlight()}
                                   <Rect x={0} y={-(wallThick + 2)/2} width={dist} height={wallThick + 2} fill="#f8fafc" />
-                                  
-                                  {/* "Fechar" as paredes (caps) */}
                                   <Rect x={0} y={-wallThick/2} width={3} height={wallThick} fill="#1e293b" />
                                   <Rect x={dist-3} y={-wallThick/2} width={3} height={wallThick} fill="#1e293b" />
-
-                                  {/* Linhas tracejadas indicando o vão (padrão de projeto) */}
                                   <Line points={[0, -wallThick/2, dist, -wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />
                                   <Line points={[0, wallThick/2, dist, wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />
                                 </Group>
                               );
                             }
                             if (el.type === 'stairs') {
-                              // Multiple parallel lines
                               const steps = Math.floor(dist / 30);
                               const stepLines = [];
                               for (let i = 0; i <= steps; i++) {
@@ -2112,7 +2144,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                 }
                               }
                               return (
-                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
+                                <Group {...elementProps}>
+                                  {renderHighlight()}
                                   <Rect x={0} y={-40} width={dist} height={80} stroke="#64748b" strokeWidth={2} />
                                   {stepLines}
                                 </Group>
@@ -2228,6 +2261,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   setSelectedConduitId(c.id);
                                   setSelectedPointId(null);
                                   setSelectedWallId(null);
+      setSelectedElementId(null);
                                 }
                               }} 
                               scaleFactor={plan?.scaleFactor || 100} 

@@ -260,14 +260,14 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     ] as const;
 
     const renderTabs = () => (
-        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+        <div className="flex border-b border-gray-100 overflow-x-auto shrink-0 __LIVE_ASYNC_HOOK_TEST__">
             {EMPLOYEE_TABS.map(tab => (
                 <button
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                        activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                    className={`flex-1 py-3 px-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
+                        activeTab === tab.id ? 'border-blue-600 text-blue-600 bg-blue-50/30' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                     }`}
                 >
                     {tab.label}
@@ -960,8 +960,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     </button>
                 </div>
 
-                {/* Toolbar de abas — anatomia canônica §19.1 */}
-                <div className="border-b border-slate-100 sticky top-0 bg-white z-10 px-6 py-3 shrink-0">
+                {/* Toolbar de abas — anatomia canônica §19.1 (renderTabs já traz seu próprio card) */}
+                <div className="sticky top-0 bg-white z-10 px-6 py-3 shrink-0">
                     {renderTabs()}
                 </div>
 

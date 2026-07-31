@@ -425,8 +425,35 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       }
     };
 
+    const checkSegments = (pts: number[]) => {
+      for (let i = 0; i < pts.length - 2; i += 2) {
+        const ax = pts[i], ay = pts[i+1];
+        const bx = pts[i+2], by = pts[i+3];
+        
+        const dx = bx - ax;
+        const dy = by - ay;
+        const lengthSquared = dx * dx + dy * dy;
+        if (lengthSquared === 0) continue;
+        
+        let t = ((pointerPosition.x - ax) * dx + (pointerPosition.y - ay) * dy) / lengthSquared;
+        t = Math.max(0, Math.min(1, t));
+        
+        const projX = ax + t * dx;
+        const projY = ay + t * dy;
+        
+        const dist = Math.sqrt(Math.pow(pointerPosition.x - projX, 2) + Math.pow(pointerPosition.y - projY, 2));
+        if (dist < closestDist) {
+          closestDist = dist;
+          snappedPos = { x: projX, y: projY };
+        }
+      }
+    };
+
     walls.forEach(w => {
-      if (w.points) checkPoints(w.points as number[]);
+      if (w.points) {
+        checkSegments(w.points as number[]);
+        checkPoints(w.points as number[]);
+      }
     });
     
     return snappedPos;
@@ -731,7 +758,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
 
     if (tool === 'add_point' && selectedToolboxItem) {
-      const clickedRoom = rooms.find(r => r.polygonPoints && isPointInPolygon(pointerPosition, r.polygonPoints));
+      const clickedRoom = rooms.find(r => r.polygonPoints && isPointInPolygon(snappedPos, r.polygonPoints));
       if (!clickedRoom) {
           alert('Você deve clicar dentro de um ambiente demarcado para inserir o ponto.');
           return;
@@ -748,8 +775,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
               powerW: pointDef.defaultPower,
               heightM: pointDef.defaultHeight,
               voltage: 0,
-              canvasX: pointerPosition.x,
-              canvasY: pointerPosition.y
+              canvasX: snappedPos.x,
+              canvasY: snappedPos.y
           });
           const newPoints = [...points, newPoint];
           setPoints(newPoints);

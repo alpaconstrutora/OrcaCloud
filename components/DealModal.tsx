@@ -471,6 +471,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
     const [generateInstallmentCount, setGenerateInstallmentCount] = useState(1);
     const [generateFirstDueDate, setGenerateFirstDueDate] = useState('');
+    /** Rascunho da data em edição na tabela de parcelas do contrato (id + valor).
+     *  Cada tecla ali seria um UPDATE no banco — ver a nota na própria célula. */
+    const [entryDateDraft, setEntryDateDraft] = useState<{ id: string; value: string } | null>(null);
     /** Data do 1º Pagamento no momento em que o campo recebeu o foco — base de
      *  comparação para perguntar (uma vez, no blur) se as parcelas recalculam. */
     const dueDateAoFocar = useRef<string>('');
@@ -985,7 +988,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 }
             })
             .catch(async (err) => {
-                setContractError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
+                notifyError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
                 const alvo = generateTargets.find(t => t.id === viewTarget);
                 if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
             });
@@ -1040,7 +1043,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
             setSelectedEntryIds(new Set());
         } catch (err) {
-            setContractError(err instanceof Error ? err.message : 'Erro ao editar as parcelas em lote.');
+            notifyError(err instanceof Error ? err.message : 'Erro ao editar as parcelas em lote.');
         }
     };
 
@@ -1057,7 +1060,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             await contractService.removeFinancialEntry(entryId);
             setContractEntries(prev => prev.filter(e => e.id !== entryId));
         } catch (e) {
-            setContractError(e instanceof Error ? e.message : 'Erro ao excluir a parcela.');
+            notifyError(e instanceof Error ? e.message : 'Erro ao excluir a parcela.');
         }
     };
 
@@ -2543,11 +2546,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
                                                                         {parcelasCols.visibleColumns.includes('vencimento') && (
                                                                             <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                {/* Rascunho local + gravação no blur. Ligado ao
+                                                                                    onChange, cada segmento digitado virava um UPDATE
+                                                                                    no banco (ao digitar o ano, "0002" já é data
+                                                                                    válida) e o re-render otimista cortava a digitação
+                                                                                    no meio — a data final nunca chegava a Contas a
+                                                                                    Receber. */}
                                                                                 <input
                                                                                     type="date"
-                                                                                    value={e.transaction_date.slice(0, 10)}
+                                                                                    value={entryDateDraft?.id === e.id
+                                                                                        ? entryDateDraft.value
+                                                                                        : e.transaction_date.slice(0, 10)}
                                                                                     disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { due_date: ev.target.value })}
+                                                                                    onChange={(ev) => setEntryDateDraft({ id: e.id, value: ev.target.value })}
+                                                                                    onBlur={() => {
+                                                                                        const rascunho = entryDateDraft;
+                                                                                        setEntryDateDraft(null);
+                                                                                        if (!rascunho || rascunho.id !== e.id) return;
+                                                                                        if (!rascunho.value || rascunho.value === e.transaction_date.slice(0, 10)) return;
+                                                                                        patchContractEntry(e.id, { due_date: rascunho.value });
+                                                                                    }}
+                                                                                    onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ev.currentTarget.blur(); } }}
                                                                                     className={pago ? CELL_RO : CELL}
                                                                                 />
                                                                             </td>

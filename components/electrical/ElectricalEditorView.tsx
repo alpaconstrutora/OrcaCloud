@@ -228,6 +228,20 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           } catch(err) {
             showToast('Erro ao excluir parede', 'error');
           }
+        } else if (selectedPointId) {
+          e.preventDefault();
+          try {
+            await electricalProjectService.deletePoint(selectedPointId);
+            setPoints(prev => {
+                const newPoints = prev.filter(p => p.id !== selectedPointId);
+                pushHistoryState({ walls, rooms, points: newPoints });
+                return newPoints;
+            });
+            setSelectedPointId(null);
+            showToast('Ponto excluído');
+          } catch(err) {
+            showToast('Erro ao excluir ponto', 'error');
+          }
         }
       }
 
@@ -237,7 +251,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [tool, currentWall, plan, organizationId, selectedWallId]);
+  }, [tool, currentWall, plan, organizationId, selectedWallId, selectedPointId, walls, rooms, points]);
 
   useEffect(() => {
     if (selectedWallId) {

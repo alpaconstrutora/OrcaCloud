@@ -10,6 +10,7 @@ import { IndexName } from '../services/contractIndexService';
 import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { KpiCard } from './ui/KpiCard';
 
 type PriceMode = 'sale' | 'rental';
 
@@ -52,10 +53,11 @@ const MODE_CONFIG: Record<PriceMode, {
 };
 
 const STATUS_LABEL: Record<string, string> = { draft: 'Rascunho', active: 'Ativa', superseded: 'Substituída' };
-const STATUS_STYLE: Record<string, string> = {
-    draft: 'bg-amber-500/10 text-amber-600',
-    active: 'bg-emerald-500/10 text-emerald-600',
-    superseded: 'bg-gray-500/10 text-gray-500',
+// §8 Status Badge — texto simples colorido, sem pílula/fundo/uppercase
+const STATUS_COLOR: Record<string, string> = {
+    draft: 'text-amber-600',
+    active: 'text-emerald-600',
+    superseded: 'text-gray-500',
 };
 const INDEX_NAMES: IndexName[] = ['INCC-M', 'INCC', 'IPCA', 'IGP-M', 'CUB', 'OUTROS'];
 
@@ -97,6 +99,13 @@ const parsePrice = (s: string): number => {
     const n = Number(normalized);
     return Number.isFinite(n) ? n : 0;
 };
+
+// Upload em lote casa cada arquivo com a unidade pelo NOME do arquivo (sem
+// extensão) vs property_name — ex: "101.jpg" ou "Apto 101.jpg" casam com a
+// unidade "101"/"Apto 101". Normaliza removendo acento/case/símbolos para
+// tolerar variação de digitação.
+const normalizeMatchKey = (s: string): string =>
+    s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 const PriceInput: React.FC<{ value: number; onCommit: (v: number) => void }> = ({ value, onCommit }) => {
     const [focused, setFocused] = React.useState(false);
@@ -191,6 +200,10 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const [activating, setActivating] = React.useState(false);
     const [applyingAdjustment, setApplyingAdjustment] = React.useState(false);
     const [uploadingPhotoId, setUploadingPhotoId] = React.useState<string | null>(null);
+    const [batchUploading, setBatchUploading] = React.useState(false);
+    const [batchProgress, setBatchProgress] = React.useState<{ done: number; total: number } | null>(null);
+    const [batchResult, setBatchResult] = React.useState<{ matched: number; unmatched: string[] } | null>(null);
+    const batchPhotoInputRef = React.useRef<HTMLInputElement>(null);
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>(`priceTable:${mode}:search`, '');
     const tableColumns = useTableColumns(COLUMNS, `priceTableColumns:${mode}`);
@@ -307,6 +320,39 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         } finally {
             setUploadingPhotoId(null);
         }
+    };
+
+    /** Upload em lote: cada arquivo é casado com uma unidade pelo nome do arquivo
+     *  (sem extensão) vs property_name. Sequencial (não paralelo) para não
+     *  estourar rate limit do Storage em lotes grandes. */
+    const handleBatchPhotoUpload = async (files: FileList) => {
+        const byKey = new Map<string, CommercialPriceTableItem>();
+        items.forEach(i => { if (i.property_name) byKey.set(normalizeMatchKey(i.property_name), i); });
+
+        setBatchUploading(true);
+        setBatchResult(null);
+        setError(null);
+        const fileList = Array.from(files);
+        const unmatched: string[] = [];
+        let matched = 0;
+        for (let idx = 0; idx < fileList.length; idx++) {
+            const file = fileList[idx];
+            setBatchProgress({ done: idx, total: fileList.length });
+            const baseName = file.name.replace(/\.[^./]+$/, '');
+            const item = byKey.get(normalizeMatchKey(baseName));
+            if (!item) { unmatched.push(file.name); continue; }
+            try {
+                const url = await svc.uploadItemPhoto(organizationId, item.property_id, file);
+                await svc.updateItemPhoto(item.property_id, url);
+                setItems(prev => prev.map(i => i.id === item.id ? { ...i, photo_url: url } : i));
+                matched++;
+            } catch (err: any) {
+                unmatched.push(`${file.name} (erro: ${err.message})`);
+            }
+        }
+        setBatchProgress({ done: fileList.length, total: fileList.length });
+        setBatchUploading(false);
+        setBatchResult({ matched, unmatched });
     };
 
     const handleApplyAdjustment = async () => {
@@ -441,7 +487,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                     : t.status === 'draft' ? <Clock className="w-3.5 h-3.5 text-amber-500" />
                                     : <Archive className="w-3.5 h-3.5 text-gray-400" />}
                                 {t.version_label}
-                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${STATUS_STYLE[t.status]}`}>{STATUS_LABEL[t.status]}</span>
+                                <span className={`text-xs font-normal ${STATUS_COLOR[t.status]}`}>{STATUS_LABEL[t.status]}</span>
                                 <span className="text-gray-400 font-medium">{fmtDate(t.created_at)}</span>
                             </button>
                         ))}
@@ -454,7 +500,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-5">
                     <div className="flex items-center justify-between flex-wrap gap-3">
                         <div className="flex items-center gap-3">
-                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${STATUS_STYLE[selectedTable.status]}`}>
+                            <span className={`text-sm font-normal ${STATUS_COLOR[selectedTable.status]}`}>
                                 {STATUS_LABEL[selectedTable.status]}
                             </span>
                             <span className="text-sm font-black text-gray-800">{selectedTable.version_label}</span>
@@ -547,18 +593,9 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                     {/* Impacto total */}
                     {items.length > 0 && (
                         <div className="grid grid-cols-3 gap-3">
-                            <div className="bg-gray-50 rounded-xl p-3">
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{cfg.totalCurrentLabel}</p>
-                                <p className="text-sm font-black text-gray-700">{fmtBRL(totalCurrent)}</p>
-                            </div>
-                            <div className="bg-blue-50 rounded-xl p-3">
-                                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">{cfg.totalVersionLabel}</p>
-                                <p className="text-sm font-black text-blue-700">{fmtBRL(totalDraft)}</p>
-                            </div>
-                            <div className={`rounded-xl p-3 ${deltaPct >= 0 ? 'bg-emerald-50' : 'bg-rose-50'}`}>
-                                <p className={`text-[9px] font-black uppercase tracking-widest ${deltaPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>Variação</p>
-                                <p className={`text-sm font-black ${deltaPct >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(2)}%</p>
-                            </div>
+                            <KpiCard shadow={false} size="sm" label={cfg.totalCurrentLabel} value={fmtBRL(totalCurrent)} color="gray" />
+                            <KpiCard shadow={false} size="sm" label={cfg.totalVersionLabel} value={fmtBRL(totalDraft)} color="blue" />
+                            <KpiCard shadow={false} size="sm" label="Variação" value={`${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(2)}%`} color={deltaPct >= 0 ? 'emerald' : 'rose'} />
                         </div>
                     )}
 
@@ -574,6 +611,24 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
+                        <button
+                            onClick={() => batchPhotoInputRef.current?.click()}
+                            disabled={batchUploading}
+                            title="Selecione várias fotos nomeadas com o número/nome da unidade (ex: 101.jpg) — cada uma é associada automaticamente à unidade correspondente."
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600 disabled:opacity-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                        >
+                            {batchUploading
+                                ? <><Loader2 className="w-[15px] h-[15px] animate-spin" /> Enviando {batchProgress?.done ?? 0}/{batchProgress?.total ?? 0}</>
+                                : <><Upload className="w-[15px] h-[15px]" /> Upload em lote</>}
+                        </button>
+                        <input
+                            ref={batchPhotoInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={e => { const files = e.target.files; if (files && files.length) handleBatchPhotoUpload(files); e.target.value = ''; }}
+                        />
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={columnsForConfig}
@@ -752,7 +807,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                         </td>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('delta') && (
-                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
                                                             {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
                                                         </td>
                                                     )}
@@ -790,6 +845,36 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {batchResult && (
+                <div className={`fixed bottom-6 right-6 z-[300] max-w-sm rounded-2xl shadow-xl text-sm animate-in slide-in-from-bottom-4 duration-300 overflow-hidden ${
+                    batchResult.unmatched.length === 0 ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white'
+                }`}>
+                    <div className="flex items-start gap-3 px-5 py-4">
+                        {batchResult.unmatched.length === 0
+                            ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                            : <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+                        <div className="flex-1 min-w-0">
+                            <p className="font-medium">
+                                {batchResult.matched} foto{batchResult.matched === 1 ? '' : 's'} enviada{batchResult.matched === 1 ? '' : 's'} com sucesso.
+                            </p>
+                            {batchResult.unmatched.length > 0 && (
+                                <div className="mt-1.5">
+                                    <p className="text-xs opacity-90">
+                                        {batchResult.unmatched.length} arquivo{batchResult.unmatched.length > 1 ? 's' : ''} sem unidade correspondente:
+                                    </p>
+                                    <ul className="text-xs opacity-90 mt-1 max-h-28 overflow-y-auto space-y-0.5">
+                                        {batchResult.unmatched.map((f, idx) => <li key={idx} className="truncate">{f}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={() => setBatchResult(null)} className="text-white/80 hover:text-white shrink-0">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

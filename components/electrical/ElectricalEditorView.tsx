@@ -1025,7 +1025,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     let finalX2 = x2;
     let finalY2 = y2;
     
-    if (elementType === 'draw_door') {
+    if (['draw_door', 'draw_opening'].includes(elementType)) {
         const doorSizePx = 0.80 * (plan.scaleFactor || 100);
         const angle = Math.atan2(y2 - y1, x2 - x1);
         finalX2 = x1 + doorSizePx * Math.cos(angle);
@@ -1974,8 +1974,16 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                               );
                             }
                             if (el.type === 'opening') {
+                              // Abertura/Vão (corta a parede)
+                              const wallThick = plan?.scaleFactor ? 0.15 * plan.scaleFactor : 15;
                               return (
-                                <Line key={`el-${el.id}`} points={[x1, y1, x2, y2]} stroke="#cbd5e1" strokeWidth={15} dash={[10, 10]} />
+                                <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
+                                  {/* Máscara para "cortar" a parede */}
+                                  <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
+                                  {/* Linhas tracejadas indicando o vão (padrão de projeto) */}
+                                  <Line points={[0, -wallThick/2, dist, -wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />
+                                  <Line points={[0, wallThick/2, dist, wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />
+                                </Group>
                               );
                             }
                             if (el.type === 'stairs') {

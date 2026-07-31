@@ -1969,12 +1969,12 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                               const wallThick = plan?.scaleFactor ? 0.15 * plan.scaleFactor : 15;
                               return (
                                 <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
-                                  {/* Máscara para "cortar" a parede - cor de fundo do canvas bg-slate-50 */}
-                                  <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
+                                  {/* Máscara para "cortar" a parede (uso de Rect garante renderização sobre a linha da parede) */}
+                                  <Rect x={0} y={-(wallThick + 2)/2} width={dist} height={wallThick + 2} fill="#f8fafc" />
                                   
-                                  {/* Batentes da porta */}
-                                  <Line points={[2, -wallThick/2, 2, wallThick/2]} stroke="#475569" strokeWidth={4} />
-                                  <Line points={[dist-2, -wallThick/2, dist-2, wallThick/2]} stroke="#475569" strokeWidth={4} />
+                                  {/* Batentes da porta (uso de Rect para evitar bugs de stroke width em linhas verticais) */}
+                                  <Rect x={0} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
+                                  <Rect x={dist-4} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
 
                                   {/* Folha da porta (batente esquerdo) */}
                                   <Line points={[0, 0, 0, -dist]} stroke="#0f172a" strokeWidth={3} />
@@ -1998,11 +1998,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                               return (
                                 <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
                                   {/* Máscara para "cortar" a parede */}
-                                  <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
+                                  <Rect x={0} y={-(wallThick + 2)/2} width={dist} height={wallThick + 2} fill="#f8fafc" />
                                   
                                   {/* "Fechar" as paredes (caps) */}
-                                  <Line points={[1.5, -wallThick/2, 1.5, wallThick/2]} stroke="#1e293b" strokeWidth={3} />
-                                  <Line points={[dist-1.5, -wallThick/2, dist-1.5, wallThick/2]} stroke="#1e293b" strokeWidth={3} />
+                                  <Rect x={0} y={-wallThick/2} width={3} height={wallThick} fill="#1e293b" />
+                                  <Rect x={dist-3} y={-wallThick/2} width={3} height={wallThick} fill="#1e293b" />
 
                                   {/* Linhas tracejadas indicando o vão (padrão de projeto) */}
                                   <Line points={[0, -wallThick/2, dist, -wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />

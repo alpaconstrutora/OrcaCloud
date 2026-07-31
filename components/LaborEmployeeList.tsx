@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Search, UserMinus, UserCheck, Building2, Briefcase, AlertCircle, Users, Wallet, Share2 } from 'lucide-react';
+import { Search, UserMinus, UserCheck, Building2, Briefcase, AlertCircle, Users, Wallet, Share2, MoveHorizontal } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import LaborEmployeeSharing from './LaborEmployeeSharing';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
@@ -21,6 +21,10 @@ const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'cost', label: 'Custo/Dia', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    name: 240, document: 150, role: 160, organization: 180, contract: 120, status: 110, salary: 140, cost: 150, actions: 110,
+};
 
 interface LaborEmployeeListProps {
     employees: Employee[];
@@ -93,7 +97,20 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const tableColumns = useTableColumns(LABOR_EMPLOYEE_COLUMNS, 'laborEmployeeListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'laborEmployeeListFilters:advanced');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'laborEmployeeListColWidths');
     const confirm = useConfirm();
+
+    // Largura total = soma exata das colunas visíveis (nunca w-full — ver §6.1 do guia de UI).
+    const tableTotalWidth =
+        (tableColumns.visibleColumns.includes('name') ? cols.getWidth('name') : 0) +
+        (tableColumns.visibleColumns.includes('document') ? cols.getWidth('document') : 0) +
+        (tableColumns.visibleColumns.includes('role') ? cols.getWidth('role') : 0) +
+        (organizations.length > 1 && tableColumns.visibleColumns.includes('organization') ? cols.getWidth('organization') : 0) +
+        (tableColumns.visibleColumns.includes('contract') ? cols.getWidth('contract') : 0) +
+        (tableColumns.visibleColumns.includes('status') ? cols.getWidth('status') : 0) +
+        (tableColumns.visibleColumns.includes('salary') ? cols.getWidth('salary') : 0) +
+        (tableColumns.visibleColumns.includes('cost') ? cols.getWidth('cost') : 0) +
+        cols.getWidth('actions');
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -223,15 +240,16 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
-                            {(['ATIVO', 'INATIVO', 'AFASTADO', 'ALL'] as const).map(s => (
-                                <button
-                                    key={s}
-                                    onClick={() => setFilterStatus(s)}
-                                    className={`h-9 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                >
-                                    {s === 'ALL' ? 'Todos' : s.charAt(0) + s.slice(1).toLowerCase()}
-                                </button>
-                            ))}
+                            <select
+                                value={filterStatus}
+                                onChange={e => setFilterStatus(e.target.value as any)}
+                                className="h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-100 text-gray-600 outline-none border border-transparent"
+                            >
+                                <option value="ATIVO">Ativo</option>
+                                <option value="INATIVO">Inativo</option>
+                                <option value="AFASTADO">Afastado</option>
+                                <option value="ALL">Todos</option>
+                            </select>
                             <select
                                 value={filterContract}
                                 onChange={e => setFilterContract(e.target.value as any)}
@@ -253,6 +271,14 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito — nunca automático (§6.1.2 do guia de UI) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
 
@@ -261,42 +287,76 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
 
                 {/* Tabela */}
                 <div className="overflow-auto max-h-[70vh]">
-                    <table className="w-full text-left border-collapse">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                        <colgroup>
+                            {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                            {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
+                            {tableColumns.visibleColumns.includes('role') && <col data-col-key="role" style={{ width: `${cols.getWidth('role')}px` }} />}
+                            {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
+                            {tableColumns.visibleColumns.includes('contract') && <col data-col-key="contract" style={{ width: `${cols.getWidth('contract')}px` }} />}
+                            {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                            {tableColumns.visibleColumns.includes('salary') && <col data-col-key="salary" style={{ width: `${cols.getWidth('salary')}px` }} />}
+                            {tableColumns.visibleColumns.includes('cost') && <col data-col-key="cost" style={{ width: `${cols.getWidth('cost')}px` }} />}
+                            {/* espaçador — absorve a folga ANTES de "Ações" (§6.1.1 do guia de UI) */}
+                            <col />
+                            <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                        </colgroup>
                         <thead>
                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {tableColumns.visibleColumns.includes('name') && (
-                                    <SortableHeader label="Colaborador" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Colaborador" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="name" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('document') && (
-                                    <SortableHeader label="Documento" colKey="document" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Documento" colKey="document" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="document" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('role') && (
-                                    <SortableHeader label="Função" colKey="role" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Função" colKey="role" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="role" />
+                                    </SortableHeader>
                                 )}
                                 {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
-                                    <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="organization" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('contract') && (
-                                    <SortableHeader label="Vínculo" colKey="contract" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Vínculo" colKey="contract" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="contract" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('status') && (
-                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="status" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('salary') && (
-                                    <SortableHeader label="Salário base" colKey="salary" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
+                                    <SortableHeader label="Salário base" colKey="salary" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
+                                        <cols.ResizeHandle colKey="salary" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('cost') && (
-                                    <SortableHeader label="Custo/dia" colKey="cost" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
+                                    <SortableHeader label="Custo/dia" colKey="cost" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
+                                        <cols.ResizeHandle colKey="cost" />
+                                    </SortableHeader>
                                 )}
+                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                <th aria-hidden="true" className="border-r border-gray-100" />
                                 {tableColumns.visibleColumns.includes('actions') && (
-                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500 relative overflow-hidden">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {filtered.length === 0 && (
                                 <tr>
-                                    <td colSpan={tableColumns.visibleColumns.length} className="px-6 py-16 text-center text-gray-400">
+                                    <td colSpan={tableColumns.visibleColumns.length + 1} className="px-6 py-16 text-center text-gray-400">
                                         <div className="flex flex-col items-center gap-2">
                                             <Briefcase className="w-12 h-12 text-gray-300 mb-2" />
                                             <h3 className="text-lg font-bold text-gray-900">Nenhum colaborador encontrado</h3>
@@ -381,6 +441,8 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                             </span>
                                         </td>
                                     )}
+                                    {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

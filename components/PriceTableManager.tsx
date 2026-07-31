@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon, Upload } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon, Upload, X } from 'lucide-react';
 import {
     commercialPriceTableService,
     CommercialPriceTable,
@@ -11,7 +11,7 @@ import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
-import UnitPhotoLoteModal from './UnitPhotoLoteModal';
+import Button from './ui/Button';
 
 type PriceMode = 'sale' | 'rental';
 
@@ -194,7 +194,11 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const [activating, setActivating] = React.useState(false);
     const [applyingAdjustment, setApplyingAdjustment] = React.useState(false);
     const [uploadingPhotoId, setUploadingPhotoId] = React.useState<string | null>(null);
-    const [showPhotoLoteModal, setShowPhotoLoteModal] = React.useState(false);
+    // Seleção em lote (§10) — marca as unidades iguais e manda uma foto para todas.
+    const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+    const [applyingBatchPhoto, setApplyingBatchPhoto] = React.useState(false);
+    const batchPhotoInputRef = React.useRef<HTMLInputElement>(null);
+    const lastSelectedIndexRef = React.useRef<number | null>(null);
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>(`priceTable:${mode}:search`, '');
     const tableColumns = useTableColumns(COLUMNS, `priceTableColumns:${mode}`);
@@ -313,6 +317,46 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         }
     };
 
+    const clearSelection = () => { setSelectedIds(new Set()); lastSelectedIndexRef.current = null; };
+
+    /** §10.1 — Shift+clique seleciona o intervalo desde a última âncora. */
+    const handleRowCheck = (itemId: string, index: number, shiftKey: boolean) => {
+        if (shiftKey && lastSelectedIndexRef.current !== null) {
+            const [start, end] = lastSelectedIndexRef.current < index
+                ? [lastSelectedIndexRef.current, index]
+                : [index, lastSelectedIndexRef.current];
+            const rangeIds = visibleItems.slice(start, end + 1).map(i => i.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+            return; // âncora só muda em clique sem Shift
+        }
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+            return next;
+        });
+        lastSelectedIndexRef.current = index;
+    };
+
+    /** Envia UMA foto e grava em todas as unidades selecionadas (unidades do
+     *  mesmo tipo compartilham a imagem). */
+    const handleBatchPhoto = async (file: File) => {
+        const selected = items.filter(i => selectedIds.has(i.id));
+        if (selected.length === 0) return;
+        setApplyingBatchPhoto(true);
+        setError(null);
+        try {
+            const url = await svc.uploadBatchPhoto(organizationId, buildingId, file);
+            await svc.applyPhotoToUnits(selected.map(i => i.property_id), url);
+            const ids = new Set(selected.map(i => i.id));
+            setItems(prev => prev.map(i => ids.has(i.id) ? { ...i, photo_url: url } : i));
+            clearSelection();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setApplyingBatchPhoto(false);
+        }
+    };
+
     const handleApplyAdjustment = async () => {
         if (!selectedTableId) return;
         setApplyingAdjustment(true);
@@ -371,13 +415,6 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         const cur = i.current_price ?? i.price;
         return cur > 0 ? ((i.price - cur) / cur) * 100 : 0;
     };
-
-    // Unidades desta versão no formato do modal de lote (agrupa por tipo lá dentro).
-    const loteUnits = React.useMemo(() => items.map(i => ({
-        propertyId: i.property_id,
-        name: i.property_name || '—',
-        typology: i.typology ?? null,
-    })), [items]);
 
     const visibleItems = React.useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
@@ -576,12 +613,6 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
-                        <button
-                            onClick={() => setShowPhotoLoteModal(true)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-blue-600 hover:bg-blue-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
-                        >
-                            <Upload className="w-4 h-4" /> Importar em Lote
-                        </button>
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={columnsForConfig}
@@ -607,6 +638,16 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    checked={visibleItems.length > 0 && visibleItems.every(i => selectedIds.has(i.id))}
+                                                    onChange={() => visibleItems.every(i => selectedIds.has(i.id))
+                                                        ? clearSelection()
+                                                        : setSelectedIds(new Set(visibleItems.map(i => i.id)))}
+                                                />
+                                            </th>
                                             {tableColumns.visibleColumns.includes('photo') && (
                                                 <th className="px-6 py-2 border-r border-gray-100 w-16">Foto</th>
                                             )}
@@ -691,11 +732,20 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {visibleItems.map(item => {
+                                        {visibleItems.map((item, rowIndex) => {
                                             const cur = item.current_price ?? item.price;
                                             const diff = itemDelta(item);
                                             return (
-                                                <tr key={item.id} className="hover:bg-blue-50/50 transition-colors">
+                                                <tr key={item.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(item.id) ? 'bg-blue-50/60' : ''}`}>
+                                                    <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            checked={selectedIds.has(item.id)}
+                                                            onChange={e => handleRowCheck(item.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                        />
+                                                    </td>
                                                     {tableColumns.visibleColumns.includes('photo') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                             <PhotoCell
@@ -801,17 +851,41 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                 </div>
             )}
 
-            {showPhotoLoteModal && selectedTableId && (
-                <UnitPhotoLoteModal
-                    organizationId={organizationId}
-                    buildingId={buildingId}
-                    units={loteUnits}
-                    uploadBatchPhoto={svc.uploadBatchPhoto}
-                    applyPhotoToUnits={svc.applyPhotoToUnits}
-                    onClose={() => setShowPhotoLoteModal(false)}
-                    onConcluir={() => loadItems(selectedTableId)}
-                />
+            {/* §10 Barra de ações em lote — fixa no rodapé, fora do fluxo da lista */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {selectedIds.size} unidade{selectedIds.size !== 1 ? 's' : ''} selecionada{selectedIds.size !== 1 ? 's' : ''}
+                    </span>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => batchPhotoInputRef.current?.click()}
+                        disabled={applyingBatchPhoto}
+                        className="text-blue-700 border-none hover:bg-blue-50"
+                    >
+                        {applyingBatchPhoto
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Upload className="w-3.5 h-3.5" />}
+                        Enviar Imagem em Lote
+                    </Button>
+                    <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
+                </div>
             )}
+
+            <input
+                ref={batchPhotoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleBatchPhoto(f); e.target.value = ''; }}
+            />
         </div>
     );
 };

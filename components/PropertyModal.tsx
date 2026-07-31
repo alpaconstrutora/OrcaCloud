@@ -1,7 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { X, Home, MapPin, DollarSign, Check, Info, Package, Layers, Settings, Building2, ArrowLeft } from 'lucide-react';
+import { X, Home, MapPin, DollarSign, Check, Info, Package, Layers, Settings, Building2, ArrowLeft, FileText } from 'lucide-react';
 import { Property, PropertyStatus, Client } from '../types';
+import { Company } from '../types/company';
 import { clientService } from '../services/clientService';
+import { companyService } from '../services/companyService';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
 import PropertyTypesManager from './PropertyTypesManager';
 import { Sheet, SheetPanel, SheetFooter } from './ui/sheet';
@@ -78,6 +80,9 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
     }, [dirty, onClose, confirm]);
 
     const [clients, setClients] = useState<Client[]>([]);
+    // REGRA #5: sem organizationId (seletor global em "Todas"), lista o que a RLS
+    // permitir em vez de bloquear — o campo de empresa proprietária nunca fica morto.
+    const [companies, setCompanies] = useState<Company[]>([]);
     const [propertyTypes, setPropertyTypes] = useState<PropertyType[]>([]);
     const [isTypesManagerOpen, setIsTypesManagerOpen] = useState(false);
 
@@ -85,6 +90,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         if (!isOpen) return;
         setDirty(false);
         clientService.listClients().then(setClients).catch(console.error);
+        companyService.list(organizationId || undefined).then(setCompanies).catch(console.error);
         propertyTypesService.listTypes().then(setPropertyTypes).catch(console.error);
 
         if (initialData) {
@@ -110,7 +116,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                 parent_id: undefined
             });
         }
-    }, [initialData, isOpen, defaultPurpose]);
+    }, [initialData, isOpen, defaultPurpose, organizationId]);
 
     // Link reverso: descobre se este imóvel foi criado a partir de um Empreendimento
     const [emprOrigin, setEmprOrigin] = useState<{
@@ -390,6 +396,48 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         </div>
                     </div>
 
+                    {/* Section: Registro do Imóvel — identifica a unidade na cláusula de
+                        objeto do contrato ("objeto da matrícula nº X do Cartório de …")
+                        e na cláusula de encargos (inscrição de IPTU). Migration
+                        20270842000001. */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-blue-600">
+                            <FileText className="w-4 h-4" />
+                            <h3 className="font-black uppercase tracking-widest text-xs">Registro do Imóvel</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Matrícula</label>
+                                <input
+                                    type="text"
+                                    value={formData.registration_number || ''}
+                                    onChange={(e) => update({ registration_number: e.target.value })}
+                                    placeholder="12.345"
+                                    className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Cartório de Registro de Imóveis</label>
+                                <input
+                                    type="text"
+                                    value={formData.registry_office || ''}
+                                    onChange={(e) => update({ registry_office: e.target.value })}
+                                    placeholder="1º Ofício de Registro de Imóveis de Belo Horizonte/MG"
+                                    className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Inscrição Imobiliária (IPTU)</label>
+                                <input
+                                    type="text"
+                                    value={formData.iptu_registration || ''}
+                                    onChange={(e) => update({ iptu_registration: e.target.value })}
+                                    className="w-full px-4 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Section: Propriedade e Status (Horizontal) */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-blue-600">
@@ -440,6 +488,29 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                 </select>
+                            </div>
+                        </div>
+
+                        {/* Empresa do grupo dona do imóvel. Decide o regime tributário na
+                            geração de Tributos a Pagar e é quem assina como LOCADOR na
+                            minuta de locação — sem ela o contrato cai no fallback da
+                            organização, que não tem razão social nem sócio assinante. */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-1.5 md:col-span-2">
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Empresa Proprietária (Locador)</label>
+                                <select
+                                    value={formData.company_id || ''}
+                                    onChange={(e) => update({ company_id: e.target.value || undefined })}
+                                    className="w-full px-4 py-2.5 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner text-sm"
+                                >
+                                    <option value="">Herdar do empreendimento</option>
+                                    {companies.map(c => (
+                                        <option key={c.id} value={c.id}>{c.nome_fantasia || c.razao_social}</option>
+                                    ))}
+                                </select>
+                                <p className="text-[11px] text-gray-400 px-1">
+                                    Define o regime tributário dos tributos da locação e qualifica o locador nos contratos gerados.
+                                </p>
                             </div>
                         </div>
 

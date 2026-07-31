@@ -62,6 +62,15 @@ export interface Property {
     images?: string[];
     floor_plan_url?: string;
     client_id?: string;
+    /** Empresa (companies) dona do imóvel — define o regime tributário na geração
+     *  de Tributos a Pagar e é o primeiro degrau da resolução do LOCADOR na
+     *  minuta de locação. Migration 20270826000002. */
+    company_id?: string;
+    /** Registro do imóvel — identificam a unidade na cláusula de objeto e na de
+     *  encargos do contrato de locação. Migration 20270842000001. */
+    registration_number?: string;
+    registry_office?: string;
+    iptu_registration?: string;
     parent_id?: string;
     position_type?: 'FRONT' | 'LATERAL' | 'BACK';
     view_type?: 'NONE' | 'PARTIAL' | 'FULL';

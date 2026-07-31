@@ -20,6 +20,15 @@ export interface Client {
     rg?: string;
     rg_uf?: string;
     rg_issuing_agency?: string;
+    /** Qualificação civil (PF) — usada na cláusula de qualificação das partes dos
+     *  contratos gerados. Mesmos nomes de `contract_guarantors`, de propósito:
+     *  vocabulário único em `constants/civilStatus.ts`. Migration 20270842000000. */
+    nationality?: string;
+    profession?: string;
+    marital_status?: string;
+    marital_regime?: string;
+    spouse_name?: string;
+    spouse_document?: string;
     type: 'PF' | 'PJ';
     address?: string;
     address_number?: string;

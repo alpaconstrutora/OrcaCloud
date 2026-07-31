@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
@@ -19,6 +19,9 @@ import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
+import { buildRentalResolveContext } from '../services/rentalDocumentContextService';
+import EmitDocumentModal from './EmitDocumentModal';
+import DocxTemplateManager from './DocxTemplateManager';
 import { contractRenewalService } from '../services/contractRenewalService';
 import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
@@ -514,6 +517,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [showEntryLoteModal, setShowEntryLoteModal] = useState(false);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [contractError, setContractError] = useState<string | null>(null);
+    // Emissão do documento (minuta) do contrato — ver EmitDocumentModal.
+    const [emitOpen, setEmitOpen] = useState(false);
+    const [docxManagerOpen, setDocxManagerOpen] = useState(false);
+    // Remonta o DocumentVersionsPanel para o usuário VER a versão recém-gravada
+    // aparecer (o painel não expõe recarga imperativa).
+    const [docsRefreshKey, setDocsRefreshKey] = useState(0);
 
     // Quem tem ponte para contrato formal: Venda e Locação (Serviço não).
     const canGenerateContract = formData.type === 'SALE' || formData.type === 'RENTAL';
@@ -551,6 +560,42 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             .catch(err => console.error('[DealModal] Erro ao recuperar parcelas do cofre:', err));
         return () => { active = false; };
     }, [isOpen, formData.id]);
+
+    // Contexto de emissão do documento. `useCallback` porque o EmitDocumentModal
+    // o usa como dependência de efeito — uma arrow nova a cada render refaria a
+    // carga sem parar.
+    const loadRentalDocContext = useCallback(() => {
+        if (!linkedContract) return Promise.resolve({});
+        return buildRentalResolveContext({
+            contractId: linkedContract.id,
+            dealId: formData.id,
+            organizationId: linkedContract.organization_id || formData.organization_id || organizationId,
+        });
+    }, [linkedContract, formData.id, formData.organization_id, organizationId]);
+
+    /* Ação de emitir a minuta. Aparece em dois lugares — no card "Contrato
+       Gerado" (onde a geração termina hoje num beco sem saída) e no topo da
+       sub-aba Documentos (para quem já está lá vendo as versões). */
+    const emitDocumentActions = (
+        <div className="flex flex-wrap items-center gap-2">
+            <button
+                type="button"
+                onClick={() => setEmitOpen(true)}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+            >
+                <FileDown className="w-[15px] h-[15px]" />
+                Gerar Documento do Contrato
+            </button>
+            <button
+                type="button"
+                onClick={() => setDocxManagerOpen(true)}
+                className="flex items-center gap-1.5 h-9 px-3 text-blue-600 hover:text-blue-700 font-medium text-[13px] transition-all"
+            >
+                <Settings className="w-[15px] h-[15px]" />
+                Modelos de documento
+            </button>
+        </div>
+    );
 
     const handleGenerateContract = async () => {
         if (!formData.id) return;
@@ -2920,14 +2965,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             )}
 
                             {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'documentos' && (
-                                <DocumentVersionsPanel
-                                    ownerType="CONTRACT"
-                                    ownerId={linkedContract.id}
-                                    contractId={linkedContract.id}
-                                    organizationId={linkedContract.organization_id}
-                                    label={`Contrato ${linkedContract.number}`}
-                                    onNotify={(msg, type) => (type === 'error' ? setContractError(msg) : setContractError(null))}
-                                />
+                                <div className="space-y-4">
+                                    {/* Quem já está vendo as versões precisa poder gerar uma
+                                        nova sem voltar para a sub-aba de dados. */}
+                                    {emitDocumentActions}
+                                    <DocumentVersionsPanel
+                                        key={`docs-${docsRefreshKey}`}
+                                        ownerType="CONTRACT"
+                                        ownerId={linkedContract.id}
+                                        contractId={linkedContract.id}
+                                        organizationId={linkedContract.organization_id}
+                                        label={`Contrato ${linkedContract.number}`}
+                                        onNotify={(msg, type) => (type === 'error' ? setContractError(msg) : setContractError(null))}
+                                    />
+                                </div>
                             )}
 
                             {(formData.type !== 'RENTAL' || !linkedContract || contratoSubTab === 'dados') && (
@@ -3053,14 +3104,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             {linkedContract ? (
                                                 <div className="p-5 bg-emerald-50 rounded-[10px] border border-emerald-100 flex gap-4 items-start">
                                                     <Check className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-bold text-emerald-800 mb-1">Contrato Gerado</p>
-                                                        <p className="text-xs text-emerald-700 leading-relaxed">
-                                                            Nº <span className="font-black">{linkedContract.number}</span> · {linkedContract.status}.
-                                                            {formData.type === 'RENTAL'
-                                                                ? <> Contrato recorrente mensal, disponível no <span className="font-bold">Portal do Cliente</span> (categoria Locação).</>
-                                                                : <> Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.</>}
-                                                        </p>
+                                                    <div className="min-w-0 space-y-3">
+                                                        <div>
+                                                            <p className="text-sm font-bold text-emerald-800 mb-1">Contrato Gerado</p>
+                                                            <p className="text-xs text-emerald-700 leading-relaxed">
+                                                                Nº <span className="font-black">{linkedContract.number}</span> · {linkedContract.status}.
+                                                                {formData.type === 'RENTAL'
+                                                                    ? <> Contrato recorrente mensal, disponível no <span className="font-bold">Portal do Cliente</span> (categoria Locação).</>
+                                                                    : <> Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.</>}
+                                                            </p>
+                                                        </div>
+                                                        {/* O registro do contrato existe, mas o DOCUMENTO não — é
+                                                            aqui que a minuta é gerada a partir de um modelo .docx. */}
+                                                        {emitDocumentActions}
                                                     </div>
                                                 </div>
                                             ) : (
@@ -3641,6 +3697,33 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* Emissão do documento do contrato. Painel lateral (UI_PATTERNS §3:
+                    "Criar registro simples" → Sheet) — o EmitDocumentModal já é
+                    Sheet-like. Contexto de locação (locador, unidades, garantia,
+                    fiador) vem do rentalDocumentContextService; `persistVersion`
+                    grava a minuta como versão rascunho antes de baixar. */}
+                {emitOpen && linkedContract && (
+                    <EmitDocumentModal
+                        organizationId={linkedContract.organization_id || formData.organization_id || organizationId || ''}
+                        contract={linkedContract}
+                        organization={null}
+                        loadContext={loadRentalDocContext}
+                        persistVersion
+                        lockClient
+                        onVersionSaved={() => { setContratoSubTab('documentos'); setDocsRefreshKey(k => k + 1); }}
+                        onManageTemplates={() => { setEmitOpen(false); setDocxManagerOpen(true); }}
+                        onClose={() => setEmitOpen(false)}
+                        notify={(msg, type) => setContractError(type === 'error' ? msg : null)}
+                    />
+                )}
+
+                {docxManagerOpen && (
+                    <DocxTemplateManager
+                        organizationId={linkedContract?.organization_id || formData.organization_id || organizationId || ''}
+                        onClose={() => setDocxManagerOpen(false)}
+                    />
                 )}
             </div>
         </div>

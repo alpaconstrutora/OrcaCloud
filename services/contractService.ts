@@ -224,6 +224,77 @@ export async function nextRentalNumber(orgId: string, year: number): Promise<str
 }
 
 /**
+ * Dados das unidades de uma negociação, numa passagem só:
+ *  • `unitLabel`       — nomes concatenados, para o título do contrato
+ *                        ("Apto 101 + Vaga 12"). Um contrato de locação pode
+ *                        reunir apto + vaga + box.
+ *  • `companyId`       — empresa dona da unidade PRINCIPAL. Vira
+ *                        `contracts.empresa_id`, que já é filtro em produção
+ *                        (`listContractsByEmpresa`) e até aqui nunca era
+ *                        preenchido em locação — nenhum contrato aparecia lá.
+ *  • `executionAddress`— endereço da unidade principal numa linha. Alimenta
+ *                        `contracts.execution_address`, que já é token do
+ *                        catálogo de documentos: modelos .docx existentes
+ *                        passam a resolver "local do imóvel" sem mudança.
+ *
+ * Nunca lança: falhar aqui não pode impedir a geração do contrato.
+ */
+async function resolveDealUnitsInfo(dealId: string, fallbackPropertyId?: string): Promise<{
+    unitLabel: string;
+    companyId?: string;
+    executionAddress?: string;
+}> {
+    try {
+        const { data: unitRows } = await supabase
+            .from('commercial_deal_units')
+            .select('property_id, is_primary')
+            .eq('deal_id', dealId);
+
+        const rows = (unitRows || []) as { property_id: string; is_primary?: boolean }[];
+        const ids = rows.map(u => u.property_id);
+        if (ids.length === 0 && fallbackPropertyId) ids.push(fallbackPropertyId);
+        if (ids.length === 0) return { unitLabel: '' };
+
+        const { data: props } = await supabase
+            .from('commercial_properties')
+            .select('id, name, company_id, street, number, complement, neighborhood, city, state, zip_code, address')
+            .in('id', ids);
+
+        type Row = {
+            id: string; name?: string; company_id?: string; street?: string; number?: string;
+            complement?: string; neighborhood?: string; city?: string; state?: string;
+            zip_code?: string; address?: string;
+        };
+        const byId = new Map((props || []).map(p => [(p as Row).id, p as Row]));
+
+        const unitLabel = ids
+            .map(id => (byId.get(id)?.name || '').trim())
+            .filter(Boolean)
+            .join(' + ');
+
+        const primary = byId.get(rows.find(r => r.is_primary)?.property_id ?? ids[0]);
+
+        // `street` só existe nas linhas migradas; `address` é o campo legado de
+        // texto livre e continua sendo o preenchido em muitas unidades antigas.
+        const line = primary ? [
+            [primary.street, primary.number].filter(Boolean).join(', '),
+            primary.complement,
+            primary.neighborhood,
+            primary.city && primary.state ? `${primary.city}/${primary.state}` : (primary.city || primary.state),
+            primary.zip_code ? `CEP ${primary.zip_code}` : '',
+        ].filter(Boolean).join(' - ') : '';
+
+        return {
+            unitLabel,
+            companyId: primary?.company_id || undefined,
+            executionAddress: line || primary?.address || undefined,
+        };
+    } catch {
+        return { unitLabel: '' };
+    }
+}
+
+/**
  * Aplica um aditivo de PRORROGAÇÃO de locação: estende a vigência do próprio
  * contrato e gera as parcelas do período novo.
  *
@@ -920,7 +991,9 @@ export const contractService = {
         try {
             const { data, error } = await supabase
                 .from('contracts')
-                .select('id, organization_id, deal_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+                // `empresa_id`/`execution_address` entram para a reconciliação de
+                // createFromDeal saber o que ainda está vazio (backfill).
+                .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
                 .eq('deal_id', dealId)
                 .maybeSingle();
             if (error) {
@@ -968,6 +1041,11 @@ export const contractService = {
             ? { contractType: 'Contrato Recorrente', nature: 'Locação', titlePrefix: 'Contrato de Locação', titleFallback: 'Contrato de Locação', numberPrefix: 'CL' }
             : { contractType: 'Compra e Venda', nature: 'Outros', titlePrefix: 'Contrato de Venda', titleFallback: 'Contrato de Compra e Venda', numberPrefix: 'CV' };
 
+        // Unidades da negociação: nome (para o título), empresa dona (locador) e
+        // endereço da unidade principal. Resolvido ANTES da idempotência porque
+        // o ramo do contrato já existente também precisa deles (backfill).
+        const unitsInfo = await resolveDealUnitsInfo(deal.id, deal.property_id);
+
         // Idempotência primária: busca por deal_id (requer migration 20261228000006 aplicada)
         const existing = await contractService.getContractByDealId(deal.id);
         if (existing) {
@@ -978,37 +1056,36 @@ export const contractService = {
             // ambos filtram por client_id. As parcelas continuavam aparecendo (vêm do
             // deal), o que fazia o problema parecer "portal sem conexão". Caso real:
             // CL-2026-002 apontando para um cliente de Vendas. Ver ClientArea.tsx:211.
+            const patch: Record<string, unknown> = {};
             if (existing.client_id && existing.client_id !== deal.client_id) {
+                patch.client_id = deal.client_id;
+            }
+            // Backfill do locador e do endereço: contratos gerados antes de
+            // `empresa_id`/`execution_address` passarem a ser gravados aqui se
+            // consertam sozinhos na primeira reabertura da negociação. Só
+            // preenche o que está vazio — nunca sobrescreve escolha manual.
+            if (isRental) {
+                if (!(existing as { empresa_id?: string }).empresa_id && unitsInfo.companyId) {
+                    patch.empresa_id = unitsInfo.companyId;
+                }
+                if (!(existing as { execution_address?: string }).execution_address && unitsInfo.executionAddress) {
+                    patch.execution_address = unitsInfo.executionAddress;
+                }
+            }
+
+            if (Object.keys(patch).length > 0) {
                 const { data: fixed } = await supabase
                     .from('contracts')
-                    .update({ client_id: deal.client_id } as any)
+                    .update(patch as any)
                     .eq('id', existing.id)
-                    .select('id, organization_id, deal_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+                    .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
                     .maybeSingle();
                 if (fixed) return fixed as Contract;
             }
             return existing;
         }
 
-        // Título com o nome da(s) unidade(s). Um contrato de locação pode reunir
-        // várias (apto + vaga + box) — todas entram no título.
-        let unitLabel = '';
-        try {
-            const { data: unitRows } = await supabase
-                .from('commercial_deal_units')
-                .select('property_id')
-                .eq('deal_id', deal.id);
-            const ids = (unitRows || []).map(u => u.property_id as string);
-            if (ids.length === 0 && deal.property_id) ids.push(deal.property_id);
-            if (ids.length > 0) {
-                const { data: props } = await supabase
-                    .from('commercial_properties')
-                    .select('id, name')
-                    .in('id', ids);
-                const nameById = new Map((props || []).map(p => [p.id as string, ((p.name as string) || '').trim()]));
-                unitLabel = ids.map(id => nameById.get(id) || '').filter(Boolean).join(' + ');
-            }
-        } catch { /* título sem unidade, não bloqueia */ }
+        const { unitLabel, companyId: unitCompanyId, executionAddress } = unitsInfo;
 
         // Gera número: usa o do deal se preenchido; senão sequência própria do domínio.
         let number = (deal.contract_number && deal.contract_number.trim())
@@ -1127,6 +1204,9 @@ export const contractService = {
             start_date: deal.date || new Date().toISOString().split('T')[0],
             is_recurring: isRental,
             ...(isRental ? {
+                // Locador e local do imóvel — ver resolveDealUnitsInfo.
+                empresa_id: unitCompanyId,
+                execution_address: executionAddress,
                 billing_cycle: deal.billing_cycle || 'Mensal',
                 due_day: dueDay,
                 payment_days: paymentDays,

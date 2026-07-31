@@ -6,7 +6,8 @@ import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { projectService } from '../services/projectService';
 import { fillDocx, docxBlobToPdf } from '../services/docxRenderService';
-import { resolveFields, describeMapping } from '../services/docxFieldCatalog';
+import { resolveFields, describeMapping, ResolveContext } from '../services/docxFieldCatalog';
+import { contractDocumentVersionService } from '../services/contractDocumentVersionService';
 import { Contract } from '../types/contracts';
 import { Client, Organization } from '../types/users';
 import { ProjectSettings } from '../types/project';
@@ -20,12 +21,30 @@ interface Props {
     onManageTemplates?: () => void;
     onFallbackPdf?: () => void;
     notify?: (msg: string, type: 'success' | 'error' | 'info') => void;
+    /**
+     * Origens extras já resolvidas (locação: landlord/units/guarantee/guarantors/
+     * rentalMeta, e o próprio `contract` completo). Sobrepõem o contexto base.
+     */
+    contextExtra?: Partial<ResolveContext>;
+    /** Carregador assíncrono das mesmas origens — o modal abre e preenche depois. */
+    loadContext?: () => Promise<Partial<ResolveContext>>;
+    /**
+     * Salva o documento gerado como versão em `contract_document_versions`
+     * (kind MINUTA, source TEMPLATE_DOCX). Default `false` = só baixa, que é o
+     * comportamento histórico do módulo de Contratos.
+     */
+    persistVersion?: boolean;
+    /** O cliente vem pronto no contexto (locatário do contrato) — esconde o seletor. */
+    lockClient?: boolean;
+    /** Disparado após gravar a versão, para o pai recarregar o painel de Documentos. */
+    onVersionSaved?: () => void;
 }
 
 const slug = (s: string) => (s || '').replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '');
 
 const EmitDocumentModal: React.FC<Props> = ({
     organizationId, contract, organization: organizationProp, onClose, onManageTemplates, onFallbackPdf, notify,
+    contextExtra, loadContext, persistVersion = false, lockClient = false, onVersionSaved,
 }) => {
     const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -36,6 +55,24 @@ const EmitDocumentModal: React.FC<Props> = ({
     const [clientId, setClientId] = useState<string>(contract.client_id ?? '');
     const [busy, setBusy] = useState<null | 'docx' | 'pdf'>(null);
     const [error, setError] = useState<string | null>(null);
+    const [extra, setExtra] = useState<Partial<ResolveContext> | null>(contextExtra ?? null);
+
+    // Origens extras assíncronas (locação). Referência estável: só troca quando o
+    // load resolve, então entra sem risco nas deps do useMemo do contexto.
+    useEffect(() => {
+        if (contextExtra) { setExtra(contextExtra); return; }
+        if (!loadContext) return;
+        let active = true;
+        loadContext()
+            .then(ctx => { if (active) setExtra(ctx); })
+            .catch(e => {
+                console.error('[EmitDocumentModal] contexto extra não carregado:', e);
+                // Não bloqueia: sem o contexto extra os campos daquelas origens
+                // ficam vazios, exatamente como qualquer origem ausente.
+                if (active) setError('Não foi possível carregar todos os dados do contrato. Campos podem sair em branco.');
+            });
+        return () => { active = false; };
+    }, [contextExtra, loadContext]);
 
     useEffect(() => {
         setLoading(true);
@@ -77,10 +114,24 @@ const EmitDocumentModal: React.FC<Props> = ({
     const template = useMemo(() => templates.find(t => t.id === templateId) ?? null, [templates, templateId]);
     const client = useMemo(() => clients.find(c => c.id === clientId) ?? null, [clients, clientId]);
 
-    const resolved = useMemo(() => {
-        if (!template) return {};
-        return resolveFields(template.token_map ?? {}, { organization, client, contract, project });
-    }, [template, organization, client, contract]);
+    /**
+     * Contexto de resolução. `extra` vem por último de propósito: quando a
+     * locação carrega o contrato completo, ele precisa sobrepor o `contract`
+     * parcial que o pai passou por prop.
+     *
+     * ⚠️ `project` PRECISA estar nas dependências: `projectService.loadProject`
+     * resolve depois do primeiro render, então antes desta correção o `resolved`
+     * não recalculava e todo token do grupo "Obra" saía vazio no documento.
+     */
+    const ctx = useMemo<ResolveContext>(
+        () => ({ organization, client, contract, project, ...(extra ?? {}) }),
+        [organization, client, contract, project, extra],
+    );
+
+    const resolved = useMemo(
+        () => (template ? resolveFields(template.token_map ?? {}, ctx) : {}),
+        [template, ctx],
+    );
 
     const mappedTokens = template ? template.detected_tokens.filter(tk => template.token_map?.[tk]) : [];
     const unmappedTokens = template ? template.detected_tokens.filter(tk => !template.token_map?.[tk]) : [];
@@ -94,13 +145,45 @@ const EmitDocumentModal: React.FC<Props> = ({
             const sourceBlob = await documentTemplateService.downloadFile(template);
             const filled = await fillDocx(sourceBlob, resolved);
             const baseName = `${slug(contract.number)}_${slug(template.name)}`;
-            if (kind === 'docx') {
-                saveAs(filled, `${baseName}.docx`);
-                notify?.('Documento .docx gerado com sucesso!', 'success');
-            } else {
-                const pdf = await docxBlobToPdf(filled);
-                saveAs(pdf, `${baseName}.pdf`);
-                notify?.('PDF gerado com sucesso!', 'success');
+            const output = kind === 'docx' ? filled : await docxBlobToPdf(filled);
+            const fileName = `${baseName}.${kind}`;
+
+            // Persistir ANTES de baixar: invertido, o usuário já teria o arquivo
+            // na mão quando o erro aparecesse, e o toast viraria ruído. Assim o
+            // estado do sistema é conhecido no momento da mensagem.
+            let savedAsVersion = false;
+            if (persistVersion) {
+                try {
+                    await contractDocumentVersionService.addVersionFromBlob({
+                        ownerType: 'CONTRACT',
+                        ownerId: contract.id,
+                        contractId: contract.id,
+                        organizationId: contract.organization_id ?? organizationId ?? null,
+                        blob: output,
+                        fileName,
+                        templateId: template.id,
+                        source: 'TEMPLATE_DOCX',
+                        kind: 'MINUTA',
+                        name: `Minuta — ${template.name}`,
+                        notes: `Gerada do modelo "${template.name}" em ${new Date().toLocaleString('pt-BR')}.`,
+                    });
+                    savedAsVersion = true;
+                    onVersionSaved?.();
+                } catch (saveErr) {
+                    const m = saveErr instanceof Error ? saveErr.message : '';
+                    notify?.(`Documento gerado, mas não foi possível salvá-lo como versão${m ? `: ${m}` : '.'}`, 'error');
+                }
+            }
+
+            // Baixa SEMPRE, mesmo se a gravação falhou: a geração é cara
+            // (docxBlobToPdf roda html2canvas) e uma falha de storage não pode
+            // custar o arquivo inteiro.
+            saveAs(output, fileName);
+
+            if (savedAsVersion) {
+                notify?.(`${kind === 'docx' ? 'Documento .docx' : 'PDF'} gerado, salvo como versão (rascunho) e baixado. Use "Emitir" para liberá-lo ao Portal do Cliente.`, 'success');
+            } else if (!persistVersion) {
+                notify?.(kind === 'docx' ? 'Documento .docx gerado com sucesso!' : 'PDF gerado com sucesso!', 'success');
             }
             onClose();
         } catch (e) {
@@ -183,17 +266,30 @@ const EmitDocumentModal: React.FC<Props> = ({
                                         {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="block text-form-label font-medium text-gray-500 mb-1">Cliente</label>
-                                    <select
-                                        value={clientId}
-                                        onChange={e => setClientId(e.target.value)}
-                                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="">Sem cliente</option>
-                                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
-                                </div>
+                                {lockClient ? (
+                                    /* O cliente é o do contrato e vem pronto no contexto — o
+                                       seletor só atrapalharia: ele carrega dentro de
+                                       `if (organizationId)`, então com "Todas as organizações"
+                                       ficaria vazio e sem ninguém para escolher. */
+                                    <div>
+                                        <label className="block text-form-label font-medium text-gray-500 mb-1">Cliente</label>
+                                        <p className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 truncate">
+                                            {ctx.client?.name || '—'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-form-label font-medium text-gray-500 mb-1">Cliente</label>
+                                        <select
+                                            value={clientId}
+                                            onChange={e => setClientId(e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">Sem cliente</option>
+                                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                    </div>
+                                )}
                             </div>
 
                             {allUnmapped && (

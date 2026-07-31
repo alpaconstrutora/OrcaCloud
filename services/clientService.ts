@@ -61,7 +61,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
@@ -69,7 +69,24 @@ export const clientService = {
 
         let { data, error } = await query.order('name', { ascending: true });
 
-        // Fallback se a coluna organization_id ainda não existir no banco
+        // Fallback 1: qualificação civil (migration 20270842000000) ainda não
+        // aplicada. Sem isto, subir o código antes da migration derrubaria a
+        // tela de Clientes inteira — as colunas novas só servem à minuta, não
+        // podem custar a listagem.
+        if (error && error.code === '42703') {
+            console.warn('[CLIENT SERVICE] Colunas de qualificação civil ausentes — aplique a migration 20270842000000. Listando sem elas.');
+            let retryQuery = supabase
+                .from('clients')
+                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+            if (organizationId) {
+                retryQuery = retryQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+            }
+            const retry = await retryQuery.order('name', { ascending: true });
+            data = retry.data as any;
+            error = retry.error;
+        }
+
+        // Fallback 2: a coluna organization_id ainda não existir no banco
         if (error && error.code === '42703' && organizationId) {
             console.warn("[CLIENT SERVICE] organization_id column missing, falling back to global list.");
             const retry = await supabase.from('clients').select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, address, neighborhood, city, state, created_at, organization_id').order('name', { ascending: true });

@@ -93,31 +93,40 @@ export const commercialService = {
      */
     async listProperties(organizationId?: string, projectId?: string, purpose?: 'SALE' | 'RENTAL' | 'BOTH', includeHidden = false) {
         console.log('[commercialService] API Call: listProperties', { organizationId, projectId, purpose, includeHidden });
-        let query = supabase
-            .from('commercial_properties')
-            .select('id, organization_id, project_id, parent_id, client_id, name, number, type, purpose, address, street, complement, neighborhood, city, state, zip_code, area, private_area, common_area, total_area, price, rental_price, current_price, initial_price, table_price, bedrooms, bathrooms, parking_spaces, status, specs, block, floor, typology, position_type, view_type, sun_orientation, features, images, visible_to_broker, visible_in_sales, created_at, updated_at')
-            .order('name', { ascending: true });
 
-        // `is not false` cobre NULL (linhas anteriores à migration) além de TRUE.
-        if (!includeHidden) {
-            query = query.not('visible_in_sales', 'is', false);
+        const BASE_COLS = 'id, organization_id, project_id, parent_id, client_id, name, number, type, purpose, address, street, complement, neighborhood, city, state, zip_code, area, private_area, common_area, total_area, price, rental_price, current_price, initial_price, table_price, bedrooms, bathrooms, parking_spaces, status, specs, block, floor, typology, position_type, view_type, sun_orientation, features, images, visible_to_broker, visible_in_sales, created_at, updated_at';
+        // Registro do imóvel (migration 20270842000001) + empresa dona
+        // (20270826000002). São opcionais para a listagem: alimentam a minuta e a
+        // resolução do locador.
+        const REGISTRY_COLS = 'company_id, registration_number, registry_office, iptu_registration';
+
+        const build = (cols: string) => {
+            let q = supabase
+                .from('commercial_properties')
+                .select(cols)
+                .order('name', { ascending: true });
+
+            // `is not false` cobre NULL (linhas anteriores à migration) além de TRUE.
+            if (!includeHidden) q = q.not('visible_in_sales', 'is', false);
+            if (organizationId) q = q.eq('organization_id', organizationId);
+            if (projectId) q = q.eq('project_id', projectId);
+            if (purpose && purpose !== 'BOTH') q = q.eq('purpose', purpose);
+            return q;
+        };
+
+        let { data, error } = await build(`${BASE_COLS}, ${REGISTRY_COLS}`);
+
+        // Fallback: colunas de registro ainda não aplicadas no banco. Subir o
+        // código antes da migration não pode derrubar a tela de imóveis inteira.
+        if (error && (error as { code?: string }).code === '42703') {
+            console.warn('[commercialService] Colunas de registro do imóvel ausentes — aplique as migrations 20270826000002 / 20270842000001. Listando sem elas.');
+            const retry = await build(BASE_COLS);
+            data = retry.data as any;
+            error = retry.error;
         }
 
-        if (organizationId) {
-            query = query.eq('organization_id', organizationId);
-        }
-
-        if (projectId) {
-            query = query.eq('project_id', projectId);
-        }
-
-        if (purpose && purpose !== 'BOTH') {
-            query = query.eq('purpose', purpose);
-        }
-
-        const { data, error } = await query;
         if (error) throw error;
-        return (data || []) as Property[];
+        return (data || []) as unknown as Property[];
     },
 
     async saveProperty(property: Partial<Property>) {

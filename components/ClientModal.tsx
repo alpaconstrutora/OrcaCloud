@@ -8,6 +8,7 @@ import { useStore } from '../store/useStore';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { ClientCategory } from '../types';
 import { masterDataService, MasterState } from '../services/masterDataService';
+import { MARITAL_STATUS_OPTIONS, MARITAL_REGIME_OPTIONS, hasSpouse } from '../constants/civilStatus';
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -31,6 +32,15 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         rg: '',
         rg_uf: '',
         rg_issuing_agency: '',
+        // 'Brasileira' é SUGESTÃO de formulário, não default de banco — a coluna
+        // nasceu sem DEFAULT justamente para não afirmar a nacionalidade dos
+        // clientes já cadastrados (ver migration 20270842000000).
+        nationality: 'Brasileira',
+        profession: '',
+        marital_status: '',
+        marital_regime: '',
+        spouse_name: '',
+        spouse_document: '',
         type: 'PF',
         address: '',
         address_number: '',
@@ -61,6 +71,12 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 rg: '',
                 rg_uf: '',
                 rg_issuing_agency: '',
+                nationality: 'Brasileira',
+                profession: '',
+                marital_status: '',
+                marital_regime: '',
+                spouse_name: '',
+                spouse_document: '',
                 type: 'PF',
                 address: '',
                 address_number: '',
@@ -256,6 +272,100 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                     onChange={(e) => update({ rg_issuing_agency: e.target.value })}
                                 />
                             </div>
+                        </div>
+                    )}
+
+                    {/* Qualificação civil — abre a cláusula de qualificação das partes
+                        nos contratos gerados ("FULANO, brasileiro, casado sob o regime
+                        de comunhão parcial, engenheiro, portador do RG…"). Só PF: a
+                        qualificação de PJ sai de razão social + CNPJ + sede.
+                        Vocabulário em constants/civilStatus.ts, compartilhado com o
+                        cadastro de fiador (contract_guarantors). */}
+                    {formData.type === 'PF' && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nacionalidade</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Brasileira"
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.nationality ?? ''}
+                                        onChange={(e) => update({ nationality: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Profissão</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Engenheiro(a) civil"
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.profession ?? ''}
+                                        onChange={(e) => update({ profession: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Estado Civil</label>
+                                    <select
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                        value={formData.marital_status ?? ''}
+                                        onChange={(e) => {
+                                            // Sair de casado/união estável limpa regime e cônjuge:
+                                            // deixá-los preenchidos faria a minuta afirmar um
+                                            // cônjuge que o estado civil já nega.
+                                            const next = e.target.value;
+                                            update(hasSpouse(next)
+                                                ? { marital_status: next }
+                                                : { marital_status: next, marital_regime: '', spouse_name: '', spouse_document: '' });
+                                        }}
+                                    >
+                                        <option value="">Não informado</option>
+                                        {MARITAL_STATUS_OPTIONS.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {hasSpouse(formData.marital_status) && (
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Regime de Bens</label>
+                                        <select
+                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                            value={formData.marital_regime ?? ''}
+                                            onChange={(e) => update({ marital_regime: e.target.value })}
+                                        >
+                                            <option value="">Não informado</option>
+                                            {MARITAL_REGIME_OPTIONS.map(r => (
+                                                <option key={r} value={r}>{r}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Cônjuge</label>
+                                        <input
+                                            type="text"
+                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={formData.spouse_name ?? ''}
+                                            onChange={(e) => update({ spouse_name: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">CPF do Cônjuge</label>
+                                        <div className="relative">
+                                            <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="000.000.000-00"
+                                                className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                value={formData.spouse_document ?? ''}
+                                                onChange={(e) => update({ spouse_document: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

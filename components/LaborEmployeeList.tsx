@@ -228,18 +228,18 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
             {/* Toolbar acoplada à tabela (§5.2) */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white space-y-3">
-                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                        <div className="flex-1 relative w-full">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center md:flex-nowrap">
+                        <div className="relative w-full md:w-56 shrink-0">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
-                                placeholder="Buscar colaborador, função ou CPF..."
+                                placeholder="Buscar colaborador..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 shrink-0">
                             <select
                                 value={filterStatus}
                                 onChange={e => setFilterStatus(e.target.value as any)}

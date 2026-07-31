@@ -536,7 +536,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         setCurrentPolygon([]);
         setTool('select');
         
-        if (Math.abs(startX - endX) < 5 || Math.abs(startY - endY) < 5) return;
+        if (Math.abs(startX - endX) < 5 && Math.abs(startY - endY) < 5) return;
         
         if (['draw_door', 'draw_window', 'draw_opening', 'draw_sliding_door', 'draw_double_door', 'draw_stairs'].includes(tool)) {
           finishElement(tool, startX, startY, endX, endY);
@@ -1021,20 +1021,30 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     
     const dbType = typeMap[elementType];
     if (!dbType) return;
+    
+    let finalX2 = x2;
+    let finalY2 = y2;
+    
+    if (elementType === 'draw_door') {
+        const doorSizePx = 0.80 * (plan.scaleFactor || 100);
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        finalX2 = x1 + doorSizePx * Math.cos(angle);
+        finalY2 = y1 + doorSizePx * Math.sin(angle);
+    }
 
     try {
       const newElement = await electricalProjectService.createElement({
         organizationId: getSafeOrgId(),
         planId: plan.id,
         type: dbType,
-        points: [x1, y1, x2, y2]
+        points: [x1, y1, finalX2, finalY2]
       });
       
       setElements(prev => [...prev, newElement]);
       setCurrentWall([]);
     } catch (error: any) {
       console.error(error);
-      const payload = { organizationId, planId: plan.id, type: dbType, points: [x1, y1, x2, y2] };
+      const payload = { organizationId, planId: plan.id, type: dbType, points: [x1, y1, finalX2, finalY2] };
       alert('Erro ao salvar o elemento: ' + (error?.message || JSON.stringify(error)) + ' | Payload: ' + JSON.stringify(payload));
     }
   };
@@ -1936,12 +1946,22 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                             const angle = Math.atan2(dy, dx) * 180 / Math.PI;
                             
                             if (el.type === 'door') {
-                              // Porta simples
+                              // Porta simples padrão (80cm)
+                              const wallThick = plan?.scaleFactor ? 0.15 * plan.scaleFactor : 15;
                               return (
                                 <Group key={`el-${el.id}`} x={x1} y={y1} rotation={angle}>
-                                  <Line points={[0, 0, dist, 0]} stroke="#64748b" strokeWidth={3} />
-                                  <Line points={[dist, 0, dist, -dist]} stroke="#64748b" strokeWidth={3} />
-                                  <Arc x={dist} y={0} innerRadius={dist} outerRadius={dist} angle={90} rotation={180} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />
+                                  {/* Máscara para "cortar" a parede - cor de fundo do canvas bg-slate-50 */}
+                                  <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
+                                  
+                                  {/* Batentes da porta */}
+                                  <Rect x={0} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
+                                  <Rect x={dist-4} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
+
+                                  {/* Folha da porta (batente esquerdo) */}
+                                  <Line points={[0, 0, 0, -dist]} stroke="#0f172a" strokeWidth={3} />
+                                  
+                                  {/* Arco de abertura */}
+                                  <Arc x={0} y={0} innerRadius={dist} outerRadius={dist} angle={90} rotation={-90} stroke="#64748b" strokeWidth={1} />
                                 </Group>
                               );
                             }

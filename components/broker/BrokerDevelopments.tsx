@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Building2, ChevronLeft, ChevronRight, Loader2, MapPin, Info } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, Loader2, MapPin, Info, Image as ImageIcon } from 'lucide-react';
 import { commercialPriceTableService } from '../../services/commercialPriceTableService';
 import type { CommercialPriceTable, CommercialPriceTableItem } from '../../services/commercialPriceTableService';
 import { rentalPriceTableService } from '../../services/rentalPriceTableService';
@@ -72,6 +72,8 @@ const areaFmt = (v: number | null | undefined) => (v != null ? `${v.toLocaleStri
 // são leitura, não campo editável (a edição continua sendo lá).
 // Os labels de preço mudam com o eixo Venda/Locação, como no MODE_CONFIG de lá.
 const buildColumns = (priceMode: 'sale' | 'rental'): ColumnConfig[] => [
+    // Foto de capa da unidade — não ordenável (imagem não tem valor comparável).
+    { key: 'photo',           label: 'Foto',               sortable: false },
     { key: 'unit',            label: 'Unidade',            sortable: true },
     { key: 'status',          label: 'Status',             sortable: true },
     { key: 'privArea',        label: 'Área privativa',     sortable: true },
@@ -87,6 +89,14 @@ const buildColumns = (priceMode: 'sale' | 'rental'): ColumnConfig[] => [
     { key: 'showPrice',       label: 'Exibir Preço',        sortable: true },
 ];
 const COLUMN_KEYS = buildColumns('sale').map(c => c.key);
+
+// Colunas criadas DEPOIS que a preferência do portal passou a ser gravada no
+// banco (20270825000010). A preferência salva só guarda o que estava visível na
+// época, então uma coluna nova nunca entraria nela e ficaria invisível para
+// sempre — o oposto do `knownColumns` de useTableColumns, que já trata isso.
+// Estas entram ligadas por padrão até o admin desmarcar e a lista ser regravada.
+// Ao criar uma coluna nova aqui no futuro, acrescente a chave nesta lista.
+const COLUMNS_ADDED_AFTER_PREFS = ['photo'];
 
 // Δ da unidade: variação % entre o preço desta versão e o vigente. Mesma
 // fórmula de itemDelta() em PriceTableManager.tsx.
@@ -147,7 +157,11 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                     : effectiveOrgId ? await brokerPortalService.getPriceColumns(effectiveOrgId) : null;
                 // Filtra chave desconhecida: se uma coluna for renomeada/removida no
                 // código, a preferência antiga no banco não deve ressuscitá-la.
-                if (!cancelled && cols) setVisibleColumns(cols.filter(k => COLUMN_KEYS.includes(k)));
+                if (!cancelled && cols) {
+                    const known = cols.filter(k => COLUMN_KEYS.includes(k));
+                    const novas = COLUMNS_ADDED_AFTER_PREFS.filter(k => !cols.includes(k));
+                    setVisibleColumns([...known, ...novas]);
+                }
             } catch (err) {
                 console.error('[BrokerDevelopments] Erro ao carregar colunas do portal:', err);
             } finally {
@@ -246,6 +260,8 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 // `?? ` e não `||`: pavimento 0 é térreo, valor legítimo.
                 floor: u.floor ?? u.specs?.floor ?? null,
                 position_type: u.position_type ?? null,
+                // Foto de capa — mesma origem do photo_url das RPCs/service: images[0].
+                photo_url: u.images?.[0] ?? null,
                 visible_to_broker: (u as any).visible_to_broker ?? true,
                 show_price_to_broker: (u as any).show_price_to_broker ?? true,
             }));
@@ -435,6 +451,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {isCol('photo') && <th className="px-6 py-2 border-r border-gray-100 w-16">Foto</th>}
                                     {isCol('unit') && <SortableHeader colKey="unit" label="Unidade" uppercase={false}
                                         sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
                                         className="px-6 py-2 border-r border-gray-100" />}
@@ -490,6 +507,13 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                             onClick={() => clickable && handleRowClick(item.property_id)}
                                             title={clickable ? 'Clique para iniciar uma proposta com esta unidade' : 'Unidade não disponível no estoque atual'}
                                         >
+                                            {isCol('photo') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                    {item.photo_url
+                                                        ? <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                                                        : <ImageIcon className="w-4 h-4 text-gray-300" />}
+                                                </div>
+                                            </td>}
                                             {isCol('unit') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                 <span className="group-hover:text-blue-700 flex items-center gap-1.5">
                                                     {item.property_name || '—'}

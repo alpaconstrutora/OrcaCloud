@@ -4,6 +4,7 @@ import { Property, PropertyDeal, Client, Organization, PaymentInstallment, Broke
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
+import { ColumnConfig, useTableColumns, ColumnConfigButton } from './ui/TableUtils';
 import { paymentTypeService } from '../services/paymentTypeService';
 import {
     DEFAULT_PAYMENT_TYPES,
@@ -271,6 +272,20 @@ interface DealModalProps {
     initialTab?: string;
 }
 
+// Mesmas colunas nas duas séries da aba Parcelas (plano de pagamento e parcelas
+// do contrato) — ver comentário em torno de contractEntries: elas têm que ler
+// igual, então compartilham a mesma configuração de colunas visíveis.
+const PARCELAS_COLUMNS: ColumnConfig[] = [
+    { key: 'vencimento', label: 'Vencimento', sortable: false },
+    { key: 'valor', label: 'Valor', sortable: false },
+    { key: 'desconto', label: 'Desconto', sortable: false },
+    { key: 'valor_final', label: 'Valor final', sortable: false },
+    { key: 'tipo', label: 'Tipo', sortable: false },
+    { key: 'forma_pagto', label: 'Forma pagto.', sortable: false },
+    { key: 'descricao', label: 'Descrição', sortable: false },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
 const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab }) => {
     const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
     // Sub-aba de "Contrato e Assinatura" (só locação com contrato gerado).
@@ -364,6 +379,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // Shift+clique (guia §10.1) + modal dedicado de edição em lote (§10).
     const [selectedInstallmentIds, setSelectedInstallmentIds] = useState<Set<string>>(new Set());
     const [lastCheckedInstallmentIndex, setLastCheckedInstallmentIndex] = useState<number | null>(null);
+    // Colunas visíveis da aba Parcelas — compartilhada pelas duas tabelas (plano
+    // de pagamento e parcelas do contrato), guia §5.2 (toolbar acoplada).
+    const parcelasCols = useTableColumns(PARCELAS_COLUMNS, 'dealModalParcelasColumns');
     const [showInstallmentLoteModal, setShowInstallmentLoteModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
@@ -2099,6 +2117,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     /* Parcelas do CONTRATO — somente leitura: quem edita valor e
                                        vencimento aqui é o financeiro, não a negociação. */
                                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                                        <div className="p-3 border-b border-gray-100 bg-white flex items-center justify-end">
+                                            <ColumnConfigButton
+                                                columns={PARCELAS_COLUMNS}
+                                                visibleColumns={parcelasCols.visibleColumns}
+                                                showColumnConfig={parcelasCols.showColumnConfig}
+                                                onToggleShow={() => parcelasCols.setShowColumnConfig(!parcelasCols.showColumnConfig)}
+                                                onToggleColumn={parcelasCols.toggleColumn}
+                                                onReset={parcelasCols.resetColumns}
+                                            />
+                                        </div>
                                         {loadingEntries ? (
                                             <div className="text-center py-12">
                                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -2139,14 +2167,30 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                 })()}
                                                             </th>
                                                             <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
-                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
-                                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                            {parcelasCols.visibleColumns.includes('vencimento') && (
+                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('valor') && (
+                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('desconto') && (
+                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('valor_final') && (
+                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('tipo') && (
+                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('forma_pagto') && (
+                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('descricao') && (
+                                                                <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('actions') && (
+                                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                            )}
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200">
@@ -2177,112 +2221,128 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                             )}
                                                                         </td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                            <input
-                                                                                type="date"
-                                                                                value={e.transaction_date.slice(0, 10)}
-                                                                                disabled={pago}
-                                                                                onChange={(ev) => patchContractEntry(e.id, { due_date: ev.target.value })}
-                                                                                className={pago ? CELL_RO : CELL}
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                            <input
-                                                                                type="number"
-                                                                                value={e.original_amount ?? e.amount}
-                                                                                disabled={pago}
-                                                                                onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
-                                                                                className={pago ? CELL_RO : CELL}
-                                                                            />
-                                                                        </td>
+                                                                        {parcelasCols.visibleColumns.includes('vencimento') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <input
+                                                                                    type="date"
+                                                                                    value={e.transaction_date.slice(0, 10)}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { due_date: ev.target.value })}
+                                                                                    className={pago ? CELL_RO : CELL}
+                                                                                />
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('valor') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={e.original_amount ?? e.amount}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
+                                                                                    className={pago ? CELL_RO : CELL}
+                                                                                />
+                                                                            </td>
+                                                                        )}
                                                                         {/* Mesmos dropdowns do plano de pagamento — os campos passaram
                                                                             a existir em internal_transactions (migration 20270828000005).
                                                                             "Valor" e' o bruto; "Valor final" e' o liquido cobrado. */}
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                            <div className="flex items-center gap-1.5">
+                                                                        {parcelasCols.visibleColumns.includes('desconto') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <select
+                                                                                        value={e.discount_type ?? ''}
+                                                                                        disabled={pago}
+                                                                                        onChange={(ev) => patchContractEntry(e.id, {
+                                                                                            discount_type: ev.target.value || null,
+                                                                                            discount_amount: ev.target.value ? (e.discount_amount ?? 0) : null,
+                                                                                        })}
+                                                                                        className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                                    >
+                                                                                        <option value="">Sem desconto</option>
+                                                                                        <option value="VALUE">R$</option>
+                                                                                        <option value="PERCENT">%</option>
+                                                                                    </select>
+                                                                                    {e.discount_type && (
+                                                                                        <input
+                                                                                            type="number" min="0" step="0.01"
+                                                                                            value={e.discount_amount ?? ''}
+                                                                                            disabled={pago}
+                                                                                            placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
+                                                                                            onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
+                                                                                            className={`${pago ? CELL_RO : CELL} w-24`}
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('valor_final') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('tipo') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
                                                                                 <select
-                                                                                    value={e.discount_type ?? ''}
+                                                                                    value={e.installment_type ?? ''}
                                                                                     disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, {
-                                                                                        discount_type: ev.target.value || null,
-                                                                                        discount_amount: ev.target.value ? (e.discount_amount ?? 0) : null,
-                                                                                    })}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { installment_type: ev.target.value || null })}
                                                                                     className={`${pago ? CELL_RO : CELL} cursor-pointer`}
                                                                                 >
-                                                                                    <option value="">Sem desconto</option>
-                                                                                    <option value="VALUE">R$</option>
-                                                                                    <option value="PERCENT">%</option>
+                                                                                    <option value="">Tipo Pagto.</option>
+                                                                                    {installmentTypeOptions.map(t => (
+                                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                                                                    ))}
                                                                                 </select>
-                                                                                {e.discount_type && (
-                                                                                    <input
-                                                                                        type="number" min="0" step="0.01"
-                                                                                        value={e.discount_amount ?? ''}
-                                                                                        disabled={pago}
-                                                                                        placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
-                                                                                        onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
-                                                                                        className={`${pago ? CELL_RO : CELL} w-24`}
-                                                                                    />
-                                                                                )}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
-                                                                        </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                            <select
-                                                                                value={e.installment_type ?? ''}
-                                                                                disabled={pago}
-                                                                                onChange={(ev) => patchContractEntry(e.id, { installment_type: ev.target.value || null })}
-                                                                                className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                            >
-                                                                                <option value="">Tipo Pagto.</option>
-                                                                                {installmentTypeOptions.map(t => (
-                                                                                    <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                            <select
-                                                                                value={e.payment_type ?? ''}
-                                                                                disabled={pago}
-                                                                                onChange={(ev) => patchContractEntry(e.id, { payment_type: ev.target.value || null })}
-                                                                                className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                            >
-                                                                                <option value="">Forma Pagto.</option>
-                                                                                <option value="PIX">PIX</option>
-                                                                                <option value="TED">TED</option>
-                                                                                <option value="DOC">DOC</option>
-                                                                                <option value="DINHEIRO">Dinheiro</option>
-                                                                                <option value="CHEQUE">Cheque</option>
-                                                                                <option value="PERMUTA">Permuta</option>
-                                                                            </select>
-                                                                        </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={e.description ?? ''}
-                                                                                disabled={pago}
-                                                                                placeholder="Descrição / observação"
-                                                                                onChange={(ev) => patchContractEntry(e.id, { description: ev.target.value })}
-                                                                                className={pago ? CELL_RO : CELL}
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-6 py-2.5 text-right">
-                                                                            <div className="flex items-center justify-end gap-1.5">
-                                                                                <span className={`text-sm font-normal ${pago ? 'text-emerald-600' : 'text-gray-400'}`}>
-                                                                                    {e.status === 'PENDING' ? 'Previsto'
-                                                                                        : e.status === 'PAID' ? 'Pago'
-                                                                                            : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
-                                                                                </span>
-                                                                                <ActionIconButton
-                                                                                    kind="delete"
-                                                                                    title={pago
-                                                                                        ? 'Parcela paga/conciliada — estorne no financeiro antes de excluir'
-                                                                                        : 'Excluir esta parcela'}
-                                                                                    onClick={() => handleRemoveContractEntry(e.id)}
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('forma_pagto') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <select
+                                                                                    value={e.payment_type ?? ''}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { payment_type: ev.target.value || null })}
+                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                                >
+                                                                                    <option value="">Forma Pagto.</option>
+                                                                                    <option value="PIX">PIX</option>
+                                                                                    <option value="TED">TED</option>
+                                                                                    <option value="DOC">DOC</option>
+                                                                                    <option value="DINHEIRO">Dinheiro</option>
+                                                                                    <option value="CHEQUE">Cheque</option>
+                                                                                    <option value="PERMUTA">Permuta</option>
+                                                                                </select>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('descricao') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={e.description ?? ''}
+                                                                                    disabled={pago}
+                                                                                    placeholder="Descrição / observação"
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { description: ev.target.value })}
+                                                                                    className={pago ? CELL_RO : CELL}
                                                                                 />
-                                                                            </div>
-                                                                        </td>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('actions') && (
+                                                                            <td className="px-6 py-2.5 text-right">
+                                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                                    <span className={`text-sm font-normal ${pago ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                                                        {e.status === 'PENDING' ? 'Previsto'
+                                                                                            : e.status === 'PAID' ? 'Pago'
+                                                                                                : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
+                                                                                    </span>
+                                                                                    <ActionIconButton
+                                                                                        kind="delete"
+                                                                                        title={pago
+                                                                                            ? 'Parcela paga/conciliada — estorne no financeiro antes de excluir'
+                                                                                            : 'Excluir esta parcela'}
+                                                                                        onClick={() => handleRemoveContractEntry(e.id)}
+                                                                                    />
+                                                                                </div>
+                                                                            </td>
+                                                                        )}
                                                                     </tr>
                                                                 );
                                                             })}
@@ -2335,8 +2395,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 </div>
 
-                                {/* Tabela acoplada — §5.2 */}
+                                {/* Tabela acoplada — §5.2: toolbar interna (só o botão de colunas,
+                                    sem moldura própria) + tabela, um único card. */}
                                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                                    <div className="p-3 border-b border-gray-100 bg-white flex items-center justify-end">
+                                        <ColumnConfigButton
+                                            columns={PARCELAS_COLUMNS}
+                                            visibleColumns={parcelasCols.visibleColumns}
+                                            showColumnConfig={parcelasCols.showColumnConfig}
+                                            onToggleShow={() => parcelasCols.setShowColumnConfig(!parcelasCols.showColumnConfig)}
+                                            onToggleColumn={parcelasCols.toggleColumn}
+                                            onReset={parcelasCols.resetColumns}
+                                        />
+                                    </div>
                                     {parcelas.length === 0 && entrada <= 0 ? (
                                         /* Empty state — §12 (sem moldura própria dentro do card) */
                                         <div className="text-center py-12">
@@ -2367,14 +2438,30 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             )}
                                                         </th>
                                                         <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
-                                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                        {parcelasCols.visibleColumns.includes('vencimento') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento</th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('valor') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor</th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('desconto') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto</th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('valor_final') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final</th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('tipo') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo</th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('forma_pagto') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.</th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('descricao') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição</th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('actions') && (
+                                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                                        )}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200">
@@ -2385,50 +2472,66 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         <tr className="bg-blue-50/40">
                                                             <td className="px-4 py-2.5 border-r border-gray-100"></td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">Entr.</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <input type="date" value={formData.date}
-                                                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                                                    className={CELL} />
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <input type="number" value={formData.down_payment ?? ''}
-                                                                    onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
-                                                                    className={CELL} />
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entrada)}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <select
-                                                                    value={formData.down_payment_installment_type ?? 'SINAL'}
-                                                                    onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
-                                                                    className={`${CELL} cursor-pointer`}>
-                                                                    {installmentTypeOptions.map(t => (
-                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <select
-                                                                    value={formData.down_payment_payment_type ?? ''}
-                                                                    onChange={(e) => setFormData({ ...formData, down_payment_payment_type: (e.target.value || undefined) as PaymentInstallment['paymentType'] })}
-                                                                    className={`${CELL} cursor-pointer`}>
-                                                                    <option value="">Forma Pagto.</option>
-                                                                    <option value="PIX">PIX</option>
-                                                                    <option value="TED">TED</option>
-                                                                    <option value="DOC">DOC</option>
-                                                                    <option value="DINHEIRO">Dinheiro</option>
-                                                                    <option value="CHEQUE">Cheque</option>
-                                                                    <option value="PERMUTA">Permuta</option>
-                                                                </select>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <input type="text" value={formData.down_payment_notes ?? ''}
-                                                                    onChange={(e) => setFormData({ ...formData, down_payment_notes: e.target.value })}
-                                                                    placeholder="Descrição / observação" className={CELL} />
-                                                            </td>
-                                                            <td className="px-6 py-2.5"></td>
+                                                            {parcelasCols.visibleColumns.includes('vencimento') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <input type="date" value={formData.date}
+                                                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                                        className={CELL} />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('valor') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <input type="number" value={formData.down_payment ?? ''}
+                                                                        onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
+                                                                        className={CELL} />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('desconto') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('valor_final') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entrada)}
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('tipo') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <select
+                                                                        value={formData.down_payment_installment_type ?? 'SINAL'}
+                                                                        onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
+                                                                        className={`${CELL} cursor-pointer`}>
+                                                                        {installmentTypeOptions.map(t => (
+                                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('forma_pagto') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <select
+                                                                        value={formData.down_payment_payment_type ?? ''}
+                                                                        onChange={(e) => setFormData({ ...formData, down_payment_payment_type: (e.target.value || undefined) as PaymentInstallment['paymentType'] })}
+                                                                        className={`${CELL} cursor-pointer`}>
+                                                                        <option value="">Forma Pagto.</option>
+                                                                        <option value="PIX">PIX</option>
+                                                                        <option value="TED">TED</option>
+                                                                        <option value="DOC">DOC</option>
+                                                                        <option value="DINHEIRO">Dinheiro</option>
+                                                                        <option value="CHEQUE">Cheque</option>
+                                                                        <option value="PERMUTA">Permuta</option>
+                                                                    </select>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('descricao') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <input type="text" value={formData.down_payment_notes ?? ''}
+                                                                        onChange={(e) => setFormData({ ...formData, down_payment_notes: e.target.value })}
+                                                                        placeholder="Descrição / observação" className={CELL} />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('actions') && (
+                                                                <td className="px-6 py-2.5"></td>
+                                                            )}
                                                         </tr>
                                                     )}
 
@@ -2445,118 +2548,134 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                 />
                                                             </td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{index + 1}</td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <input
-                                                                    type="date"
-                                                                    value={inst.dueDate}
-                                                                    onChange={(e) => {
-                                                                        const newInsts = [...parcelas];
-                                                                        newInsts[index] = { ...inst, dueDate: e.target.value };
-                                                                        setFormData({ ...formData, custom_installments: newInsts });
-                                                                    }}
-                                                                    className={CELL}
-                                                                />
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <input
-                                                                    type="number"
-                                                                    value={inst.originalValue ?? inst.value}
-                                                                    onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
-                                                                    className={CELL}
-                                                                />
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <select
-                                                                        value={inst.discountType ?? ''}
+                                                            {parcelasCols.visibleColumns.includes('vencimento') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <input
+                                                                        type="date"
+                                                                        value={inst.dueDate}
                                                                         onChange={(e) => {
-                                                                            const type = e.target.value as 'VALUE' | 'PERCENT' | '';
-                                                                            updateInstallmentDiscount(index, {
-                                                                                discountType: type || undefined,
-                                                                                discountAmount: type ? inst.discountAmount : undefined
-                                                                            });
-                                                                            // Tirar o desconto também mexe no líquido — mesma pergunta.
-                                                                            if (!type) {
-                                                                                const base = inst.originalValue ?? inst.value;
-                                                                                void perguntarCorrigirFechamento(
-                                                                                    somaLiquidaPlano() - inst.value + base);
-                                                                            }
+                                                                            const newInsts = [...parcelas];
+                                                                            newInsts[index] = { ...inst, dueDate: e.target.value };
+                                                                            setFormData({ ...formData, custom_installments: newInsts });
+                                                                        }}
+                                                                        className={CELL}
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('valor') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <input
+                                                                        type="number"
+                                                                        value={inst.originalValue ?? inst.value}
+                                                                        onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
+                                                                        className={CELL}
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('desconto') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <select
+                                                                            value={inst.discountType ?? ''}
+                                                                            onChange={(e) => {
+                                                                                const type = e.target.value as 'VALUE' | 'PERCENT' | '';
+                                                                                updateInstallmentDiscount(index, {
+                                                                                    discountType: type || undefined,
+                                                                                    discountAmount: type ? inst.discountAmount : undefined
+                                                                                });
+                                                                                // Tirar o desconto também mexe no líquido — mesma pergunta.
+                                                                                if (!type) {
+                                                                                    const base = inst.originalValue ?? inst.value;
+                                                                                    void perguntarCorrigirFechamento(
+                                                                                        somaLiquidaPlano() - inst.value + base);
+                                                                                }
+                                                                            }}
+                                                                            className={`${CELL} cursor-pointer`}>
+                                                                            <option value="">Sem desconto</option>
+                                                                            <option value="VALUE">R$</option>
+                                                                            <option value="PERCENT">%</option>
+                                                                        </select>
+                                                                        {/* A pergunta sobre corrigir o fechamento sai no BLUR, não a
+                                                                            cada tecla — perguntar a cada dígito abriria o modal no
+                                                                            meio da digitação. */}
+                                                                        {inst.discountType && (
+                                                                            <input
+                                                                                type="number" min="0" step="0.01"
+                                                                                value={inst.discountAmount ?? ''}
+                                                                                onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
+                                                                                onBlur={() => void perguntarCorrigirFechamento(somaLiquidaPlano())}
+                                                                                placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
+                                                                                className={`${CELL} w-24`}
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('valor_final') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('tipo') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <select
+                                                                        value={inst.installmentType ?? ''}
+                                                                        onChange={(e) => {
+                                                                            const newInsts = [...parcelas];
+                                                                            newInsts[index] = { ...inst, installmentType: (e.target.value || undefined) as PaymentInstallment['installmentType'] };
+                                                                            setFormData({ ...formData, custom_installments: newInsts });
                                                                         }}
                                                                         className={`${CELL} cursor-pointer`}>
-                                                                        <option value="">Sem desconto</option>
-                                                                        <option value="VALUE">R$</option>
-                                                                        <option value="PERCENT">%</option>
+                                                                        <option value="">Tipo Pagto.</option>
+                                                                        {installmentTypeOptions.map(t => (
+                                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                                                        ))}
                                                                     </select>
-                                                                    {/* A pergunta sobre corrigir o fechamento sai no BLUR, não a
-                                                                        cada tecla — perguntar a cada dígito abriria o modal no
-                                                                        meio da digitação. */}
-                                                                    {inst.discountType && (
-                                                                        <input
-                                                                            type="number" min="0" step="0.01"
-                                                                            value={inst.discountAmount ?? ''}
-                                                                            onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
-                                                                            onBlur={() => void perguntarCorrigirFechamento(somaLiquidaPlano())}
-                                                                            placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
-                                                                            className={`${CELL} w-24`}
-                                                                        />
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <select
-                                                                    value={inst.installmentType ?? ''}
-                                                                    onChange={(e) => {
-                                                                        const newInsts = [...parcelas];
-                                                                        newInsts[index] = { ...inst, installmentType: (e.target.value || undefined) as PaymentInstallment['installmentType'] };
-                                                                        setFormData({ ...formData, custom_installments: newInsts });
-                                                                    }}
-                                                                    className={`${CELL} cursor-pointer`}>
-                                                                    <option value="">Tipo Pagto.</option>
-                                                                    {installmentTypeOptions.map(t => (
-                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <select
-                                                                    value={inst.paymentType ?? ''}
-                                                                    onChange={(e) => {
-                                                                        const newInsts = [...parcelas];
-                                                                        newInsts[index] = { ...inst, paymentType: (e.target.value || undefined) as PaymentInstallment['paymentType'] };
-                                                                        setFormData({ ...formData, custom_installments: newInsts });
-                                                                    }}
-                                                                    className={`${CELL} cursor-pointer`}>
-                                                                    <option value="">Forma Pagto.</option>
-                                                                    <option value="PIX">PIX</option>
-                                                                    <option value="TED">TED</option>
-                                                                    <option value="DOC">DOC</option>
-                                                                    <option value="DINHEIRO">Dinheiro</option>
-                                                                    <option value="CHEQUE">Cheque</option>
-                                                                    <option value="PERMUTA">Permuta</option>
-                                                                </select>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                <input
-                                                                    type="text"
-                                                                    value={inst.notes ?? ''}
-                                                                    onChange={(e) => {
-                                                                        const newInsts = [...parcelas];
-                                                                        newInsts[index] = { ...inst, notes: e.target.value };
-                                                                        setFormData({ ...formData, custom_installments: newInsts });
-                                                                    }}
-                                                                    placeholder="Descrição / observação"
-                                                                    className={CELL}
-                                                                />
-                                                            </td>
-                                                            <td className="px-6 py-2.5 text-right">
-                                                                <div className="flex items-center justify-end gap-1.5">
-                                                                    <ActionIconButton kind="delete" title="Remover parcela"
-                                                                        onClick={() => handleRemoveInstallment(inst.id)} />
-                                                                </div>
-                                                            </td>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('forma_pagto') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <select
+                                                                        value={inst.paymentType ?? ''}
+                                                                        onChange={(e) => {
+                                                                            const newInsts = [...parcelas];
+                                                                            newInsts[index] = { ...inst, paymentType: (e.target.value || undefined) as PaymentInstallment['paymentType'] };
+                                                                            setFormData({ ...formData, custom_installments: newInsts });
+                                                                        }}
+                                                                        className={`${CELL} cursor-pointer`}>
+                                                                        <option value="">Forma Pagto.</option>
+                                                                        <option value="PIX">PIX</option>
+                                                                        <option value="TED">TED</option>
+                                                                        <option value="DOC">DOC</option>
+                                                                        <option value="DINHEIRO">Dinheiro</option>
+                                                                        <option value="CHEQUE">Cheque</option>
+                                                                        <option value="PERMUTA">Permuta</option>
+                                                                    </select>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('descricao') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={inst.notes ?? ''}
+                                                                        onChange={(e) => {
+                                                                            const newInsts = [...parcelas];
+                                                                            newInsts[index] = { ...inst, notes: e.target.value };
+                                                                            setFormData({ ...formData, custom_installments: newInsts });
+                                                                        }}
+                                                                        placeholder="Descrição / observação"
+                                                                        className={CELL}
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('actions') && (
+                                                                <td className="px-6 py-2.5 text-right">
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        <ActionIconButton kind="delete" title="Remover parcela"
+                                                                            onClick={() => handleRemoveInstallment(inst.id)} />
+                                                                    </div>
+                                                                </td>
+                                                            )}
                                                         </tr>
                                                     ))}
                                                 </tbody>

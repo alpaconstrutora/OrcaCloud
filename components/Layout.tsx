@@ -1345,14 +1345,20 @@ const Layout: React.FC<LayoutProps> = ({
           </button>
 
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div className="min-w-0 hidden sm:block">
-              <div className="truncate text-sm font-semibold text-slate-900">
-                {activeCommand?.label ?? 'Opura'}
+            {/* Só renderiza quando há um título de página real (activeCommand).
+                Sem isso, os fallbacks ('Opura' + profile.role) duplicavam a
+                logo e o cargo já mostrados no chip de perfil à direita — ver
+                ui_ux_guia_unificado.md §18. */}
+            {activeCommand && (
+              <div className="min-w-0 hidden sm:block">
+                <div className="truncate text-sm font-semibold text-slate-900">
+                  {activeCommand.label}
+                </div>
+                <div className="truncate text-xs text-slate-500">
+                  {activeCommand.group}
+                </div>
               </div>
-              <div className="truncate text-xs text-slate-500">
-                {activeCommand?.group ?? profile.role}
-              </div>
-            </div>
+            )}
 
             <div className="relative hidden min-w-[180px] max-w-[320px] flex-1 lg:block">
               <button

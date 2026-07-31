@@ -172,7 +172,7 @@ const Layout: React.FC<LayoutProps> = ({
   const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
 
   // Obter organização e membros para calcular permissões dinâmicas
-  const { organizations, activeOrganizationId, setOrganizations } = useStore();
+  const { organizations, activeOrganizationId, setActiveOrganizationId, setOrganizations } = useStore();
   const activeOrg = organizations.find(o => o.id === activeOrganizationId);
   
   const currentMember = React.useMemo(() => {
@@ -1379,8 +1379,31 @@ const Layout: React.FC<LayoutProps> = ({
                 </span>
                 <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isHeaderEmpresaDropdownOpen ? 'rotate-90' : ''}`} />
               </button>
-              {isHeaderEmpresaDropdownOpen && (companies.length > 0 || projectId) && (
-                <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+              {isHeaderEmpresaDropdownOpen && (companies.length > 0 || projectId || organizations.length > 1) && (
+                <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl max-h-[70vh] overflow-y-auto">
+                  {/* Trocar de organização primeiro — empresas/obra abaixo pertencem
+                      à organização ativa, então o usuário escolhe o nível mais alto
+                      antes do mais específico. Selecionar uma organização diferente
+                      reseta activeEmpresaId (ver setActiveOrganizationId no store) e
+                      dispara um novo fetchCompanies para a org escolhida. */}
+                  {organizations.length > 1 && (
+                    <div className="border-b border-slate-100">
+                      <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Organização
+                      </div>
+                      {organizations.map(org => (
+                        <button
+                          key={org.id}
+                          type="button"
+                          onClick={() => { setActiveOrganizationId(org.id); setIsHeaderEmpresaDropdownOpen(false); }}
+                          className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 ${org.id === activeOrganizationId ? 'bg-slate-100 text-slate-950 font-medium' : 'text-slate-700'}`}
+                        >
+                          <Building2 className="h-4 w-4 shrink-0 text-slate-400" />
+                          <span className="min-w-0 flex-1 truncate">{org.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {/* Saída da obra. Antes do "Coronel Lambert 345" ficar preso na
                       tela, o `projectId` só era limpo em três lugares: um botão
                       dentro de UMA tela, o excluir-obra (destrutivo) e um caminho

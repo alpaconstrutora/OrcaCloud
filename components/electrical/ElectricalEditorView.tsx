@@ -158,9 +158,10 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [showRooms, setShowRooms] = useState(true);
   const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
   const [editingWallLengthValue, setEditingWallLengthValue] = useState<string>('');
-  const wallPreviewRef = useRef<any>(null);
   
   const stageRef = useRef<any>(null);
+  const wallPreviewRef = useRef<any>(null);
+  const pointPreviewRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [stageTransform, setStageTransform] = useState({ scale: 1, x: 0, y: 0 });
@@ -571,39 +572,50 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       return;
     }
 
-    if (tool !== 'draw_wall' || currentWall.length === 0) return;
-    const stage = e.target.getStage();
-    const pointerPosition = stage.getRelativePointerPosition();
-    if (pointerPosition && wallPreviewRef.current) {
-      let nextPos = pointerPosition;
-      if (isOrthoMode && currentWall.length >= 2) {
-        const lastX = currentWall[currentWall.length - 2];
-        const lastY = currentWall[currentWall.length - 1];
-        const dx = Math.abs(pointerPosition.x - lastX);
-        const dy = Math.abs(pointerPosition.y - lastY);
-        if (dx > dy) {
-          nextPos = { x: pointerPosition.x, y: lastY };
-        } else {
-          nextPos = { x: lastX, y: pointerPosition.y };
-        }
-      }
-
-      const newPoints = [...currentWall, nextPos.x, nextPos.y];
-      
-      if (typeof wallPreviewRef.current.points === 'function') {
-        // Fallback for single line (just in case)
-        wallPreviewRef.current.points(newPoints);
-      } else {
-        // Group of lines
-        const children = wallPreviewRef.current.getChildren();
-        children.forEach((child: any) => {
-          if (child.getClassName() === 'Line') {
-            child.points(newPoints);
+    if (tool === 'draw_wall' && currentWall.length > 0) {
+      const stage = e.target.getStage();
+      const pointerPosition = stage.getRelativePointerPosition();
+      if (pointerPosition && wallPreviewRef.current) {
+        let nextPos = pointerPosition;
+        if (isOrthoMode && currentWall.length >= 2) {
+          const lastX = currentWall[currentWall.length - 2];
+          const lastY = currentWall[currentWall.length - 1];
+          const dx = Math.abs(pointerPosition.x - lastX);
+          const dy = Math.abs(pointerPosition.y - lastY);
+          if (dx > dy) {
+            nextPos = { x: pointerPosition.x, y: lastY };
+          } else {
+            nextPos = { x: lastX, y: pointerPosition.y };
           }
-        });
+        }
+
+        const newPoints = [...currentWall, nextPos.x, nextPos.y];
+        
+        if (typeof wallPreviewRef.current.points === 'function') {
+          // Fallback for single line (just in case)
+          wallPreviewRef.current.points(newPoints);
+        } else {
+          // Group of lines
+          const children = wallPreviewRef.current.getChildren();
+          children.forEach((child: any) => {
+            if (child.getClassName() === 'Line') {
+              child.points(newPoints);
+            }
+          });
+        }
+        
+        wallPreviewRef.current.getLayer().batchDraw();
       }
-      
-      wallPreviewRef.current.getLayer().batchDraw();
+    }
+
+    if (tool === 'add_point' && pointPreviewRef.current) {
+      const stage = e.target.getStage();
+      const pointerPosition = stage.getRelativePointerPosition();
+      if (pointerPosition) {
+        const snappedPos = getSnappedPosition(pointerPosition);
+        pointPreviewRef.current.position({ x: snappedPos.x, y: snappedPos.y });
+        pointPreviewRef.current.getLayer().batchDraw();
+      }
     }
   };
 
@@ -783,8 +795,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
 
     if (tool === 'add_point' && selectedToolboxItem) {
+      const snappedPoint = points.find(p => p.canvasX === snappedPos.x && p.canvasY === snappedPos.y);
       const clickedRoom = rooms.find(r => r.polygonPoints && isPointInPolygon(pointerPosition, r.polygonPoints));
-      if (!clickedRoom) {
+      const targetRoomId = snappedPoint ? snappedPoint.roomId : clickedRoom?.id;
+
+      if (!targetRoomId) {
           alert('Você deve clicar dentro de um ambiente demarcado para inserir o ponto.');
           return;
       }
@@ -795,7 +810,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       try {
           const newPoint = await electricalProjectService.createPoint({
               organizationId: project?.organizationId || organizationId,
-              roomId: clickedRoom.id,
+              roomId: targetRoomId,
               pointType: selectedToolboxItem,
               powerW: pointDef.defaultPower,
               heightM: pointDef.defaultHeight,
@@ -2162,6 +2177,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   lineJoin="miter" 
                                />
                              </Group>
+                          )}
+                          
+                          {/* Point Preview */}
+                          {tool === 'add_point' && selectedToolboxItem && (
+                              <Circle 
+                                ref={pointPreviewRef}
+                                radius={8}
+                                fill={POINT_TYPES.find(p => p.id === selectedToolboxItem)?.color || '#94a3b8'}
+                                opacity={0.6}
+                                listening={false}
+                              />
                           )}
                         </Layer>
                       </Stage>

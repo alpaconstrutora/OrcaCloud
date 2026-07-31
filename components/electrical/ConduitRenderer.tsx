@@ -18,10 +18,10 @@ export default function ConduitRenderer({ conduit, points, isSelected, onSelect,
     return null;
   }
 
-  const sx = source.canvasX * scaleFactor;
-  const sy = source.canvasY * scaleFactor;
-  const tx = target.canvasX * scaleFactor;
-  const ty = target.canvasY * scaleFactor;
+  const sx = source.canvasX;
+  const sy = source.canvasY;
+  const tx = target.canvasX;
+  const ty = target.canvasY;
 
   // Calculate curve
   const dx = tx - sx;

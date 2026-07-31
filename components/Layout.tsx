@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -82,8 +82,8 @@ const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveC
   const { isCollapsed, t } = useNavCtx();
   return (
     <div className="mb-1">
-      <button onClick={onToggle} className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg justify-between group ${hasActiveChild ? t.itemActive : `${t.itemText} ${t.itemHover}`} ${isCollapsed ? 'justify-center' : ''}`}>
-        <div className="flex items-center">
+      <button onClick={onToggle} className={`flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg justify-between group ${hasActiveChild ? t.itemActive : `${t.itemText} ${t.itemHover}`} ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}>
+        <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
           <Icon className={`w-4 h-4 mr-3 transition-colors ${hasActiveChild ? t.itemIconActive : t.itemIcon} ${isCollapsed ? 'mr-0' : ''}`} strokeWidth={2} />
           {!isCollapsed && <span>{label}</span>}
         </div>
@@ -755,16 +755,8 @@ const Layout: React.FC<LayoutProps> = ({
     <div className={`flex h-screen overflow-hidden font-sans relative ${w.shell}`}>
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col border-r shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${t.shell} ${isCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
-        {/* Collapse Toggle */}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-9 w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-md hover:bg-slate-700 transition-colors z-30"
-        >
-          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </button>
-
-        {/* Header Logo */}
-        <div className={`flex items-center h-[60px] relative overflow-hidden ${isCollapsed ? 'justify-center' : 'px-4'}`}>
+        {/* Header Logo + Collapse Toggle */}
+        <div className={`flex items-center h-[60px] relative overflow-hidden ${isCollapsed ? 'flex-col justify-center gap-2 py-2' : 'justify-between px-4'}`}>
           {isCollapsed ? (
             <div className="w-9 h-9 rounded-lg bg-[#0F172A] flex items-center justify-center shadow-lg">
               <span className="text-white font-bold text-lg" style={{ fontFamily: 'Inter, sans-serif' }}>O</span>
@@ -777,6 +769,13 @@ const Layout: React.FC<LayoutProps> = ({
               style={isDarkMode ? { filter: 'brightness(0) invert(1)' } : undefined}
             />
           )}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors shrink-0 ${t.itemText} ${t.itemHover}`}
+            title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
+          >
+            <Columns3 className="w-4 h-4" strokeWidth={2} />
+          </button>
         </div>
 
         {/* Global Search */}
@@ -854,7 +853,7 @@ const Layout: React.FC<LayoutProps> = ({
                   >
                     <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
                       <span
-                        className="w-3 h-3 rounded-full flex-shrink-0 mr-3"
+                        className={`w-3 h-3 rounded-full flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`}
                         style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }}
                       />
                       {!isCollapsed && (

@@ -3153,52 +3153,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle}</p>
             </div>
 
-            {/* Header / Stats — variante flat (bare icon, sentence case, sem sombra),
-                igual à tela de referência SupplierList.tsx. Grade simétrica: os 4 KPIs
-                são métricas independentes, sem relação total→decomposição (guia §4.2). */}
-            {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (abas → botões →
-                toolbar acoplada) respira 12px, metade do space-y-6 do container raiz. */}
-            <div className="relative mb-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Pendentes"
-                        value={bankTransactions.length}
-                        sub="Transações no extrato"
-                        icon={<ArrowRightLeft className="w-4 h-4" />}
-                        color="blue"
-                    />
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Automação"
-                        value={`${stats.automationRate}%`}
-                        sub="Conciliadas por regra"
-                        icon={<Zap className="w-4 h-4" />}
-                        color="emerald"
-                    />
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Regras ativas"
-                        value={rules.length}
-                        sub="Regras de conciliação"
-                        icon={<ShieldCheck className="w-4 h-4" />}
-                        color="purple"
-                    />
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Atenção"
-                        value={internalTransactions.length}
-                        sub="Lançamentos internos pendentes"
-                        icon={<AlertCircle className="w-4 h-4" />}
-                        color="amber"
-                    />
-            </div>
-        </div>
-
             {/* Toolbar de abas — guia §19/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 {/* Barra de abas local — escala compacta (guia §19). flex-wrap em vez de
@@ -3274,6 +3228,52 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     </button>
                 </div>
             </div>
+
+            {/* Header / Stats — variante flat (bare icon, sentence case, sem sombra),
+                igual à tela de referência SupplierList.tsx. Grade simétrica: os 4 KPIs
+                são métricas independentes, sem relação total→decomposição (guia §4.2). */}
+            {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (abas → botões →
+                toolbar acoplada) respira 12px, metade do space-y-6 do container raiz. */}
+            <div className="relative mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KpiCard
+                        shadow={false}
+                        size="sm"
+                        label="Pendentes"
+                        value={bankTransactions.length}
+                        sub="Transações no extrato"
+                        icon={<ArrowRightLeft className="w-4 h-4" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        shadow={false}
+                        size="sm"
+                        label="Automação"
+                        value={`${stats.automationRate}%`}
+                        sub="Conciliadas por regra"
+                        icon={<Zap className="w-4 h-4" />}
+                        color="emerald"
+                    />
+                    <KpiCard
+                        shadow={false}
+                        size="sm"
+                        label="Regras ativas"
+                        value={rules.length}
+                        sub="Regras de conciliação"
+                        icon={<ShieldCheck className="w-4 h-4" />}
+                        color="purple"
+                    />
+                    <KpiCard
+                        shadow={false}
+                        size="sm"
+                        label="Atenção"
+                        value={internalTransactions.length}
+                        sub="Lançamentos internos pendentes"
+                        icon={<AlertCircle className="w-4 h-4" />}
+                        color="amber"
+                    />
+            </div>
+        </div>
 
             {/* Toolbar de botões — guia §5.3/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">

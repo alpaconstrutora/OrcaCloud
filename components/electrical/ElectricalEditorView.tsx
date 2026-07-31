@@ -54,10 +54,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [historyIndex, setHistoryIndex] = useState(-1);
   const isUndoRedoRef = useRef(false);
   
-  const pushHistoryState = (newState: CanvasState) => {
+  const pushHistoryState = (newState: Partial<CanvasState>) => {
+    const stateToSave: CanvasState = {
+        walls: newState.walls ?? walls,
+        rooms: newState.rooms ?? rooms,
+        points: newState.points ?? points,
+        conduits: newState.conduits ?? conduits,
+        elements: newState.elements ?? elements
+    };
     setHistory(prev => {
         const newHistory = prev.slice(0, historyIndex + 1);
-        newHistory.push(newState);
+        newHistory.push(stateToSave);
         return newHistory;
     });
     setHistoryIndex(prev => prev + 1);
@@ -325,6 +332,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       setRooms([]);
       setPoints([]);
       setElements([]);
+      setConduits([]);
       setImageObj(null);
       return;
     }
@@ -348,7 +356,13 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             setPoints([]);
           }
           
-          setHistory([{ walls: w, rooms: r, points: initialPoints }]);
+          const els = await electricalProjectService.listElementsByPlan(p.id);
+          setElements(els);
+
+          const conds = await electricalProjectService.getConduitsByPlan(p.id);
+          setConduits(conds);
+          
+          setHistory([{ walls: w, rooms: r, points: initialPoints, conduits: conds }]);
           setHistoryIndex(0);
 
           if (p.fileUrl) {
@@ -589,6 +603,19 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           startX, snappedPos.y,
           startX, startY
         ]);
+      }
+      return;
+    }
+
+    if (tool === 'draw_conduit' && drawingConduitSource) {
+      const stage = e.target.getStage();
+      const pointerPosition = stage.getRelativePointerPosition();
+      if (pointerPosition && wallPreviewRef.current) {
+        const sourcePt = points.find(p => p.id === drawingConduitSource);
+        if (sourcePt && sourcePt.canvasX !== undefined && sourcePt.canvasY !== undefined) {
+          wallPreviewRef.current.points([sourcePt.canvasX, sourcePt.canvasY, pointerPosition.x, pointerPosition.y]);
+          wallPreviewRef.current.getLayer().batchDraw();
+        }
       }
       return;
     }
@@ -857,6 +884,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         setSelectedPointId(null);
         setSelectedPoint(null);
         setSelectedWallId(null);
+        setSelectedConduitId(null);
+      }
+      return;
+    }
+
+    if (tool === 'draw_conduit') {
+      if (e.target === stage || e.target.getClassName() === 'Image') {
+        setDrawingConduitSource(null);
       }
       return;
     }
@@ -2180,6 +2215,25 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                              />
                           )}
 
+                          {/* Eletrodutos */}
+                          {conduits && conduits.map(c => (
+                            <ConduitRenderer 
+                              key={c.id} 
+                              conduit={c} 
+                              points={points} 
+                              isSelected={selectedConduitId === c.id} 
+                              onSelect={(e) => {
+                                if (tool === 'select') {
+                                  e.cancelBubble = true;
+                                  setSelectedConduitId(c.id);
+                                  setSelectedPointId(null);
+                                  setSelectedWallId(null);
+                                }
+                              }} 
+                              scaleFactor={plan?.scaleFactor || 100} 
+                            />
+                          ))}
+
                           {/* Pontos Elétricos */}
                           {points.map(pt => {
                             const def = POINT_TYPES.find(d => d.id === pt.pointType);
@@ -2208,6 +2262,25 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                    e.cancelBubble = true;
                                    if (tool === 'select') {
                                      setSelectedPointId(pt.id);
+                                     setSelectedConduitId(null);
+                                   } else if (tool === 'draw_conduit') {
+                                     if (!drawingConduitSource) {
+                                       setDrawingConduitSource(pt.id);
+                                     } else if (drawingConduitSource !== pt.id) {
+                                       (async () => {
+                                         try {
+                                           const nc = await electricalProjectService.createConduit(organizationId, plan!.id, drawingConduitSource, pt.id);
+                                           const newConduits = [...(conduits || []), nc];
+                                           setConduits(newConduits);
+                                           pushHistoryState({ walls, rooms, points, conduits: newConduits });
+                                           setDrawingConduitSource(null);
+                                           showToast('Eletroduto criado!');
+                                         } catch(err) {
+                                           console.error(err);
+                                           showToast('Erro ao criar eletroduto', 'error');
+                                         }
+                                       })();
+                                     }
                                    }
                                  }}
                               />
@@ -2274,6 +2347,18 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                 listening={false}
                               />
                           )}
+
+                          {/* Conduit Preview */}
+                          {tool === 'draw_conduit' && drawingConduitSource && (
+                              <Line 
+                                ref={wallPreviewRef}
+                                points={[]}
+                                stroke="#f59e0b"
+                                strokeWidth={2}
+                                dash={[5, 5]}
+                                listening={false}
+                              />
+                          )}
                         </Layer>
                       </Stage>
                       {renderWallLabels()}
@@ -2317,7 +2402,39 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
           {/* RIGHT SIDEBAR (ROOMS OR PROPERTIES) */}
           <div className="w-80 bg-white border-l border-slate-200 shadow-xl z-10 flex flex-col">
-            {selectedPointId && points.find(p => p.id === selectedPointId) ? (
+            {selectedConduitId && conduits?.find(c => c.id === selectedConduitId) ? (
+              <ConduitPropertiesSidebar
+                conduit={conduits.find(c => c.id === selectedConduitId)!}
+                onUpdate={async (updates) => {
+                  try {
+                      const updated = await electricalProjectService.updateConduit(selectedConduitId, updates);
+                      setConduits(prev => {
+                          const newConduits = prev.map(c => c.id === selectedConduitId ? updated : c);
+                          pushHistoryState({ walls, rooms, points, conduits: newConduits });
+                          return newConduits;
+                      });
+                      showToast('Eletroduto atualizado com sucesso!', 'success');
+                  } catch (err) {
+                      showToast('Erro ao atualizar eletroduto.', 'error');
+                  }
+                }}
+                onDelete={async () => {
+                  try {
+                      await electricalProjectService.deleteConduit(selectedConduitId);
+                      setConduits(prev => {
+                          const newConduits = prev.filter(c => c.id !== selectedConduitId);
+                          pushHistoryState({ walls, rooms, points, conduits: newConduits });
+                          return newConduits;
+                      });
+                      setSelectedConduitId(null);
+                      showToast('Eletroduto excluído com sucesso!', 'success');
+                  } catch (err) {
+                      showToast('Erro ao excluir eletroduto.', 'error');
+                  }
+                }}
+                onClose={() => setSelectedConduitId(null)}
+              />
+            ) : selectedPointId && points.find(p => p.id === selectedPointId) ? (
               <PointPropertiesSidebar
                 point={points.find(p => p.id === selectedPointId)!}
                 versionId={version!.id}

@@ -158,8 +158,8 @@ export const rentalPriceTableService = {
     /** Foto de capa — mesma coluna/bucket compartilhados com Venda de Ativos. */
     updateItemPhoto: commercialPriceTableService.updateItemPhoto,
     uploadItemPhoto: commercialPriceTableService.uploadItemPhoto,
-    uploadTypologyPhoto: commercialPriceTableService.uploadTypologyPhoto,
-    applyPhotoToTypology: commercialPriceTableService.applyPhotoToTypology,
+    uploadBatchPhoto: commercialPriceTableService.uploadBatchPhoto,
+    applyPhotoToUnits: commercialPriceTableService.applyPhotoToUnits,
 
     /** Reajuste em massa: percentual simples OU por índice (IGP-M/IPCA/...),
      *  reusando contractIndexService (mesmos índices dos Contratos de locação). */

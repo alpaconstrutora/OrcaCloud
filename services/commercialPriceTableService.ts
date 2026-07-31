@@ -189,26 +189,23 @@ export const commercialPriceTableService = {
         return storageService.getPublicUrl(PHOTO_BUCKET, path);
     },
 
-    /** Sobe UMA foto representando uma tipologia inteira (ver applyPhotoToTypology) —
-     *  path chaveado por tipologia, não por unidade, já que o mesmo arquivo vale
-     *  para todas as unidades daquele tipo. */
-    async uploadTypologyPhoto(organizationId: string, buildingId: string, typology: string, file: File): Promise<string> {
+    /** Sobe uma foto do lote (ainda sem dono definido — a associação às unidades
+     *  acontece depois, em applyPhotoToUnits). Path chaveado pelo prédio. */
+    async uploadBatchPhoto(organizationId: string, buildingId: string, file: File): Promise<string> {
         const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
-        const typeSlug = typology.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40) || 'tipo';
-        const path = `${organizationId}/${buildingId}/typology-${typeSlug}/${crypto.randomUUID()}-${safe}`;
+        const path = `${organizationId}/${buildingId}/lote/${crypto.randomUUID()}-${safe}`;
         await storageService.upsertFile(PHOTO_BUCKET, path, file, file.type);
         return storageService.getPublicUrl(PHOTO_BUCKET, path);
     },
 
-    /** Grava a mesma foto de capa em TODAS as unidades do prédio com a tipologia
-     *  informada (unidades iguais compartilham 1 foto). Retorna quantas foram
-     *  atualizadas. */
-    async applyPhotoToTypology(buildingId: string, typology: string, imageUrl: string): Promise<number> {
+    /** Grava a MESMA foto de capa em várias unidades de uma vez (unidades do
+     *  mesmo tipo compartilham a foto). Retorna quantas foram atualizadas. */
+    async applyPhotoToUnits(propertyIds: string[], imageUrl: string): Promise<number> {
+        if (propertyIds.length === 0) return 0;
         const { data, error } = await supabase
             .from('commercial_properties')
             .update({ images: [imageUrl] })
-            .eq('parent_id', buildingId)
-            .eq('typology', typology)
+            .in('id', propertyIds)
             .select('id');
         if (error) throw error;
         return (data ?? []).length;

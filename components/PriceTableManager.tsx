@@ -11,7 +11,7 @@ import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
-import UnitTypologyPhotoLoteModal from './UnitTypologyPhotoLoteModal';
+import UnitPhotoLoteModal from './UnitPhotoLoteModal';
 
 type PriceMode = 'sale' | 'rental';
 
@@ -372,15 +372,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         return cur > 0 ? ((i.price - cur) / cur) * 100 : 0;
     };
 
-    // Agrupa as unidades desta versão por tipologia (unidades iguais) — base do
-    // upload de foto em lote: 1 foto por grupo, aplicada a todas as unidades dele.
-    const typologyGroups = React.useMemo(() => {
-        const counts = new Map<string, number>();
-        items.forEach(i => { if (i.typology) counts.set(i.typology, (counts.get(i.typology) ?? 0) + 1); });
-        return Array.from(counts.entries())
-            .map(([typology, count]) => ({ typology, count }))
-            .sort((a, b) => a.typology.localeCompare(b.typology, 'pt-BR'));
-    }, [items]);
+    // Unidades desta versão no formato do modal de lote (agrupa por tipo lá dentro).
+    const loteUnits = React.useMemo(() => items.map(i => ({
+        propertyId: i.property_id,
+        name: i.property_name || '—',
+        typology: i.typology ?? null,
+    })), [items]);
 
     const visibleItems = React.useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
@@ -581,13 +578,9 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                         </div>
                         <button
                             onClick={() => setShowPhotoLoteModal(true)}
-                            disabled={typologyGroups.length === 0}
-                            title={typologyGroups.length === 0
-                                ? 'Nenhuma unidade desta versão tem tipologia definida — cadastre a tipologia da unidade primeiro.'
-                                : 'Envie 1 foto por tipo de unidade — aplicada a todas as unidades iguais de uma vez.'}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600 disabled:opacity-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-blue-600 hover:bg-blue-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap"
                         >
-                            <Upload className="w-[15px] h-[15px]" /> Upload em lote
+                            <Upload className="w-4 h-4" /> Importar em Lote
                         </button>
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
@@ -809,12 +802,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
             )}
 
             {showPhotoLoteModal && selectedTableId && (
-                <UnitTypologyPhotoLoteModal
+                <UnitPhotoLoteModal
                     organizationId={organizationId}
                     buildingId={buildingId}
-                    typologyGroups={typologyGroups}
-                    uploadTypologyPhoto={svc.uploadTypologyPhoto}
-                    applyPhotoToTypology={svc.applyPhotoToTypology}
+                    units={loteUnits}
+                    uploadBatchPhoto={svc.uploadBatchPhoto}
+                    applyPhotoToUnits={svc.applyPhotoToUnits}
                     onClose={() => setShowPhotoLoteModal(false)}
                     onConcluir={() => loadItems(selectedTableId)}
                 />

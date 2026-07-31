@@ -2250,7 +2250,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                  shadowColor="black"
                                  shadowBlur={5}
                                  shadowOpacity={0.2}
-                                 onMouseEnter={(e) => {
+                                   hitStrokeWidth={30}
+                                   onMouseEnter={(e) => {
                                    const container = e.target.getStage()?.container();
                                    if (container) container.style.cursor = 'pointer';
                                  }}
@@ -2266,6 +2267,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                    } else if (tool === 'draw_conduit') {
                                      if (!drawingConduitSource) {
                                        setDrawingConduitSource(pt.id);
+                                         showToast('Ponto inicial selecionado! Agora clique no destino.', 'success');
                                      } else if (drawingConduitSource !== pt.id) {
                                        (async () => {
                                          try {
@@ -2547,3 +2549,4 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 };
 
 export default ElectricalEditorView;
+

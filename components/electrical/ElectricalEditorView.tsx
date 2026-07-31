@@ -395,6 +395,43 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     return isInside;
   };
 
+  const getSnappedPosition = (pointerPosition: { x: number, y: number }) => {
+    let snappedPos = { ...pointerPosition };
+    
+    // 1. Grid Snapping
+    const baseGridPx = gridSizeCm > 0 && plan?.scaleFactor ? (gridSizeCm / 100) * plan.scaleFactor : 0;
+    const scaledGridPx = baseGridPx * stageTransform.scale;
+    if (gridSizeCm > 0 && scaledGridPx >= 5) {
+      const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
+      snappedPos = {
+        x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
+        y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
+      };
+    }
+
+    // 2. Object Snapping (overrides grid if close to a vertex)
+    const SNAP_THRESHOLD = 15 / stageTransform.scale;
+    let closestDist = SNAP_THRESHOLD;
+    
+    const checkPoints = (pts: number[]) => {
+      for (let i = 0; i < pts.length; i += 2) {
+        const vx = pts[i];
+        const vy = pts[i + 1];
+        const dist = Math.sqrt(Math.pow(pointerPosition.x - vx, 2) + Math.pow(pointerPosition.y - vy, 2));
+        if (dist < closestDist) {
+          closestDist = dist;
+          snappedPos = { x: vx, y: vy };
+        }
+      }
+    };
+
+    walls.forEach(w => {
+      if (w.points) checkPoints(w.points as number[]);
+    });
+    
+    return snappedPos;
+  };
+
   const handleStageMouseDown = (e: any) => {
     if (tool === 'select' || isShiftDown) {
       setIsPanning(true);
@@ -406,16 +443,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       const stage = e.target.getStage();
       const pointerPosition = stage.getRelativePointerPosition();
       if (pointerPosition) {
-        let snappedPos = pointerPosition;
-        const baseGridPx = gridSizeCm > 0 && plan?.scaleFactor ? (gridSizeCm / 100) * plan.scaleFactor : 0;
-        const scaledGridPx = baseGridPx * stageTransform.scale;
-        if (gridSizeCm > 0 && scaledGridPx >= 5) {
-          const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
-          snappedPos = {
-            x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
-            y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
-          };
-        }
+        const snappedPos = getSnappedPosition(pointerPosition);
         setCurrentWall([snappedPos.x, snappedPos.y]);
       }
     }
@@ -431,16 +459,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       const stage = e.target.getStage();
       const pointerPosition = stage.getRelativePointerPosition();
       if (pointerPosition) {
-        let snappedPos = pointerPosition;
-        const baseGridPx = gridSizeCm > 0 && plan?.scaleFactor ? (gridSizeCm / 100) * plan.scaleFactor : 0;
-        const scaledGridPx = baseGridPx * stageTransform.scale;
-        if (gridSizeCm > 0 && scaledGridPx >= 5) {
-          const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
-          snappedPos = {
-            x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
-            y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
-          };
-        }
+        const snappedPos = getSnappedPosition(pointerPosition);
         
         const startX = currentWall[0];
         const startY = currentWall[1];
@@ -485,16 +504,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
       const stage = e.target.getStage();
       const pointerPosition = stage.getRelativePointerPosition();
       if (pointerPosition) {
-        let snappedPos = pointerPosition;
-        const baseGridPx = gridSizeCm > 0 && plan?.scaleFactor ? (gridSizeCm / 100) * plan.scaleFactor : 0;
-        const scaledGridPx = baseGridPx * stageTransform.scale;
-        if (gridSizeCm > 0 && scaledGridPx >= 5) {
-          const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
-          snappedPos = {
-            x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
-            y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
-          };
-        }
+        const snappedPos = getSnappedPosition(pointerPosition);
         const startX = currentWall[0];
         const startY = currentWall[1];
         // Preview polygon for the rect
@@ -588,19 +598,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     const pointerPosition = stage.getRelativePointerPosition();
     if (!pointerPosition) return;
 
-    const ppm = plan?.scaleFactor || 100;
-    const baseGridPx = (gridSizeCm / 100) * ppm;
-    const scaledGridPx = baseGridPx * stageTransform.scale;
-    
-    let snapPoint = pointerPosition;
-    if (gridSizeCm > 0 && scaledGridPx >= 5) {
-      // Offset snapping by half the default wall thickness (0.15m) so the outer edge aligns with the grid
-      const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
-      snapPoint = {
-        x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
-        y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
-      };
-    }
+    let snapPoint = getSnappedPosition(pointerPosition);
 
     if (tool === 'draw_wall') {
       if (isOrthoMode && currentWall.length >= 2) {
@@ -702,17 +700,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
 
     const ppm = plan?.scaleFactor || 100;
     const baseGridPx = (gridSizeCm / 100) * ppm;
-    const scaledGridPx = baseGridPx * stageTransform.scale;
-    
-    let snappedPos = pointerPosition;
-    if (gridSizeCm > 0 && scaledGridPx >= 5) {
-      // Offset snapping by half the default wall thickness (0.15m) so the outer edge aligns with the grid
-      const wallHalfThickPx = (0.15 * (plan?.scaleFactor || 100)) / 2;
-      snappedPos = {
-        x: Math.round((pointerPosition.x - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx,
-        y: Math.round((pointerPosition.y - wallHalfThickPx) / baseGridPx) * baseGridPx + wallHalfThickPx
-      };
-    }
+    let snappedPos = getSnappedPosition(pointerPosition);
 
     if (isOrthoMode) {
       if (tool === 'draw_wall' && currentWall.length >= 2) {

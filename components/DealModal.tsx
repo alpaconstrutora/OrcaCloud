@@ -1477,26 +1477,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     </div>
                 </div>
 
-                {/* KPIs — §4: cor semântica por métrica, componente único */}
-                <div className="px-8 shrink-0">
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                        <KpiCard shadow={false} size="sm" label="Tipo de acordo"
-                            value={formData.type === 'SALE' ? 'Venda direta' : formData.type === 'RENTAL' ? 'Contrato locação' : 'Prestação de serviço'}
-                            icon={<TrendingUp className="w-4 h-4" />} color="blue" />
-                        <KpiCard shadow={false} size="sm" label="Situação"
-                            value={statusLabel}
-                            icon={<Briefcase className="w-4 h-4" />}
-                            color={formData.status === 'COMPLETED' ? 'emerald' : formData.status === 'CANCELLED' ? 'red' : 'indigo'} />
-                        <KpiCard shadow={false} size="sm" label="Valor total"
-                            value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(formData.value || 0)}
-                            icon={<DollarSign className="w-4 h-4" />} color="violet" />
-                        <KpiCard shadow={false} size="sm" label="Comissão do corretor"
-                            value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(formData.broker_commission_value || 0)}
-                            icon={<Percent className="w-4 h-4" />}
-                            color={(formData.broker_commission_value || 0) > 0 ? 'amber' : 'gray'} />
-                    </div>
-                </div>
-
                 {/* Toolbar de abas — §19.1: trilho bg-gray-50 em card branco, aba ativa
                     bg-white text-blue-600 shadow-sm; flex-wrap, nunca overflow-x-auto. */}
                 <div className="px-8 shrink-0">
@@ -1532,6 +1512,26 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 );
                             })}
                         </div>
+                    </div>
+                </div>
+
+                {/* KPIs — §4: cor semântica por métrica, componente único */}
+                <div className="px-8 shrink-0">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                        <KpiCard shadow={false} size="sm" label="Tipo de acordo"
+                            value={formData.type === 'SALE' ? 'Venda direta' : formData.type === 'RENTAL' ? 'Contrato locação' : 'Prestação de serviço'}
+                            icon={<TrendingUp className="w-4 h-4" />} color="blue" />
+                        <KpiCard shadow={false} size="sm" label="Situação"
+                            value={statusLabel}
+                            icon={<Briefcase className="w-4 h-4" />}
+                            color={formData.status === 'COMPLETED' ? 'emerald' : formData.status === 'CANCELLED' ? 'red' : 'indigo'} />
+                        <KpiCard shadow={false} size="sm" label="Valor total"
+                            value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(formData.value || 0)}
+                            icon={<DollarSign className="w-4 h-4" />} color="violet" />
+                        <KpiCard shadow={false} size="sm" label="Comissão do corretor"
+                            value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(formData.broker_commission_value || 0)}
+                            icon={<Percent className="w-4 h-4" />}
+                            color={(formData.broker_commission_value || 0) > 0 ? 'amber' : 'gray'} />
                     </div>
                 </div>
 

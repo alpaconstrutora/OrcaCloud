@@ -842,18 +842,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             </div>
 
-            {/* KPIs — §20/Anatomia (ui_ux_guia_unificado.md): sempre logo após o título, ANTES
-                das abas. Antes desta correção, a grade de KPI só existia dentro da
-                subaba "Unidades" e vinha depois da barra de abas — a mesma classe de
-                bug do FiscalModule (abas/botões do pai antes do KPI do filho, §3.2). */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
-                <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
-                <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
-                <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
-            </div>
-
             {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1:
                 card branco externo (mesmo peso visual da toolbar de botões abaixo)
                 envolvendo o trilho cinza interno onde ficam os botões das abas.
@@ -912,6 +900,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     </div>
                 </div>
             )}
+
+            {/* KPIs — §20/Anatomia (ui_ux_guia_unificado.md): logo após a toolbar de abas. */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
+                <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
+                <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
+            </div>
 
             {/* Toolbar de botões — ui_ux_guia_unificado.md §5.3. Esta tela não tem controles de
                 escopo reais (não é conta/competência/período) — "Relatórios" fica à

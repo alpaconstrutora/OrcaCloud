@@ -189,7 +189,10 @@ const Layout: React.FC<LayoutProps> = ({
   const userInitial = (profile.email?.[0] ?? userName[0] ?? 'U').toUpperCase();
   const DEV_EMAIL = 'altair.rosa@alpaconstrutora.com.br';
   const isDevEmail = profile.email?.toLowerCase() === DEV_EMAIL;
-  const activeContextLabel = activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? activeOrg?.name ?? projectName ?? 'Contexto atual';
+  // projectName cai no placeholder 'Residencial Horizonte' (INITIAL_PROJECT_SETTINGS,
+  // constants.ts) sempre que não há projeto carregado — só é um nome real quando
+  // projectId existe de fato (mesmo sinal usado pelo botão "sair da obra" abaixo).
+  const activeContextLabel = activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? activeOrg?.name ?? (projectId ? projectName : undefined) ?? 'Contexto atual';
   const roleLabel = currentMember?.role === 'admin'
     ? 'Admin da organizacao'
     : profile.group === 'DESENVOLVEDOR'
@@ -1372,7 +1375,7 @@ const Layout: React.FC<LayoutProps> = ({
                   style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }}
                 />
                 <span className="min-w-0 flex-1 truncate">
-                  {activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? projectName ?? 'Contexto atual'}
+                  {activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? (projectId ? projectName : undefined) ?? 'Contexto atual'}
                 </span>
                 <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isHeaderEmpresaDropdownOpen ? 'rotate-90' : ''}`} />
               </button>

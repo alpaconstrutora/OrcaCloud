@@ -468,7 +468,13 @@ const App: React.FC = () => {
   }, [projectId, fetchProjects, organizations, session?.user?.id, activeOrganizationId]);
 
   React.useEffect(() => {
-    if (session?.user?.id && activeOrganizationId) {
+    // Sem activeOrganizationId ("Todas as organizações"), NÃO bloquear a
+    // leitura — companyService.list() já omite o filtro org_id quando
+    // undefined, deixando a RLS decidir o que o usuário pode ver (REGRA
+    // OBRIGATÓRIA #5 do CLAUDE.md). Sem isso, o seletor de empresa da
+    // sidebar nunca buscava as empresas quando nenhuma organização estava
+    // selecionada, mostrando só a que já estava salva em cache.
+    if (session?.user?.id) {
       fetchCompanies();
     }
   }, [session?.user?.id, activeOrganizationId, fetchCompanies]);

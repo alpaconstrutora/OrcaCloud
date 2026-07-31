@@ -43,6 +43,9 @@ export interface CommercialPriceTableItem {
     show_price_to_broker?: boolean;
     // Foto de capa da unidade (commercial_properties.images[0]) — ver updateItemPhoto.
     photo_url?: string | null;
+    // Tipologia (commercial_properties.typology) — agrupa unidades iguais para
+    // upload de foto em lote (ver uploadTypologyPhoto/applyPhotoToTypology).
+    typology?: string | null;
 }
 
 const TABLE_COLS = 'id, organization_id, building_id, version_label, effective_date, status, notes, created_at, activated_at';
@@ -84,7 +87,7 @@ export const commercialPriceTableService = {
     async getTableItems(tableId: string): Promise<CommercialPriceTableItem[]> {
         const { data, error } = await supabase
             .from('commercial_price_table_items')
-            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images)`)
+            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images, typology)`)
             .eq('price_table_id', tableId);
         if (error) throw error;
         return (data ?? []).map((row: any) => {
@@ -116,6 +119,7 @@ export const commercialPriceTableService = {
                 visible_to_broker: p.visible_to_broker ?? true,
                 show_price_to_broker: p.show_price_to_broker ?? true,
                 photo_url: (Array.isArray(p.images) && p.images[0]) || null,
+                typology: p.typology ?? null,
             };
         });
     },
@@ -183,6 +187,31 @@ export const commercialPriceTableService = {
         const path = `${organizationId}/${propertyId}/${crypto.randomUUID()}-${safe}`;
         await storageService.upsertFile(PHOTO_BUCKET, path, file, file.type);
         return storageService.getPublicUrl(PHOTO_BUCKET, path);
+    },
+
+    /** Sobe UMA foto representando uma tipologia inteira (ver applyPhotoToTypology) —
+     *  path chaveado por tipologia, não por unidade, já que o mesmo arquivo vale
+     *  para todas as unidades daquele tipo. */
+    async uploadTypologyPhoto(organizationId: string, buildingId: string, typology: string, file: File): Promise<string> {
+        const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+        const typeSlug = typology.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40) || 'tipo';
+        const path = `${organizationId}/${buildingId}/typology-${typeSlug}/${crypto.randomUUID()}-${safe}`;
+        await storageService.upsertFile(PHOTO_BUCKET, path, file, file.type);
+        return storageService.getPublicUrl(PHOTO_BUCKET, path);
+    },
+
+    /** Grava a mesma foto de capa em TODAS as unidades do prédio com a tipologia
+     *  informada (unidades iguais compartilham 1 foto). Retorna quantas foram
+     *  atualizadas. */
+    async applyPhotoToTypology(buildingId: string, typology: string, imageUrl: string): Promise<number> {
+        const { data, error } = await supabase
+            .from('commercial_properties')
+            .update({ images: [imageUrl] })
+            .eq('parent_id', buildingId)
+            .eq('typology', typology)
+            .select('id');
+        if (error) throw error;
+        return (data ?? []).length;
     },
 
     /**

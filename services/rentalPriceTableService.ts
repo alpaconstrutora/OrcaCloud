@@ -64,7 +64,7 @@ export const rentalPriceTableService = {
         const propIds = [...new Set(items.map((i: any) => i.property_id))];
         const { data: props, error: propsErr } = await supabase
             .from('commercial_properties')
-            .select('id, name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images')
+            .select('id, name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images, typology')
             .in('id', propIds);
         if (propsErr) throw propsErr;
         const byId = new Map((props ?? []).map((p: any) => [p.id, p]));
@@ -99,6 +99,7 @@ export const rentalPriceTableService = {
                 visible_to_broker: p.visible_to_broker ?? true,
                 show_price_to_broker: p.show_price_to_broker ?? true,
                 photo_url: (Array.isArray(p.images) && p.images[0]) || null,
+                typology: p.typology ?? null,
             };
         });
     },
@@ -157,6 +158,8 @@ export const rentalPriceTableService = {
     /** Foto de capa — mesma coluna/bucket compartilhados com Venda de Ativos. */
     updateItemPhoto: commercialPriceTableService.updateItemPhoto,
     uploadItemPhoto: commercialPriceTableService.uploadItemPhoto,
+    uploadTypologyPhoto: commercialPriceTableService.uploadTypologyPhoto,
+    applyPhotoToTypology: commercialPriceTableService.applyPhotoToTypology,
 
     /** Reajuste em massa: percentual simples OU por índice (IGP-M/IPCA/...),
      *  reusando contractIndexService (mesmos índices dos Contratos de locação). */

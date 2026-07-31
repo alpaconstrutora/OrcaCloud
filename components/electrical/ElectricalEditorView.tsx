@@ -273,7 +273,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           } catch(err) {
             showToast('Erro ao excluir ponto', 'error');
           }
-        }
+        } else if (selectedElementId) { e.preventDefault(); try { await electricalProjectService.deleteElement(selectedElementId); setElements(prev => prev.filter(el => el.id !== selectedElementId)); setSelectedElementId(null); showToast('Elemento arquitetônico excluído', 'success'); } catch(err) { showToast('Erro ao excluir elemento', 'error'); } }
       }
 
       if (tool === 'draw_wall' && (e.key === 'Enter' || e.key === 'Escape')) {

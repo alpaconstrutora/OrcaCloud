@@ -1973,8 +1973,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
                                   
                                   {/* Batentes da porta */}
-                                  <Rect x={0} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
-                                  <Rect x={dist-4} y={-wallThick/2} width={4} height={wallThick} fill="#475569" />
+                                  <Line points={[2, -wallThick/2, 2, wallThick/2]} stroke="#475569" strokeWidth={4} />
+                                  <Line points={[dist-2, -wallThick/2, dist-2, wallThick/2]} stroke="#475569" strokeWidth={4} />
 
                                   {/* Folha da porta (batente esquerdo) */}
                                   <Line points={[0, 0, 0, -dist]} stroke="#0f172a" strokeWidth={3} />
@@ -2001,8 +2001,8 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   <Line points={[0, 0, dist, 0]} stroke="#f8fafc" strokeWidth={wallThick + 2} />
                                   
                                   {/* "Fechar" as paredes (caps) */}
-                                  <Rect x={0} y={-wallThick/2} width={2} height={wallThick} fill="#1e293b" />
-                                  <Rect x={dist-2} y={-wallThick/2} width={2} height={wallThick} fill="#1e293b" />
+                                  <Line points={[1.5, -wallThick/2, 1.5, wallThick/2]} stroke="#1e293b" strokeWidth={3} />
+                                  <Line points={[dist-1.5, -wallThick/2, dist-1.5, wallThick/2]} stroke="#1e293b" strokeWidth={3} />
 
                                   {/* Linhas tracejadas indicando o vão (padrão de projeto) */}
                                   <Line points={[0, -wallThick/2, dist, -wallThick/2]} stroke="#cbd5e1" strokeWidth={2} dash={[5, 5]} />

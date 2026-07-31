@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
@@ -425,6 +425,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
     const [generateInstallmentCount, setGenerateInstallmentCount] = useState(1);
     const [generateFirstDueDate, setGenerateFirstDueDate] = useState('');
+    /** Data do 1º Pagamento no momento em que o campo recebeu o foco — base de
+     *  comparação para perguntar (uma vez, no blur) se as parcelas recalculam. */
+    const dueDateAoFocar = useRef<string>('');
     const [showAddAdhocModal, setShowAddAdhocModal] = useState(false);
     const [adhocPosition, setAdhocPosition] = useState(1);
     const [adhocDate, setAdhocDate] = useState('');
@@ -1012,11 +1015,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
     };
 
-    const handleOpenGenerateModal = () => {
+    /** `targetId` pré-seleciona o alvo — usado pela barra da série do contrato,
+     *  onde abrir em "Negociação" obrigaria o usuário a reescolher o que ele
+     *  acabou de escolher no seletor de cima. */
+    const handleOpenGenerateModal = (targetId?: string) => {
         setGenerateInstallmentType('MENSAL');
         setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
         setGenerateFirstDueDate(formData.payment_due_date || formData.date || new Date().toISOString().split('T')[0]);
-        setGenerateTarget('DEAL');
+        setGenerateTarget(targetId || 'DEAL');
         setGenerateResult(null);
         void carregarAlvosDeGeracao();
         setShowGenerateModal(true);
@@ -1460,9 +1466,23 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * dessincronizados — pergunta antes de recalcular os vencimentos (mantendo
      * os valores). A gravação em Contas a Receber só acontece ao Salvar.
      */
-    const handlePaymentDueDateChange = async (newDate: string) => {
+    /**
+     * Chamado no blur/Enter do campo de data, nunca a cada tecla — ver a nota no
+     * próprio input. A data já está gravada; o que se decide aqui é só se as
+     * parcelas já geradas acompanham a mudança.
+     */
+    const perguntarRecalculoDatas = async () => {
+        const nova = formData.payment_due_date || '';
+        const anterior = dueDateAoFocar.current;
+        dueDateAoFocar.current = nova;
+        if (!nova || nova === anterior) return;
+        await handlePaymentDueDateChange(nova, anterior);
+    };
+
+    const handlePaymentDueDateChange = async (newDate: string, dataAnterior?: string) => {
         const hasGenerated = (formData.custom_installments?.length ?? 0) > 0;
-        if (hasGenerated && newDate && newDate !== formData.payment_due_date) {
+        const mudou = newDate !== (dataAnterior ?? formData.payment_due_date);
+        if (hasGenerated && newDate && mudou) {
             const ok = await confirm({
                 title: 'Atualizar datas das parcelas?',
                 message: (
@@ -2211,10 +2231,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <label className="text-xs font-semibold text-slate-500">Data do 1º Pagamento</label>
                                         <div className="relative">
                                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
+                                            {/* A data é gravada a cada tecla (nada se perde se o
+                                                usuário clicar direto em Salvar), mas a PERGUNTA de
+                                                recalcular as parcelas só sai no blur/Enter. Ligada ao
+                                                onChange, ela abria no meio da digitação: o input de
+                                                data dispara a cada segmento e, ao digitar o ano,
+                                                "0002" já é uma data válida. */}
                                             <input
                                                 type="date"
                                                 value={formData.payment_due_date || ''}
-                                                onChange={(e) => handlePaymentDueDateChange(e.target.value)}
+                                                onFocus={() => { dueDateAoFocar.current = formData.payment_due_date || ''; }}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, payment_due_date: e.target.value }))}
+                                                onBlur={() => perguntarRecalculoDatas()}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
                                                 className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                             />
                                         </div>
@@ -2325,8 +2354,21 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 )}
 
                                 {alvoVisualizado ? (
-                                    /* Parcelas do CONTRATO — somente leitura: quem edita valor e
-                                       vencimento aqui é o financeiro, não a negociação. */
+                                    <>
+                                    {/* Toolbar §5.3. Ficava só no ramo do plano de pagamento: ao
+                                        escolher um contrato no seletor, "Gerar parcelas" sumia da
+                                        tela — e o estado vazio abaixo mandava usar exatamente esse
+                                        botão. Aqui ele já abre o modal com este contrato escolhido. */}
+                                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                                        <p className="text-sm text-gray-500">
+                                            Parcelas lançadas em Contas a Receber por {alvoVisualizado.label}. Valor e vencimento são editáveis aqui.
+                                        </p>
+                                        <button type="button" onClick={() => handleOpenGenerateModal(alvoVisualizado.id)} disabled={loading}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
+                                            <Plus className="w-[15px] h-[15px]" />
+                                            {loading ? 'Gerando…' : 'Gerar parcelas'}
+                                        </button>
+                                    </div>
                                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                                         <div className="p-3 border-b border-gray-100 bg-white flex items-center justify-end">
                                             <ColumnConfigButton
@@ -2562,6 +2604,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         )}
                                     </div>
+                                    </>
                                 ) : (
                                 <>
                                 {/* Sem KPIs (removidos a pedido): o rodapé de totais da própria
@@ -2585,7 +2628,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
                                             <Plus className="w-4 h-4" /> Parcela avulsa
                                         </button>
-                                        <button type="button" onClick={handleOpenGenerateModal} disabled={loading}
+                                        <button type="button" onClick={() => handleOpenGenerateModal()} disabled={loading}
                                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
                                             <Plus className="w-[15px] h-[15px]" />
                                             {loading ? 'Verificando…' : 'Gerar parcelas'}

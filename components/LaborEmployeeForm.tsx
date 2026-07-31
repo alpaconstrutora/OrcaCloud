@@ -941,9 +941,9 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
     if (isEditing) {
         return (
-            <div className="absolute inset-0 z-50 bg-white flex flex-col">
+            <div className="absolute inset-0 z-50 bg-gray-50 flex flex-col">
                 {/* Header - padrão de tela dedicada (ver ProjectModal.tsx mode==='edit') */}
-                <div className="px-6 md:px-10 pt-6 pb-5 border-b border-gray-100 shrink-0">
+                <div className="bg-white px-6 md:px-10 pt-6 pb-5 border-b border-gray-100 shrink-0">
                     <div className="flex items-center gap-4">
                         <button
                             type="button"
@@ -964,12 +964,14 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     {renderTabs()}
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-6 p-6 md:p-10">
-                    {renderTabContent()}
+                <div className="flex-1 overflow-y-auto p-6 md:p-10">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6 md:p-10 space-y-6">
+                        {renderTabContent()}
+                    </div>
                 </div>
 
                 {/* Footer */}
-                <div className="bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 px-6 py-4 shrink-0">
+                <div className="bg-white border-t border-gray-100 flex items-center justify-end gap-2 px-6 py-4 shrink-0">
                     {renderFooter()}
                 </div>
 

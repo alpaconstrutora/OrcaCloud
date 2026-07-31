@@ -117,15 +117,32 @@ export const propertyExportService = {
         doc.text('CONDIÇÕES DA NEGOCIAÇÃO', 14, currentY);
         currentY += 5;
 
+        // Locação: `deal.value` é a soma das unidades — o "Valor Mensal Sugerido"
+        // da aba Forma de Pagamento, NÃO o total do contrato. Anunciá-lo como
+        // "Valor Total" numa proposta de aluguel dizia ao cliente que o contrato
+        // inteiro custa um mês. O que vale é o que foi negociado: mensal, nº de
+        // parcelas e o total.
+        const isRental = deal.type === 'RENTAL';
+        const mensal = deal.installment_value || 0;
+        const nParcelas = deal.installments || 0;
+        const condicoes: string[][] = [
+            ['Tipo de Negociação', deal.type === 'SALE' ? 'Venda' : 'Aluguel'],
+        ];
+        if (isRental && mensal > 0) {
+            condicoes.push(['Valor Mensal', fmtCurrency(mensal)]);
+            if (nParcelas > 0) condicoes.push(['Nº de Parcelas', String(nParcelas)]);
+            condicoes.push(['Valor Total do Contrato',
+                fmtCurrency(deal.contract_total_value || mensal * nParcelas)]);
+        } else {
+            condicoes.push(['Valor Total', fmtCurrency(deal.value)]);
+        }
+        condicoes.push(['Data Prevista', new Date(deal.date).toLocaleDateString('pt-BR')]);
+        condicoes.push(['Status Atual', deal.status]);
+
         autoTable(doc, {
             startY: currentY,
             head: [['Descrição', 'Valor Negociado']],
-            body: [
-                ['Tipo de Negociação', deal.type === 'SALE' ? 'Venda' : 'Aluguel'],
-                ['Valor Total', new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)],
-                ['Data Prevista', new Date(deal.date).toLocaleDateString('pt-BR')],
-                ['Status Atual', deal.status]
-            ],
+            body: condicoes,
             theme: 'grid',
             headStyles: { fillColor: [30, 41, 59] },
             styles: { fontSize: 10 }

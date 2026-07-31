@@ -712,9 +712,20 @@ async function syncRecurringToFinance(contract: Contract) {
  */
 export async function generateRecurringInstallmentsForPeriod(
     contract: Contract,
-    opts: { fromDate: string; toDate: string; amount: number; label?: string; maxCount?: number },
-): Promise<{ inserted: number; skipped: number; dueDates: string[] }> {
-    const { fromDate, toDate, amount, maxCount } = opts;
+    opts: {
+        fromDate: string; toDate: string; amount: number; label?: string; maxCount?: number;
+        /** Espaçamento entre parcelas, quando NÃO deve vir de `billing_cycle`.
+         *  A Periodicidade da aba Contrato fica ao lado do Índice de Reajuste e
+         *  é lida (com razão) como a periodicidade do REAJUSTE — usá-la como
+         *  cadência de cobrança gerava aluguel de ano em ano. */
+        cycleOverride?: string;
+        /** Regerar refaz a série: apaga as parcelas ainda PREVISTAS do período e
+         *  reinsere com o valor/quantidade atuais. Pagas nunca são tocadas. */
+        replaceExisting?: boolean;
+    },
+): Promise<{ inserted: number; skipped: number; removed: number; dueDates: string[] }> {
+    const { fromDate, toDate, amount, maxCount, replaceExisting } = opts;
+    const cycle = opts.cycleOverride || contract.billing_cycle;
     if (!contract.is_recurring) throw new Error('Geração por período só se aplica a contrato recorrente.');
     if (!(amount > 0)) throw new Error('Valor da parcela deve ser maior que zero.');
 
@@ -733,7 +744,7 @@ export async function generateRecurringInstallmentsForPeriod(
         // 1200 iterações, então isso não é loop infinito.
         to: n > 0 ? '9999-12-31' : toDate,
         dueDay: contract.due_day,
-        billingCycle: contract.billing_cycle,
+        billingCycle: cycle,
         paymentDays: contract.payment_days,
     });
     if (n > 0) dueDates = dueDates.slice(0, n);
@@ -743,7 +754,7 @@ export async function generateRecurringInstallmentsForPeriod(
     if (dueDates.length === 0) {
         throw new Error(
             `Nenhum vencimento cai a partir de ${fromDate} com a cadência do contrato `
-            + `(${contract.billing_cycle ?? 'sem periodicidade'}, dia ${contract.due_day ?? 'não definido'}). `
+            + `(${cycle ?? 'sem periodicidade'}, dia ${contract.due_day ?? 'não definido'}). `
             + 'Confira periodicidade, dia de vencimento e o período informado.');
     }
     // A checagem de duplicidade tem que cobrir a série REAL, não a janela pedida:
@@ -778,7 +789,7 @@ export async function generateRecurringInstallmentsForPeriod(
                 notes: `[contract:${contract.id}] Gerado pela prorrogação de vigência`,
             })));
         }
-        return { inserted: novos.length, skipped: dueDates.length - novos.length, dueDates };
+        return { inserted: novos.length, skipped: dueDates.length - novos.length, removed: 0, dueDates };
     }
 
     if (!contract.organization_id) {
@@ -788,16 +799,39 @@ export async function generateRecurringInstallmentsForPeriod(
     // ── Contrato org-level: internal_transactions
     const { data: jaExistem } = await supabase
         .from('internal_transactions')
-        .select('due_date')
+        .select('id, due_date, status')
         .eq('organization_id', contract.organization_id)
         .eq('source_system', 'CONTRACT_RECURRING')
         .like('reference_id', `${contract.id}%`)
         .gte('due_date', fromDate)
         .lte('due_date', rangeFim);
-    const existing = new Set((jaExistem || []).map(r => (r.due_date as string).slice(0, 10)));
+
+    // Regerar SOBRESCREVE: a série é refeita com o valor e a quantidade atuais.
+    // Sem isso, uma geração anterior com valor diferente sobrevivia — a
+    // idempotência é por DATA, então o vencimento repetido era pulado e ficava
+    // com o valor antigo, produzindo uma série com dois valores misturados.
+    // Parcela já paga/conciliada NUNCA é tocada: o dinheiro já entrou, refazer
+    // a cobrança seria falsear o histórico. Ela é preservada e reportada.
+    let removed = 0;
+    let existing: Set<string>;
+    if (replaceExisting) {
+        const pagas = (jaExistem || []).filter(r => r.status !== 'PENDING');
+        const previstas = (jaExistem || []).filter(r => r.status === 'PENDING');
+        if (previstas.length > 0) {
+            const { error: delErr } = await supabase
+                .from('internal_transactions')
+                .delete()
+                .in('id', previstas.map(r => r.id));
+            if (delErr) throw delErr;
+            removed = previstas.length;
+        }
+        existing = new Set(pagas.map(r => (r.due_date as string).slice(0, 10)));
+    } else {
+        existing = new Set((jaExistem || []).map(r => (r.due_date as string).slice(0, 10)));
+    }
 
     const novos = dueDates.filter(d => !existing.has(d));
-    if (novos.length === 0) return { inserted: 0, skipped: dueDates.length, dueDates };
+    if (novos.length === 0) return { inserted: 0, skipped: dueDates.length, removed, dueDates };
 
     const party = await resolveContractParty(contract, supplierName);
     const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
@@ -824,7 +858,7 @@ export async function generateRecurringInstallmentsForPeriod(
     if (error) throw error;
 
     console.log(`[CONTRACTS] Prorrogação: ${novos.length} parcela(s) geradas para ${contract.number} (${fromDate} → ${toDate})`);
-    return { inserted: novos.length, skipped: dueDates.length - novos.length, dueDates };
+    return { inserted: novos.length, skipped: dueDates.length - novos.length, removed, dueDates };
 }
 
 // Generate a single financial entry for a À Vista (non-parcelado, non-recurring) contract.

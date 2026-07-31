@@ -1098,15 +1098,41 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * Idempotente por data: repetir não duplica.
      */
     const handleGenerateForContract = async (target: GenerateTarget) => {
+        const { amount, maxCount } = geracaoContrato(target);
+
+        // Regerar refaz a série. Como isso apaga as parcelas ainda PREVISTAS
+        // (perdendo descontos e ajustes manuais nelas), pergunta antes — §14.
+        // Parcela paga/conciliada não é tocada e é dita na pergunta, senão o
+        // usuário confirmaria achando que perde o histórico do que já recebeu.
+        const jaExistem = contractEntries.length > 0 && viewTarget === target.id;
+        if (jaExistem) {
+            const previstas = contractEntries.filter(e => e.status === 'PENDING').length;
+            const pagas = contractEntries.length - previstas;
+            const ok = await confirm({
+                title: 'Refazer as parcelas deste contrato?',
+                message: `As ${previstas} parcela(s) ainda previstas serão apagadas e recriadas com o valor e a quantidade atuais da aba Forma de Pagamento. `
+                    + 'Descontos e ajustes manuais nelas serão perdidos. '
+                    + (pagas > 0 ? `As ${pagas} já pagas/conciliadas são mantidas e puladas.` : ''),
+                variant: 'warning',
+                confirmLabel: 'Refazer parcelas',
+                cancelLabel: 'Cancelar',
+            });
+            if (!ok) return;
+        }
+
         setLoading(true);
         try {
-            const { amount, maxCount } = geracaoContrato(target);
             const r = await generateRecurringInstallmentsForPeriod(target.contract, {
                 fromDate: target.fromDate,
                 toDate: target.toDate,
                 amount,
                 maxCount,
                 label: target.label,
+                // A cobrança do aluguel é MENSAL. A Periodicidade da aba Contrato
+                // fica ao lado do Índice de Reajuste e vale para o reajuste (IPCA
+                // anual) — usá-la como cadência gerava uma parcela por ano.
+                cycleOverride: maxCount ? 'Mensal' : undefined,
+                replaceExisting: true,
             });
             // O modal continua ABERTO com o resultado: as parcelas de contrato vão
             // para Contas a Receber (internal_transactions), NÃO para o plano de
@@ -1118,8 +1144,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             const ini = r.dueDates[0] ?? target.fromDate;
             const fim = r.dueDates[r.dueDates.length - 1] ?? target.toDate;
             setGenerateResult(r.inserted > 0
-                ? { ok: true, msg: `${r.inserted} parcela(s) geradas em Contas a Receber para ${target.label}, de ${fmtDateBR(ini)} a ${fmtDateBR(fim)}. Elas não aparecem na aba Parcelas: lá fica o plano de pagamento da negociação.` }
-                : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(ini)} a ${fmtDateBR(fim)}) já existiam em Contas a Receber.` });
+                ? {
+                    ok: true,
+                    msg: `${r.inserted} parcela(s) geradas em Contas a Receber para ${target.label}, de ${fmtDateBR(ini)} a ${fmtDateBR(fim)}.`
+                        + (r.removed > 0 ? ` ${r.removed} parcela(s) previstas foram refeitas.` : '')
+                        + (r.skipped > 0 ? ` ${r.skipped} já paga(s)/conciliada(s) foram mantidas.` : '')
+                        + ' Elas não aparecem na aba Parcelas: lá fica o plano de pagamento da negociação.',
+                }
+                : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(ini)} a ${fmtDateBR(fim)}) já estão pagas ou conciliadas e não são refeitas.` });
+            // A tabela na tela ficou desatualizada depois do refazimento.
+            if (viewTarget === target.id) {
+                setContractEntries(await contractService.listFinancialEntries(target.contract));
+            }
         } catch (e) {
             // Log detalhado: o erro do PostgREST traz code/details/hint que a
             // mensagem sozinha esconde — sem isso, "não gerou" fica indepurável.
@@ -3176,8 +3212,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             )}
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {/* Este campo fica ao lado do Índice de Reajuste e é lido
+                                                    como a periodicidade DO REAJUSTE — foi o que aconteceu
+                                                    na prática (IPCA anual ⇒ "Anual"), e a geração de
+                                                    parcelas passou a sair de ano em ano. O rótulo agora
+                                                    diz o que ele é, e a cobrança do aluguel não depende
+                                                    mais dele: quem manda é o Nº de Parcelas da aba Forma
+                                                    de Pagamento, com cadência mensal. */}
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-semibold text-slate-500">Periodicidade</label>
+                                                    <label className="text-xs font-semibold text-slate-500">Periodicidade do Reajuste</label>
                                                     <select
                                                         value={formData.billing_cycle || 'Mensal'}
                                                         onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as PropertyDeal['billing_cycle'] })}
@@ -3188,6 +3231,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         <option value="Semestral">Semestral</option>
                                                         <option value="Anual">Anual</option>
                                                     </select>
+                                                    <p className="text-xs text-gray-400 px-1">
+                                                        De quanto em quanto tempo o índice é aplicado. Não define
+                                                        as parcelas: o aluguel é cobrado mensalmente, na
+                                                        quantidade do campo Número de Parcelas.
+                                                    </p>
                                                 </div>
 
                                                 <div className="space-y-2">
@@ -3537,7 +3585,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </select>
                                         <p className="text-xs text-gray-400 mt-1">
                                             {alvoSelecionado
-                                                ? `Usa a cadência do contrato (${alvoSelecionado.contract.billing_cycle ?? 'Mensal'}, dia ${alvoSelecionado.contract.due_day ?? '—'}) a partir de ${fmtDateBR(alvoSelecionado.fromDate)}. Repetir não duplica: vencimentos já lançados são pulados.`
+                                                ? `Cobrança mensal no dia ${alvoSelecionado.contract.due_day ?? '—'}, a partir de ${fmtDateBR(alvoSelecionado.fromDate)}. Gerar de novo REFAZ a série: as parcelas previstas são recriadas com os valores atuais; as já pagas são mantidas.`
                                                 : 'As parcelas entram no plano de pagamento desta negociação.'}
                                         </p>
                                     </div>

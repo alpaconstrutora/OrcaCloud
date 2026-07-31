@@ -1,5 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { contractIndexService, IndexName } from './contractIndexService';
+import { storageService } from './storageService';
+
+const PHOTO_BUCKET = 'commercial-property-photos';
 
 export type PriceTableStatus = 'draft' | 'active' | 'superseded';
 
@@ -38,6 +41,8 @@ export interface CommercialPriceTableItem {
     // Exibição do PREÇO no Portal do Corretor — independente de visible_to_broker
     // (a unidade continua listada, só o valor some). Ver updateItemShowPrice.
     show_price_to_broker?: boolean;
+    // Foto de capa da unidade (commercial_properties.images[0]) — ver updateItemPhoto.
+    photo_url?: string | null;
 }
 
 const TABLE_COLS = 'id, organization_id, building_id, version_label, effective_date, status, notes, created_at, activated_at';
@@ -79,7 +84,7 @@ export const commercialPriceTableService = {
     async getTableItems(tableId: string): Promise<CommercialPriceTableItem[]> {
         const { data, error } = await supabase
             .from('commercial_price_table_items')
-            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker)`)
+            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images)`)
             .eq('price_table_id', tableId);
         if (error) throw error;
         return (data ?? []).map((row: any) => {
@@ -110,6 +115,7 @@ export const commercialPriceTableService = {
                 position_type: p.position_type ?? null,
                 visible_to_broker: p.visible_to_broker ?? true,
                 show_price_to_broker: p.show_price_to_broker ?? true,
+                photo_url: (Array.isArray(p.images) && p.images[0]) || null,
             };
         });
     },
@@ -161,6 +167,22 @@ export const commercialPriceTableService = {
     async updateItemShowPrice(propertyId: string, show: boolean): Promise<void> {
         const { error } = await supabase.from('commercial_properties').update({ show_price_to_broker: show }).eq('id', propertyId);
         if (error) throw error;
+    },
+
+    /** Grava a foto de capa da unidade — array de 1 elemento (sem galeria por
+     *  enquanto). Flag da UNIDADE, mesmo molde de updateItemVisibility. */
+    async updateItemPhoto(propertyId: string, imageUrl: string | null): Promise<void> {
+        const { error } = await supabase.from('commercial_properties').update({ images: imageUrl ? [imageUrl] : [] }).eq('id', propertyId);
+        if (error) throw error;
+    },
+
+    /** Sobe a foto de capa para o bucket público commercial-property-photos e
+     *  retorna a URL pública (visível também no Portal do Corretor). */
+    async uploadItemPhoto(organizationId: string, propertyId: string, file: File): Promise<string> {
+        const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+        const path = `${organizationId}/${propertyId}/${crypto.randomUUID()}-${safe}`;
+        await storageService.upsertFile(PHOTO_BUCKET, path, file, file.type);
+        return storageService.getPublicUrl(PHOTO_BUCKET, path);
     },
 
     /**

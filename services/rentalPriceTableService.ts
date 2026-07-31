@@ -4,6 +4,7 @@ import {
     CommercialPriceTable,
     CommercialPriceTableItem,
     PriceTableStatus,
+    commercialPriceTableService,
 } from './commercialPriceTableService';
 
 // Locação reusa as MESMAS interfaces de Venda de Ativos (CommercialPriceTable/
@@ -63,7 +64,7 @@ export const rentalPriceTableService = {
         const propIds = [...new Set(items.map((i: any) => i.property_id))];
         const { data: props, error: propsErr } = await supabase
             .from('commercial_properties')
-            .select('id, name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker')
+            .select('id, name, rental_price, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images')
             .in('id', propIds);
         if (propsErr) throw propsErr;
         const byId = new Map((props ?? []).map((p: any) => [p.id, p]));
@@ -97,6 +98,7 @@ export const rentalPriceTableService = {
                 position_type: p.position_type ?? null,
                 visible_to_broker: p.visible_to_broker ?? true,
                 show_price_to_broker: p.show_price_to_broker ?? true,
+                photo_url: (Array.isArray(p.images) && p.images[0]) || null,
             };
         });
     },
@@ -151,6 +153,10 @@ export const rentalPriceTableService = {
         const { error } = await supabase.from('commercial_properties').update({ show_price_to_broker: show }).eq('id', propertyId);
         if (error) throw error;
     },
+
+    /** Foto de capa — mesma coluna/bucket compartilhados com Venda de Ativos. */
+    updateItemPhoto: commercialPriceTableService.updateItemPhoto,
+    uploadItemPhoto: commercialPriceTableService.uploadItemPhoto,
 
     /** Reajuste em massa: percentual simples OU por índice (IGP-M/IPCA/...),
      *  reusando contractIndexService (mesmos índices dos Contratos de locação). */

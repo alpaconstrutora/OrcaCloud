@@ -758,7 +758,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
 
     if (tool === 'add_point' && selectedToolboxItem) {
-      const clickedRoom = rooms.find(r => r.polygonPoints && isPointInPolygon(snappedPos, r.polygonPoints));
+      const clickedRoom = rooms.find(r => r.polygonPoints && isPointInPolygon(pointerPosition, r.polygonPoints));
       if (!clickedRoom) {
           alert('Você deve clicar dentro de um ambiente demarcado para inserir o ponto.');
           return;

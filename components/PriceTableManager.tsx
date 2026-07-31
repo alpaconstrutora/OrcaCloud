@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon } from 'lucide-react';
 import {
     commercialPriceTableService,
     CommercialPriceTable,
@@ -114,6 +114,35 @@ const PriceInput: React.FC<{ value: number; onCommit: (v: number) => void }> = (
     );
 };
 
+// §7.1 campo editável inline — thumbnail 40x40, clique abre o seletor de arquivo.
+const PhotoCell: React.FC<{ url: string | null | undefined; uploading: boolean; onSelect: (file: File) => void }> = ({ url, uploading, onSelect }) => {
+    const inputRef = React.useRef<HTMLInputElement>(null);
+    return (
+        <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0 hover:border-blue-400 transition-all disabled:opacity-50"
+            title="Alterar foto da unidade"
+        >
+            {uploading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+            ) : url ? (
+                <img src={url} alt="" className="w-full h-full object-cover" />
+            ) : (
+                <ImageIcon className="w-4 h-4 text-gray-300" />
+            )}
+            <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) onSelect(f); e.target.value = ''; }}
+            />
+        </button>
+    );
+};
+
 // position_type (commercial_properties) — labels alinhadas a PropertyModal.tsx
 const POSITION_LABEL: Record<string, string> = { FRONT: 'Frente', LATERAL: 'Lateral', BACK: 'Fundos' };
 
@@ -121,6 +150,7 @@ const num = (v: number | null | undefined) => (v != null ? String(v) : '—');
 const areaFmt = (v: number | null | undefined) => (v != null ? `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²` : '—');
 
 const COLUMNS: ColumnConfig[] = [
+    { key: 'photo',    label: 'Foto',               sortable: false },
     { key: 'unit',     label: 'Unidade',            sortable: true },
     { key: 'status',   label: 'Status',             sortable: true },
     { key: 'privArea', label: 'Área privativa',     sortable: true },
@@ -160,6 +190,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const [creating, setCreating] = React.useState(false);
     const [activating, setActivating] = React.useState(false);
     const [applyingAdjustment, setApplyingAdjustment] = React.useState(false);
+    const [uploadingPhotoId, setUploadingPhotoId] = React.useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>(`priceTable:${mode}:search`, '');
     const tableColumns = useTableColumns(COLUMNS, `priceTableColumns:${mode}`);
@@ -261,6 +292,20 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         } catch (err: any) {
             setError(err.message);
             setItems(prev => prev.map(i => i.id === item.id ? { ...i, show_price_to_broker: !next } : i));
+        }
+    };
+
+    const handleUpdateItemPhoto = async (item: CommercialPriceTableItem, file: File) => {
+        setUploadingPhotoId(item.id);
+        setError(null);
+        try {
+            const url = await svc.uploadItemPhoto(organizationId, item.property_id, file);
+            await svc.updateItemPhoto(item.property_id, url);
+            setItems(prev => prev.map(i => i.id === item.id ? { ...i, photo_url: url } : i));
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setUploadingPhotoId(null);
         }
     };
 
@@ -554,6 +599,9 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            {tableColumns.visibleColumns.includes('photo') && (
+                                                <th className="px-6 py-2 border-r border-gray-100 w-16">Foto</th>
+                                            )}
                                             {tableColumns.visibleColumns.includes('unit') && (
                                                 <SortableHeader colKey="unit" label="Unidade" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
@@ -640,6 +688,15 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                             const diff = itemDelta(item);
                                             return (
                                                 <tr key={item.id} className="hover:bg-blue-50/50 transition-colors">
+                                                    {tableColumns.visibleColumns.includes('photo') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <PhotoCell
+                                                                url={item.photo_url}
+                                                                uploading={uploadingPhotoId === item.id}
+                                                                onSelect={file => handleUpdateItemPhoto(item, file)}
+                                                            />
+                                                        </td>
+                                                    )}
                                                     {tableColumns.visibleColumns.includes('unit') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                             {item.property_name || '—'}

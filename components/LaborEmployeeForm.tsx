@@ -35,7 +35,7 @@ const ADMISSION_CHECKLIST_ITEMS = [
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode; icon?: React.ElementType }> = ({ label, children, icon: Icon }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+        <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
             {Icon && <Icon className="w-3 h-3" />}
             {label}
         </label>
@@ -43,7 +43,7 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode; icon?: Re
     </div>
 );
 
-const inputCls = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
+const inputCls = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
 
 const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, organizations = [], onClose, onSaved }) => {
     const isEditing = !!employee;
@@ -280,13 +280,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
     const renderFooter = () => (
         <>
-            <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
+            <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all">
                 Cancelar
             </button>
             <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 transition-all active:scale-95 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 {saving ? 'Salvando...' : (isEditing ? 'Salvar Alterações' : 'Cadastrar Colaborador')}
@@ -540,7 +540,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                         <button
                                             type="button"
                                             onClick={() => setField('is_disabled', !form.is_disabled)}
-                                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-form-input font-bold ${form.is_disabled ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-[6px] border transition-all text-form-input font-bold ${form.is_disabled ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                                         >
                                             {form.is_disabled ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                                             Pessoa com Deficiência (PcD)
@@ -607,7 +607,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
                     {activeTab === 'folha' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
-                            <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 flex items-start gap-4">
+                            <div className="bg-indigo-50 p-4 rounded-[10px] border border-indigo-100 flex items-start gap-4">
                                 <Wallet className="text-indigo-600 mt-1" size={20} />
                                 <div>
                                     <h4 className="text-sm font-black text-indigo-900 tracking-tight">Rubricas Recorrentes Individuais</h4>

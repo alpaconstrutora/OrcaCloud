@@ -155,6 +155,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [isOrthoMode, setIsOrthoMode] = useState(true);
   const [gridSizeCm, setGridSizeCm] = useState<number>(10);
   const [showBackground, setShowBackground] = useState(true);
+  const [showRooms, setShowRooms] = useState(true);
   const [editingSegment, setEditingSegment] = useState<{wallId: string, index: number, lengthM: string} | null>(null);
   const [editingWallLengthValue, setEditingWallLengthValue] = useState<string>('');
   const wallPreviewRef = useRef<any>(null);
@@ -1460,6 +1461,14 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                 {showBackground ? 'Ocultar Planta' : 'Mostrar Planta'}
               </button>
               <button
+                onClick={() => setShowRooms(!showRooms)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ml-2 ${
+                  showRooms ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {showRooms ? 'Ocultar Ambientes' : 'Mostrar Ambientes'}
+              </button>
+              <button
                 onClick={async () => {
                   if (confirm('Tem certeza que deseja remover a planta de fundo? Os elementos desenhados não serão perdidos.')) {
                     try {
@@ -1931,7 +1940,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                           
                           {/* Removed preview from here to separate layer */}
                           
-                          {rooms.map((room) => {
+                          {showRooms && rooms.map((room) => {
                             const pts = room.polygonPoints as number[];
                             if (!pts || pts.length < 6) return null;
                             

@@ -906,30 +906,60 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     );
 
     if (isEditing) {
+        const EDIT_TABS = [
+            { id: 'geral', label: 'Geral' },
+            { id: 'pessoal', label: 'Pessoal' },
+            { id: 'documentos', label: 'Documentos' },
+            { id: 'endereco', label: 'Endereço' },
+            { id: 'organizacional', label: 'Organizacional' },
+            { id: 'bancario', label: 'Dados Bancários' },
+            { id: 'folha', label: 'Folha de Pagamento' },
+            { id: 'checklist', label: 'Checklist' },
+        ] as const;
+
         return (
-            <div className="fixed inset-0 z-50 bg-white flex flex-col">
-                {/* Header - tela dedicada */}
-                <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-700 shrink-0">
-                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors">
-                        <ArrowLeft className="w-5 h-5" />
-                    </button>
-                    <div>
-                        <h2 className="text-lg font-black text-white">Editar Colaborador</h2>
-                        <p className="text-indigo-200 text-xs mt-0.5">Atualize os dados do colaborador</p>
+            <div className="absolute inset-0 z-50 bg-white flex flex-col">
+                {/* Header - padrão de tela dedicada (ver ProjectModal.tsx mode==='edit') */}
+                <div className="px-6 md:px-10 pt-6 pb-5 border-b border-gray-100 shrink-0">
+                    <div className="flex items-center gap-4">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
+                        >
+                            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                        </button>
+                        <div>
+                            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Editar Colaborador</h1>
+                            <p className="text-gray-400 text-sm mt-1.5 font-medium">Atualize as informações do colaborador selecionado.</p>
+                        </div>
                     </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-slate-100 mb-0 sticky top-0 bg-white z-10 px-6 shrink-0 max-w-3xl w-full mx-auto">
-                    {renderTabs()}
+                <div className="flex border-b border-gray-100 overflow-x-auto shrink-0">
+                    {EDIT_TABS.map(tab => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex-1 py-3 px-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
+                                activeTab === tab.id
+                                    ? 'border-blue-600 text-blue-600 bg-blue-50/30'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-3xl w-full mx-auto">
+                <div className="flex-1 overflow-y-auto space-y-6 p-6 md:p-10">
                     {renderTabContent()}
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50 shrink-0">
+                <div className="bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 px-6 py-4 shrink-0">
                     {renderFooter()}
                 </div>
             </div>

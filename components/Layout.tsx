@@ -84,7 +84,7 @@ const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveC
     <div className="mb-1">
       <button onClick={onToggle} className={`flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg justify-between group ${hasActiveChild ? t.itemActive : `${t.itemText} ${t.itemHover}`} ${isCollapsed ? 'justify-center px-0' : 'px-3'}`}>
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-          <Icon className={`w-4 h-4 mr-3 transition-colors ${hasActiveChild ? t.itemIconActive : t.itemIcon} ${isCollapsed ? 'mr-0' : ''}`} strokeWidth={2} />
+          <Icon className={`w-4 h-4 transition-colors ${hasActiveChild ? t.itemIconActive : t.itemIcon} ${isCollapsed ? '' : 'mr-3'}`} strokeWidth={2} />
           {!isCollapsed && <span>{label}</span>}
         </div>
         {!isCollapsed && <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />}

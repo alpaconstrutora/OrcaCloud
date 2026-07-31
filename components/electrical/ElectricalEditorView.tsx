@@ -1508,7 +1508,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
             <Download className="w-4 h-4 mr-2" />
             PDF (Prancha)
           </Button>
-          <Button variant="primary" className="rounded-[1rem]">
+          <Button 
+            variant="primary" 
+            className="rounded-[1rem]"
+            onClick={() => showToast('Seu projeto é salvo automaticamente a cada alteração!', 'success')}
+          >
             <Save className="w-4 h-4 mr-2" />
             Salvar
           </Button>

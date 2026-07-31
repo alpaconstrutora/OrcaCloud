@@ -246,30 +246,34 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
 
 
+    // Toolbar de abas — anatomia canônica do guia §19.1 (trilho cinza dentro de
+    // card branco; aba ativa = bg-white text-blue-600 shadow-sm sobre bg-gray-50)
+    const EMPLOYEE_TABS = [
+        { id: 'geral', label: 'Geral' },
+        { id: 'pessoal', label: 'Pessoal' },
+        { id: 'documentos', label: 'Documentos' },
+        { id: 'endereco', label: 'Endereço' },
+        { id: 'organizacional', label: 'Organizacional' },
+        { id: 'bancario', label: 'Dados Bancários' },
+        { id: 'folha', label: 'Folha de Pagamento' },
+        { id: 'checklist', label: 'Checklist' },
+    ] as const;
+
     const renderTabs = () => (
-        <>
-            {([
-                { id: 'geral', label: 'Geral', icon: User },
-                { id: 'pessoal', label: 'Pessoal', icon: Users },
-                { id: 'documentos', label: 'Docs', icon: FileText },
-                { id: 'endereco', label: 'Endereço', icon: MapPin },
-                { id: 'organizacional', label: 'Org.', icon: Briefcase },
-                { id: 'bancario', label: 'Banco', icon: CreditCard },
-                { id: 'folha', label: 'Folha', icon: Wallet },
-                { id: 'checklist', label: 'Checklist', icon: CheckSquare }
-            ] as const).map(tab => (
+        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+            {EMPLOYEE_TABS.map(tab => (
                 <button
                     key={tab.id}
+                    type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-3 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${
-                        activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                        activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                     }`}
                 >
-                    <tab.icon className="w-3 h-3" />
                     {tab.label}
                 </button>
             ))}
-        </>
+        </div>
     );
 
     const renderFooter = () => (
@@ -906,17 +910,6 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     );
 
     if (isEditing) {
-        const EDIT_TABS = [
-            { id: 'geral', label: 'Geral' },
-            { id: 'pessoal', label: 'Pessoal' },
-            { id: 'documentos', label: 'Documentos' },
-            { id: 'endereco', label: 'Endereço' },
-            { id: 'organizacional', label: 'Organizacional' },
-            { id: 'bancario', label: 'Dados Bancários' },
-            { id: 'folha', label: 'Folha de Pagamento' },
-            { id: 'checklist', label: 'Checklist' },
-        ] as const;
-
         return (
             <div className="absolute inset-0 z-50 bg-white flex flex-col">
                 {/* Header - padrão de tela dedicada (ver ProjectModal.tsx mode==='edit') */}
@@ -936,22 +929,9 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex border-b border-gray-100 overflow-x-auto shrink-0">
-                    {EDIT_TABS.map(tab => (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex-1 py-3 px-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
-                                activeTab === tab.id
-                                    ? 'border-blue-600 text-blue-600 bg-blue-50/30'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                            }`}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
+                {/* Toolbar de abas — anatomia canônica §19.1 */}
+                <div className="px-6 md:px-10 pt-4 shrink-0">
+                    {renderTabs()}
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-6 p-6 md:p-10">
@@ -980,8 +960,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     </button>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex border-b border-slate-100 mb-0 sticky top-0 bg-white z-10 px-6 shrink-0">
+                {/* Toolbar de abas — anatomia canônica §19.1 */}
+                <div className="border-b border-slate-100 sticky top-0 bg-white z-10 px-6 py-3 shrink-0">
                     {renderTabs()}
                 </div>
 

@@ -9,7 +9,8 @@ import {
   OpuraElectricalPoint,
   OpuraElectricalBoard,
   OpuraElectricalCircuit,
-  OpuraElectricalTakeoff
+  OpuraElectricalTakeoff,
+  OpuraElectricalConduit
 } from '../types/electrical';
 
 export const electricalProjectService = {
@@ -393,6 +394,57 @@ export const electricalProjectService = {
   async deleteElement(id: string): Promise<void> {
     const { error } = await supabase
       .from('opura_electrical_elements')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  // ==================== CONDUITS ====================
+
+  async getConduitsByPlan(planId: string): Promise<OpuraElectricalConduit[]> {
+    const { data, error } = await supabase
+      .from('opura_electrical_conduits')
+      .select('*')
+      .eq('plan_id', planId);
+
+    if (error) throw error;
+    return (data || []).map(d => toCamelCaseObject(d)) as OpuraElectricalConduit[];
+  },
+
+  async createConduit(organizationId: string, planId: string, sourceId: string, targetId: string, type: string = 'teto'): Promise<OpuraElectricalConduit> {
+    const { data, error } = await supabase
+      .from('opura_electrical_conduits')
+      .insert({
+        organization_id: organizationId,
+        plan_id: planId,
+        source_id: sourceId,
+        target_id: targetId,
+        type: type,
+        wires: []
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return toCamelCaseObject(data) as OpuraElectricalConduit;
+  },
+
+  async updateConduit(id: string, updates: Partial<OpuraElectricalConduit>): Promise<OpuraElectricalConduit> {
+    const { data, error } = await supabase
+      .from('opura_electrical_conduits')
+      .update(toSnakeCaseObject(updates))
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return toCamelCaseObject(data) as OpuraElectricalConduit;
+  },
+
+  async deleteConduit(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_electrical_conduits')
       .delete()
       .eq('id', id);
 

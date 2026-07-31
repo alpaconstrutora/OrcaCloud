@@ -99,6 +99,17 @@ export default function PointToolbox({
                         </div>
                         <span className="text-sm">Desenhar Sala</span>
                     </button>
+                    <button
+                        onClick={() => { setTool('draw_conduit'); onSelectToolboxItem(null); }}
+                        className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-3 transition-colors ${
+                            tool === 'draw_conduit' ? 'bg-orange-50 text-orange-700 ring-1 ring-orange-200 font-medium' : 'hover:bg-slate-50 text-slate-700'
+                        }`}
+                    >
+                        <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 bg-orange-100 text-orange-600">
+                            <span className="text-sm">〰️</span>
+                        </div>
+                        <span className="text-sm">Eletroduto (Conexão)</span>
+                    </button>
                 </div>
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Pontos Elétricos</h3>
             </div>

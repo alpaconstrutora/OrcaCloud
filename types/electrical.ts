@@ -128,3 +128,23 @@ export interface OpuraElectricalElement {
     createdAt: string;
     updatedAt: string;
 }
+
+export interface WireAnnotation {
+    circuit: string;
+    phase?: number;
+    neutral?: number;
+    ground?: number;
+    returns?: string[];
+}
+
+export interface OpuraElectricalConduit {
+    id: string;
+    organizationId: string;
+    planId: string;
+    sourceId: string;
+    targetId: string;
+    type: string;
+    wires: WireAnnotation[];
+    createdAt: string;
+    updatedAt: string;
+}

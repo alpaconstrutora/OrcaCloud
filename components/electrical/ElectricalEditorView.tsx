@@ -9,11 +9,14 @@ import RoomSidebar from './RoomSidebar';
 import PlanSidebar from './PlanSidebar';
 import PointToolbox, { ElectricalPointType, POINT_TYPES } from './PointToolbox';
 import PointPropertiesSidebar from './PointPropertiesSidebar';
+import ConduitPropertiesSidebar from './ConduitPropertiesSidebar';
+import ConduitRenderer from './ConduitRenderer';
+
 import LoadScheduleView from './LoadScheduleView';
 import { convertPdfToImage } from '../../utils/pdfToImage';
 import { ElectricalTakeoffView } from './ElectricalTakeoffView';
 import { useToast } from '../../hooks/useToast';
-import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint, OpuraElectricalWall } from '../../types/electrical';
+import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint, OpuraElectricalWall, OpuraElectricalConduit, WireAnnotation } from '../../types/electrical';
 import { detectNewRooms } from '../../utils/geometry/roomDetection';
 
 interface ElectricalEditorViewProps {
@@ -27,6 +30,8 @@ export interface CanvasState {
   walls: OpuraElectricalWall[];
   rooms: OpuraElectricalRoom[];
   points: OpuraElectricalPoint[];
+  elements?: any[];
+  conduits?: OpuraElectricalConduit[];
 }
 
 const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizationId, projectId, electricalProjectId, onBack }) => {
@@ -40,6 +45,9 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [walls, setWalls] = useState<OpuraElectricalWall[]>([]);
   const [points, setPoints] = useState<OpuraElectricalPoint[]>([]);
   const [elements, setElements] = useState<any[]>([]);
+  const [conduits, setConduits] = useState<OpuraElectricalConduit[]>([]);
+  const [drawingConduitSource, setDrawingConduitSource] = useState<string | null>(null);
+  const [selectedConduitId, setSelectedConduitId] = useState<string | null>(null);
 
   // Undo/Redo State
   const [history, setHistory] = useState<CanvasState[]>([]);

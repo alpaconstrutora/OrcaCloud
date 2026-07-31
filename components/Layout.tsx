@@ -797,7 +797,7 @@ const Layout: React.FC<LayoutProps> = ({
         <nav ref={navRef} onScroll={handleNavScroll} className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || isDevEmail) && (
             <>
-              <NavItem id="central" icon={LayoutDashboard} label="Central de Controle" forceFull />
+              <NavItem id="central" icon={LayoutDashboard} label="Central de Controle" />
 
               <NavDropdown
                 label="Especialidades"

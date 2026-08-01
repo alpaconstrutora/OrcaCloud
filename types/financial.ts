@@ -744,6 +744,11 @@ export interface Payable {
     project_id?: string;
     project_name?: string;
     cost_center_id?: string;
+    plano_de_contas_id?: string;
+    /** Resolvidos no client (ContasPagarParcelas), NÃO são coluna de
+     *  vw_payables — a view só expõe os UUIDs. */
+    cost_center_name?: string;
+    plano_de_contas_name?: string;
     created_at?: string;
     updated_at?: string;
 }

@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, X,
 } from 'lucide-react';
-import type { Payable, PayableBusinessStatus } from '../types/financial';
+import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty } from '../services/payableService';
+import { financialRegistryService } from '../services/financialRegistryService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
@@ -60,10 +61,16 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'valor', label: 'Valor', sortable: true },
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
+    // Duas dimensões DIFERENTES (ver migration 20270822000013): Centro de
+    // Custo é cost_centers_v2, Plano de Contas é plano_de_contas. Resolvidas
+    // no client — vw_payables só expõe os UUIDs.
+    { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
+    { key: 'plano_contas', label: 'Plano de Contas', sortable: true },
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 130, status: 120, actions: 200,
+    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 130, status: 120,
+    centro_custo: 180, plano_contas: 180, actions: 200,
 };
 
 const STATUS_FILTROS = ['all', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
@@ -82,6 +89,10 @@ function diasAtraso(dueDate: string): number {
 
 interface Props {
     rows: Payable[];
+    /** Org efetiva do pai (undefined = "Todas as Organizações"), usada só para
+     *  carregar os cadastros de Centro de Custo/Plano de Contas — a RLS já
+     *  recorta o que aparece em `rows`. */
+    organizationId?: string;
     /**
      * Período de vencimento (escopo, vem do pai). Recorte de CLIENTE de propósito:
      * como filtro de servidor, `due_date >= x` descartaria silenciosamente toda
@@ -104,12 +115,41 @@ interface Props {
     onVisibleRowsChange?: (rows: Payable[]) => void;
 }
 
-export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('contasPagarParcelas:search', '');
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
     const [origemFiltro, setOrigemFiltro] = usePersistedState<OrigemFiltro>('contasPagarParcelas:origem', 'all');
     const [salvando, setSalvando] = useState<string | null>(null);
+    // Duas dimensões DIFERENTES (ver migration 20270822000013) — carregadas uma
+    // vez para resolver os UUIDs de vw_payables em nome.
+    const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+    const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
+
+    useEffect(() => {
+        let ativo = true;
+        Promise.all([
+            financialRegistryService.listCostCenters(organizationId),
+            financialRegistryService.listPlanoContas(organizationId),
+        ])
+            .then(([cc, pc]) => {
+                if (!ativo) return;
+                setCostCenters(cc);
+                setPlanoContas(pc);
+            })
+            .catch(err => console.error('[ContasPagarParcelas] Erro ao carregar Centro de Custo / Plano de Contas:', err));
+        return () => { ativo = false; };
+    }, [organizationId]);
+
+    const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
+    const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
+
+    /** Injeta os nomes resolvidos — a view só traz os UUIDs. */
+    const rowsWithNames = useMemo(() => rows.map(r => ({
+        ...r,
+        cost_center_name: r.cost_center_id ? (costCenterNameById.get(r.cost_center_id) ?? '') : '',
+        plano_de_contas_name: r.plano_de_contas_id ? (planoContasNameById.get(r.plano_de_contas_id) ?? '') : '',
+    })), [rows, costCenterNameById, planoContasNameById]);
 
     const tableColumns = useTableColumns(PARCELAS_COLUMNS, 'contasPagarParcelasColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarParcelasColWidths');
@@ -119,7 +159,7 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
         + cols.getWidth('actions');
 
     const filtered = useMemo(() => {
-        let result = rows.filter(r => {
+        let result = rowsWithNames.filter(r => {
             if (statusFiltro !== 'all' && r.effective_status !== statusFiltro) return false;
             if (origemFiltro !== 'all' && r.source_system !== origemFiltro) return false;
             // Parcela sem vencimento passa pelo período (mesma semântica da visão de
@@ -130,7 +170,9 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
                 const termo = search.toLowerCase();
                 const hit = payableParty(r).toLowerCase().includes(termo)
                     || (r.description ?? '').toLowerCase().includes(termo)
-                    || (r.project_name ?? '').toLowerCase().includes(termo);
+                    || (r.project_name ?? '').toLowerCase().includes(termo)
+                    || (r.cost_center_name ?? '').toLowerCase().includes(termo)
+                    || (r.plano_de_contas_name ?? '').toLowerCase().includes(termo);
                 if (!hit) return false;
             }
             return true;
@@ -140,14 +182,16 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
             const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
             const valor = (r: Payable): string | number => {
                 switch (tableColumns.sortColumn) {
-                    case 'credor':     return payableParty(r).toLowerCase();
-                    case 'descricao':  return (r.description ?? '').toLowerCase();
-                    case 'origem':     return origemLabel(r.source_system).toLowerCase();
-                    case 'obra':       return (r.project_name ?? '').toLowerCase();
-                    case 'valor':      return r.amount ?? 0;
-                    case 'vencimento': return r.due_date ?? '';
-                    case 'status':     return r.effective_status;
-                    default:           return '';
+                    case 'credor':       return payableParty(r).toLowerCase();
+                    case 'descricao':    return (r.description ?? '').toLowerCase();
+                    case 'origem':       return origemLabel(r.source_system).toLowerCase();
+                    case 'obra':         return (r.project_name ?? '').toLowerCase();
+                    case 'valor':        return r.amount ?? 0;
+                    case 'vencimento':   return r.due_date ?? '';
+                    case 'status':       return r.effective_status;
+                    case 'centro_custo': return (r.cost_center_name ?? '').toLowerCase();
+                    case 'plano_contas': return (r.plano_de_contas_name ?? '').toLowerCase();
+                    default:             return '';
                 }
             };
             result = [...result].sort((a, b) => {
@@ -399,6 +443,16 @@ export default function ContasPagarParcelas({ rows, vencDe, vencAte, loading, er
                                             {tableColumns.visibleColumns.includes('status') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
                                                     <StatusBadge status={row.effective_status} />
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('centro_custo') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
+                                                    {row.cost_center_name || '—'}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('plano_contas') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
+                                                    {row.plano_de_contas_name || '—'}
                                                 </td>
                                             )}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

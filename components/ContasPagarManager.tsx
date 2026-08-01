@@ -625,6 +625,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                     {visao === 'parcelas' ? (
                         <ContasPagarParcelas
                             rows={payables}
+                            organizationId={effectiveOrgId}
                             vencDe={vencDe}
                             vencAte={vencAte}
                             loading={loading}

@@ -1429,7 +1429,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <TributosAPagarManager
             organizationId={activeOrganizationId || ''}
             organizations={organizations}
-            onOrgChange={(id) => setActiveOrganizationId(id)}
           />
         </React.Suspense>
       );

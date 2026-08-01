@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Plus, Search, FileText, Loader2, RefreshCw,
-    Building2, Calendar, AlertTriangle, ChevronDown,
+    Building2, Calendar, AlertTriangle,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
     Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2, MoveHorizontal,
 } from 'lucide-react';
@@ -313,9 +313,6 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
 const BoletoManager: React.FC<BoletoManagerProps> = ({
     organizationId, userEmail, projectId, organizations = [], onOrgChange, tabsSlot,
 }) => {
-    // Inicia em 'ALL' para garantir visibilidade de todos os boletos acessíveis via RLS.
-    // O usuário pode filtrar por organização específica via dropdown.
-    const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
     const [boletos, setBoletos] = useState<Boleto[]>([]);
     // Totais agregados no servidor — independem de quantos boletos estão na tela.
     const [stats, setStats] = useState<BoletoStats | null>(null);
@@ -376,8 +373,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [projectMap, setProjectMap] = useState<Record<string, string>>({});
     const [supplierMap, setSupplierMap] = useState<Record<string, string>>({});
 
-    const [orgPrompt, setOrgPrompt] = useState(false);
-    const orgSelectRef = useRef<HTMLSelectElement>(null);
 
     // Abrir edição substitui a lista pelo BoletoFormModal (página cheia) — ao
     // voltar, a div de scroll da tabela é recriada do zero e o navegador zera
@@ -397,12 +392,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         setVencDe(''); setVencAte(''); setValorMin(''); setValorMax('');
     }
 
-    const effectiveOrgId = selectedOrgId === 'ALL' ? undefined : selectedOrgId;
-
-    function handleOrgChange(id: string) {
-        setSelectedOrgId(id);
-        onOrgChange?.(id === 'ALL' ? null : id);
-    }
+    // Org vem do seletor global do topo; vazio = "Todas as organizações" (REGRA #5:
+    // leitura não bloqueia — o service não filtra e a RLS recorta).
+    const effectiveOrgId = organizationId || undefined;
 
     const lastSelectedIndexRef = useRef<number | null>(null);
     const shiftHeldRef = useRef(false);
@@ -492,11 +484,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         try {
             const filters: BoletoFilters = {};
             if (projectId) filters.project_id = projectId;
-            setStats(await boletoService.stats(selectedOrgId === 'ALL' ? undefined : selectedOrgId, filters));
+            setStats(await boletoService.stats(effectiveOrgId, filters));
         } catch {
             // KPI defasado não justifica quebrar a tela; a próxima carga corrige.
         }
-    }, [selectedOrgId, projectId]);
+    }, [effectiveOrgId, projectId]);
 
     async function carregar(orgId: string | undefined) {
         setLoading(true);
@@ -532,9 +524,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     }
 
     useEffect(() => {
-        carregar(selectedOrgId === 'ALL' ? undefined : selectedOrgId);
+        carregar(effectiveOrgId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedOrgId, filtroStatus, projectId]);
+    }, [effectiveOrgId, filtroStatus, projectId]);
 
     // Consome o deep-link: ao chegar de outro módulo com viewFocus apontando um boleto,
     // abre a edição do item e o destaca; depois limpa o foco para não reabrir.
@@ -686,7 +678,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         if (!filtered.length) return;
         setExporting(true);
         try {
-            const nome = `boletos${selectedOrgId !== 'ALL' ? `_${selectedOrgId.slice(0,8)}` : ''}`;
+            const nome = `boletos${effectiveOrgId ? `_${effectiveOrgId.slice(0, 8)}` : ''}`;
             if (tipo === 'excel') await boletoService.exportarExcel(filtered, nome);
             else await boletoService.exportarPDF(filtered, nome);
             notify(`Exportação para ${tipo === 'excel' ? 'Excel' : 'PDF'} concluída.`);
@@ -705,7 +697,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             <BoletoFormModal
                 organizationId={editing?.organization_id ?? effectiveOrgId ?? ''}
                 organizations={organizations}
-                onOrgChange={(id) => { handleOrgChange(id); }}
+                onOrgChange={(id) => onOrgChange?.(id || null)}
                 userEmail={userEmail}
                 projectId={projectId}
                 boleto={editing}
@@ -769,23 +761,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 primária à direita. Estavam todos na linha do título antes. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    {organizations.length > 0 && (
-                        <div className="relative flex items-center">
-                            <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                            <select
-                                ref={orgSelectRef}
-                                value={selectedOrgId}
-                                onChange={(e) => handleOrgChange(e.target.value)}
-                                className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none min-w-[200px]"
-                            >
-                                <option value="ALL">Todas as Organizações</option>
-                                {organizations.map(org => (
-                                    <option key={org.id} value={org.id}>{org.name}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
-                        </div>
-                    )}
+                    {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
 
                     {/* Exports — só fazem sentido com lista carregada */}
                     {filtered.length > 0 && (

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown,
+    AlertCircle, Check,
     Loader2, Plus, RefreshCw, Search, X, Filter,
     DollarSign, AlertTriangle, Landmark, MoveHorizontal,
 } from 'lucide-react';
@@ -270,13 +270,13 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
 // ─── main ────────────────────────────────────────────────────
 
 interface Props {
+    /** Org ativa no seletor global do topo. Vazio = "Todas as organizações". */
     organizationId?: string;
+    /** Fallback de org quando o seletor global está em "Todas" — não há seletor nesta tela. */
     organizations?: Organization[];
-    onOrgChange?: (id: string) => void;
 }
 
-export default function TributosAPagarManager({ organizationId, organizations, onOrgChange }: Props) {
-    const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
+export default function TributosAPagarManager({ organizationId, organizations }: Props) {
     const [rows, setRows]       = useState<TaxPayable[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState<string | null>(null);
@@ -315,9 +315,9 @@ export default function TributosAPagarManager({ organizationId, organizations, o
     const [bulkLoading, setBulkLoading]   = useState(false);
     const [generating, setGenerating]     = useState(false);
 
-    const effectiveOrgId = selectedOrgId === 'ALL'
-        ? (organizationId || organizations?.[0]?.id || '')
-        : selectedOrgId;
+    // A org vem do seletor global do topo. Fechamento fiscal é inerentemente
+    // por-empresa (REGRA #5, caso 3), então em "Todas" cai na primeira org.
+    const effectiveOrgId = organizationId || organizations?.[0]?.id || '';
 
     useEffect(() => {
         if (!effectiveOrgId) return;
@@ -344,11 +344,6 @@ export default function TributosAPagarManager({ organizationId, organizations, o
     }, [effectiveOrgId, search, statusFilter, dueFrom, dueTo]);
 
     useEffect(() => { load(); }, [load]);
-
-    function handleOrgChange(id: string) {
-        setSelectedOrgId(id);
-        if (id !== 'ALL') onOrgChange?.(id);
-    }
 
     async function handleBaixa(t: TaxPayable) {
         const ok = await confirm({
@@ -637,23 +632,7 @@ export default function TributosAPagarManager({ organizationId, organizations, o
                         </div>
                     )}
 
-                    {/* Escopo — seletor de organização */}
-                    {organizations && organizations.length > 1 && (
-                        <div className="relative flex items-center h-9">
-                            <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                            <select
-                                value={selectedOrgId}
-                                onChange={e => handleOrgChange(e.target.value)}
-                                className="h-9 pl-9 pr-7 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
-                            >
-                                <option value="ALL">Todas as Organizações</option>
-                                {organizations.map(o => (
-                                    <option key={o.id} value={o.id}>{o.name}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
-                        </div>
-                    )}
+                    {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">

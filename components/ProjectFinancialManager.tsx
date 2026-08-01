@@ -1673,7 +1673,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             {/* Sem actionsSlot: ContasPagarManager tem export próprio, amarrado às
                 parcelas/notas realmente exibidas — não ao Extrato/Fluxo do projeto
                 que `exportButtons` gera (dado errado para esta tela). */}
-            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} tabsSlot={tabsOnlyBar} /> }
+            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} tabsSlot={tabsOnlyBar} /> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}
 

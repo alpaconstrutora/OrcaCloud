@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown,
+    AlertCircle, Check,
     Clock, ExternalLink, FileDown, FileText, Landmark, Loader2, RefreshCw,
     Search, X, DollarSign, AlertTriangle, MoveHorizontal,
 } from 'lucide-react';
@@ -97,9 +97,10 @@ function StatusBadge({ inv }: { inv: InvoiceRow }) {
 }
 
 interface Props {
+    /** Org ativa no seletor global do topo. Vazio/undefined = "Todas as organizações". */
     organizationId?: string;
+    /** Só para resolver o nome da org no cabeçalho do PDF — não há seletor nesta tela. */
     organizations?: Organization[];
-    onOrgChange?: (id: string) => void;
     /**
      * Barra de abas do módulo pai (§3). Vem por prop porque a anatomia do §1 exige
      * título → KPIs → ABAS → botões → tabela: as abas são do pai, mas título e KPIs
@@ -130,7 +131,7 @@ const VISAO_HEADERS: Record<Visao, { titulo: string; subtitulo: string }> = {
     },
 };
 
-export default function ContasPagarManager({ organizationId, organizations, onOrgChange, tabsSlot }: Props) {
+export default function ContasPagarManager({ organizationId, organizations, tabsSlot }: Props) {
     const [visao, setVisao] = usePersistedState<Visao>('contasPagarManager:visao', 'parcelas');
     const [payables, setPayables] = useState<Payable[]>([]);
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
@@ -144,7 +145,6 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading] = useState(false);
 
-    const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
     // F2: filtros sobrevivem a navegação/reload (mesmo padrão de useTableColumns).
     const [search, setSearch] = usePersistedState('contasPagarManagerFilters:search', '');
     const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('contasPagarManagerFilters:status', 'all');
@@ -167,7 +167,9 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         setTimeout(() => setNotification(null), 4500);
     };
 
-    const effectiveOrgId = selectedOrgId === 'ALL' ? undefined : selectedOrgId;
+    // Org vem do seletor global do topo; vazio = "Todas as organizações" (REGRA #5:
+    // não bloqueia leitura — o service não filtra e a RLS recorta).
+    const effectiveOrgId = organizationId || undefined;
 
     async function carregar(orgId?: string) {
         setLoading(true);
@@ -199,11 +201,6 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     // Sem vencDe/vencAte nas deps: o período é recorte de cliente nas duas visões,
     // recarregar do servidor a cada mudança de data seria consulta jogada fora.
     useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, visao]);
-
-    function handleOrgChange(id: string) {
-        setSelectedOrgId(id);
-        if (id !== 'ALL') onOrgChange?.(id);
-    }
 
     async function handleMarcarPago(inv: InvoiceRow) {
         setMarcandoPago(inv.id);
@@ -405,8 +402,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const summary = visao === 'parcelas' ? summaryParcelas : summaryNotas;
     const header = VISAO_HEADERS[visao];
 
-    // Organização do cabeçalho do PDF: a do filtro ativo, ou nenhuma em "Todas".
-    const orgAtual = organizations?.find(o => o.id === selectedOrgId);
+    // Organização do cabeçalho do PDF: a ativa no seletor global, ou nenhuma em "Todas".
+    const orgAtual = organizations?.find(o => o.id === effectiveOrgId);
 
     /**
      * Exporta exatamente o que a tabela mostra na visão ativa — não a lista
@@ -570,23 +567,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 ))}
                             </div>
 
-                            {organizations && organizations.length > 1 && (
-                                <div className="relative flex items-center">
-                                    <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                    <select
-                                        value={selectedOrgId}
-                                        onChange={e => handleOrgChange(e.target.value)}
-                                        className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
-                                    >
-                                        <option value="ALL">Todas as Organizações</option>
-                                        {organizations.map(o => (
-                                            <option key={o.id} value={o.id}>{o.name}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
-                                </div>
-                            )}
-
+                            {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
                             <span className="text-sm font-medium text-gray-400 pl-1">Vencimento</span>
                             <input
                                 type="date"

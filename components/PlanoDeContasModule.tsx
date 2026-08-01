@@ -13,20 +13,13 @@ import { CostCenter } from '../types/financial';
 // hierárquica e a UI vêm de FinancialRegistryManager; este módulo é dono da
 // própria carga de dados e do CRUD, sem passar por OrganizationList.
 
-interface OrgOption { id: string; name: string; }
-
 interface PlanoDeContasModuleProps {
-    /** Org sobre a qual criar/editar. REGRA #5: leitura nunca bloqueia por org nula; criar exige. */
+    /** Org sobre a qual criar/editar. REGRA #5: leitura nunca bloqueia por org nula; criar exige.
+     *  Vem do seletor global de organização do topo — esta tela não tem seletor próprio. */
     organizationId: string | null;
-    /** Seletor de organização da toolbar (cadastro por-org). */
-    orgFilter?: {
-        organizations: OrgOption[];
-        value: string | null;
-        onChange: (id: string) => void;
-    };
 }
 
-const PlanoDeContasModule: React.FC<PlanoDeContasModuleProps> = ({ organizationId, orgFilter }) => {
+const PlanoDeContasModule: React.FC<PlanoDeContasModuleProps> = ({ organizationId }) => {
     const [items, setItems] = useState<CostCenter[]>([]);
     const [showImport, setShowImport] = useState(false);
 
@@ -52,7 +45,6 @@ const PlanoDeContasModule: React.FC<PlanoDeContasModuleProps> = ({ organizationI
                 items={items}
                 showCode={true}
                 showNature={true}
-                orgFilter={orgFilter}
                 onSave={async (item) => {
                     const orgId = item.organization_id || organizationId;
                     if (!orgId) return alert('Selecione uma organização para vincular a conta.');

@@ -117,14 +117,10 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     // organizações" (activeOrganizationId null) buscar sem filtro trazia a
     // árvore de TODAS as orgs de uma vez; como toda org tem o mesmo plano
     // padrão (1.1.1 PIS, 1.1.2 COFINS...), o resultado parecia duplicado.
-    // Aqui escolhemos UMA org por vez: a ativa, se houver; senão a escolha
-    // salva no seletor da toolbar; senão a primeira org da lista. Nunca merge.
-    const [registryOrgOverride, setRegistryOrgOverride] = usePersistedState<string | null>('financialRegistryOrgFilter', null);
-    const validOverride = React.useMemo(
-        () => (organizations || []).some(o => o.id === registryOrgOverride) ? registryOrgOverride : null,
-        [organizations, registryOrgOverride]
-    );
-    const registryOrgId = activeOrganizationId || managingOrgId || validOverride || (organizations || [])[0]?.id || null;
+    // Aqui escolhemos UMA org por vez: a ativa no seletor global do topo, se
+    // houver; senão a org sendo gerenciada; senão a primeira da lista. Nunca
+    // merge. Não há mais seletor próprio na toolbar — o do topo é o único.
+    const registryOrgId = activeOrganizationId || managingOrgId || (organizations || [])[0]?.id || null;
 
     const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
         const { data, error } = await supabase.functions.invoke('invite-member', {
@@ -602,18 +598,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     <FinancialRegistryManager
                         organizations={activeTab === 'accounts' ? organizations.map(o => ({ id: o.id, name: o.name })) : undefined}
                         defaultOrganizationId={activeTab === 'accounts' ? (registryOrgId || undefined) : undefined}
-                        // Seletor de organização: só na aba por-org (accounts), e só quando não
-                        // há org fixada globalmente e existe mais de uma. chart_of_accounts é
-                        // global (financial_categories) — não recebe seletor.
-                        orgFilter={
-                            activeTab !== 'chart_of_accounts' && !activeOrganizationId && !managingOrgId && organizations.length > 1
-                                ? {
-                                    organizations: organizations.map(o => ({ id: o.id, name: o.name })),
-                                    value: registryOrgId,
-                                    onChange: setRegistryOrgOverride,
-                                }
-                                : undefined
-                        }
+                        // Sem seletor de organização na toolbar: a org vem do seletor global do topo.
                         title={activeTab === 'accounts' ? 'Contas de Pagamento' : 'Plano de Contas'}
                         description={
                             activeTab === 'accounts' ? 'Gerencie as contas bancárias para alocação de gastos' :
@@ -652,33 +637,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 )}
 
                 {activeTab === 'cost_centers' && (
-                    <CostCenterModule
-                        organizationId={registryOrgId}
-                        orgFilter={
-                            !activeOrganizationId && !managingOrgId && organizations.length > 1
-                                ? {
-                                    organizations: organizations.map(o => ({ id: o.id, name: o.name })),
-                                    value: registryOrgId,
-                                    onChange: setRegistryOrgOverride,
-                                }
-                                : undefined
-                        }
-                    />
+                    <CostCenterModule organizationId={registryOrgId} />
                 )}
 
                 {activeTab === 'plano_contas' && (
-                    <PlanoDeContasModule
-                        organizationId={registryOrgId}
-                        orgFilter={
-                            !activeOrganizationId && !managingOrgId && organizations.length > 1
-                                ? {
-                                    organizations: organizations.map(o => ({ id: o.id, name: o.name })),
-                                    value: registryOrgId,
-                                    onChange: setRegistryOrgOverride,
-                                }
-                                : undefined
-                        }
-                    />
+                    <PlanoDeContasModule organizationId={registryOrgId} />
                 )}
 
                 {activeTab === 'settings' && (

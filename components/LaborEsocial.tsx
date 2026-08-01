@@ -435,13 +435,11 @@ interface LaborEsocialProps {
     orgId: string;
     employees: { id: string; name: string; status?: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 type MainTab = 'painel' | 'eventos' | 'lotes' | 'configuracao';
 
-const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [mainTab, setMainTab] = useState<MainTab>('painel');
@@ -601,9 +599,6 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
             )}
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={refetchAll}
             />
 

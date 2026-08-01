@@ -12,11 +12,9 @@ interface LaborTimeTrackingProps {
     orgId: string;
     onRefresh: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projects, orgId, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projects, orgId, onRefresh, organizations }) => {
     const confirm = useConfirm();
     const [entries, setEntries] = useState<TimeEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -127,9 +125,6 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

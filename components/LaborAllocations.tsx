@@ -40,12 +40,10 @@ interface LaborAllocationsProps {
     orgId: string;
     employees: Employee[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
-const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, organizations, onRefresh }) => {
     const [worksites, setWorksites] = useState<Worksite[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
@@ -370,9 +368,6 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
         </div>

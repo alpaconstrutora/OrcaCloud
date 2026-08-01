@@ -12,8 +12,6 @@ interface LaborCostsProps {
     legacyCount?: number;
     onMigrate?: () => Promise<void>;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
@@ -31,7 +29,7 @@ const getWorkingDays = (start: string, end: string): number => {
     return Math.max(count, 1);
 };
 
-const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, onMigrate, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, onMigrate, organizations, onRefresh }) => {
     const [summary, setSummary] = useState<LaborCostSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'employees' | 'projects' | 'teams'>('employees');
@@ -160,9 +158,6 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

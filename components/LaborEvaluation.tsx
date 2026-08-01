@@ -799,14 +799,12 @@ interface LaborEvaluationProps {
     orgId: string;
     employees: { id: string; name: string; status?: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
 type MainTab = 'ciclos' | 'pdi';
 
-const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, organizations, onRefresh }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [mainTab, setMainTab] = useState<MainTab>('ciclos');
@@ -867,9 +865,6 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de avaliação, competências, PDI e ranking de equipes.</p>
                 </div>
                 <LaborScopeBar
-                    organizations={organizations}
-                    selectedOrgId={selectedOrgId}
-                    onSelectedOrgIdChange={onSelectedOrgIdChange}
                     onRefresh={onRefresh}
                 />
                 <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
@@ -929,9 +924,6 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees, org
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

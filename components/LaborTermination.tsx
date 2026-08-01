@@ -484,11 +484,9 @@ interface LaborTerminationProps {
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, onRefresh, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState<string>('laborTermination:search', '');
@@ -552,9 +550,6 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh || (() => {})}
             />
 

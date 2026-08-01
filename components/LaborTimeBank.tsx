@@ -176,14 +176,12 @@ interface LaborTimeBankProps {
     employees: Employee[];
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
 type TBView = 'balances' | 'entries' | 'qrcodes';
 
-const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, projects = [], organizations, onRefresh }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [view, setView] = useState<TBView>('balances');
@@ -260,9 +258,6 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

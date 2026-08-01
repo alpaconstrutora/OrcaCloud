@@ -357,14 +357,12 @@ interface LaborSSTProps {
     employees: Employee[];
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
 type SSTView = 'accidents' | 'checklists' | 'indicators' | 'regulatory';
 
-const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], organizations, onRefresh }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [view, setView] = useState<SSTView>('accidents');
@@ -477,9 +475,6 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

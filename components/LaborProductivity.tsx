@@ -12,13 +12,11 @@ interface LaborProductivityProps {
     orgId: string;
     onRefresh: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 const UNITS = ['m²', 'm³', 'm', 'un', 'kg', 'h', 'pc', 'vb', 'lata', 'saco'];
 
-const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams, projects, orgId, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams, projects, orgId, onRefresh, organizations }) => {
     const confirm = useConfirm();
     const [logs, setLogs] = useState<ProductivityLog[]>([]);
     const [loading, setLoading] = useState(true);
@@ -103,9 +101,6 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             >
                 <button onClick={() => setShowForm(s => !s)} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">

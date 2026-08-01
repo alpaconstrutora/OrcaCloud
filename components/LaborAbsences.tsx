@@ -461,8 +461,6 @@ interface LaborAbsencesProps {
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 type AbsView = 'requests' | 'balances';
@@ -478,7 +476,7 @@ const BALANCE_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
 ];
 
-const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefresh, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
@@ -661,9 +659,6 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh || (() => {})}
             />
 

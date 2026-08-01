@@ -22,8 +22,6 @@ type EncargosTab = 'contribuicoes' | 'inss' | 'folha' | 'prolabore';
 interface LaborEncargosProps {
     orgId: string;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
@@ -49,7 +47,7 @@ interface PayrollSummary {
     headcount: number;
 }
 
-const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onRefresh }) => {
     const [activeTab, setActiveTab] = useState<EncargosTab>('contribuicoes');
 
     // ── Competência compartilhada entre sub-abas ──
@@ -179,9 +177,6 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, sel
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

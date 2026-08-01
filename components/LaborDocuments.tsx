@@ -19,8 +19,6 @@ interface LaborDocumentsProps {
     orgId: string;
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
@@ -32,7 +30,7 @@ const CATEGORY_LABELS: Record<DocumentCategory, string> = {
     OUTROS: 'Outros'
 };
 
-const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRefresh, organizations }) => {
     const confirm = useConfirm();
     const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
     const [loading, setLoading] = useState(true);
@@ -144,9 +142,6 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh || (() => {})}
             />
 

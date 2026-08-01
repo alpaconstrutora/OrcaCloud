@@ -338,14 +338,12 @@ interface LaborBIAnalyticsProps {
     orgId: string;
     employees: { id: string; name: string; status?: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
 type MainTab = 'turnover' | 'retencao' | 'produtividade' | 'movimentacoes';
 
-const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, organizations, onRefresh }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const currentYear = new Date().getFullYear();
@@ -456,9 +454,6 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Turnover, retenção, produtividade e movimentações.</p>
                 </div>
                 <LaborScopeBar
-                    organizations={organizations}
-                    selectedOrgId={selectedOrgId}
-                    onSelectedOrgIdChange={onSelectedOrgIdChange}
                     onRefresh={onRefresh}
                 />
                 <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
@@ -514,9 +509,6 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
             )}
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

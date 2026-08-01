@@ -544,12 +544,10 @@ interface LaborPortalProps {
     orgId: string;
     employees: Employee[];
     organizations?: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange?: (orgId: string | undefined) => void;
     onRefresh?: () => void;
 }
 
-const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizations = [], selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizations = [], onRefresh }) => {
     const initialTokenParam = new URLSearchParams(window.location.search).get('portal_token');
     const [tokenParam] = useState(initialTokenParam);
     const [portalSession, setPortalSession] = useState<{ employeeId: string; orgId: string } | null>(null);
@@ -571,14 +569,7 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizatio
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Link self-service: ponto, férias, documentos e holerite pelo celular.</p>
                     </div>
 
-                    {onSelectedOrgIdChange && (
-                        <LaborScopeBar
-                            organizations={organizations}
-                            selectedOrgId={selectedOrgId}
-                            onSelectedOrgIdChange={onSelectedOrgIdChange}
-                            onRefresh={onRefresh || (() => {})}
-                        />
-                    )}
+                    <LaborScopeBar onRefresh={onRefresh || (() => {})} />
 
                     <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 w-fit">
                         <button onClick={() => setView('management')}

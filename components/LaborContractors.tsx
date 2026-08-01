@@ -341,14 +341,12 @@ interface LaborContractorsProps {
     orgId: string;
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
 type CView = 'contractors' | 'measurements' | 'documents';
 
-const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [], organizations, onRefresh }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [view, setView] = useState<CView>('contractors');
@@ -432,9 +430,6 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

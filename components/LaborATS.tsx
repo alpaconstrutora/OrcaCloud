@@ -580,14 +580,12 @@ interface LaborATSProps {
     orgId: string;
     projects?: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
 type ATSView = 'kanban' | 'jobs' | 'talent_bank';
 
-const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations, onRefresh }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [view, setView] = useState<ATSView>('kanban');
@@ -720,9 +718,6 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [], organizations
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

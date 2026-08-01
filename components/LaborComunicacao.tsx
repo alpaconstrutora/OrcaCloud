@@ -579,14 +579,12 @@ interface LaborComunicacaoProps {
     employees: { id: string; name: string; status?: string }[];
     projects: { id: string; name: string }[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
 type MainTab = 'comunicados' | 'config';
 
-const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, projects, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, projects, organizations, onRefresh }) => {
     const qc = useQueryClient();
     const [mainTab, setMainTab] = useState<MainTab>('comunicados');
     const [selectedComm, setSelectedComm] = useState<Communication | null>(null);
@@ -652,9 +650,6 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Avisos, DDS digitais, treinamentos e disparos via WhatsApp.</p>
                 </div>
                 <LaborScopeBar
-                    organizations={organizations}
-                    selectedOrgId={selectedOrgId}
-                    onSelectedOrgIdChange={onSelectedOrgIdChange}
                     onRefresh={onRefresh}
                 />
                 <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
@@ -713,9 +708,6 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

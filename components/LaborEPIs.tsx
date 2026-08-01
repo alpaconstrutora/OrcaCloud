@@ -271,13 +271,11 @@ interface LaborEPIsProps {
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 type EpiView = 'catalog' | 'deliveries';
 
-const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [view, setView] = useState<EpiView>('catalog');
@@ -413,9 +411,6 @@ const LaborEPIs: React.FC<LaborEPIsProps> = ({ orgId, employees, onRefresh, orga
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh || (() => {})}
             />
 

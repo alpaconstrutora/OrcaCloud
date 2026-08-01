@@ -25,8 +25,6 @@ interface Props {
     teams: TeamLite[];
     projects: ProjectLite[];
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
@@ -68,7 +66,7 @@ const abrirComprovante = async (path: string) => {
 };
 
 // ════════════════════════════════════════════════════════════
-const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, organizations, onRefresh }) => {
     const confirm = useConfirm();
     const [tab, setTab] = useState<SubTab>('launch');
     const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
@@ -92,9 +90,6 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gratificações, metas e guarda de habitualidade.</p>
                 </div>
                 <LaborScopeBar
-                    organizations={organizations}
-                    selectedOrgId={selectedOrgId}
-                    onSelectedOrgIdChange={onSelectedOrgIdChange}
                     onRefresh={onRefresh}
                 />
                 <div className="p-12 text-center bg-white rounded-3xl border border-slate-100">
@@ -114,9 +109,6 @@ const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects, o
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

@@ -374,8 +374,6 @@ interface LaborTrainingsProps {
     employees: Employee[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
 type TView = 'records' | 'catalog';
@@ -400,7 +398,7 @@ const COURSE_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees, onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees, onRefresh, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
@@ -552,9 +550,6 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees, onRef
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh || (() => {})}
             />
 

@@ -12,12 +12,10 @@ interface LaborCostDashboardProps {
     legacyCount?: number;
     onMigrate?: () => Promise<void>;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
-const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCount, onMigrate, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCount, onMigrate, organizations, onRefresh }) => {
     const [runs, setRuns] = useState<PayrollRun[]>([]);
     const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
     const [summary, setSummary] = useState<any>(null);
@@ -128,9 +126,6 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

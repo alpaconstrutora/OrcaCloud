@@ -13,22 +13,17 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } fro
 interface PayrollRunListProps {
     runs: PayrollRun[];
     orgId: string;
+    /** Só para resolver o nome da org na coluna Empresa — não há seletor nesta tela. */
     organizations: Array<{ id: string; name: string }>;
-    /** Organização ativa no módulo (distinta do filtro "Empresa" abaixo, que só
-     * narrows dentro do modo consolidado — ver LaborPayroll.tsx). */
-    selectedOrgId?: string;
-    onSelectedOrgIdChange?: (orgId: string | undefined) => void;
     loading: boolean;
     typeFilter: string;
     monthFilter: string;
     yearFilter: string;
-    localOrgId: string;
     search: string;
     runTotals: Record<string, number>;
     onTypeFilter: (v: string) => void;
     onMonthFilter: (v: string) => void;
     onYearFilter: (v: string) => void;
-    onLocalOrgId: (v: string) => void;
     onSearch: (v: string) => void;
     onSelectRun: (run: PayrollRun) => void;
     onDeleteRun: (id: string) => void;
@@ -69,9 +64,9 @@ const COLUMNS: ColumnConfig[] = [
 ];
 
 const PayrollRunList: React.FC<PayrollRunListProps> = ({
-    runs, orgId, organizations, selectedOrgId, onSelectedOrgIdChange, loading,
-    typeFilter, monthFilter, yearFilter, localOrgId, search, runTotals,
-    onTypeFilter, onMonthFilter, onYearFilter, onLocalOrgId, onSearch,
+    runs, orgId, organizations, loading,
+    typeFilter, monthFilter, yearFilter, search, runTotals,
+    onTypeFilter, onMonthFilter, onYearFilter, onSearch,
     onSelectRun, onDeleteRun, onDuplicateRun, onNewRun, onRefresh,
 }) => {
     const tableColumns = useTableColumns(COLUMNS, 'payrollRunListColumns');
@@ -137,18 +132,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
             {/* 4. Toolbar de botões — escopo (organização/mês/ano/empresa) + ação primária */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    {onSelectedOrgIdChange && (
-                        <select
-                            value={selectedOrgId || ''}
-                            onChange={e => onSelectedOrgIdChange(e.target.value || undefined)}
-                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer min-w-[180px]"
-                        >
-                            <option value="">Todas as organizações</option>
-                            {organizations.map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                        </select>
-                    )}
+                    {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
                     <select
                         value={monthFilter}
                         onChange={e => onMonthFilter(e.target.value)}
@@ -169,18 +153,6 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                         <option value="2026">2026</option>
                         <option value="2027">2027</option>
                     </select>
-                    {orgId === 'all' && (
-                        <select
-                            value={localOrgId}
-                            onChange={e => onLocalOrgId(e.target.value)}
-                            className="h-9 pl-3 pr-8 bg-indigo-50 border border-transparent rounded-[6px] text-sm font-medium text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer min-w-[150px]"
-                        >
-                            <option value="">Empresa (todas)</option>
-                            {organizations.map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                        </select>
-                    )}
                 </div>
 
                 <button

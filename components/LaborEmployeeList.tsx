@@ -34,8 +34,6 @@ interface LaborEmployeeListProps {
     onEdit: (emp: Employee) => void;
     onNew: () => void;
     onRefresh: () => void;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     isAllOrgsMode: boolean;
 }
 
@@ -86,7 +84,7 @@ function getAdvancedFilterValue(e: Employee, key: string): unknown {
     }
 }
 
-const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], currentUserEmail, onEdit, onNew, onRefresh, selectedOrgId, onSelectedOrgIdChange, isAllOrgsMode }) => {
+const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], currentUserEmail, onEdit, onNew, onRefresh, isAllOrgsMode }) => {
     // F2: filtros sobrevivem a navegação/reload.
     const [search, setSearch] = usePersistedState('laborEmployeeListFilters:search', '');
     const [filterStatus, setFilterStatus] = usePersistedState<EmployeeStatus | 'ALL'>('laborEmployeeListFilters:status', 'ATIVO');
@@ -203,9 +201,6 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             >
                 <button

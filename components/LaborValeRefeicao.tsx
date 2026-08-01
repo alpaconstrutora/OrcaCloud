@@ -1194,8 +1194,6 @@ interface LaborValeRefeicaoProps {
     organizations: { id: string; name: string }[];
     employees: Employee[];
     projects: { id: string; name: string }[];
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
@@ -1207,7 +1205,7 @@ const TABS: { id: VrTab; label: string; icon: React.ElementType }[] = [
     { id: 'historico',  label: 'Histórico',       icon: FileText },
 ];
 
-const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizations, employees, projects, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizations, employees, projects, onRefresh }) => {
     const [tab, setTab] = usePersistedState<VrTab>('laborValeRefeicao:tab', 'calculo');
 
     return (
@@ -1219,9 +1217,6 @@ const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizati
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

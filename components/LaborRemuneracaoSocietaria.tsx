@@ -22,8 +22,6 @@ import LaborScopeBar from './LaborScopeBar';
 interface Props {
     orgId: string;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 
@@ -41,7 +39,7 @@ function parseYearMonth(dateStr: string): { year: number; month: number } {
     return { year: y, month: m };
 }
 
-const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onRefresh }) => {
     const confirm = useConfirm();
     const [companies, setCompanies] = useState<Company[]>([]);
     const [companyId, setCompanyId] = useState<string>('');
@@ -445,9 +443,6 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, sel
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

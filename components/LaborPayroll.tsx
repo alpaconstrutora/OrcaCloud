@@ -19,14 +19,11 @@ interface OrganizationItem {
 
 
 interface LaborPayrollProps {
+    /** Org ativa no seletor global do topo; 'all' = todas as organizações. */
     orgId: string;
-    /** Organização ativa no nível do módulo (Mão de Obra) — distinta do filtro
-     * "Empresa" local desta tela, que só narrows dentro do modo consolidado. */
-    selectedOrgId?: string;
-    onSelectedOrgIdChange?: (orgId: string | undefined) => void;
 }
 
-const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     // ── Data ──────────────────────────────────────────────────────────────────
     const [runs, setRuns]               = useState<PayrollRun[]>([]);
     const [rubrics, setRubrics]         = useState<PayrollRubric[]>([]);
@@ -46,7 +43,6 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, selectedOrgId, onSel
     const [typeFilter, setTypeFilter]   = usePersistedState<string>('payrollRunList:type', 'all');
     const [monthFilter, setMonthFilter] = usePersistedState<string>('payrollRunList:month', 'all');
     const [yearFilter, setYearFilter]   = usePersistedState<string>('payrollRunList:year', new Date().getFullYear().toString());
-    const [localOrgId, setLocalOrgId]   = usePersistedState<string>('payrollRunList:localOrg', '');
     const [search, setSearch]           = usePersistedState<string>('payrollRunList:search', '');
 
     // ── Modal state ───────────────────────────────────────────────────────────
@@ -66,7 +62,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, selectedOrgId, onSel
         loadRuns();
         loadRubrics();
         loadOrganizations();
-    }, [orgId, typeFilter, monthFilter, yearFilter, localOrgId]);
+    }, [orgId, typeFilter, monthFilter, yearFilter]);
 
     useEffect(() => {
         if (selectedRun) loadEvents();
@@ -96,7 +92,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, selectedOrgId, onSel
         try {
             setLoading(true);
             setLoadError(null);
-            const activeOrgId = (orgId === 'all' && localOrgId) ? localOrgId : orgId;
+            const activeOrgId = orgId;
             const { start, end } = computeDateRange(yearFilter, monthFilter);
             const data = await payrollService.listRuns(
                 activeOrgId,
@@ -344,21 +340,17 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, selectedOrgId, onSel
             ) : (
                 <PayrollRunList
                     runs={runs}
-                    orgId={orgId}
                     organizations={organizations}
-                    selectedOrgId={selectedOrgId}
-                    onSelectedOrgIdChange={onSelectedOrgIdChange}
+                    orgId={orgId}
                     loading={loading}
                     typeFilter={typeFilter}
                     monthFilter={monthFilter}
                     yearFilter={yearFilter}
-                    localOrgId={localOrgId}
                     search={search}
                     runTotals={runTotals}
                     onTypeFilter={setTypeFilter}
                     onMonthFilter={setMonthFilter}
                     onYearFilter={setYearFilter}
-                    onLocalOrgId={setLocalOrgId}
                     onSearch={setSearch}
                     onSelectRun={handleSelectRun}
                     onDeleteRun={handleDeleteRun}

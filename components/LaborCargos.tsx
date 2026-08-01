@@ -15,8 +15,6 @@ import LaborScopeBar from './LaborScopeBar';
 interface LaborCargosProps {
     orgId: string;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
     onRefresh: () => void;
 }
 interface CompanyOption { id: string; razao_social: string; tipo: string; }
@@ -330,7 +328,7 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
 };
 
 // ── Main Component ──────────────────────────────────────────────────────────
-const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, selectedOrgId, onSelectedOrgIdChange, onRefresh }) => {
+const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefresh }) => {
     const confirm = useConfirm();
     const [activeTab, setActiveTab] = useState<'cargos' | 'funcoes'>('cargos');
     const [cargosView, setCargosView] = useState<'organograma' | 'lista'>('organograma');
@@ -476,9 +474,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, selecte
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Estrutura de cargos, níveis e responsabilidades.</p>
             </div>
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center text-amber-800 max-w-lg mx-auto mt-10">
@@ -519,9 +514,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, selecte
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh}
             />
 

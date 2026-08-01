@@ -128,11 +128,9 @@ interface LaborRHDashboardProps {
     costSummary: LaborCostSummary | null;
     onNavigate?: (tab: string) => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, costSummary, onNavigate, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, costSummary, onNavigate, organizations }) => {
     const today = new Date().toISOString().split('T')[0];
     const [refDate] = useState(today);
 
@@ -219,9 +217,6 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={() => refetch()}
             />
 

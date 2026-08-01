@@ -270,11 +270,9 @@ interface LaborDiaryProps {
     projects?: { id: string; name: string }[];
     onRefresh?: () => void;
     organizations: Array<{ id: string; name: string }>;
-    selectedOrgId?: string;
-    onSelectedOrgIdChange: (orgId: string | undefined) => void;
 }
 
-const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projects = [], onRefresh, organizations, selectedOrgId, onSelectedOrgIdChange }) => {
+const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projects = [], onRefresh, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState<string>('laborDiary:search', '');
@@ -339,9 +337,6 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
             </div>
 
             <LaborScopeBar
-                organizations={organizations}
-                selectedOrgId={selectedOrgId}
-                onSelectedOrgIdChange={onSelectedOrgIdChange}
                 onRefresh={onRefresh || (() => {})}
             />
 

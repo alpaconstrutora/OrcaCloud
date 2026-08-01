@@ -785,10 +785,13 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-6">
-                    <div className="max-w-5xl mx-auto space-y-6">
+                {/* flex-1 min-h-0: a área de conteúdo ocupa o resto da tela e o único
+                    scroll fica dentro do card da tabela — sem isso, max-h-[65vh] deixava
+                    um vão em branco embaixo sempre que a busca reduzia as linhas visíveis. */}
+                <div className="flex-1 min-h-0 flex flex-col px-6 py-6">
+                    <div className="max-w-5xl w-full mx-auto flex-1 min-h-0 flex flex-col gap-4">
                         {/* Toolbar de busca — variante desaninhada (§5.1), única régua desta tela */}
-                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center shrink-0">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
@@ -802,8 +805,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         </div>
 
                         {/* Tabela — container/thead/tbody §6, tipografia §7, separadores §6.6 */}
-                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="overflow-auto max-h-[65vh]">
+                        <div className="flex-1 min-h-0 bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                            <div className="flex-1 min-h-0 overflow-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">

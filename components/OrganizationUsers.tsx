@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole, ProductContext, ModuleVisibilityConfig, ProductModuleMap } from '../types';
-import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette, AlertCircle, Search } from 'lucide-react';
+import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette, AlertCircle, Search, ArrowLeft } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, SortableHeader, usePersistedState } from './ui/TableUtils';
-import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
@@ -759,17 +758,143 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         </div>
     );
 
-    // Membro cujas Permissões Detalhadas estão abertas no painel lateral — busca
-    // sempre a versão fresca em `members` (não uma cópia presa no momento do clique),
-    // já que cada toggle de checkbox atualiza `members` via onUpdateMembers.
+    // Membro cuja tela de Permissões Detalhadas está aberta — busca sempre a versão
+    // fresca em `members` (não uma cópia presa no momento do clique), já que cada
+    // toggle de checkbox atualiza `members` via onUpdateMembers.
     const permissionsMember = editingMemberId ? members.find(m => m.id === editingMemberId) || null : null;
-    const permissionsSearchNormalized = permissionsSearch.trim().toLowerCase();
-    const visiblePermissionGroups = PERMISSION_GROUPS
-        .map(section => ({
-            ...section,
-            modules: section.modules.filter(mod => !permissionsSearchNormalized || mod.title.toLowerCase().includes(permissionsSearchNormalized) || section.group.toLowerCase().includes(permissionsSearchNormalized)),
-        }))
-        .filter(section => section.modules.length > 0);
+
+    // Tela dedicada de Permissões Detalhadas — troca o conteúdo da aba "Membros"
+    // pelo detalhe, no mesmo padrão de lista→detalhe já usado em
+    // ContractDetailView.tsx (seta "voltar" + <h1>, sem overlay/backdrop, o
+    // shell/sidebar continua visível). NÃO é modal, painel lateral nem tela cheia.
+    if (permissionsMember) {
+        const permissionsSearchNormalized = permissionsSearch.trim().toLowerCase();
+        const visiblePermissionGroups = PERMISSION_GROUPS
+            .map(section => ({
+                ...section,
+                modules: section.modules.filter(mod => !permissionsSearchNormalized || mod.title.toLowerCase().includes(permissionsSearchNormalized) || section.group.toLowerCase().includes(permissionsSearchNormalized)),
+            }))
+            .filter(section => section.modules.length > 0);
+
+        return (
+            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+                {/* Cabeçalho — mesmo padrão de ContractDetailView.tsx: seta "voltar" +
+                    identidade do registro, título em text-2xl (detalhe, não raiz de lista) */}
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => setEditingMemberId(null)}
+                        className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group shrink-0"
+                    >
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    </button>
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-sm shrink-0">
+                        {permissionsMember.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium text-blue-600 truncate">{permissionsMember.email}</span>
+                            <span className="w-1 h-1 bg-gray-300 rounded-full shrink-0" />
+                            <span className="text-xs font-medium text-gray-400">Permissões detalhadas</span>
+                        </div>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight truncate">{permissionsMember.name}</h1>
+                    </div>
+                </div>
+
+                {/* Toolbar de busca — variante desaninhada (§5.1) */}
+                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                    <div className="flex-1 relative w-full max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar módulo ou área..."
+                            value={permissionsSearch}
+                            onChange={(e) => setPermissionsSearch(e.target.value)}
+                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        />
+                    </div>
+                </div>
+
+                {/* Tabela — container/thead/tbody §6, tipografia §7, separadores §6.6 */}
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                {/* §6.3: nenhuma coluna é ordenável por valor único — "Módulo" segue a
+                                    ordem fixa dos grupos (Geral → Sistema, espelhando Layout.tsx), e
+                                    Visualizar/Editar são toggles, não dado comparável. Exceção legítima
+                                    documentada, mesmo padrão da matriz de Visibilidade de Módulos abaixo
+                                    neste arquivo (Administrador/Membro/Visualizador também não ordenam). */}
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="px-6 py-2 border-r border-gray-100">Módulo</th>
+                                    <th className="px-6 py-2 border-r border-gray-100 text-center w-32 last:border-r-0">Visualizar</th>
+                                    <th className="px-6 py-2 text-center w-32">Editar</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {visiblePermissionGroups.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-400">
+                                            Nenhum módulo encontrado para "{permissionsSearch}".
+                                        </td>
+                                    </tr>
+                                ) : visiblePermissionGroups.map((section) => (
+                                    <React.Fragment key={section.group}>
+                                        <tr className="bg-gray-50/70">
+                                            <td colSpan={3} className="px-6 py-2">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xs font-black text-gray-700 uppercase tracking-widest">{section.group}</span>
+                                                    <div className="flex-1 h-px bg-gray-200" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleMemberGroup(permissionsMember, section.modules)}
+                                                        className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors shrink-0"
+                                                    >
+                                                        {isGroupFullyChecked(permissionsMember, section.modules) ? 'Desmarcar tudo' : 'Marcar tudo'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {section.modules.map((module) => {
+                                            const perms = effectivePerms(permissionsMember);
+                                            const viewChecked = !!perms[module.view as keyof UserPermissions];
+                                            const editChecked = module.edit ? !!perms[module.edit as keyof UserPermissions] : false;
+                                            return (
+                                                <tr key={module.view} className="hover:bg-gray-50/40 transition-colors">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{module.title}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={viewChecked}
+                                                            onChange={() => handleToggleMemberPermission(permissionsMember.id, module.view as keyof UserPermissions)}
+                                                            className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                            title={`Permite ver o módulo ${module.title}.`}
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-2.5 text-center">
+                                                        {module.edit ? (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={editChecked}
+                                                                onChange={() => handleToggleMemberPermission(permissionsMember.id, module.edit as keyof UserPermissions)}
+                                                                className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                                                                title={`Permite salvar alterações no módulo ${module.title}.`}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-gray-300 text-sm" title="Este módulo não tem ação de edição própria">—</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -1409,121 +1534,6 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     </div>
                 </div>
             )}
-
-            {/* Permissões Detalhadas — painel lateral (Sheet), padrão default de
-                UI_PATTERNS.md §3 ("Gerenciar lista de config" → Lateral) para
-                editar item sem perder o contexto da lista de membros atrás. */}
-            <Sheet open={!!permissionsMember} onClose={() => setEditingMemberId(null)} size="2xl">
-                {permissionsMember && (
-                    <>
-                        <SheetHeader onClose={() => setEditingMemberId(null)}>
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-sm shrink-0">
-                                    {permissionsMember.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                    <SheetTitle className="truncate">{permissionsMember.name}</SheetTitle>
-                                    <SheetDescription className="truncate">Permissões detalhadas · {permissionsMember.email}</SheetDescription>
-                                </div>
-                            </div>
-                        </SheetHeader>
-                        <SheetPanel className="flex flex-col">
-                            {/* Toolbar de busca — variante desaninhada (§5.1), sticky junto ao topo do painel */}
-                            <div className="sticky top-0 z-10 bg-white px-6 pt-4 pb-3 border-b border-gray-100 shrink-0">
-                                <div className="relative w-full">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar módulo ou área..."
-                                        value={permissionsSearch}
-                                        onChange={(e) => setPermissionsSearch(e.target.value)}
-                                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Tabela — container/thead/tbody §6, tipografia §7, separadores §6.6 */}
-                            <div className="p-6">
-                                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            {/* §6.3: nenhuma coluna é ordenável por valor único — "Módulo" segue a
-                                                ordem fixa dos grupos (Geral → Sistema, espelhando Layout.tsx), e
-                                                Visualizar/Editar são toggles, não dado comparável. Exceção legítima
-                                                documentada, mesmo padrão da matriz de Visibilidade de Módulos acima
-                                                neste arquivo (Administrador/Membro/Visualizador também não ordenam). */}
-                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                <th className="px-6 py-2 border-r border-gray-100">Módulo</th>
-                                                <th className="px-6 py-2 border-r border-gray-100 text-center w-24 last:border-r-0">Visualizar</th>
-                                                <th className="px-6 py-2 text-center w-24">Editar</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-200">
-                                            {visiblePermissionGroups.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-400">
-                                                        Nenhum módulo encontrado para "{permissionsSearch}".
-                                                    </td>
-                                                </tr>
-                                            ) : visiblePermissionGroups.map((section) => (
-                                                <React.Fragment key={section.group}>
-                                                    <tr className="bg-gray-50/70">
-                                                        <td colSpan={3} className="px-6 py-2">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-xs font-black text-gray-700 uppercase tracking-widest">{section.group}</span>
-                                                                <div className="flex-1 h-px bg-gray-200" />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleToggleMemberGroup(permissionsMember, section.modules)}
-                                                                    className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors shrink-0"
-                                                                >
-                                                                    {isGroupFullyChecked(permissionsMember, section.modules) ? 'Desmarcar tudo' : 'Marcar tudo'}
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                    {section.modules.map((module) => {
-                                                        const perms = effectivePerms(permissionsMember);
-                                                        const viewChecked = !!perms[module.view as keyof UserPermissions];
-                                                        const editChecked = module.edit ? !!perms[module.edit as keyof UserPermissions] : false;
-                                                        return (
-                                                            <tr key={module.view} className="hover:bg-gray-50/40 transition-colors">
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{module.title}</td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={viewChecked}
-                                                                        onChange={() => handleToggleMemberPermission(permissionsMember.id, module.view as keyof UserPermissions)}
-                                                                        className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                                                                        title={`Permite ver o módulo ${module.title}.`}
-                                                                    />
-                                                                </td>
-                                                                <td className="px-6 py-2.5 text-center">
-                                                                    {module.edit ? (
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={editChecked}
-                                                                            onChange={() => handleToggleMemberPermission(permissionsMember.id, module.edit as keyof UserPermissions)}
-                                                                            className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
-                                                                            title={`Permite salvar alterações no módulo ${module.title}.`}
-                                                                        />
-                                                                    ) : (
-                                                                        <span className="text-gray-300 text-sm" title="Este módulo não tem ação de edição própria">—</span>
-                                                                    )}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </React.Fragment>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </SheetPanel>
-                    </>
-                )}
-            </Sheet>
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

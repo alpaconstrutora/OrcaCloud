@@ -172,7 +172,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                         </div>
 
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Plano de Contas</label>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Centro de Custo</label>
                             <select
                                 value={costCenterId}
                                 onChange={e => setCostCenterId(e.target.value)}

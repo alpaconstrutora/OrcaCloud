@@ -290,7 +290,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         }
 
         if (!selectedCostCenter) {
-            alert("Por favor, selecione um Plano de Contas para os Salários.");
+            alert("Por favor, selecione um Centro de Custo para os Salários.");
             return;
         }
 
@@ -300,7 +300,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
         }
 
         if (!selectedEncargoCostCenter) {
-            alert("Por favor, selecione um Plano de Contas para os Encargos Patronais.");
+            alert("Por favor, selecione um Centro de Custo para os Encargos Patronais.");
             return;
         }
 
@@ -602,7 +602,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-slate-50 rounded-2xl border border-slate-200">
                                         {/* Centro de Custo — dropdown com busca */}
                                         <div className="space-y-1.5" ref={costCenterRef}>
-                                            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Contas</label>
+                                            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                             {/* Valor selecionado */}
                                             {selectedCostCenter && !costCenterOpen && (() => {
                                                 const sel = costCenters.find((c: CostCenter) => c.name === selectedCostCenter);
@@ -776,7 +776,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-orange-50/60 rounded-2xl border border-orange-100">
                                             {/* Centro de Custo — Encargos */}
                                             <div className="space-y-1.5" ref={encargoCostCenterRef}>
-                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Contas</label>
+                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                                 {selectedEncargoCostCenter && !encargoCostCenterOpen && (() => {
                                                     const sel = costCenters.find((c: CostCenter) => c.name === selectedEncargoCostCenter);
                                                     return (
@@ -941,7 +941,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-6 bg-purple-50/60 rounded-2xl border border-purple-100">
                                             {/* Centro de Custo — Terceiros */}
                                             <div className="space-y-1.5" ref={terceiroCostCenterRef}>
-                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Plano de Contas</label>
+                                                <label className="text-xs font-black text-slate-700 uppercase tracking-wide">Centro de Custo</label>
                                                 {selectedTerceiroCostCenter && !terceiroCostCenterOpen && (() => {
                                                     const sel = costCenters.find((c: CostCenter) => c.name === selectedTerceiroCostCenter);
                                                     return (

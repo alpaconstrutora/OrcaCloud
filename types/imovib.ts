@@ -218,6 +218,12 @@ export interface PropertyDeal {
     down_payment_installment_type?: PaymentInstallment['installmentType'];
     down_payment_notes?: string;
     payment_due_date?: string;
+    /** Centro de Custo da negociação (`cost_centers_v2`). Definido na aba Forma
+     *  de Pagamento e propagado para as parcelas em Contas a Receber. */
+    cost_center_id?: string | null;
+    /** Plano de Contas da negociação (`plano_de_contas`). Dimensão DIFERENTE de
+     *  `cost_center_id` — ver migration 20270822000013. */
+    plano_de_contas_id?: string | null;
     /** Origem/canal do negócio (ex.: Direto, Portal, Imobiliária) — alimenta "Fontes de Locação"/Vendas */
     origin_channel?: string;
     /**

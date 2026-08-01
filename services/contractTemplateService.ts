@@ -30,7 +30,7 @@ export const TEMPLATE_VARIABLES: { key: string; label: string }[] = [
     { key: 'NATUREZA',        label: 'Natureza' },
     { key: 'INDICE_REAJUSTE', label: 'Índice de reajuste' },
     { key: 'RETENCAO_PCT',    label: 'Retenção (%)' },
-    { key: 'CENTRO_CUSTO',    label: 'Plano de Contas' },
+    { key: 'CENTRO_CUSTO',    label: 'Centro de Custo' },
     { key: 'DATA_HOJE',       label: 'Data de hoje' },
     // Fase 8.3 — enriquecimento com campos das Fases 5-7 (seguros/penalidades/RT)
     { key: 'LIMITE_RESPONSABILIDADE', label: 'Limite de responsabilidade (R$)' },

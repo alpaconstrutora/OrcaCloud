@@ -559,7 +559,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </select>
                                 </FormField>
 
-                                <FormField label="Plano de Contas">
+                                <FormField label="Centro de Custo">
                                     <select value={costCenterId} onChange={e => setCostCenterId(e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
                                         <option value="">—</option>
@@ -914,7 +914,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </select>
                                 </FormField>
 
-                                <FormField label="Plano de Contas">
+                                <FormField label="Centro de Custo">
                                     <HierarchicalSelect
                                         items={costCenters}
                                         value={costCenterId}

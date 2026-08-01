@@ -62,7 +62,7 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'numero', label: 'Código', sortable: true },
     { key: 'beneficiario', label: 'Beneficiário', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
-    { key: 'centro_custo', label: 'Plano de Contas', sortable: true },
+    { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
     { key: 'valor', label: 'Valor', sortable: true },
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
@@ -1172,7 +1172,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 )}
                                 {tableColumns.visibleColumns.includes('centro_custo') && (
                                     <SortableHeader
-                                        label="Plano de Contas"
+                                        label="Centro de Custo"
                                         colKey="centro_custo"
                                         sortable={true}
                                         uppercase={false}

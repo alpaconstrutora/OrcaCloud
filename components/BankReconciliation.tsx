@@ -70,7 +70,7 @@ const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'creditor',     label: 'Credor',             sortable: true },
     { key: 'category',     label: 'Categoria',          sortable: true },
     { key: 'project',      label: 'Obra',               sortable: true },
-    { key: 'costCenter',   label: 'Plano de Contas',    sortable: true },
+    { key: 'costCenter',   label: 'Centro de Custo',    sortable: true },
     { key: 'date',         label: 'Data',               sortable: true },
     { key: 'amount',       label: 'Valor',              sortable: true },
     // Status mistura dado (situação da conciliação) com ação inline (Aceitar/Rejeitar
@@ -111,7 +111,7 @@ const PENDING_BANK_COLUMNS: ColumnConfig[] = [
     { key: 'counterparty', label: 'Contraparte',     sortable: true  },
     { key: 'category',     label: 'Categoria',       sortable: true  },
     { key: 'project',      label: 'Obra',            sortable: false },
-    { key: 'costCenter',   label: 'Plano de Contas', sortable: false },
+    { key: 'costCenter',   label: 'Centro de Custo', sortable: false },
     { key: 'date',         label: 'Data',            sortable: true  },
     { key: 'amount',       label: 'Valor',           sortable: true  },
     { key: 'actions',      label: 'Ações',           sortable: false },
@@ -136,7 +136,7 @@ const PENDING_INTERNAL_COLUMNS: ColumnConfig[] = [
     { key: 'creditor',     label: 'Credor',               sortable: true  },
     { key: 'category',     label: 'Categoria',            sortable: true  },
     { key: 'project',      label: 'Obra',                 sortable: false },
-    { key: 'costCenter',   label: 'Plano de Contas',      sortable: false },
+    { key: 'costCenter',   label: 'Centro de Custo',      sortable: false },
     { key: 'date',         label: 'Data',                 sortable: true  },
     { key: 'amount',       label: 'Valor',                sortable: true  },
     { key: 'actions',      label: 'Ações',                sortable: false },
@@ -2080,7 +2080,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? JSON.stringify(err);
             console.error(`Error bulk updating ${type} cost_center_id:`, err);
-            alert(`Erro ao atualizar plano de contas em lote: ${msg}`);
+            alert(`Erro ao atualizar centro de custo em lote: ${msg}`);
         } finally {
             setIsLoading(false);
         }
@@ -3692,7 +3692,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     defaultValue=""
                                     className="bg-white/10 border border-white/20 text-white text-xs font-black pl-9 pr-8 py-2.5 rounded-2xl uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all appearance-none min-w-[200px] hover:bg-white/20"
                                 >
-                                    <option value="" disabled className="text-gray-900 bg-white">Plano de Contas em lote...</option>
+                                    <option value="" disabled className="text-gray-900 bg-white">Centro de Custo em lote...</option>
                                     {masterCostCenters.map(c => (
                                         <option key={c.id} value={c.id} className="text-gray-900 bg-white font-bold">{c.name}</option>
                                     ))}
@@ -3704,7 +3704,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <button
                                         onClick={() => {
                                             const sel = document.getElementById('bulk-costcenter-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione um plano de contas.'); return; }
+                                            if (!sel?.value) { alert('Selecione um centro de custo.'); return; }
                                             handleBulkUpdateCostCenter('bank', sel.value);
                                         }}
                                         className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
@@ -3717,7 +3717,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <button
                                         onClick={() => {
                                             const sel = document.getElementById('bulk-costcenter-select') as HTMLSelectElement;
-                                            if (!sel?.value) { alert('Selecione um plano de contas.'); return; }
+                                            if (!sel?.value) { alert('Selecione um centro de custo.'); return; }
                                             handleBulkUpdateCostCenter('internal', sel.value);
                                         }}
                                         className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 transition-all shadow-lg active:scale-95 flex items-center gap-2"
@@ -4392,7 +4392,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {tableColumns.visibleColumns.includes('costCenter') && (
                                                         <SortableHeader
-                                                            colKey="costCenter" label="Plano de Contas" uppercase={false}
+                                                            colKey="costCenter" label="Centro de Custo" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'costCenter' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('costCenter'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
@@ -4545,7 +4545,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         currentLabel={costCenterName(tx.cost_center_id) || ''}
                                                                         onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
                                                                         options={costCenterOptions}
-                                                                        placeholder="Plano de Contas"
+                                                                        placeholder="Centro de Custo"
                                                                         className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
                                                                     />
                                                                 </td>
@@ -4808,7 +4808,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Plano de Contas" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingBankResize.ResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}
@@ -5361,7 +5361,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Plano de Contas" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingInternalResize.ResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}

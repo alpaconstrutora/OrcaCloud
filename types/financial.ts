@@ -19,6 +19,20 @@ export interface PaymentInstallment {
     /** Rótulo concatenado das unidades ("Apto 101 + Vaga 12"). */
     propertyNames?: string;
     linkedProjectId?: string;
+    /**
+     * Dimensões contábeis herdadas do CABEÇALHO da negociação (aba Forma de
+     * Pagamento) — não são editáveis por parcela: na aba Parcelas aparecem
+     * apenas como colunas de leitura. Vêm do `metadata` montado em
+     * `commercialFinanceService.syncDealToFinance` e são materializadas em
+     * `internal_transactions` por `financialSyncService`.
+     *
+     * São dimensões DIFERENTES entre si (ver migration 20270822000013):
+     *   • costCenterId     → cost_centers_v2  (Centro de Custo)
+     *   • planoDeContasId  → plano_de_contas  (Plano de Contas)
+     * Nenhuma das duas se confunde com `category` (financial_categories).
+     */
+    costCenterId?: string | null;
+    planoDeContasId?: string | null;
     commissionRate?: number;
     brokerName?: string;
     attachmentUrl?: string;

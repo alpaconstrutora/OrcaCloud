@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal } from 'lucide-react';
-import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit } from '../types';
+import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, CostCenter } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, useResizableColumns } from './ui/TableUtils';
@@ -13,6 +13,8 @@ import {
 } from '../constants/paymentTypes';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
+import { financialRegistryService } from '../services/financialRegistryService';
+import HierarchicalSelect from './HierarchicalSelect';
 import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
@@ -286,6 +288,8 @@ const PARCELAS_COL_WIDTHS: Record<string, number> = {
     valor_final: 120,
     tipo: 150,
     forma_pagto: 150,
+    centro_custo: 190,
+    plano_contas: 190,
     descricao: 220,
     actions: 110,
 };
@@ -297,6 +301,10 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'valor_final', label: 'Valor final', sortable: false },
     { key: 'tipo', label: 'Tipo', sortable: false },
     { key: 'forma_pagto', label: 'Forma pagto.', sortable: false },
+    // Herdadas do cabeçalho (aba Forma de Pagamento) — leitura, sem edição por
+    // linha: o valor é do NEGÓCIO, não da parcela.
+    { key: 'centro_custo', label: 'Centro de Custo', sortable: false },
+    { key: 'plano_contas', label: 'Plano de Contas', sortable: false },
     { key: 'descricao', label: 'Descrição', sortable: false },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
@@ -623,6 +631,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         installment_type?: string | null; payment_type?: string | null;
     }[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
+    // Dimensões contábeis do cabeçalho (aba Forma de Pagamento). São DUAS
+    // dimensões distintas — Centro de Custo é `cost_centers_v2`, Plano de Contas
+    // é `plano_de_contas` (ver migration 20270822000013). Não intercambiáveis.
+    const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+    const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
     // Selecao em lote da serie do CONTRATO — espelha selectedInstallmentIds do
     // plano de pagamento, inclusive o Shift+clique (guia §10.1).
     const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(new Set());
@@ -673,6 +686,39 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             .catch(err => console.error('[DealModal] Erro ao recuperar parcelas do cofre:', err));
         return () => { active = false; };
     }, [isOpen, formData.id]);
+
+    // Cadastros das duas dimensões contábeis da aba Forma de Pagamento.
+    // A org vem da PRÓPRIA negociação quando o seletor global está em "Todas as
+    // organizações" (REGRA #5) — e mesmo sem org nenhuma a busca é feita, com a
+    // RLS filtrando; bloquear aqui deixaria os dois campos vazios sem explicação.
+    useEffect(() => {
+        if (!isOpen) return;
+        const orgId = formData.organization_id || organizationId || undefined;
+        let ativo = true;
+        Promise.all([
+            financialRegistryService.listCostCenters(orgId),
+            financialRegistryService.listPlanoContas(orgId),
+        ])
+            .then(([cc, pc]) => {
+                if (!ativo) return;
+                setCostCenters(cc);
+                setPlanoContas(pc);
+            })
+            .catch(err => console.error('[DealModal] Erro ao carregar Centro de Custo / Plano de Contas:', err));
+        return () => { ativo = false; };
+    }, [isOpen, formData.organization_id, organizationId]);
+
+    /** Rótulos das duas dimensões do cabeçalho, resolvidos uma vez para as
+     *  colunas (de leitura) da aba Parcelas — toda parcela do negócio herda o
+     *  mesmo valor, então não faz sentido resolver linha a linha. */
+    const costCenterLabel = useMemo(
+        () => costCenters.find(c => c.id === formData.cost_center_id)?.name ?? '—',
+        [costCenters, formData.cost_center_id]
+    );
+    const planoContasLabel = useMemo(
+        () => planoContas.find(c => c.id === formData.plano_de_contas_id)?.name ?? '—',
+        [planoContas, formData.plano_de_contas_id]
+    );
 
     // Contexto de emissão do documento. `useCallback` porque o EmitDocumentModal
     // o usa como dependência de efeito — uma arrow nova a cada render refaria a
@@ -2338,6 +2384,37 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         />
                                     </div>
                                 )}
+
+                                {/* Dimensões contábeis do negócio. São DUAS coisas
+                                    diferentes: Centro de Custo é `cost_centers_v2`
+                                    (Minha Organização > Centro de Custo) e Plano de
+                                    Contas é `plano_de_contas` (Minha Organização >
+                                    Plano de Contas). Definidas aqui uma única vez e
+                                    herdadas por TODAS as parcelas — na aba Parcelas
+                                    aparecem só como colunas de leitura. */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
+                                    <HierarchicalSelect
+                                        items={costCenters}
+                                        value={formData.cost_center_id || ''}
+                                        onChange={(v) => setFormData({ ...formData, cost_center_id: v || null })}
+                                        valueField="id"
+                                        placeholder="Nenhum centro de custo vinculado"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
+                                    <HierarchicalSelect
+                                        items={planoContas}
+                                        value={formData.plano_de_contas_id || ''}
+                                        onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v || null })}
+                                        valueField="id"
+                                        placeholder="Nenhuma conta vinculada"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
+                                </div>
                             </div>
 
                             {/* O Plano de Pagamento saiu daqui para a aba PARCELAS:
@@ -2507,6 +2584,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             {parcelasCols.visibleColumns.includes('forma_pagto') && (
                                                                 <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.<parcelasResize.ResizeHandle colKey="forma_pagto" /></th>
                                                             )}
+                                                            {parcelasCols.visibleColumns.includes('centro_custo') && (
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Centro de Custo<parcelasResize.ResizeHandle colKey="centro_custo" /></th>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('plano_contas') && (
+                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Plano de Contas<parcelasResize.ResizeHandle colKey="plano_contas" /></th>
+                                                            )}
                                                             {parcelasCols.visibleColumns.includes('descricao') && (
                                                                 <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição<parcelasResize.ResizeHandle colKey="descricao" /></th>
                                                             )}
@@ -2650,6 +2733,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                                     <option value="CHEQUE">Cheque</option>
                                                                                     <option value="PERMUTA">Permuta</option>
                                                                                 </select>
+                                                                            </td>
+                                                                        )}
+                                                                        {/* Dimensões do CABEÇALHO: iguais em toda a série, por isso
+                                                                            leitura — mudar é na aba Forma de Pagamento. */}
+                                                                        {parcelasCols.visibleColumns.includes('centro_custo') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('plano_contas') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
                                                                             </td>
                                                                         )}
                                                                         {parcelasCols.visibleColumns.includes('descricao') && (
@@ -2796,6 +2891,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         {parcelasCols.visibleColumns.includes('forma_pagto') && (
                                                             <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.<parcelasResize.ResizeHandle colKey="forma_pagto" /></th>
                                                         )}
+                                                        {parcelasCols.visibleColumns.includes('centro_custo') && (
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Centro de Custo<parcelasResize.ResizeHandle colKey="centro_custo" /></th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('plano_contas') && (
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Plano de Contas<parcelasResize.ResizeHandle colKey="plano_contas" /></th>
+                                                        )}
                                                         {parcelasCols.visibleColumns.includes('descricao') && (
                                                             <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição<parcelasResize.ResizeHandle colKey="descricao" /></th>
                                                         )}
@@ -2861,6 +2962,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         <option value="CHEQUE">Cheque</option>
                                                                         <option value="PERMUTA">Permuta</option>
                                                                     </select>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('centro_custo') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('plano_contas') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
                                                                 </td>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('descricao') && (
@@ -2993,6 +3104,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         <option value="CHEQUE">Cheque</option>
                                                                         <option value="PERMUTA">Permuta</option>
                                                                     </select>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('centro_custo') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('plano_contas') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
                                                                 </td>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('descricao') && (

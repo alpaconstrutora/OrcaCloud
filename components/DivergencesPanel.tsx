@@ -410,7 +410,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Plano de Contas</label>
+                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Centro de Custo</label>
                             <select
                                 value={form.costCenterId}
                                 onChange={e => setForm(f => ({ ...f, costCenterId: e.target.value }))}

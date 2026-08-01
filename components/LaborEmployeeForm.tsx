@@ -780,7 +780,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     <InputGroup label="Departamento">
                                         <input value={form.departamento} onChange={e => setField('departamento', e.target.value)} className={inputCls} placeholder="Ex: Produção / Obras" />
                                     </InputGroup>
-                                    <InputGroup label="Plano de Contas">
+                                    <InputGroup label="Centro de Custo">
                                         <input value={form.centro_custo} onChange={e => setField('centro_custo', e.target.value)} className={inputCls} placeholder="Ex: CC-001 / Obra Vila" />
                                     </InputGroup>
                                     <InputGroup label="Sindicato">

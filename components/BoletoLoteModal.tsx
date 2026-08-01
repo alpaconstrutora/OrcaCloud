@@ -352,14 +352,14 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                             {/* Centro de custo */}
                             <div className="space-y-1">
                                 <label className="text-form-label font-semibold text-gray-600 flex items-center gap-1">
-                                    <FolderOpen className="w-3 h-3" /> Plano de Contas
+                                    <FolderOpen className="w-3 h-3" /> Centro de Custo
                                 </label>
                                 <select
                                     value={costCenterId}
                                     onChange={e => { setCostCenterId(e.target.value); setCommonApplied(false); }}
                                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
                                 >
-                                    <option value="">— Sem plano de contas —</option>
+                                    <option value="">— Sem centro de custo —</option>
                                     {costCenters.map(c => (
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                     ))}

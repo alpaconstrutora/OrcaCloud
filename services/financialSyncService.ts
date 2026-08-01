@@ -54,6 +54,15 @@ export const financialSyncService = {
                     party_id: inst.clientId ?? null, // FK clients(id), ON DELETE SET NULL
                     party_type: 'CLIENT',
                     category: (inst as unknown as Record<string, unknown>).category || 'Receita de Obra',
+                    // Dimensões contábeis vindas do cabeçalho da negociação — SÓ no
+                    // vault comercial. Numa obra estas colunas são preenchidas à mão
+                    // em Contas a Receber; emiti-las aqui faria o upsert zerá-las a
+                    // cada sync (o PostgREST monta as colunas pela união das chaves
+                    // do array, então uma chave presente com null SOBRESCREVE).
+                    ...(isVault ? {
+                        cost_center_id: inst.costCenterId ?? null,
+                        plano_de_contas_id: inst.planoDeContasId ?? null,
+                    } : {}),
                     status: inst.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
                     // business_status é o status de NEGÓCIO que Contas a Receber exibe
                     // e filtra (Previsto/Recebido/...). Ficava nulo em tudo que vinha de

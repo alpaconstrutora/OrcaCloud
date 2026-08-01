@@ -125,7 +125,14 @@ export const commercialFinanceService = {
             propertyIds,
             /** Rótulo concatenado ("Apto 101 + Vaga 12"). */
             propertyNames,
-            linkedProjectId: deal.linked_project_id
+            linkedProjectId: deal.linked_project_id,
+            // Dimensões contábeis do CABEÇALHO (aba Forma de Pagamento). Ficam no
+            // metadata de propósito: assim as três formas de gerar parcelas
+            // (customizadas, cronograma padrão e a Entrada) herdam sem repetição,
+            // e o espelho em internal_transactions as encontra no mesmo lugar.
+            // Não são editáveis por parcela — na aba Parcelas são só leitura.
+            costCenterId: deal.cost_center_id ?? null,
+            planoDeContasId: deal.plano_de_contas_id ?? null
         };
 
         // 2. RECUPERAR LANÇAMENTOS EXISTENTES NO LOTE ATUAL

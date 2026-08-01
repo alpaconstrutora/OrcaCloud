@@ -14,7 +14,7 @@ export const receivableService = {
     async list(organizationId: string, filters?: ReceivableFilters): Promise<Receivable[]> {
         let q = supabase
             .from('vw_receivables')
-            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,effective_status,party_id,party_name,party_type,project_id,project_name,created_at,updated_at')
+            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,effective_status,party_id,party_name,party_type,project_id,project_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
             .eq('organization_id', organizationId)
             .order('due_date', { ascending: true, nullsFirst: false });
 

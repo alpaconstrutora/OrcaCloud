@@ -8,9 +8,10 @@ import { receivableService } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
 import { asaasConfigService } from '../services/asaasConfigService';
 import { clientService } from '../services/clientService';
+import { financialRegistryService } from '../services/financialRegistryService';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
-import type { Organization } from '../types';
+import type { Organization, CostCenter } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
@@ -50,11 +51,17 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
     { key: 'due_date', label: 'Vencimento', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
+    // Duas dimensões DIFERENTES (ver migration 20270822000013): Centro de
+    // Custo é cost_centers_v2, Plano de Contas é plano_de_contas. Resolvidas
+    // no client — vw_receivables só expõe os UUIDs.
+    { key: 'cost_center_name', label: 'Centro de Custo', sortable: true },
+    { key: 'plano_de_contas_name', label: 'Plano de Contas', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 200, description: 220, project_name: 160, due_date: 130, amount: 140, status: 150, actions: 260,
+    party_name: 200, description: 220, project_name: 160, due_date: 130, amount: 140, status: 150,
+    cost_center_name: 180, plano_de_contas_name: 180, actions: 260,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Roda client-side
@@ -66,6 +73,8 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'amount', label: 'Valor', type: 'number' },
     { key: 'due_date', label: 'Vencimento', type: 'date' },
     { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
+    { key: 'cost_center_name', label: 'Centro de Custo', type: 'text' },
+    { key: 'plano_de_contas_name', label: 'Plano de Contas', type: 'text' },
 ];
 
 function getAdvancedFilterValue(r: Receivable, key: string): unknown {
@@ -76,6 +85,8 @@ function getAdvancedFilterValue(r: Receivable, key: string): unknown {
         case 'amount': return r.amount ?? null;
         case 'due_date': return r.due_date ?? null;
         case 'status': return r.effective_status;
+        case 'cost_center_name': return r.cost_center_name ?? '';
+        case 'plano_de_contas_name': return r.plano_de_contas_name ?? '';
         default: return null;
     }
 }
@@ -647,8 +658,31 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const [emitindo, setEmitindo]         = useState<Receivable | null>(null);
     const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading]   = useState(false);
+    // Duas dimensões DIFERENTES (ver migration 20270822000013) — carregadas uma
+    // vez por organização para resolver os UUIDs de vw_receivables em nome.
+    const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+    const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
 
     const effectiveOrgId = organizationId || organizations?.[0]?.id || '';
+
+    useEffect(() => {
+        if (!effectiveOrgId) return;
+        let ativo = true;
+        Promise.all([
+            financialRegistryService.listCostCenters(effectiveOrgId),
+            financialRegistryService.listPlanoContas(effectiveOrgId),
+        ])
+            .then(([cc, pc]) => {
+                if (!ativo) return;
+                setCostCenters(cc);
+                setPlanoContas(pc);
+            })
+            .catch(err => console.error('[ContasReceberManager] Erro ao carregar Centro de Custo / Plano de Contas:', err));
+        return () => { ativo = false; };
+    }, [effectiveOrgId]);
+
+    const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
+    const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
 
     const load = useCallback(async () => {
         if (!effectiveOrgId) return;
@@ -741,8 +775,16 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         }
     }
 
+    /** Injeta os nomes resolvidos de Centro de Custo/Plano de Contas — a view só
+     *  traz os UUIDs (ver comentário na migration 20270847000000). */
+    const rowsWithNames = useMemo(() => rows.map(r => ({
+        ...r,
+        cost_center_name: r.cost_center_id ? (costCenterNameById.get(r.cost_center_id) ?? '') : '',
+        plano_de_contas_name: r.plano_de_contas_id ? (planoContasNameById.get(r.plano_de_contas_id) ?? '') : '',
+    })), [rows, costCenterNameById, planoContasNameById]);
+
     const sorted = useMemo(() => {
-        let result = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        let result = applyFilterRules(rowsWithNames, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
         result = [...result];
         if (tableColumns.sortColumn) {
             result.sort((a, b) => {
@@ -753,6 +795,8 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                     case 'project_name':  va = (a.project_name ?? '').toLowerCase();  vb = (b.project_name ?? '').toLowerCase();  break;
                     case 'due_date':      va = a.due_date ?? '';                      vb = b.due_date ?? '';                      break;
                     case 'amount':        va = a.amount ?? 0;                         vb = b.amount ?? 0;                         break;
+                    case 'cost_center_name':    va = (a.cost_center_name ?? '').toLowerCase();    vb = (b.cost_center_name ?? '').toLowerCase();    break;
+                    case 'plano_de_contas_name': va = (a.plano_de_contas_name ?? '').toLowerCase(); vb = (b.plano_de_contas_name ?? '').toLowerCase(); break;
                     case 'status':        va = a.effective_status;                    vb = b.effective_status;                    break;
                     default:              return 0;
                 }
@@ -916,10 +960,16 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                 </div>
             )}
 
+            {/* Banner de erro fica FORA do card acoplado (§5.2) — dentro quebra a
+                costura visível do border-b da toolbar. */}
+            {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
+            )}
+
             {/* Toolbar acoplada à tabela (§5.2) — toolbar e tabela dividem um único card;
                 a costura visível entre elas é o border-b da toolbar. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex flex-col gap-2.5 p-4 border-b border-gray-100 bg-white">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1004,7 +1054,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                     </div>
 
                     {showFilters && (
-                        <div className="flex items-center gap-3 flex-wrap">
+                        <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-4 flex items-center gap-3 flex-wrap">
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-gray-500 font-semibold">Venc. de</span>
                                 <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
@@ -1027,9 +1077,6 @@ export default function ContasReceberManager({ organizationId, organizations }: 
 
                 {/* Conteúdo — tabela sem bg/border/rounded próprios (já dentro do card acoplado §5.2) */}
                 <div>
-                    {error && (
-                        <div className="m-4 p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
-                    )}
                     {loading ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -1112,6 +1159,20 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                             <cols.ResizeHandle colKey="status" />
                                         </SortableHeader>
                                     )}
+                                    {tableColumns.visibleColumns.includes('cost_center_name') && (
+                                        <SortableHeader label="Centro de Custo" colKey="cost_center_name" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="cost_center_name" />
+                                        </SortableHeader>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('plano_de_contas_name') && (
+                                        <SortableHeader label="Plano de Contas" colKey="plano_de_contas_name" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden">
+                                            <cols.ResizeHandle colKey="plano_de_contas_name" />
+                                        </SortableHeader>
+                                    )}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
@@ -1153,7 +1214,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('project_name') && (
-                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-600 max-w-[140px] truncate border-r border-gray-100 last:border-r-0">
+                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-700 max-w-[140px] truncate border-r border-gray-100 last:border-r-0">
                                                     {r.project_name ?? '—'}
                                                 </td>
                                             )}
@@ -1170,6 +1231,16 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                             {tableColumns.visibleColumns.includes('status') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <StatusBadge status={r.effective_status} />
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('cost_center_name') && (
+                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-700 max-w-[180px] truncate border-r border-gray-100 last:border-r-0">
+                                                    {r.cost_center_name || '—'}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('plano_de_contas_name') && (
+                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-700 max-w-[180px] truncate border-r border-gray-100 last:border-r-0">
+                                                    {r.plano_de_contas_name || '—'}
                                                 </td>
                                             )}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

@@ -54,7 +54,84 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewFiscal: true,
         canViewQuality: true,
         canViewRentals: true,
-        canViewStructural: true
+        canViewStructural: true,
+
+        // Módulos adicionados junto com a expansão de DETAILED_PERMISSIONS.
+        // Visualizar = true por padrão (o menu já filtra por produto/plano);
+        // Editar fica false — quem edita é `member`/`admin`, abaixo.
+        canViewCommandCenter: true,
+        canViewTasks: true, canEditTasks: false,
+        canViewNotifications: true,
+        canViewBi: true,
+        canViewOpuraReports: true,
+        canViewCentralObra: true,
+        canViewCentralCliente: true,
+        canViewCentralFornecedor: true,
+        canViewMarket: true,
+        canViewGovernance: true, canEditGovernance: false,
+        canViewOrganization: true, canEditOrganization: false,
+        canViewClients: true, canEditClients: false,
+        canViewSuppliers: true, canEditSuppliers: false,
+        canViewInvestors: true, canEditInvestors: false,
+        canViewBankAccounts: true, canEditBankAccounts: false,
+        canViewCostCenters: true, canEditCostCenters: false,
+        canViewChartOfAccounts: true, canEditChartOfAccounts: false,
+        canViewAssets: true, canEditAssets: false,
+        canViewDocs: true, canEditDocs: false,
+        canViewProcesses: true, canEditProcesses: false,
+        canViewMasterData: true, canEditMasterData: false,
+        canViewProjects: true, canEditProjects: false,
+        canViewMeasureAi: true, canEditMeasureAi: false,
+        canEditStructural: false,
+        canViewElectrical: true, canEditElectrical: false,
+        canViewAreaEngine: true, canEditAreaEngine: false,
+        canViewProjectTemplates: true, canEditProjectTemplates: false,
+        canViewOperational: true, canEditOperational: false,
+        canEditQuality: false,
+        canViewWarranty: true, canEditWarranty: false,
+        canEditLabor: false,
+        canViewPayroll: true, canEditPayroll: false,
+        canViewTimeTracking: true, canEditTimeTracking: false,
+        canViewEsocial: true, canEditEsocial: false,
+        canViewSst: true, canEditSst: false,
+        canViewIncentives: true, canEditIncentives: false,
+        canViewPartnerComp: true, canEditPartnerComp: false,
+        canViewRecruitment: true, canEditRecruitment: false,
+        canViewP2P: true, canEditP2P: false,
+        canViewProcurementPlan: true, canEditProcurementPlan: false,
+        canViewSupplyContracts: true, canEditSupplyContracts: false,
+        canViewQuotations: true, canEditQuotations: false,
+        canViewInventory: true, canEditInventory: false,
+        canViewFpa: true, canEditFpa: false,
+        canViewReceivables: true, canEditReceivables: false,
+        canViewPayables: true, canEditPayables: false,
+        canViewTaxPayables: true, canEditTaxPayables: false,
+        canViewBoletos: true, canEditBoletos: false,
+        canViewBankReconciliation: true, canEditBankReconciliation: false,
+        canViewFinancialApproval: true, canEditFinancialApproval: false,
+        canViewDunning: true, canEditDunning: false,
+        canViewFinancialIntelligence: true,
+        canViewControladoria: true, canEditControladoria: false,
+        canEditFiscal: false,
+        canViewAutomation: true, canEditAutomation: false,
+        canEditSales: false,
+        canEditRentals: false,
+        canViewServiceContracts: true, canEditServiceContracts: false,
+        canViewServicesCrm: true, canEditServicesCrm: false,
+        canViewDevelopments: true, canEditDevelopments: false,
+        canViewRegulatoryMap: true, canEditRegulatoryMap: false,
+        canViewOpportunities: true, canEditOpportunities: false,
+        canViewPlantaAi: true, canEditPlantaAi: false,
+        canEditImovib: false,
+        canViewAppraisal: true, canEditAppraisal: false,
+        canViewPartnerPortal: true, canEditPartnerPortal: false,
+        canEditPro: false,
+        canEditOffices: false,
+        canViewReformas: true, canEditReformas: false,
+        canViewCno: true, canEditCno: false,
+        // `canViewEcommerce` fica INTENCIONALMENTE ausente: Layout.checkModule dá
+        // precedência à permissão do membro sobre a matriz de visibilidade da
+        // organização. Defini-la aqui forçaria o módulo visível para todos.
     };
 
     switch (role) {
@@ -64,6 +141,9 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
                 [key]: true
             }), {} as UserPermissions);
         case 'member':
+            // `member` = operacional: edita o que produz obra/compra/venda,
+            // mas não mexe em cadastro mestre, organização, contábil, RH
+            // sensível, aprovações nem configurações.
             return {
                 ...baseViewer,
                 canEditBudget: true,
@@ -73,7 +153,36 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
                 canEditOrders: true,
                 canEditReceipts: true,
                 canEditFinancial: true,
-                canEditTechnicalData: true
+                canEditTechnicalData: true,
+
+                canEditTasks: true,
+                canEditProjects: true,
+                canEditMeasureAi: true,
+                canEditStructural: true,
+                canEditElectrical: true,
+                canEditAreaEngine: true,
+                canEditOperational: true,
+                canEditQuality: true,
+                canEditWarranty: true,
+                canEditP2P: true,
+                canEditProcurementPlan: true,
+                canEditSupplyContracts: true,
+                canEditQuotations: true,
+                canEditInventory: true,
+                canEditReceivables: true,
+                canEditPayables: true,
+                canEditBoletos: true,
+                canEditBankReconciliation: true,
+                canEditSales: true,
+                canEditRentals: true,
+                canEditServiceContracts: true,
+                canEditServicesCrm: true,
+                canEditDevelopments: true,
+                canEditPlantaAi: true,
+                canEditImovib: true,
+                canEditAppraisal: true,
+                canEditDocs: true,
+                canEditProcesses: true,
             };
         case 'viewer':
             return baseViewer;
@@ -117,35 +226,131 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
     ],
 };
 
-const DETAILED_PERMISSIONS = [
-    { title: 'Orçamento', view: 'canViewBudget', edit: 'canEditBudget' },
-    { title: 'Composições', view: 'canViewCompositions', edit: 'canEditCompositions' },
-    { title: 'Planejamento', view: 'canViewPlanning', edit: 'canEditPlanning' },
-    { title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
-    { title: 'Relatórios', view: 'canViewReports', edit: 'canEditReports' },
-    { title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
-    { title: 'Pedidos', view: 'canViewOrders', edit: 'canEditOrders' },
-    { title: 'Recebimento', view: 'canViewReceipts', edit: 'canEditReceipts' },
-    { title: 'Financeiro', view: 'canViewFinancial', edit: 'canEditFinancial' },
-    { title: 'Portal do Cliente', view: 'canViewClientPortal', edit: 'canEditClientPortal' },
-    { title: 'Portal do Investidor', view: 'canViewInvestorPortal', edit: 'canEditInvestorPortal' },
-    { title: 'Portal do Fornecedor', view: 'canViewSupplierPortal', edit: 'canEditSupplierPortal' },
-    { title: 'Portal do Corretor', view: 'canViewBrokerPortal', edit: 'canEditBrokerPortal' },
-    { title: 'Configurações', view: 'canViewSettings', edit: 'canEditSettings' },
-    { title: 'Gestão de Team', view: 'canManageUsers' },
-    
-    // Novas flags de visibilidade de módulos
-    { title: 'Módulo de Mão de Obra / RH', view: 'canViewLabor' },
-    { title: 'Módulo ÒPURA Offices', view: 'canViewOffices' },
-    { title: 'Módulo ÒPURA Pro', view: 'canViewPro' },
-    { title: 'Módulo Comercial & Vendas', view: 'canViewSales' },
-    { title: 'Módulo Viabilidade Imobiliária (Imovib)', view: 'canViewImovib' },
-    { title: 'Módulo Fiscal & NF-e', view: 'canViewFiscal' },
-    { title: 'Módulo Qualidade & Pós-Obra', view: 'canViewQuality' },
-    { title: 'Módulo Locações', view: 'canViewRentals' },
-    { title: 'Módulo Estrutural (Aço/Ferragem)', view: 'canViewStructural' },
-    { title: 'Módulo de E-commerce / TTS', view: 'canViewEcommerce', edit: 'canEditEcommerce' }
+// Espelha a navegação real de `components/Layout.tsx`. Ao adicionar um item novo
+// ao menu lateral, adicione a permissão correspondente aqui — e a chave em
+// `UserPermissions` (types/users.ts) + o default em `getDefaultPermissions`.
+const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?: string }[] = [
+    // --- Geral ---
+    { group: 'Geral', title: 'Central de Controle', view: 'canViewCommandCenter' },
+    { group: 'Geral', title: 'Minhas Tarefas', view: 'canViewTasks', edit: 'canEditTasks' },
+    { group: 'Geral', title: 'Notificações', view: 'canViewNotifications' },
+
+    // --- Inteligência de Negócios ---
+    { group: 'Inteligência de Negócios', title: 'BI Executivo', view: 'canViewBi' },
+    { group: 'Inteligência de Negócios', title: 'ÒPURA Relatórios', view: 'canViewOpuraReports' },
+    { group: 'Inteligência de Negócios', title: 'Central de Obras', view: 'canViewCentralObra' },
+    { group: 'Inteligência de Negócios', title: 'Central de Clientes', view: 'canViewCentralCliente' },
+    { group: 'Inteligência de Negócios', title: 'Central de Fornecedores', view: 'canViewCentralFornecedor' },
+    { group: 'Inteligência de Negócios', title: 'ÒPURA Market', view: 'canViewMarket' },
+    { group: 'Inteligência de Negócios', title: 'Governança Corporativa', view: 'canViewGovernance', edit: 'canEditGovernance' },
+
+    // --- Corporativo ---
+    { group: 'Corporativo', title: 'Minha Organização', view: 'canViewOrganization', edit: 'canEditOrganization' },
+    { group: 'Corporativo', title: 'Clientes', view: 'canViewClients', edit: 'canEditClients' },
+    { group: 'Corporativo', title: 'Fornecedores', view: 'canViewSuppliers', edit: 'canEditSuppliers' },
+    { group: 'Corporativo', title: 'Investidores', view: 'canViewInvestors', edit: 'canEditInvestors' },
+    { group: 'Corporativo', title: 'Contas Bancárias', view: 'canViewBankAccounts', edit: 'canEditBankAccounts' },
+    { group: 'Corporativo', title: 'Centros de Custo', view: 'canViewCostCenters', edit: 'canEditCostCenters' },
+    { group: 'Corporativo', title: 'Plano de Contas', view: 'canViewChartOfAccounts', edit: 'canEditChartOfAccounts' },
+    { group: 'Corporativo', title: 'Gestão de Ativos', view: 'canViewAssets', edit: 'canEditAssets' },
+    { group: 'Corporativo', title: 'Gestão de Documentos', view: 'canViewDocs', edit: 'canEditDocs' },
+    { group: 'Corporativo', title: 'Processos', view: 'canViewProcesses', edit: 'canEditProcesses' },
+    { group: 'Corporativo', title: 'Cadastros (Dados Mestres)', view: 'canViewMasterData', edit: 'canEditMasterData' },
+
+    // --- Engenharia ---
+    { group: 'Engenharia', title: 'Obras', view: 'canViewProjects', edit: 'canEditProjects' },
+    { group: 'Engenharia', title: 'Orçamento', view: 'canViewBudget', edit: 'canEditBudget' },
+    { group: 'Engenharia', title: 'Composições', view: 'canViewCompositions', edit: 'canEditCompositions' },
+    { group: 'Engenharia', title: 'Planejamento', view: 'canViewPlanning', edit: 'canEditPlanning' },
+    { group: 'Engenharia', title: 'Relatórios de Engenharia', view: 'canViewReports', edit: 'canEditReports' },
+    { group: 'Engenharia', title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
+    { group: 'Engenharia', title: 'Medição Inteligente', view: 'canViewMeasureAi', edit: 'canEditMeasureAi' },
+    { group: 'Engenharia', title: 'Ferragem & Aço (Estrutural)', view: 'canViewStructural', edit: 'canEditStructural' },
+    { group: 'Engenharia', title: 'Projetos Elétricos', view: 'canViewElectrical', edit: 'canEditElectrical' },
+    { group: 'Engenharia', title: 'Áreas NBR 12721', view: 'canViewAreaEngine', edit: 'canEditAreaEngine' },
+    { group: 'Engenharia', title: 'Tipos e Templates de Obra', view: 'canViewProjectTemplates', edit: 'canEditProjectTemplates' },
+
+    // --- Operação de Obra ---
+    { group: 'Operação de Obra', title: 'Controle Operacional', view: 'canViewOperational', edit: 'canEditOperational' },
+    { group: 'Operação de Obra', title: 'Diário de Obra', view: 'canViewDiary', edit: 'canEditDiary' },
+    { group: 'Operação de Obra', title: 'Qualidade e Entrega', view: 'canViewQuality', edit: 'canEditQuality' },
+    { group: 'Operação de Obra', title: 'Pós-Obra e Garantia', view: 'canViewWarranty', edit: 'canEditWarranty' },
+
+    // --- Recursos Humanos ---
+    { group: 'Recursos Humanos', title: 'Mão de Obra / RH', view: 'canViewLabor', edit: 'canEditLabor' },
+    { group: 'Recursos Humanos', title: 'Folha de Pagamento', view: 'canViewPayroll', edit: 'canEditPayroll' },
+    { group: 'Recursos Humanos', title: 'Ponto e Banco de Horas', view: 'canViewTimeTracking', edit: 'canEditTimeTracking' },
+    { group: 'Recursos Humanos', title: 'eSocial', view: 'canViewEsocial', edit: 'canEditEsocial' },
+    { group: 'Recursos Humanos', title: 'SST e EPIs', view: 'canViewSst', edit: 'canEditSst' },
+    { group: 'Recursos Humanos', title: 'Incentivos & Produtividade', view: 'canViewIncentives', edit: 'canEditIncentives' },
+    { group: 'Recursos Humanos', title: 'Remuneração Societária', view: 'canViewPartnerComp', edit: 'canEditPartnerComp' },
+    { group: 'Recursos Humanos', title: 'Recrutamento', view: 'canViewRecruitment', edit: 'canEditRecruitment' },
+
+    // --- Suprimentos ---
+    { group: 'Suprimentos', title: 'Fluxo Integrado (P2P)', view: 'canViewP2P', edit: 'canEditP2P' },
+    { group: 'Suprimentos', title: 'Plano de Aquisições', view: 'canViewProcurementPlan', edit: 'canEditProcurementPlan' },
+    { group: 'Suprimentos', title: 'Contratos de Suprimentos', view: 'canViewSupplyContracts', edit: 'canEditSupplyContracts' },
+    { group: 'Suprimentos', title: 'Cotações', view: 'canViewQuotations', edit: 'canEditQuotations' },
+    { group: 'Suprimentos', title: 'Pedidos', view: 'canViewOrders', edit: 'canEditOrders' },
+    { group: 'Suprimentos', title: 'Recebimento', view: 'canViewReceipts', edit: 'canEditReceipts' },
+    { group: 'Suprimentos', title: 'Almoxarifado', view: 'canViewInventory', edit: 'canEditInventory' },
+
+    // --- Financeiro ---
+    { group: 'Financeiro', title: 'Financeiro (Geral)', view: 'canViewFinancial', edit: 'canEditFinancial' },
+    { group: 'Financeiro', title: 'FP&A', view: 'canViewFpa', edit: 'canEditFpa' },
+    { group: 'Financeiro', title: 'Contas a Receber', view: 'canViewReceivables', edit: 'canEditReceivables' },
+    { group: 'Financeiro', title: 'Contas a Pagar', view: 'canViewPayables', edit: 'canEditPayables' },
+    { group: 'Financeiro', title: 'Tributos a Pagar', view: 'canViewTaxPayables', edit: 'canEditTaxPayables' },
+    { group: 'Financeiro', title: 'Boletos', view: 'canViewBoletos', edit: 'canEditBoletos' },
+    { group: 'Financeiro', title: 'Conciliação Bancária', view: 'canViewBankReconciliation', edit: 'canEditBankReconciliation' },
+    { group: 'Financeiro', title: 'Aprovações Financeiras', view: 'canViewFinancialApproval', edit: 'canEditFinancialApproval' },
+    { group: 'Financeiro', title: 'Cobrança Automática', view: 'canViewDunning', edit: 'canEditDunning' },
+    { group: 'Financeiro', title: 'Inteligência Financeira', view: 'canViewFinancialIntelligence' },
+    { group: 'Financeiro', title: 'Controladoria', view: 'canViewControladoria', edit: 'canEditControladoria' },
+    { group: 'Financeiro', title: 'Fiscal e NF-e', view: 'canViewFiscal', edit: 'canEditFiscal' },
+    { group: 'Financeiro', title: 'Automação', view: 'canViewAutomation', edit: 'canEditAutomation' },
+
+    // --- Comercial ---
+    { group: 'Comercial', title: 'Vendas de Ativos', view: 'canViewSales', edit: 'canEditSales' },
+    { group: 'Comercial', title: 'Locações', view: 'canViewRentals', edit: 'canEditRentals' },
+    { group: 'Comercial', title: 'Contratos de Serviço', view: 'canViewServiceContracts', edit: 'canEditServiceContracts' },
+    { group: 'Comercial', title: 'CRM de Serviços', view: 'canViewServicesCrm', edit: 'canEditServicesCrm' },
+
+    // --- Incorporação ---
+    { group: 'Incorporação', title: 'Empreendimentos', view: 'canViewDevelopments', edit: 'canEditDevelopments' },
+    { group: 'Incorporação', title: 'Mapa Regulatório', view: 'canViewRegulatoryMap', edit: 'canEditRegulatoryMap' },
+    { group: 'Incorporação', title: 'Oportunidades', view: 'canViewOpportunities', edit: 'canEditOpportunities' },
+    { group: 'Incorporação', title: 'Estudo de Massa (Planta IA)', view: 'canViewPlantaAi', edit: 'canEditPlantaAi' },
+    { group: 'Incorporação', title: 'Estudos de Viabilidade (Imovib)', view: 'canViewImovib', edit: 'canEditImovib' },
+    { group: 'Incorporação', title: 'Laudo de Avaliação', view: 'canViewAppraisal', edit: 'canEditAppraisal' },
+
+    // --- Portais ---
+    { group: 'Portais', title: 'Portal do Cliente', view: 'canViewClientPortal', edit: 'canEditClientPortal' },
+    { group: 'Portais', title: 'Portal do Investidor', view: 'canViewInvestorPortal', edit: 'canEditInvestorPortal' },
+    { group: 'Portais', title: 'Portal do Fornecedor', view: 'canViewSupplierPortal', edit: 'canEditSupplierPortal' },
+    { group: 'Portais', title: 'Portal do Corretor', view: 'canViewBrokerPortal', edit: 'canEditBrokerPortal' },
+    { group: 'Portais', title: 'Portal de Parceiros', view: 'canViewPartnerPortal', edit: 'canEditPartnerPortal' },
+
+    // --- Especialidades ÒPURA ---
+    { group: 'Especialidades ÒPURA', title: 'ÒPURA Pro', view: 'canViewPro', edit: 'canEditPro' },
+    { group: 'Especialidades ÒPURA', title: 'ÒPURA Offices', view: 'canViewOffices', edit: 'canEditOffices' },
+    { group: 'Especialidades ÒPURA', title: 'ÒPURA Reformas', view: 'canViewReformas', edit: 'canEditReformas' },
+    { group: 'Especialidades ÒPURA', title: 'ÒPURA CNO e Previdência', view: 'canViewCno', edit: 'canEditCno' },
+    { group: 'Especialidades ÒPURA', title: 'ÒPURA E-commerce / TTS', view: 'canViewEcommerce', edit: 'canEditEcommerce' },
+
+    // --- Sistema ---
+    { group: 'Sistema', title: 'Configurações', view: 'canViewSettings', edit: 'canEditSettings' },
+    { group: 'Sistema', title: 'Gestão de Usuários', view: 'canManageUsers' },
 ];
+
+// Ordem de exibição dos grupos = ordem em que aparecem na lista acima.
+const PERMISSION_GROUPS: { group: string; modules: typeof DETAILED_PERMISSIONS }[] =
+    DETAILED_PERMISSIONS.reduce((acc, module) => {
+        const bucket = acc.find(g => g.group === module.group);
+        if (bucket) bucket.modules.push(module);
+        else acc.push({ group: module.group, modules: [module] });
+        return acc;
+    }, [] as { group: string; modules: typeof DETAILED_PERMISSIONS }[]);
 
 const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     organizationId,
@@ -368,7 +573,13 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     };
 
     const handleResendInvite = async (member: OrganizationMember) => {
-        if (!organizationId) return;
+        // Ação (não leitura): o convite é sempre PARA uma organização específica.
+        // Com "Todas as organizações" selecionado não há org de destino — avisa
+        // em vez de falhar em silêncio (CLAUDE.md REGRA #5, caso 3).
+        if (!organizationId) {
+            notify('Selecione uma organização específica para reenviar o convite.', 'error');
+            return;
+        }
         const { data, error } = await supabase.functions.invoke('invite-member', {
             body: { email: member.email, name: member.name, organizationId, role: member.role, resend: true },
         });
@@ -436,6 +647,39 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 };
             }
             return m;
+        }));
+    };
+
+    /** Permissões efetivas do membro (as salvas, com o default do papel como fallback). */
+    const effectivePerms = (member: OrganizationMember): UserPermissions => ({
+        ...getDefaultPermissions(member.role),
+        ...(member.permissions || {}),
+    });
+
+    const isGroupFullyChecked = (member: OrganizationMember, modules: typeof DETAILED_PERMISSIONS) => {
+        const perms = effectivePerms(member);
+        return modules.every(mod =>
+            !!perms[mod.view as keyof UserPermissions] &&
+            (!mod.edit || !!perms[mod.edit as keyof UserPermissions])
+        );
+    };
+
+    /** Marca/desmarca de uma vez todas as permissões de um grupo de módulos. */
+    const handleToggleMemberGroup = (member: OrganizationMember, modules: typeof DETAILED_PERMISSIONS) => {
+        const next = !isGroupFullyChecked(member, modules);
+        onUpdateMembers(members.map(m => {
+            if (m.id !== member.id) return m;
+            const currentPerms = m.permissions || getDefaultPermissions(m.role);
+            const patch: Record<string, boolean> = {};
+            modules.forEach(mod => {
+                patch[mod.view] = next;
+                if (mod.edit) patch[mod.edit] = next;
+            });
+            return {
+                ...m,
+                customRoleId: undefined, // igual ao toggle individual: quebra o vínculo com o template
+                permissions: { ...currentPerms, ...patch },
+            };
         }));
     };
 
@@ -512,18 +756,19 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie membros, cargos customizados e visibilidade de módulos.</p>
             </div>
 
-            <div className="flex items-center justify-between">
-                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+            {/* §19.1 — toolbar de abas: card branco próprio + trilho bg-gray-50 */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveSubTab('members')}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeSubTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <Users className="w-4 h-4 inline mr-2" />
                         Membros
                     </button>
                     <button
                         onClick={() => setActiveSubTab('roles')}
-                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeSubTab === 'roles' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'roles' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <Briefcase className="w-4 h-4 inline mr-2" />
                         Cargos Customizados
@@ -531,7 +776,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     {isAdmin && (
                         <button
                             onClick={() => setActiveSubTab('visibility')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeSubTab === 'visibility' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'visibility' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             <Shield className="w-4 h-4 inline mr-2" />
                             Visibilidade de Módulos
@@ -602,7 +847,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
                                                         {member.name.charAt(0).toUpperCase()}
                                                     </div>
-                                                    <p className="text-sm font-normal text-gray-900">{member.name}</p>
+                                                    <p className="text-sm font-normal text-gray-700">{member.name}</p>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
@@ -670,25 +915,42 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                             <div className="text-sm font-bold text-gray-700">Permissões Detalhadas</div>
                                                             <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">Controle de Acesso por Módulo</div>
                                                         </div>
-                                                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-8 gap-x-12">
-                                                            {DETAILED_PERMISSIONS.map((module) => (
-                                                                <div key={module.title} className="space-y-4">
-                                                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">{module.title}</div>
-                                                                    <div className="space-y-2">
-                                                                        <PermissionCheckbox
-                                                                            label="Visualizar"
-                                                                            checked={!!(member.permissions?.[module.view as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.view as keyof UserPermissions])}
-                                                                            onChange={() => handleToggleMemberPermission(member.id, module.view as keyof UserPermissions)}
-                                                                            description={`Permite ver o módulo ${module.title}.`}
-                                                                        />
-                                                                        {module.edit && (
-                                                                            <PermissionCheckbox
-                                                                                label="Editar"
-                                                                                checked={!!(member.permissions?.[module.edit as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.edit as keyof UserPermissions])}
-                                                                                onChange={() => handleToggleMemberPermission(member.id, module.edit as keyof UserPermissions)}
-                                                                                description={`Permite salvar alterações no módulo ${module.title}.`}
-                                                                            />
-                                                                        )}
+                                                        <div className="p-6 space-y-8 max-h-[520px] overflow-y-auto">
+                                                            {PERMISSION_GROUPS.map((section) => (
+                                                                <div key={section.group} className="space-y-4">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="text-xs font-black text-gray-700 uppercase tracking-widest">{section.group}</div>
+                                                                        <div className="flex-1 h-px bg-gray-100" />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleToggleMemberGroup(member, section.modules)}
+                                                                            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                                                                        >
+                                                                            {isGroupFullyChecked(member, section.modules) ? 'Desmarcar tudo' : 'Marcar tudo'}
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-12">
+                                                                        {section.modules.map((module) => (
+                                                                            <div key={module.view} className="space-y-2">
+                                                                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 pb-2">{module.title}</div>
+                                                                                <div className="space-y-2">
+                                                                                    <PermissionCheckbox
+                                                                                        label="Visualizar"
+                                                                                        checked={!!(member.permissions?.[module.view as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.view as keyof UserPermissions])}
+                                                                                        onChange={() => handleToggleMemberPermission(member.id, module.view as keyof UserPermissions)}
+                                                                                        description={`Permite ver o módulo ${module.title}.`}
+                                                                                    />
+                                                                                    {module.edit && (
+                                                                                        <PermissionCheckbox
+                                                                                            label="Editar"
+                                                                                            checked={!!(member.permissions?.[module.edit as keyof UserPermissions] ?? getDefaultPermissions(member.role)[module.edit as keyof UserPermissions])}
+                                                                                            onChange={() => handleToggleMemberPermission(member.id, module.edit as keyof UserPermissions)}
+                                                                                            description={`Permite salvar alterações no módulo ${module.title}.`}
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 </div>
                                                             ))}
@@ -797,33 +1059,33 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     </div>
 
                     {/* Matriz para o produto ativo */}
-                    <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                    <div className="overflow-x-auto bg-white border border-gray-100 rounded-[10px] shadow-sm">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                    <th className="px-6 py-4 min-w-[280px]">Módulo / Recurso</th>
-                                    <th className="px-6 py-4 text-center">
+                                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500">
+                                    <th className="px-6 py-2 min-w-[280px] border-r border-gray-100">Módulo / Recurso</th>
+                                    <th className="px-6 py-2 text-center border-r border-gray-100">
                                         <div className="flex flex-col items-center gap-0.5">
                                             <span>Administrador</span>
                                             <span className="text-[9px] text-emerald-500 font-black uppercase">Sempre ativo</span>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 text-center">Membro</th>
-                                    <th className="px-6 py-4 text-center">Visualizador</th>
+                                    <th className="px-6 py-2 text-center border-r border-gray-100">Membro</th>
+                                    <th className="px-6 py-2 text-center border-r border-gray-100 last:border-r-0">Visualizador</th>
                                     {customRoles.map(role => (
-                                        <th key={role.id} className="px-6 py-4 text-center truncate max-w-[150px]">{role.name}</th>
+                                        <th key={role.id} className="px-6 py-2 text-center truncate max-w-[150px] border-r border-gray-100 last:border-r-0">{role.name}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
                                 {MODULES_BY_PRODUCT[activeProductTab].map(modItem => (
                                     <tr key={modItem.key} className="hover:bg-gray-50/40 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="text-sm font-normal text-gray-900">{modItem.label}</div>
+                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                            <div className="text-sm font-normal text-gray-700">{modItem.label}</div>
                                             <div className="text-xs text-gray-400 font-medium">{modItem.description}</div>
                                         </td>
                                         {/* Admin: sempre habilitado */}
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-6 py-2.5 text-center border-r border-gray-100">
                                             <div className="flex justify-center">
                                                 <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
                                                     <Check className="w-3 h-3 text-emerald-600" />
@@ -831,7 +1093,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             </div>
                                         </td>
                                         {/* Membro */}
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-6 py-2.5 text-center border-r border-gray-100">
                                             <div className="flex justify-center">
                                                 <input type="checkbox"
                                                     checked={getVisibility('member', modItem.key)}
@@ -841,7 +1103,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             </div>
                                         </td>
                                         {/* Visualizador */}
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-6 py-2.5 text-center border-r border-gray-100 last:border-r-0">
                                             <div className="flex justify-center">
                                                 <input type="checkbox"
                                                     checked={getVisibility('viewer', modItem.key)}
@@ -852,7 +1114,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         </td>
                                         {/* Cargos customizados */}
                                         {customRoles.map(role => (
-                                            <td key={role.id} className="px-6 py-4 text-center">
+                                            <td key={role.id} className="px-6 py-2.5 text-center border-r border-gray-100 last:border-r-0">
                                                 <div className="flex justify-center">
                                                     <input type="checkbox"
                                                         checked={getVisibility(role.id, modItem.key)}
@@ -1020,25 +1282,35 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 <div className="space-y-4">
                                     <label className="block text-sm font-medium text-gray-700">Revisão de Permissões</label>
                                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12 max-h-[400px] overflow-y-auto">
-                                            {DETAILED_PERMISSIONS.map((module) => (
-                                                <div key={module.title} className="space-y-4">
-                                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
-                                                    <div className="space-y-2">
-                                                        <PermissionCheckbox
-                                                            label="Visualizar"
-                                                            checked={!!newMemberPermissions[module.view as keyof UserPermissions]}
-                                                            onChange={() => togglePermission(module.view as keyof UserPermissions)}
-                                                            description=""
-                                                        />
-                                                        {module.edit && (
-                                                            <PermissionCheckbox
-                                                                label="Editar"
-                                                                checked={!!newMemberPermissions[module.edit as keyof UserPermissions]}
-                                                                onChange={() => togglePermission(module.edit as keyof UserPermissions)}
-                                                                description=""
-                                                            />
-                                                        )}
+                                        <div className="p-6 space-y-8 max-h-[400px] overflow-y-auto">
+                                            {PERMISSION_GROUPS.map((section) => (
+                                                <div key={section.group} className="space-y-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="text-xs font-black text-gray-700 uppercase tracking-widest">{section.group}</div>
+                                                        <div className="flex-1 h-px bg-gray-200" />
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12">
+                                                        {section.modules.map((module) => (
+                                                            <div key={module.view} className="space-y-2">
+                                                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
+                                                                <div className="space-y-2">
+                                                                    <PermissionCheckbox
+                                                                        label="Visualizar"
+                                                                        checked={!!newMemberPermissions[module.view as keyof UserPermissions]}
+                                                                        onChange={() => togglePermission(module.view as keyof UserPermissions)}
+                                                                        description=""
+                                                                    />
+                                                                    {module.edit && (
+                                                                        <PermissionCheckbox
+                                                                            label="Editar"
+                                                                            checked={!!newMemberPermissions[module.edit as keyof UserPermissions]}
+                                                                            onChange={() => togglePermission(module.edit as keyof UserPermissions)}
+                                                                            description=""
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             ))}
@@ -1091,31 +1363,62 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 <div className="space-y-3">
                                     <label className="block text-sm font-medium text-gray-700">Permissões do Template</label>
                                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                                        <div className="p-6 grid grid-cols-1 gap-y-8 max-h-[400px] overflow-y-auto">
-                                            {DETAILED_PERMISSIONS.map((module) => (
-                                                <div key={module.title} className="space-y-4">
-                                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
-                                                    <div className="space-y-2">
-                                                        <PermissionCheckbox
-                                                            label="Visualizar"
-                                                            checked={!!roleFormData.permissions[module.view as keyof UserPermissions]}
-                                                            onChange={() => setRoleFormData(prev => ({
-                                                                ...prev,
-                                                                permissions: { ...prev.permissions, [module.view as keyof UserPermissions]: !prev.permissions[module.view as keyof UserPermissions] }
-                                                            }))}
-                                                            description=""
-                                                        />
-                                                        {module.edit && (
-                                                            <PermissionCheckbox
-                                                                label="Editar"
-                                                                checked={!!roleFormData.permissions[module.edit as keyof UserPermissions]}
-                                                                onChange={() => setRoleFormData(prev => ({
-                                                                    ...prev,
-                                                                    permissions: { ...prev.permissions, [module.edit as keyof UserPermissions]: !prev.permissions[module.edit as keyof UserPermissions] }
-                                                                }))}
-                                                                description=""
-                                                            />
-                                                        )}
+                                        <div className="p-6 space-y-8 max-h-[400px] overflow-y-auto">
+                                            {PERMISSION_GROUPS.map((section) => (
+                                                <div key={section.group} className="space-y-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="text-xs font-black text-gray-700 uppercase tracking-widest">{section.group}</div>
+                                                        <div className="flex-1 h-px bg-gray-200" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setRoleFormData(prev => {
+                                                                const next = !section.modules.every(mod =>
+                                                                    !!prev.permissions[mod.view as keyof UserPermissions] &&
+                                                                    (!mod.edit || !!prev.permissions[mod.edit as keyof UserPermissions])
+                                                                );
+                                                                const patch: Record<string, boolean> = {};
+                                                                section.modules.forEach(mod => {
+                                                                    patch[mod.view] = next;
+                                                                    if (mod.edit) patch[mod.edit] = next;
+                                                                });
+                                                                return { ...prev, permissions: { ...prev.permissions, ...patch } };
+                                                            })}
+                                                            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                                                        >
+                                                            {section.modules.every(mod =>
+                                                                !!roleFormData.permissions[mod.view as keyof UserPermissions] &&
+                                                                (!mod.edit || !!roleFormData.permissions[mod.edit as keyof UserPermissions])
+                                                            ) ? 'Desmarcar tudo' : 'Marcar tudo'}
+                                                        </button>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12">
+                                                        {section.modules.map((module) => (
+                                                            <div key={module.view} className="space-y-2">
+                                                                <div className="text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-2">{module.title}</div>
+                                                                <div className="space-y-2">
+                                                                    <PermissionCheckbox
+                                                                        label="Visualizar"
+                                                                        checked={!!roleFormData.permissions[module.view as keyof UserPermissions]}
+                                                                        onChange={() => setRoleFormData(prev => ({
+                                                                            ...prev,
+                                                                            permissions: { ...prev.permissions, [module.view as keyof UserPermissions]: !prev.permissions[module.view as keyof UserPermissions] }
+                                                                        }))}
+                                                                        description=""
+                                                                    />
+                                                                    {module.edit && (
+                                                                        <PermissionCheckbox
+                                                                            label="Editar"
+                                                                            checked={!!roleFormData.permissions[module.edit as keyof UserPermissions]}
+                                                                            onChange={() => setRoleFormData(prev => ({
+                                                                                ...prev,
+                                                                                permissions: { ...prev.permissions, [module.edit as keyof UserPermissions]: !prev.permissions[module.edit as keyof UserPermissions] }
+                                                                            }))}
+                                                                            description=""
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             ))}

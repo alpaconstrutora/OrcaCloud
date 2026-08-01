@@ -271,6 +271,152 @@ export interface UserPermissions {
     canViewRentals?: boolean;
     canViewStructural?: boolean;
     canViewEcommerceModule?: boolean;
+
+    // --- Geral ---
+    canViewCommandCenter?: boolean;
+    canViewTasks?: boolean;
+    canEditTasks?: boolean;
+    canViewNotifications?: boolean;
+
+    // --- Inteligência de Negócios ---
+    canViewBi?: boolean;
+    canViewOpuraReports?: boolean;
+    canViewCentralObra?: boolean;
+    canViewCentralCliente?: boolean;
+    canViewCentralFornecedor?: boolean;
+    canViewMarket?: boolean;
+    canViewGovernance?: boolean;
+    canEditGovernance?: boolean;
+
+    // --- Corporativo / Organização ---
+    canViewOrganization?: boolean;
+    canEditOrganization?: boolean;
+    canViewClients?: boolean;
+    canEditClients?: boolean;
+    canViewSuppliers?: boolean;
+    canEditSuppliers?: boolean;
+    canViewInvestors?: boolean;
+    canEditInvestors?: boolean;
+    canViewBankAccounts?: boolean;
+    canEditBankAccounts?: boolean;
+    canViewCostCenters?: boolean;
+    canEditCostCenters?: boolean;
+    canViewChartOfAccounts?: boolean;
+    canEditChartOfAccounts?: boolean;
+    canViewAssets?: boolean;
+    canEditAssets?: boolean;
+    canViewDocs?: boolean;
+    canEditDocs?: boolean;
+    canViewProcesses?: boolean;
+    canEditProcesses?: boolean;
+    canViewMasterData?: boolean;
+    canEditMasterData?: boolean;
+
+    // --- Engenharia ---
+    canViewProjects?: boolean;
+    canEditProjects?: boolean;
+    canViewMeasureAi?: boolean;
+    canEditMeasureAi?: boolean;
+    canEditStructural?: boolean;
+    canViewElectrical?: boolean;
+    canEditElectrical?: boolean;
+    canViewAreaEngine?: boolean;
+    canEditAreaEngine?: boolean;
+    canViewProjectTemplates?: boolean;
+    canEditProjectTemplates?: boolean;
+
+    // --- Operação de Obra ---
+    canViewOperational?: boolean;
+    canEditOperational?: boolean;
+    canEditQuality?: boolean;
+    canViewWarranty?: boolean;
+    canEditWarranty?: boolean;
+
+    // --- Recursos Humanos ---
+    canEditLabor?: boolean;
+    canViewPayroll?: boolean;
+    canEditPayroll?: boolean;
+    canViewTimeTracking?: boolean;
+    canEditTimeTracking?: boolean;
+    canViewEsocial?: boolean;
+    canEditEsocial?: boolean;
+    canViewSst?: boolean;
+    canEditSst?: boolean;
+    canViewIncentives?: boolean;
+    canEditIncentives?: boolean;
+    canViewPartnerComp?: boolean;
+    canEditPartnerComp?: boolean;
+    canViewRecruitment?: boolean;
+    canEditRecruitment?: boolean;
+
+    // --- Suprimentos ---
+    canViewP2P?: boolean;
+    canEditP2P?: boolean;
+    canViewProcurementPlan?: boolean;
+    canEditProcurementPlan?: boolean;
+    canViewSupplyContracts?: boolean;
+    canEditSupplyContracts?: boolean;
+    canViewQuotations?: boolean;
+    canEditQuotations?: boolean;
+    canViewInventory?: boolean;
+    canEditInventory?: boolean;
+
+    // --- Financeiro ---
+    canViewFpa?: boolean;
+    canEditFpa?: boolean;
+    canViewReceivables?: boolean;
+    canEditReceivables?: boolean;
+    canViewPayables?: boolean;
+    canEditPayables?: boolean;
+    canViewTaxPayables?: boolean;
+    canEditTaxPayables?: boolean;
+    canViewBoletos?: boolean;
+    canEditBoletos?: boolean;
+    canViewBankReconciliation?: boolean;
+    canEditBankReconciliation?: boolean;
+    canViewFinancialApproval?: boolean;
+    canEditFinancialApproval?: boolean;
+    canViewDunning?: boolean;
+    canEditDunning?: boolean;
+    canViewFinancialIntelligence?: boolean;
+    canViewControladoria?: boolean;
+    canEditControladoria?: boolean;
+    canEditFiscal?: boolean;
+    canViewAutomation?: boolean;
+    canEditAutomation?: boolean;
+
+    // --- Comercial ---
+    canEditSales?: boolean;
+    canEditRentals?: boolean;
+    canViewServiceContracts?: boolean;
+    canEditServiceContracts?: boolean;
+    canViewServicesCrm?: boolean;
+    canEditServicesCrm?: boolean;
+
+    // --- Incorporação ---
+    canViewDevelopments?: boolean;
+    canEditDevelopments?: boolean;
+    canViewRegulatoryMap?: boolean;
+    canEditRegulatoryMap?: boolean;
+    canViewOpportunities?: boolean;
+    canEditOpportunities?: boolean;
+    canViewPlantaAi?: boolean;
+    canEditPlantaAi?: boolean;
+    canEditImovib?: boolean;
+    canViewAppraisal?: boolean;
+    canEditAppraisal?: boolean;
+
+    // --- Portais ---
+    canViewPartnerPortal?: boolean;
+    canEditPartnerPortal?: boolean;
+
+    // --- Especialidades ÒPURA ---
+    canEditPro?: boolean;
+    canEditOffices?: boolean;
+    canViewReformas?: boolean;
+    canEditReformas?: boolean;
+    canViewCno?: boolean;
+    canEditCno?: boolean;
 }
 
 export interface OrganizationCustomRole {

@@ -1,8 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Property, PropertyDeal, PropertyStatus, DealUnit } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
-import { projectService } from './projectService';
-import { financialSyncService } from './financialSyncService';
+import { dealInstallmentService } from './dealInstallmentService';
 import { taxPayableService } from './taxPayableService';
 
 /**
@@ -666,14 +665,47 @@ export const commercialService = {
         // gerado ainda, trava a unidade — decisão do usuário 2026-07-19 (unidade com
         // negociação pendente aparecia como "Disponível" em Gestão de Unidades).
         const RESERVA_STATUSES = ['PENDING', 'APPROVED', 'WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA'];
-        // Estágios que geram lançamentos em Contas a Receber. DEVE bater com
-        // `allowedStatuses` de syncDealToFinance (commercialFinanceService) — as duas
-        // listas eram inconsistentes e por isso PENDING nunca lançava e RESERVA/CONTRATO/
-        // ASSINATURA eram chamados mas rejeitados.
-        const FINANCIAL_STATUSES = ['COMPLETED', ...RESERVA_STATUSES];
+        // Estágios ATIVOS do negócio (unidade reservada, tributos gerados).
+        //
+        // ⚠️ Esta lista NÃO gera mais lançamento em Contas a Receber. Até
+        // 2026-08-01 ela se chamava FINANCIAL_STATUSES e publicava as parcelas
+        // automaticamente: bastava salvar em PENDING/RESERVA para o plano de
+        // pagamento — que serve para montar a PROPOSTA — virar recebível de um
+        // negócio que ainda não fechou. Era a maior fonte de confusão do módulo.
+        // Publicar agora é ação explícita do usuário, pelo botão "Enviar ao
+        // Contas a Receber" da aba Parcelas (dealInstallmentService).
+        // NÃO reintroduza o sync aqui.
+        const ACTIVE_STATUSES = ['COMPLETED', ...RESERVA_STATUSES];
 
-        // Gera/atualiza o financeiro em qualquer estágio ativo (não só reserva/conclusão)
-        if (FINANCIAL_STATUSES.includes(result.status)) {
+        // O plano de pagamento persiste em QUALQUER status — inclusive
+        // IN_NEGOTIATION (Proposta). Antes ele só sobrevivia porque era espelhado
+        // no JSONB `custom_installments`; agora a fonte da verdade é a tabela
+        // `deal_installments` (migration 20270849000000).
+        const planOrgId = result.organization_id || dbPayload.organization_id;
+        if (planOrgId) {
+            try {
+                await dealInstallmentService.saveForDeal(
+                    result.id,
+                    planOrgId,
+                    deal.custom_installments,
+                    deal.down_payment ?? result.down_payment ?? 0,
+                    {
+                        dealType: result.type,
+                        date: result.date,
+                        costCenterId: (result as any).cost_center_id ?? deal.cost_center_id ?? null,
+                        planoDeContasId: (result as any).plano_de_contas_id ?? deal.plano_de_contas_id ?? null,
+                        downPaymentPaymentType: deal.down_payment_payment_type ?? null,
+                        downPaymentInstallmentType: deal.down_payment_installment_type ?? null,
+                        downPaymentNotes: deal.down_payment_notes ?? null,
+                    },
+                );
+            } catch (e) {
+                console.error('[COMMERCIAL SERVICE] Falha ao salvar o plano de parcelas:', e);
+            }
+        }
+
+        // Estágio ativo: atualiza unidade e tributos. Financeiro NÃO — ver acima.
+        if (ACTIVE_STATUSES.includes(result.status)) {
             try {
                 // Atualizar status do imóvel em qualquer estágio ativo (inclusive PENDING).
                 // TODAS as unidades do contrato mudam de estado, não só a principal.
@@ -705,39 +737,12 @@ export const commercialService = {
 
                 // 0.1 — passa organization_id explicitamente para evitar vazamento cross-tenant
                 const orgId = result.organization_id || dbPayload.organization_id;
-                if (!orgId) throw new Error('[COMMERCIAL SERVICE] organization_id ausente — impossível sincronizar financeiro.');
-                const syncResult = await commercialFinanceService.syncDealToFinance(finalDealToSync, orgId);
-                
-                // PERSISTÊNCIA IMEDIATA: Gravar as parcelas calculadas no cofre financeiro
-                // Antes, o resultado do syncDealToFinance era descartado, e o Global Sync posterior
-                // (com isGlobalSync=true) preservava parcelas antigas em vez de usar as novas.
-                if (syncResult && syncResult.commercialProject) {
-                    const { installments, transactions, commercialProject: targetProject } = syncResult;
-                    const updatedSettings = {
-                        ...targetProject.settings,
-                        financialInfo: {
-                            ...(targetProject.settings?.financialInfo || {}),
-                            installments,
-                            transactions
-                        }
-                    };
-                    await projectService.saveProject({
-                        ...targetProject,
-                        settings: updatedSettings
-                    });
-                    console.log(`[COMMERCIAL SERVICE] Financial sync PERSISTED: ${installments.length} installments saved to Vault`);
+                if (!orgId) throw new Error('[COMMERCIAL SERVICE] organization_id ausente.');
 
-                    // Materializa JÁ as parcelas em internal_transactions (Contas a
-                    // Receber / Conciliação). Sem isto, as parcelas ficavam só no vault
-                    // e só apareciam em Contas a Receber depois de abrir a Conciliação
-                    // Bancária (única tela que disparava o sync). Upsert idempotente.
-                    try {
-                        await financialSyncService.syncFinancialData(
-                            { ...targetProject, settings: updatedSettings }, orgId);
-                    } catch (e) {
-                        console.error('[COMMERCIAL SERVICE] Falha ao materializar parcelas em Contas a Receber:', e);
-                    }
-                }
+                // ⚠️ NÃO chame syncDealToFinance / syncFinancialData aqui.
+                // Salvar a negociação não publica parcela em Contas a Receber —
+                // quem publica é o botão "Enviar ao Contas a Receber" da aba
+                // Parcelas (dealInstallmentService.publishToReceivables).
 
                 // Tributos a Pagar: gera/atualiza os tributos (IRRF/PIS/COFINS/CSLL…)
                 // deste negócio de Venda de Ativo/Locação a partir de tax_settings.
@@ -766,10 +771,15 @@ export const commercialService = {
                         .in('id', units.map(u => u.property_id))
                         .then(() => console.log(`[COMMERCIAL SERVICE] ${units.length} unidade(s) revertida(s) para AVAILABLE (distrato)`))
                     : Promise.resolve(),
-                // (b) Estorna parcelas pendentes do vault (deleteDealInstallments ignora PAID, remove PENDING)
+                // (b) Estorna parcelas pendentes do vault legado (ignora PAID)
                 cancelOrgId
                     ? commercialFinanceService.deleteDealInstallments(result.id, cancelOrgId)
                         .then(() => console.log(`[COMMERCIAL SERVICE] Installments reversed for deal ${result.id} (distrato)`))
+                    : Promise.resolve(),
+                // (b2) Série única: tira de Contas a Receber o que ainda não foi
+                //      recebido e marca o resto como CANCELADA (auditável).
+                cancelOrgId
+                    ? dealInstallmentService.cancelForDeal(result.id, cancelOrgId)
                     : Promise.resolve(),
                 // (c) Estorna tributos a pagar pendentes deste negócio
                 cancelOrgId

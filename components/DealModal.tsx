@@ -19,6 +19,8 @@ import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
+import { dealInstallmentService } from '../services/dealInstallmentService';
+import { SETTLEMENT_LABEL, SettlementStatus } from '../types/dealInstallment';
 import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
 import { buildRentalResolveContext } from '../services/rentalDocumentContextService';
 import EmitDocumentModal from './EmitDocumentModal';
@@ -276,9 +278,9 @@ interface DealModalProps {
     initialTab?: string;
 }
 
-// Mesmas colunas nas duas séries da aba Parcelas (plano de pagamento e parcelas
-// do contrato) — ver comentário em torno de contractEntries: elas têm que ler
-// igual, então compartilham a mesma configuração de colunas visíveis.
+// Colunas da aba Parcelas. A aba tem UMA tabela só desde 2026-08-01: plano da
+// negociação, Entrada e parcelas de contrato dividem a mesma lista, separadas
+// pela coluna "Origem".
 /** Larguras iniciais das colunas da aba Parcelas (§6.1). Chutes de partida — o
  *  botão de auto-ajuste (§6.1.2) mede o conteúdo real e corrige. */
 const PARCELAS_COL_WIDTHS: Record<string, number> = {
@@ -286,6 +288,8 @@ const PARCELAS_COL_WIDTHS: Record<string, number> = {
     valor: 120,
     desconto: 170,
     valor_final: 120,
+    situacao: 120,
+    origem: 170,
     tipo: 150,
     forma_pagto: 150,
     centro_custo: 190,
@@ -299,6 +303,13 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'valor', label: 'Valor', sortable: false },
     { key: 'desconto', label: 'Desconto', sortable: false },
     { key: 'valor_final', label: 'Valor final', sortable: false },
+    // Situação da parcela em Contas a Receber. Existe porque salvar a negociação
+    // deixou de publicar sozinho (2026-08-01): sem esta coluna o usuário não
+    // teria como saber o que já virou cobrança e o que ainda é só plano.
+    { key: 'situacao', label: 'Situação', sortable: false },
+    // De onde a linha vem, agora que a aba tem UMA tabela: o plano da negociação
+    // ou um contrato (renovação/aditivo). Substituiu o seletor "Ver parcelas de".
+    { key: 'origem', label: 'Origem', sortable: false },
     { key: 'tipo', label: 'Tipo', sortable: false },
     { key: 'forma_pagto', label: 'Forma pagto.', sortable: false },
     // Herdadas do cabeçalho (aba Forma de Pagamento) — leitura, sem edição por
@@ -308,6 +319,20 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'descricao', label: 'Descrição', sortable: false },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+/**
+ * Situação da parcela em Contas a Receber. §8 puro — texto colorido, sem
+ * pílula, sem fundo, sem uppercase.
+ */
+const SituacaoParcela: React.FC<{ status: SettlementStatus }> = ({ status }) => {
+    const cor: Record<SettlementStatus, string> = {
+        NAO_LANCADA: 'text-gray-500',
+        LANCADA: 'text-blue-700',
+        RECEBIDA: 'text-green-800',
+        CANCELADA: 'text-red-600',
+    };
+    return <span className={`text-sm font-normal ${cor[status]}`}>{SETTLEMENT_LABEL[status]}</span>;
+};
 
 const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab }) => {
     const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
@@ -416,6 +441,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const notifyError = (message: string) => {
         setErrorNotice(message);
         setTimeout(() => setErrorNotice(null), 5000);
+    };
+    /** Toast verde com mensagem livre (§13) — o `savedNotice` é fixo em "salva
+     *  com sucesso" e não serve para o relatório de publicação de parcelas. */
+    const [successNotice, setSuccessNotice] = useState<string | null>(null);
+    const notifySuccess = (message: string) => {
+        setSuccessNotice(message);
+        setTimeout(() => setSuccessNotice(null), 6000);
     };
     const [org, setOrg] = useState<Organization | null>(null);
 
@@ -621,16 +653,39 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [generateTargets, setGenerateTargets] = useState<GenerateTarget[]>([]);
     const alvoSelecionado = generateTargets.find(t => t.id === generateTarget);
     const [generateResult, setGenerateResult] = useState<{ ok: boolean; msg: string } | null>(null);
-    // Aba Parcelas: qual série está sendo exibida — 'DEAL' (plano de pagamento
-    // da negociação) ou um contrato (parcelas em Contas a Receber). São origens
-    // diferentes, e antes só a primeira tinha tela.
-    const [viewTarget, setViewTarget] = useState<string>('DEAL');
+    // Parcelas que os CONTRATOS do negócio já lançaram em Contas a Receber.
+    // Entram na MESMA tabela do plano de pagamento, distinguidas pela coluna
+    // "Origem" — até 2026-08-01 viviam numa segunda tabela, atrás de um seletor
+    // "Ver parcelas de" que escondia metade da informação.
     const [contractEntries, setContractEntries] = useState<{
-        id: string; transaction_date: string; amount: number; status: string; description: string | null;
+        id: string; reference_id?: string | null;
+        transaction_date: string; amount: number; status: string; description: string | null;
         original_amount?: number | null; discount_type?: string | null; discount_amount?: number | null;
         installment_type?: string | null; payment_type?: string | null;
+        /** Rótulo do contrato de origem — alimenta a coluna "Origem" da série única. */
+        __origem?: string;
     }[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
+    /* Série única (`deal_installments`): situação de cada parcela em Contas a
+       Receber. Indexada pelo `reference_id` porque o plano na tela ainda
+       trabalha com ids temporários — a chave estável é `tx-{deal}-custom-p{n}`
+       / `tx-{deal}-dp`, a mesma do upsert no financeiro. */
+    const [situacaoPorRef, setSituacaoPorRef] = useState<Record<string, SettlementStatus>>({});
+    /** `reference_id` → id da linha em `deal_installments`, para publicar/remover
+     *  apenas a seleção (a tabela da tela ainda trabalha com ids temporários). */
+    const [idPorRef, setIdPorRef] = useState<Record<string, string>>({});
+    const [publishing, setPublishing] = useState(false);
+    const refDaParcela = (index: number) => `tx-${formData.id}-custom-p${index + 1}`;
+    const refDaEntrada = () => `tx-${formData.id}-dp`;
+    /** Quantas linhas do plano ainda NÃO viraram cobrança — rótulo do botão. */
+    const naoLancadas = useMemo(() => {
+        const refs = (formData.custom_installments || []).map((_, i) => `tx-${formData.id}-custom-p${i + 1}`);
+        if ((formData.down_payment || 0) > 0) refs.push(`tx-${formData.id}-dp`);
+        return refs.filter(r => (situacaoPorRef[r] ?? 'NAO_LANCADA') === 'NAO_LANCADA').length;
+    }, [formData.custom_installments, formData.down_payment, formData.id, situacaoPorRef]);
+    const temLancadas = useMemo(
+        () => Object.values(situacaoPorRef).some(s => s === 'LANCADA' || s === 'RECEBIDA'),
+        [situacaoPorRef]);
     // Dimensões contábeis do cabeçalho (aba Forma de Pagamento). São DUAS
     // dimensões distintas — Centro de Custo é `cost_centers_v2`, Plano de Contas
     // é `plano_de_contas` (ver migration 20270822000013). Não intercambiáveis.
@@ -975,23 +1030,111 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, linkedContract]);
 
+    /** Relê a situação das parcelas na série única (traz de volta baixas feitas
+     *  em Contas a Receber / pelo webhook do Asaas). */
+    const recarregarSituacoes = useCallback(async () => {
+        const dealId = formData.id;
+        const orgId = formData.organization_id || organizationId;
+        if (!dealId || !orgId) { setSituacaoPorRef({}); setIdPorRef({}); return; }
+        try {
+            await dealInstallmentService.refreshSettlementStatus(dealId, orgId);
+            const rows = await dealInstallmentService.listByDeal(dealId, orgId);
+            setSituacaoPorRef(Object.fromEntries(rows.map(r => [r.referenceId, r.settlementStatus])));
+            setIdPorRef(Object.fromEntries(rows.map(r => [r.referenceId, r.id])));
+        } catch (e) {
+            console.error('[DealModal] Erro ao ler a situação das parcelas:', e);
+        }
+    }, [formData.id, formData.organization_id, organizationId]);
+
     useEffect(() => {
-        // Trocar de série zera a seleção: manter ids de outra lista deixaria a
-        // barra de lote contando parcelas que não estão mais na tela.
+        if (activeTab === 'parcelas') void recarregarSituacoes();
+    }, [activeTab, recarregarSituacoes]);
+
+    /**
+     * "Enviar ao Contas a Receber" — a publicação é EXPLÍCITA desde 2026-08-01.
+     * Antes, salvar a negociação já materializava as parcelas do plano (que serve
+     * para montar a proposta) como recebíveis de um negócio ainda não fechado.
+     */
+    const handlePublicarParcelas = async (onlyIds?: string[]) => {
+        const dealId = formData.id;
+        const orgId = formData.organization_id || organizationId;
+        if (!dealId || !orgId) {
+            notifyError('Salve a negociação antes de enviar as parcelas ao Contas a Receber.');
+            return;
+        }
+        const quantas = onlyIds?.length ?? naoLancadas;
+        const ok = await confirm({
+            title: 'Enviar ao Contas a Receber?',
+            message: `${quantas} parcela(s) serão lançadas como recebíveis previstos. Você pode removê-las depois, desde que ainda não tenham sido recebidas.`,
+            variant: 'default',
+            confirmLabel: 'Enviar',
+        });
+        if (!ok) return;
+        setPublishing(true);
+        try {
+            const r = await dealInstallmentService.publishToReceivables(dealId, orgId, { onlyIds });
+            await recarregarSituacoes();
+            notifySuccess(
+                `${r.published} parcela(s) enviada(s) ao Contas a Receber.`
+                + (r.alreadyPublished > 0 ? ` ${r.alreadyPublished} já estavam lançadas.` : ''));
+        } catch (e) {
+            notifyError(e instanceof Error ? e.message : 'Erro ao enviar as parcelas.');
+        } finally {
+            setPublishing(false);
+        }
+    };
+
+    /** Contrapartida. Parcela já recebida/conciliada é preservada e NOMEADA no
+     *  toast — dizer "algumas foram preservadas" obrigaria a ir conferir. */
+    const handleRemoverDoContasAReceber = async (onlyIds?: string[]) => {
+        const dealId = formData.id;
+        const orgId = formData.organization_id || organizationId;
+        if (!dealId || !orgId) return;
+        const ok = await confirm({
+            title: 'Remover do Contas a Receber?',
+            message: 'As parcelas voltam a ser apenas plano de pagamento. Parcelas já recebidas ou conciliadas permanecem no financeiro.',
+            variant: 'warning',
+            confirmLabel: 'Remover',
+        });
+        if (!ok) return;
+        setPublishing(true);
+        try {
+            const r = await dealInstallmentService.unpublishFromReceivables(dealId, orgId, { onlyIds });
+            await recarregarSituacoes();
+            const preservadas = r.blocked.length > 0
+                ? ` Preservada(s): ${r.blocked.map(b => b.description).join(', ')}.`
+                : '';
+            notifySuccess(`${r.removed} parcela(s) removida(s) do Contas a Receber.${preservadas}`);
+        } catch (e) {
+            notifyError(e instanceof Error ? e.message : 'Erro ao remover as parcelas.');
+        } finally {
+            setPublishing(false);
+        }
+    };
+
+    useEffect(() => {
+        // SÉRIE ÚNICA (2026-08-01): a aba tem UMA tabela só. Antes existia um
+        // seletor "Ver parcelas de" que alternava entre o plano da negociação e
+        // as parcelas de cada contrato — duas origens, duas tabelas, que nunca
+        // se reconciliavam. Agora as parcelas de TODOS os contratos do negócio
+        // são carregadas de uma vez e entram na mesma lista, distinguidas pela
+        // coluna "Origem".
         setSelectedEntryIds(new Set());
         setLastEntryIndex(null);
-        if (viewTarget === 'DEAL') { setContractEntries([]); return; }
-        const alvo = generateTargets.find(t => t.id === viewTarget);
-        if (!alvo) return;
+        const alvos = generateTargets.filter(t => t.kind === 'CONTRACT');
+        if (alvos.length === 0) { setContractEntries([]); return; }
         let ativo = true;
         setLoadingEntries(true);
-        contractService.listFinancialEntries(alvo.contract)
-            .then(rows => { if (ativo) setContractEntries(rows); })
-            .catch(e => console.error('[DealModal] Erro ao listar parcelas do contrato:', e))
+        Promise.all(alvos.map(a =>
+            contractService.listFinancialEntries(a.contract)
+                .then(rows => rows.map(r => ({ ...r, __origem: a.label as string })))
+                .catch(e => { console.error('[DealModal] Erro ao listar parcelas do contrato:', e); return []; })
+        ))
+            .then(listas => { if (ativo) setContractEntries(listas.flat()); })
             .finally(() => { if (ativo) setLoadingEntries(false); });
         return () => { ativo = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [viewTarget, generateTargets]);
+    }, [generateTargets]);
 
     /**
      * Edita uma parcela do contrato. Atualiza a tela na hora (otimista) e grava;
@@ -1024,10 +1167,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         void contractService.updateFinancialEntry(entryId, patch)
             .then(async () => {
                 if (!recalcula) return;
-                const alvo = generateTargets.find(t => t.id === viewTarget);
-                if (!alvo) return;
-                const rows = await contractService.listFinancialEntries(alvo.contract);
-                setContractEntries(rows);
+                const rows = await recarregarParcelasDeContratos();
                 if (mexeuNoDesconto) {
                     await perguntarCorrigirTotalContrato(
                         rows.reduce((s, r) => s + (Number(r.amount) || 0), 0));
@@ -1035,10 +1175,28 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             })
             .catch(async (err) => {
                 notifyError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
-                const alvo = generateTargets.find(t => t.id === viewTarget);
-                if (alvo) setContractEntries(await contractService.listFinancialEntries(alvo.contract));
+                await recarregarParcelasDeContratos();
             });
     };
+
+    /**
+     * Relê as parcelas de TODOS os contratos do negócio. Com a série única não
+     * existe mais "contrato em exibição": a tabela mostra todos de uma vez, então
+     * qualquer recarga é a lista inteira. Devolve as linhas para quem precisa
+     * somar (ex.: conferir o total do contrato depois de um desconto).
+     */
+    const recarregarParcelasDeContratos = useCallback(async () => {
+        const alvos = generateTargets.filter(t => t.kind === 'CONTRACT');
+        if (alvos.length === 0) { setContractEntries([]); return []; }
+        const listas = await Promise.all(alvos.map(a =>
+            contractService.listFinancialEntries(a.contract)
+                .then(rows => rows.map(r => ({ ...r, __origem: a.label as string })))
+                .catch(() => [])
+        ));
+        const todas = listas.flat();
+        setContractEntries(todas);
+        return todas;
+    }, [generateTargets]);
 
     /** Seleção com intervalo por Shift+clique — mesmo comportamento do plano. */
     const handleEntryRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean, visiveis: string[]) => {
@@ -1078,10 +1236,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     ...(patch.installmentType !== undefined ? { installment_type: patch.installmentType || null } : {}),
                 });
             }
-            const alvo = generateTargets.find(t => t.id === viewTarget);
-            if (alvo) {
-                const rows = await contractService.listFinancialEntries(alvo.contract);
-                setContractEntries(rows);
+            const rows = await recarregarParcelasDeContratos();
+            if (rows.length > 0) {
                 // Mesmo desvio do desconto avulso: a soma cobrada deixa de bater
                 // com o total acordado, e quem decide é o usuário.
                 await perguntarCorrigirTotalContrato(
@@ -1205,10 +1361,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // (perdendo descontos e ajustes manuais nelas), pergunta antes — §14.
         // Parcela paga/conciliada não é tocada e é dita na pergunta, senão o
         // usuário confirmaria achando que perde o histórico do que já recebeu.
-        const jaExistem = contractEntries.length > 0 && viewTarget === target.id;
-        if (jaExistem) {
-            const previstas = contractEntries.filter(e => e.status === 'PENDING').length;
-            const pagas = contractEntries.length - previstas;
+        // Série única: a tabela traz as parcelas de TODOS os contratos, então a
+        // contagem tem que ser filtrada pelo contrato em questão (o reference_id
+        // sempre começa pelo id dele) — antes bastava comparar com o contrato
+        // selecionado no seletor, que não existe mais.
+        const desteContrato = contractEntries.filter(e => (e.reference_id || '').startsWith(target.id));
+        if (desteContrato.length > 0) {
+            const previstas = desteContrato.filter(e => e.status === 'PENDING').length;
+            const pagas = desteContrato.length - previstas;
             const ok = await confirm({
                 title: 'Refazer as parcelas deste contrato?',
                 message: `As ${previstas} parcela(s) ainda previstas serão apagadas e recriadas com o valor e a quantidade atuais da aba Forma de Pagamento. `
@@ -1250,13 +1410,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     msg: `${r.inserted} parcela(s) geradas em Contas a Receber para ${target.label}, de ${fmtDateBR(ini)} a ${fmtDateBR(fim)}.`
                         + (r.removed > 0 ? ` ${r.removed} parcela(s) previstas foram refeitas.` : '')
                         + (r.skipped > 0 ? ` ${r.skipped} já paga(s)/conciliada(s) foram mantidas.` : '')
-                        + ' Elas não aparecem na aba Parcelas: lá fica o plano de pagamento da negociação.',
+                        + ' Elas aparecem nesta mesma tabela, com Origem = ' + target.label + '.',
                 }
                 : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(ini)} a ${fmtDateBR(fim)}) já estão pagas ou conciliadas e não são refeitas.` });
             // A tabela na tela ficou desatualizada depois do refazimento.
-            if (viewTarget === target.id) {
-                setContractEntries(await contractService.listFinancialEntries(target.contract));
-            }
+            await recarregarParcelasDeContratos();
         } catch (e) {
             // Log detalhado: o erro do PostgREST traz code/details/hint que a
             // mensagem sozinha esconde — sem isso, "não gerou" fica indepurável.
@@ -2455,338 +2613,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         // não se altera pela negociação (estorno é no financeiro).
                         const CELL_RO = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-100 text-gray-500 outline-none cursor-not-allowed';
 
-                        const alvoVisualizado = generateTargets.find(t => t.id === viewTarget);
-
-                        /* Seletor de série. O plano de pagamento da negociação e as parcelas
-                           do contrato são origens DIFERENTES (a segunda vive em Contas a
-                           Receber) — sem este seletor, as parcelas de uma renovação eram
-                           geradas e não apareciam em lugar nenhum. Mora dentro da toolbar
-                           acoplada (§5.2), à esquerda, junto da descrição da série que ele
-                           escolhe; solto acima do card era mais uma barra flutuante. */
-                        const seletorSerie = generateTargets.length > 0 && (
-                            <div className="flex items-center gap-2 shrink-0">
-                                <label className="text-xs font-semibold text-slate-500 shrink-0">Ver parcelas de</label>
-                                <select
-                                    value={viewTarget}
-                                    onChange={(e) => setViewTarget(e.target.value)}
-                                    className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
-                                >
-                                    <option value="DEAL">Negociação — plano de pagamento</option>
-                                    {generateTargets.filter(t => t.kind === 'CONTRACT').map(t => (
-                                        <option key={t.id} value={t.id}>{t.label} — Contas a Receber</option>
-                                    ))}
-                                </select>
-                            </div>
-                        );
+                        /* SÉRIE ÚNICA — o seletor "Ver parcelas de" foi removido em
+                           2026-08-01. Ele existia porque o plano da negociação e as
+                           parcelas do contrato eram origens diferentes, cada uma com sua
+                           tabela; quem abria a aba tinha que descobrir que havia uma
+                           segunda lista escondida atrás de um dropdown. Agora é uma
+                           tabela só, e o que era o seletor virou a coluna "Origem". */
 
                         return (
                             <div className="space-y-6">
-                                {alvoVisualizado ? (
-                                    /* §5.2 — toolbar acoplada: barra e tabela dividem UM card
-                                       (border/rounded/shadow só no pai; a barra separada apenas
-                                       pelo border-b). Antes eram dois cards soltos empilhados. */
-                                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                                        <div className="p-3 border-b border-gray-100 bg-white flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
-                                            <div className="flex flex-col md:flex-row md:items-center gap-2.5 min-w-0">
-                                                {seletorSerie}
-                                                <p className="text-sm text-gray-500 truncate">
-                                                    Lançadas em Contas a Receber. Valor e vencimento são editáveis aqui.
-                                                </p>
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                                                    <ColumnConfigButton
-                                                        columns={PARCELAS_COLUMNS}
-                                                        visibleColumns={parcelasCols.visibleColumns}
-                                                        showColumnConfig={parcelasCols.showColumnConfig}
-                                                        onToggleShow={() => parcelasCols.setShowColumnConfig(!parcelasCols.showColumnConfig)}
-                                                        onToggleColumn={parcelasCols.toggleColumn}
-                                                        onReset={parcelasCols.resetColumns}
-                                                    />
-                                                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => parcelasResize.autoFit()}
-                                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
-                                                        title="Ajustar largura das colunas ao conteúdo"
-                                                    >
-                                                        <MoveHorizontal className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                                {/* Ação primária (§17). Ficava só no ramo do plano de
-                                                    pagamento: ao escolher um contrato no seletor,
-                                                    "Gerar parcelas" sumia — e o estado vazio abaixo
-                                                    mandava usar exatamente este botão. Já abre o modal
-                                                    com este contrato escolhido. */}
-                                                <button type="button" onClick={() => handleOpenGenerateModal(alvoVisualizado.id)} disabled={loading}
-                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
-                                                    <Plus className="w-[15px] h-[15px]" />
-                                                    {loading ? 'Gerando…' : 'Gerar parcelas'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                        {loadingEntries ? (
-                                            <div className="text-center py-12">
-                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                                                <p className="mt-2 text-gray-500">Carregando...</p>
-                                            </div>
-                                        ) : contractEntries.length === 0 ? (
-                                            <div className="text-center py-12">
-                                                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma parcela lançada</h3>
-                                                <p className="text-sm text-gray-500">
-                                                    Use "Gerar parcelas" e escolha este contrato (ou um aditivo dele) para lançá-las.
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="overflow-auto max-h-[60vh]">
-                                                {/* MESMAS colunas do plano de pagamento acima, para as duas
-                                                    séries lerem igual. O que a parcela de contrato não tem
-                                                    — desconto, tipo e forma de pagamento — aparece como "—"
-                                                    em vez de sumir a coluna: coluna que muda de lugar
-                                                    conforme a origem obriga a reaprender a tabela. */}
-                                                <table ref={parcelasResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: parcelasTableWidth }}>
-{parcelasColGroup}
-                                                    <thead>
-                                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                            <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
-                                                                {(() => {
-                                                                    const editaveis = contractEntries.filter(e => e.status === 'PENDING');
-                                                                    const todas = editaveis.length > 0 && editaveis.every(e => selectedEntryIds.has(e.id));
-                                                                    return (
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            title="Selecionar todas"
-                                                                            checked={todas}
-                                                                            disabled={editaveis.length === 0}
-                                                                            onChange={() => setSelectedEntryIds(todas ? new Set() : new Set(editaveis.map(e => e.id)))}
-                                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
-                                                                        />
-                                                                    );
-                                                                })()}
-                                                            </th>
-                                                            <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
-                                                            {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento<parcelasResize.ResizeHandle colKey="vencimento" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('valor') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor<parcelasResize.ResizeHandle colKey="valor" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('desconto') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto<parcelasResize.ResizeHandle colKey="desconto" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final<parcelasResize.ResizeHandle colKey="valor_final" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('tipo') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo<parcelasResize.ResizeHandle colKey="tipo" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.<parcelasResize.ResizeHandle colKey="forma_pagto" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('centro_custo') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Centro de Custo<parcelasResize.ResizeHandle colKey="centro_custo" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('plano_contas') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Plano de Contas<parcelasResize.ResizeHandle colKey="plano_contas" /></th>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('descricao') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição<parcelasResize.ResizeHandle colKey="descricao" /></th>
-                                                            )}
-                                                            <th aria-hidden="true" className="border-r border-gray-100"></th>
-                                                            {parcelasCols.visibleColumns.includes('actions') && (
-                                                                <th className="relative overflow-hidden px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações<parcelasResize.ResizeHandle colKey="actions" /></th>
-                                                            )}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-200">
-                                                        {[...contractEntries]
-                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
-                                                            .map((e, i) => {
-                                                                const pago = e.status !== 'PENDING';
-                                                                return (
-                                                                    <tr key={e.id} className={`hover:bg-blue-50/50 transition-colors ${selectedEntryIds.has(e.id) ? 'bg-blue-50/60' : ''}`}>
-                                                                        <td className="px-4 py-2.5 border-r border-gray-100 text-center">
-                                                                            {/* Só parcela PENDENTE entra no lote: paga/conciliada
-                                                                                nao pode ser alterada (§10 — checkbox so' onde a
-                                                                                acao em lote e' valida). */}
-                                                                            {!pago && (
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
-                                                                                    checked={selectedEntryIds.has(e.id)}
-                                                                                    onChange={(ev) => handleEntryRowCheck(
-                                                                                        e.id, i, ev.target.checked,
-                                                                                        (ev.nativeEvent as MouseEvent).shiftKey,
-                                                                                        [...contractEntries]
-                                                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
-                                                                                            .map(x => x.id),
-                                                                                    )}
-                                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                                                />
-                                                                            )}
-                                                                        </td>
-                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
-                                                                        {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                {/* Rascunho local + gravação no blur. Ligado ao
-                                                                                    onChange, cada segmento digitado virava um UPDATE
-                                                                                    no banco (ao digitar o ano, "0002" já é data
-                                                                                    válida) e o re-render otimista cortava a digitação
-                                                                                    no meio — a data final nunca chegava a Contas a
-                                                                                    Receber. */}
-                                                                                <input
-                                                                                    type="date"
-                                                                                    value={entryDateDraft?.id === e.id
-                                                                                        ? entryDateDraft.value
-                                                                                        : e.transaction_date.slice(0, 10)}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => setEntryDateDraft({ id: e.id, value: ev.target.value })}
-                                                                                    onBlur={() => {
-                                                                                        const rascunho = entryDateDraft;
-                                                                                        setEntryDateDraft(null);
-                                                                                        if (!rascunho || rascunho.id !== e.id) return;
-                                                                                        if (!rascunho.value || rascunho.value === e.transaction_date.slice(0, 10)) return;
-                                                                                        patchContractEntry(e.id, { due_date: rascunho.value });
-                                                                                    }}
-                                                                                    onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ev.currentTarget.blur(); } }}
-                                                                                    className={pago ? CELL_RO : CELL}
-                                                                                />
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('valor') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <input
-                                                                                    type="number"
-                                                                                    value={e.original_amount ?? e.amount}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
-                                                                                    className={pago ? CELL_RO : CELL}
-                                                                                />
-                                                                            </td>
-                                                                        )}
-                                                                        {/* Mesmos dropdowns do plano de pagamento — os campos passaram
-                                                                            a existir em internal_transactions (migration 20270828000005).
-                                                                            "Valor" e' o bruto; "Valor final" e' o liquido cobrado. */}
-                                                                        {parcelasCols.visibleColumns.includes('desconto') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <div className="flex items-center gap-1.5">
-                                                                                    <select
-                                                                                        value={e.discount_type ?? ''}
-                                                                                        disabled={pago}
-                                                                                        onChange={(ev) => patchContractEntry(e.id, {
-                                                                                            discount_type: ev.target.value || null,
-                                                                                            discount_amount: ev.target.value ? (e.discount_amount ?? 0) : null,
-                                                                                        })}
-                                                                                        className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                                    >
-                                                                                        <option value="">Sem desconto</option>
-                                                                                        <option value="VALUE">R$</option>
-                                                                                        <option value="PERCENT">%</option>
-                                                                                    </select>
-                                                                                    {e.discount_type && (
-                                                                                        <input
-                                                                                            type="number" min="0" step="0.01"
-                                                                                            value={e.discount_amount ?? ''}
-                                                                                            disabled={pago}
-                                                                                            placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
-                                                                                            onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
-                                                                                            className={`${pago ? CELL_RO : CELL} w-24`}
-                                                                                        />
-                                                                                    )}
-                                                                                </div>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('tipo') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <select
-                                                                                    value={e.installment_type ?? ''}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { installment_type: ev.target.value || null })}
-                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                                >
-                                                                                    <option value="">Tipo Pagto.</option>
-                                                                                    {installmentTypeOptions.map(t => (
-                                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                                                    ))}
-                                                                                </select>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <select
-                                                                                    value={e.payment_type ?? ''}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { payment_type: ev.target.value || null })}
-                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                                >
-                                                                                    <option value="">Forma Pagto.</option>
-                                                                                    <option value="PIX">PIX</option>
-                                                                                    <option value="TED">TED</option>
-                                                                                    <option value="DOC">DOC</option>
-                                                                                    <option value="DINHEIRO">Dinheiro</option>
-                                                                                    <option value="CHEQUE">Cheque</option>
-                                                                                    <option value="PERMUTA">Permuta</option>
-                                                                                </select>
-                                                                            </td>
-                                                                        )}
-                                                                        {/* Dimensões do CABEÇALHO: iguais em toda a série, por isso
-                                                                            leitura — mudar é na aba Forma de Pagamento. */}
-                                                                        {parcelasCols.visibleColumns.includes('centro_custo') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('plano_contas') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('descricao') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <input
-                                                                                    type="text"
-                                                                                    value={e.description ?? ''}
-                                                                                    disabled={pago}
-                                                                                    placeholder="Descrição / observação"
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { description: ev.target.value })}
-                                                                                    className={pago ? CELL_RO : CELL}
-                                                                                />
-                                                                            </td>
-                                                                        )}
-                                                                        <td aria-hidden="true"></td>
-                                                                        {parcelasCols.visibleColumns.includes('actions') && (
-                                                                            <td className="px-6 py-2.5 text-right">
-                                                                                <div className="flex items-center justify-end gap-1.5">
-                                                                                    <span className={`text-sm font-normal ${pago ? 'text-emerald-600' : 'text-gray-400'}`}>
-                                                                                        {e.status === 'PENDING' ? 'Previsto'
-                                                                                            : e.status === 'PAID' ? 'Pago'
-                                                                                                : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
-                                                                                    </span>
-                                                                                    <ActionIconButton
-                                                                                        kind="delete"
-                                                                                        title={pago
-                                                                                            ? 'Parcela paga/conciliada — estorne no financeiro antes de excluir'
-                                                                                            : 'Excluir esta parcela'}
-                                                                                        onClick={() => handleRemoveContractEntry(e.id)}
-                                                                                    />
-                                                                                </div>
-                                                                            </td>
-                                                                        )}
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
                                 <>
                                 {/* Sem KPIs (removidos a pedido): o rodapé de totais da própria
                                     tabela de parcelas já mostra soma, desconto e líquido. */}
@@ -2798,10 +2633,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                                     <div className="p-3 border-b border-gray-100 bg-white flex flex-col lg:flex-row gap-2.5 lg:items-center justify-between">
                                         <div className="flex flex-col md:flex-row md:items-center gap-2.5 min-w-0">
-                                            {seletorSerie}
                                             <p className="text-sm text-gray-500 truncate">
                                                 {formData.payment_method === 'INSTALLMENTS'
-                                                    ? 'Cada linha é uma cobrança. Data, valor e desconto são editáveis aqui.'
+                                                    ? 'Cada linha é uma cobrança. A coluna Origem diz se ela vem do plano da negociação ou de um contrato.'
                                                     : 'A forma de pagamento atual não é parcelada — troque em "Forma de Pagamento" para montar um plano.'}
                                             </p>
                                         </div>
@@ -2835,6 +2669,30 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
                                                 <Plus className="w-4 h-4" /> Parcela avulsa
                                             </button>
+                                            {/* Publicação EXPLÍCITA em Contas a Receber. Mesmo padrão do
+                                                "Lançar Financeiro" de ContractDetailView — outline emerald,
+                                                para o usuário reconhecer a ação. Os dois botões coexistem
+                                                quando parte da série já foi lançada e parte não. */}
+                                            {naoLancadas > 0 && (
+                                                <button type="button" onClick={() => void handlePublicarParcelas()}
+                                                    disabled={publishing || !formData.id}
+                                                    title={formData.id
+                                                        ? 'Lançar as parcelas deste plano em Contas a Receber'
+                                                        : 'Salve a negociação antes de enviar as parcelas'}
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-all active:scale-95 disabled:opacity-50">
+                                                    <DollarSign className="w-4 h-4" />
+                                                    {publishing ? 'Enviando…' : `Enviar ao Contas a Receber (${naoLancadas})`}
+                                                </button>
+                                            )}
+                                            {temLancadas && (
+                                                <button type="button" onClick={() => void handleRemoverDoContasAReceber()}
+                                                    disabled={publishing}
+                                                    title="Remover estas parcelas de Contas a Receber (as já recebidas são preservadas)"
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50">
+                                                    <ArrowLeft className="w-4 h-4 text-gray-500" />
+                                                    Remover do Contas a Receber
+                                                </button>
+                                            )}
                                             <button type="button" onClick={() => handleOpenGenerateModal()} disabled={loading}
                                                 className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
                                                 <Plus className="w-[15px] h-[15px]" />
@@ -2842,7 +2700,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </button>
                                         </div>
                                     </div>
-                                    {parcelas.length === 0 && entrada <= 0 ? (
+                                    {/* Só é "vazio" quando NENHUMA das origens tem linha — o
+                                        plano da negociação, a Entrada e as parcelas de
+                                        contrato agora dividem a mesma tabela. */}
+                                    {parcelas.length === 0 && entrada <= 0 && contractEntries.length === 0 ? (
                                         /* Empty state — §12 (sem moldura própria dentro do card) */
                                         <div className="text-center py-12">
                                             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -2884,6 +2745,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('valor_final') && (
                                                             <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final<parcelasResize.ResizeHandle colKey="valor_final" /></th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('situacao') && (
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Situação<parcelasResize.ResizeHandle colKey="situacao" /></th>
+                                                        )}
+                                                        {parcelasCols.visibleColumns.includes('origem') && (
+                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Origem<parcelasResize.ResizeHandle colKey="origem" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('tipo') && (
                                                             <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo<parcelasResize.ResizeHandle colKey="tipo" /></th>
@@ -2935,6 +2802,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
                                                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entrada)}
                                                                 </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('situacao') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <SituacaoParcela status={situacaoPorRef[refDaEntrada()] ?? 'NAO_LANCADA'} />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('origem') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">Negociação</td>
                                                             )}
                                                             {parcelasCols.visibleColumns.includes('tipo') && (
                                                                 <td className="px-6 py-2.5 border-r border-gray-100">
@@ -3069,6 +2944,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
                                                                 </td>
                                                             )}
+                                                            {parcelasCols.visibleColumns.includes('situacao') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                    <SituacaoParcela status={situacaoPorRef[refDaParcela(index)] ?? 'NAO_LANCADA'} />
+                                                                </td>
+                                                            )}
+                                                            {parcelasCols.visibleColumns.includes('origem') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">Negociação</td>
+                                                            )}
                                                             {parcelasCols.visibleColumns.includes('tipo') && (
                                                                 <td className="px-6 py-2.5 border-r border-gray-100">
                                                                     <select
@@ -3142,6 +3025,199 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             )}
                                                         </tr>
                                                     ))}
+                                                        {[...contractEntries]
+                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
+                                                            .map((e, i) => {
+                                                                const pago = e.status !== 'PENDING';
+                                                                return (
+                                                                    <tr key={e.id} className={`hover:bg-blue-50/50 transition-colors ${selectedEntryIds.has(e.id) ? 'bg-blue-50/60' : ''}`}>
+                                                                        <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                                                            {/* Só parcela PENDENTE entra no lote: paga/conciliada
+                                                                                nao pode ser alterada (§10 — checkbox so' onde a
+                                                                                acao em lote e' valida). */}
+                                                                            {!pago && (
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                                                    checked={selectedEntryIds.has(e.id)}
+                                                                                    onChange={(ev) => handleEntryRowCheck(
+                                                                                        e.id, i, ev.target.checked,
+                                                                                        (ev.nativeEvent as MouseEvent).shiftKey,
+                                                                                        [...contractEntries]
+                                                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
+                                                                                            .map(x => x.id),
+                                                                                    )}
+                                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                                />
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
+                                                                        {parcelasCols.visibleColumns.includes('vencimento') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                {/* Rascunho local + gravação no blur. Ligado ao
+                                                                                    onChange, cada segmento digitado virava um UPDATE
+                                                                                    no banco (ao digitar o ano, "0002" já é data
+                                                                                    válida) e o re-render otimista cortava a digitação
+                                                                                    no meio — a data final nunca chegava a Contas a
+                                                                                    Receber. */}
+                                                                                <input
+                                                                                    type="date"
+                                                                                    value={entryDateDraft?.id === e.id
+                                                                                        ? entryDateDraft.value
+                                                                                        : e.transaction_date.slice(0, 10)}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => setEntryDateDraft({ id: e.id, value: ev.target.value })}
+                                                                                    onBlur={() => {
+                                                                                        const rascunho = entryDateDraft;
+                                                                                        setEntryDateDraft(null);
+                                                                                        if (!rascunho || rascunho.id !== e.id) return;
+                                                                                        if (!rascunho.value || rascunho.value === e.transaction_date.slice(0, 10)) return;
+                                                                                        patchContractEntry(e.id, { due_date: rascunho.value });
+                                                                                    }}
+                                                                                    onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ev.currentTarget.blur(); } }}
+                                                                                    className={pago ? CELL_RO : CELL}
+                                                                                />
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('valor') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={e.original_amount ?? e.amount}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
+                                                                                    className={pago ? CELL_RO : CELL}
+                                                                                />
+                                                                            </td>
+                                                                        )}
+                                                                        {/* Mesmos dropdowns do plano de pagamento — os campos passaram
+                                                                            a existir em internal_transactions (migration 20270828000005).
+                                                                            "Valor" e' o bruto; "Valor final" e' o liquido cobrado. */}
+                                                                        {parcelasCols.visibleColumns.includes('desconto') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <select
+                                                                                        value={e.discount_type ?? ''}
+                                                                                        disabled={pago}
+                                                                                        onChange={(ev) => patchContractEntry(e.id, {
+                                                                                            discount_type: ev.target.value || null,
+                                                                                            discount_amount: ev.target.value ? (e.discount_amount ?? 0) : null,
+                                                                                        })}
+                                                                                        className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                                    >
+                                                                                        <option value="">Sem desconto</option>
+                                                                                        <option value="VALUE">R$</option>
+                                                                                        <option value="PERCENT">%</option>
+                                                                                    </select>
+                                                                                    {e.discount_type && (
+                                                                                        <input
+                                                                                            type="number" min="0" step="0.01"
+                                                                                            value={e.discount_amount ?? ''}
+                                                                                            disabled={pago}
+                                                                                            placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
+                                                                                            onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
+                                                                                            className={`${pago ? CELL_RO : CELL} w-24`}
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('valor_final') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('situacao') && (
+                                                                            /* Série do contrato: por definição já está em Contas
+                                                                               a Receber — o status vem do próprio lançamento. */
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <SituacaoParcela status={pago ? 'RECEBIDA' : 'LANCADA'} />
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('origem') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
+                                                                                {e.__origem || 'Contrato'}
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('tipo') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <select
+                                                                                    value={e.installment_type ?? ''}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { installment_type: ev.target.value || null })}
+                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                                >
+                                                                                    <option value="">Tipo Pagto.</option>
+                                                                                    {installmentTypeOptions.map(t => (
+                                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                                                                    ))}
+                                                                                </select>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('forma_pagto') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <select
+                                                                                    value={e.payment_type ?? ''}
+                                                                                    disabled={pago}
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { payment_type: ev.target.value || null })}
+                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                                                                >
+                                                                                    <option value="">Forma Pagto.</option>
+                                                                                    <option value="PIX">PIX</option>
+                                                                                    <option value="TED">TED</option>
+                                                                                    <option value="DOC">DOC</option>
+                                                                                    <option value="DINHEIRO">Dinheiro</option>
+                                                                                    <option value="CHEQUE">Cheque</option>
+                                                                                    <option value="PERMUTA">Permuta</option>
+                                                                                </select>
+                                                                            </td>
+                                                                        )}
+                                                                        {/* Dimensões do CABEÇALHO: iguais em toda a série, por isso
+                                                                            leitura — mudar é na aba Forma de Pagamento. */}
+                                                                        {parcelasCols.visibleColumns.includes('centro_custo') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('plano_contas') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
+                                                                            </td>
+                                                                        )}
+                                                                        {parcelasCols.visibleColumns.includes('descricao') && (
+                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={e.description ?? ''}
+                                                                                    disabled={pago}
+                                                                                    placeholder="Descrição / observação"
+                                                                                    onChange={(ev) => patchContractEntry(e.id, { description: ev.target.value })}
+                                                                                    className={pago ? CELL_RO : CELL}
+                                                                                />
+                                                                            </td>
+                                                                        )}
+                                                                        <td aria-hidden="true"></td>
+                                                                        {parcelasCols.visibleColumns.includes('actions') && (
+                                                                            <td className="px-6 py-2.5 text-right">
+                                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                                    <span className={`text-sm font-normal ${pago ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                                                                        {e.status === 'PENDING' ? 'Previsto'
+                                                                                            : e.status === 'PAID' ? 'Pago'
+                                                                                                : e.status === 'CONCILIATED' ? 'Conciliado' : e.status}
+                                                                                    </span>
+                                                                                    <ActionIconButton
+                                                                                        kind="delete"
+                                                                                        title={pago
+                                                                                            ? 'Parcela paga/conciliada — estorne no financeiro antes de excluir'
+                                                                                            : 'Excluir esta parcela'}
+                                                                                        onClick={() => handleRemoveContractEntry(e.id)}
+                                                                                    />
+                                                                                </div>
+                                                                            </td>
+                                                                        )}
+                                                                    </tr>
+                                                                );
+                                                            })}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -3159,7 +3235,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 )}
                                 </>
-                                )}
                             </div>
                         );
                     })()}
@@ -3710,6 +3785,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     </div>
                 )}
 
+                {successNotice && (
+                    <div className="fixed bottom-6 right-6 z-[300] flex items-start gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium bg-emerald-600 text-white max-w-md animate-in slide-in-from-bottom-4 duration-300">
+                        <Check className="w-4 h-4 shrink-0 mt-0.5" />
+                        {successNotice}
+                    </div>
+                )}
+
                 {/* Toast de erro — §13 (vermelho = erro). Substitui os alert() nativos. */}
                 {errorNotice && (
                     <div className="fixed bottom-6 right-6 z-[300] flex items-start gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium bg-red-600 text-white max-w-md animate-in slide-in-from-bottom-4 duration-300">
@@ -3738,6 +3820,26 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         >
                             <Pencil className="w-3.5 h-3.5" />
                             Editar em Lote
+                        </button>
+                        {/* Publicar só o que está selecionado — mesma ação da toolbar,
+                            restrita à seleção (guia §10). Os ids da tela são temporários,
+                            então a ponte é o `reference_id` → id da linha real. */}
+                        <button
+                            onClick={() => {
+                                const ids = (formData.custom_installments || [])
+                                    .map((inst, i) => (selectedInstallmentIds.has(inst.id) ? idPorRef[refDaParcela(i)] : null))
+                                    .filter((v): v is string => !!v);
+                                if (ids.length === 0) {
+                                    notifyError('Salve a negociação antes de enviar estas parcelas.');
+                                    return;
+                                }
+                                void handlePublicarParcelas(ids);
+                            }}
+                            disabled={publishing}
+                            className="flex items-center gap-2 px-3 py-2 bg-white text-emerald-700 rounded-[6px] font-bold text-button uppercase tracking-widest hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                        >
+                            <DollarSign className="w-3.5 h-3.5" />
+                            Enviar ao Contas a Receber
                         </button>
                         <button
                             onClick={() => setSelectedInstallmentIds(new Set())}

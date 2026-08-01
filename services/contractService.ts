@@ -4,6 +4,7 @@ import { projectService } from './projectService';
 import { approvalService } from './approvalService';
 import { normalizeIndexName } from './contractIndexService';
 import { commercialFinanceService } from './commercialFinanceService';
+import { dealInstallmentService } from './dealInstallmentService';
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import {
@@ -493,6 +494,8 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             }));
             await supabase.from('internal_transactions').insert(internalRows);
             console.log(`[CONTRACTS] Synced ${internalRows.length} parcelado txs to internal_transactions`);
+            // Série única — ver nota em syncRecurringToFinance.
+            await dealInstallmentService.registerContractEntries(contract);
         }
     } catch (e) {
         console.error('[CONTRACTS] Error syncing parcelado schedule to finance:', e);
@@ -688,6 +691,10 @@ async function syncRecurringToFinance(contract: Contract) {
             })));
         }
         console.log(`[CONTRACTS] Generated ${transactions.length} recurring entries for contract ${contract.id} (from current month)`);
+        // Série única: registra as parcelas recém-lançadas em `deal_installments`
+        // para a aba Parcelas da negociação ler UMA tabela só. Aditivo — não
+        // altera o que foi gravado acima. Ignora Suprimentos internamente.
+        await dealInstallmentService.registerContractEntries(contract);
     } catch (e) {
         console.error('[CONTRACTS] Error syncing recurring contract to finance:', e);
     }
@@ -858,6 +865,8 @@ export async function generateRecurringInstallmentsForPeriod(
     if (error) throw error;
 
     console.log(`[CONTRACTS] Prorrogação: ${novos.length} parcela(s) geradas para ${contract.number} (${fromDate} → ${toDate})`);
+    // Série única — ver nota em syncRecurringToFinance.
+    await dealInstallmentService.registerContractEntries(contract);
     return { inserted: novos.length, skipped: dueDates.length - novos.length, removed, dueDates };
 }
 
@@ -941,6 +950,8 @@ async function syncAVistaToFinance(contract: Contract) {
             });
         }
         console.log(`[CONTRACTS] Synced À Vista contract ${contract.id} to finance`);
+        // Série única — ver nota em syncRecurringToFinance.
+        await dealInstallmentService.registerContractEntries(contract);
     } catch (e) {
         console.error('[CONTRACTS] Error syncing À Vista to finance:', e);
     }

@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { PropertyDeal, ProjectSettings, PaymentInstallment, FinancialTransaction } from '../types';
 import { projectService } from './projectService';
 import { brokerService } from './brokerService';
+import { dealInstallmentService, toPaymentInstallment } from './dealInstallmentService';
 
 // Supabase project row as returned by .select('id, name, settings') / .select('*')
 interface CommercialProjectRow {
@@ -27,6 +28,18 @@ export const commercialFinanceService = {
             throw new Error(`[COMMERCIAL-FINANCE] Cross-tenant bloqueado: deal ${deal.id} pertence à org ${deal.organization_id}, não ${targetOrganizationId}`);
         }
         const orgToUse = targetOrganizationId;
+
+        // ⚠️ SÉRIE ÚNICA (2026-08-01): negócio cujas parcelas já vivem em
+        // `deal_installments` NUNCA é materializado por aqui. Sem este guard, o
+        // `syncAllOrganizationDeals` — disparado ao abrir a Conciliação Bancária
+        // e o Financeiro do projeto — republicaria em Contas a Receber tudo o
+        // que o usuário tirou de lá pelo botão "Remover do Contas a Receber".
+        // Publicar é ação explícita: dealInstallmentService.publishToReceivables.
+        if (await dealInstallmentService.hasRows(deal.id)) {
+            console.log(`[COMMERCIAL-FINANCE] Skip: Deal #${deal.id.substring(0, 8)} usa a série única (deal_installments).`);
+            return null;
+        }
+
         console.log(`[COMMERCIAL-FINANCE] Processing Deal #${deal.id} for Org: ${orgToUse}`);
 
         // DEVE bater com FINANCIAL_STATUSES de commercialService.saveDeal — antes as duas
@@ -507,6 +520,13 @@ export const commercialFinanceService = {
         try {
             console.log(`[COMMERCIAL-FINANCE] Auditing paid installments for Deal ${dealId} (Org: ${organizationId})`);
 
+            // Série única primeiro (fonte da verdade); vault só como legado.
+            const rows = await dealInstallmentService.listByDeal(dealId, organizationId);
+            if (rows.length > 0) {
+                const pagas = rows.filter(r => r.settlementStatus === 'RECEBIDA').length;
+                return { hasPaid: pagas > 0, paidCount: pagas };
+            }
+
             // 1. Carregar projetos de Gestão Comercial da organização
             const { data: projects, error } = await supabase
                 .from('projects')
@@ -557,6 +577,18 @@ export const commercialFinanceService = {
      */
     async getDealInstallments(dealId: string, organizationId: string): Promise<PaymentInstallment[]> {
         if (!organizationId || !dealId) return [];
+        try {
+            // Fonte da verdade desde 2026-08-01: a tabela `deal_installments`.
+            // O vault só responde por negócios anteriores ao backfill.
+            const rows = await dealInstallmentService.listByDeal(dealId, organizationId);
+            if (rows.length > 0) {
+                return rows
+                    .filter(r => r.sequence > 0) // Entrada é editada à parte
+                    .map(toPaymentInstallment);
+            }
+        } catch (e) {
+            console.error('[COMMERCIAL-FINANCE] getDealInstallments (série única):', e);
+        }
         try {
             const { data: projects, error } = await supabase
                 .from('projects')
@@ -855,6 +887,28 @@ export const commercialFinanceService = {
             }
         });
 
+        // Série única: o Portal do Cliente mostra o que foi PUBLICADO em Contas a
+        // Receber — parcela que ainda é só plano/proposta não é cobrança e não
+        // pode aparecer para o cliente. Sem esta união o portal esvaziaria para
+        // todo negócio criado depois da migração.
+        try {
+            const { data: deals } = await supabase
+                .from('commercial_deals')
+                .select('id')
+                .eq('client_id', clientId)
+                .eq('organization_id', organizationId);
+            for (const d of deals || []) {
+                const rows = await dealInstallmentService.listByDeal(d.id as string, organizationId);
+                consolidated.push(
+                    ...rows
+                        .filter(r => !!r.publishedAt && r.settlementStatus !== 'CANCELADA')
+                        .map(r => ({ ...toPaymentInstallment(r), clientId })),
+                );
+            }
+        } catch (e) {
+            console.error('[COMMERCIAL-FINANCE] listAllClientInstallments (série única):', e);
+        }
+
         return consolidated;
     },
 
@@ -880,13 +934,25 @@ export const commercialFinanceService = {
             return;
         }
 
-        // 2. Coletar todas as parcelas deste deal, em todos os cofres do sistema
+        // 2. Coletar todas as parcelas deste deal. Série única primeiro — sem
+        //    isto, "todas pagas → COMPLETED/SOLD" pararia de funcionar para
+        //    negócios que não existem mais no vault.
         let dealInstallments: PaymentInstallment[] = [];
-        for (const proj of allProjects) {
-            const info = (proj.settings as ProjectSettings)?.financialInfo;
-            if (info && info.installments) {
-                const projInstalls = info.installments.filter((i: PaymentInstallment) => i.dealId === dealId);
-                dealInstallments.push(...projInstalls);
+        try {
+            const rows = await dealInstallmentService.listByDeal(dealId, organizationId);
+            dealInstallments.push(...rows.filter(r => !!r.publishedAt).map(toPaymentInstallment));
+        } catch (e) {
+            console.error('[COMMERCIAL-RECONCILE] série única:', e);
+        }
+        // Vault só entra quando a série única não respondeu (negócio legado):
+        // somar as duas duplicaria a mesma parcela e travaria a reconciliação.
+        if (dealInstallments.length === 0) {
+            for (const proj of allProjects) {
+                const info = (proj.settings as ProjectSettings)?.financialInfo;
+                if (info && info.installments) {
+                    const projInstalls = info.installments.filter((i: PaymentInstallment) => i.dealId === dealId);
+                    dealInstallments.push(...projInstalls);
+                }
             }
         }
 

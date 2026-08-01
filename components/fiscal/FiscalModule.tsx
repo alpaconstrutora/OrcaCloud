@@ -53,16 +53,14 @@ interface Props {
 }
 
 export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
-  const { activeOrganizationId, organizations, session } = useStore();
+  const { activeOrganizationId, session } = useStore();
   const [page, setPage] = useState<FiscalPage>('documents');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [health, setHealth] = useState<PipelineHealth | null>(null);
-  // Seletor próprio do módulo Fiscal — independe do seletor global do app.
-  // '' representa "Todas as organizações".
-  const [moduleOrgId, setModuleOrgId] = useState(activeOrganizationId ?? '');
 
-  const orgId: string | null = moduleOrgId || null;
+  // Org vem do seletor global do topo — sem seletor próprio no módulo.
+  const orgId = activeOrganizationId;
   const isConsolidated = !orgId;
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => setToast({ msg, type });
@@ -99,21 +97,9 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
       </div>
 
       {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita.
-          O seletor de organização é o controle de escopo do módulo (define QUAL
-          conjunto as três abas leem), por isso vive aqui e não no cabeçalho. */}
+          Sem seletor de organização aqui: vem do seletor global do topo. */}
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={moduleOrgId}
-            onChange={e => setModuleOrgId(e.target.value)}
-            title="Organização"
-            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer min-w-[200px]"
-          >
-            <option value="">Todas as organizações</option>
-            {organizations.map(org => (
-              <option key={org.id} value={org.id}>{org.name}</option>
-            ))}
-          </select>
           {health && (
             <>
               <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-gray-500">

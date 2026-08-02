@@ -401,6 +401,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Árvore de pastas nasce EXPANDIDA. Cada pasta entra em `expandedNodes` uma única
+  // vez (o ref registra quem já foi auto-expandida), então recolher uma pasta é uma
+  // decisão que sobrevive aos refetches — troca de aba, de obra ou criação de pasta
+  // não reabre o que o usuário fechou.
+  const autoExpandedFolderIds = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    const novos = folders.map(f => f.id).filter(id => !autoExpandedFolderIds.current.has(id));
+    if (novos.length === 0) return;
+    novos.forEach(id => autoExpandedFolderIds.current.add(id));
+    setExpandedNodes(prev => Array.from(new Set([...prev, ...novos])));
+  }, [folders]);
+
   // Carregar lista de documentos
   const fetchDocs = async () => {
     // Espera a membership: sem ela não há como saber quais orgs entram no escopo,
@@ -2982,6 +2994,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           disciplines={disciplines}
           obras={obras}
           companies={companies}
+          suppliers={suppliers}
           currentProfile={currentProfile}
           notify={notify}
           onClose={() => setBatchEditOpen(false)}

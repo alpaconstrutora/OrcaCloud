@@ -10,12 +10,19 @@ interface CompanyOption {
   razao_social: string;
 }
 
+interface SupplierOption {
+  id: string;
+  name: string;
+}
+
 export interface DocumentBatchEditModalProps {
   documents: OpuraDocument[];
   documentTypes: OpuraDmsDocumentType[];
   disciplines: OpuraDmsDiscipline[];
   obras: any[];
   companies: CompanyOption[];
+  /** Autor do Projeto — mesma lista do formulário de edição individual. */
+  suppliers: SupplierOption[];
   currentProfile: { email?: string };
   notify: (message: string, type?: 'success' | 'error') => void;
   onClose: () => void;
@@ -42,6 +49,7 @@ export function DocumentBatchEditModal({
   disciplines,
   obras,
   companies,
+  suppliers,
   currentProfile,
   notify,
   onClose,
@@ -50,6 +58,12 @@ export function DocumentBatchEditModal({
   const confirm = useConfirm();
   const [tipoDocumento, setTipoDocumento] = React.useState('');
   const [disciplineCode, setDisciplineCode] = React.useState('');
+  const [descricao, setDescricao] = React.useState('');
+  // Autor do Projeto: fornecedor cadastrado (grava supplier_id + autor) ou nome
+  // digitado à mão ("Outro"), como no formulário de edição individual do GED.
+  const [autorSupplierId, setAutorSupplierId] = React.useState('');
+  const [autorOutro, setAutorOutro] = React.useState(false);
+  const [autorNome, setAutorNome] = React.useState('');
   const [status, setStatus] = React.useState('');
   const [dataEmissao, setDataEmissao] = React.useState('');
   const [dataValidade, setDataValidade] = React.useState('');
@@ -63,14 +77,30 @@ export function DocumentBatchEditModal({
   const orgIds = React.useMemo(() => new Set(documents.map((d) => d.organization_id)), [documents]);
   const isMultiOrg = orgIds.size > 1;
 
+  // Fornecedor é cadastro por organização — vincular um fornecedor de uma org a
+  // documento de outra criaria vínculo cruzado. Com seleção multi-org, Autor só
+  // aceita nome digitado.
+  const autorNomeFinal = autorOutro || isMultiOrg
+    ? autorNome.trim()
+    : (suppliers.find((s) => s.id === autorSupplierId)?.name || '');
+  const autorChanged = !!autorNomeFinal || (!isMultiOrg && !autorOutro && !!autorSupplierId);
+
   const noneChanged =
-    !tipoDocumento && !disciplineCode && !status && !dataEmissao && !dataValidade &&
-    !alertaDias && !projectId && !companyId && !addTagsInput.trim();
+    !tipoDocumento && !disciplineCode && !descricao.trim() && !autorChanged && !status &&
+    !dataEmissao && !dataValidade && !alertaDias && !projectId && !companyId && !addTagsInput.trim();
 
   const buildCommonUpdates = (): OpuraDocumentUpdate => {
     const updates: OpuraDocumentUpdate = {};
     if (tipoDocumento) updates.tipo_documento = tipoDocumento;
     if (disciplineCode) updates.discipline_code = disciplineCode;
+    if (descricao.trim()) updates.descricao = descricao.trim();
+    if (autorChanged) {
+      updates.autor = autorNomeFinal;
+      // "Outro"/multi-org desfaz o vínculo com fornecedor — o autor passa a ser texto
+      // livre. `null` (não `undefined`) porque undefined some no payload e deixaria o
+      // supplier_id antigo apontando para outro fornecedor.
+      updates.supplier_id = ((!isMultiOrg && !autorOutro && autorSupplierId) || null) as any;
+    }
     if (status) updates.status = status as OpuraDocumentStatus;
     if (dataEmissao) updates.data_emissao = dataEmissao;
     if (dataValidade) updates.data_validade = dataValidade;
@@ -84,6 +114,8 @@ export function DocumentBatchEditModal({
     const labels: string[] = [];
     if (tipoDocumento) labels.push(`Tipo=${tipoDocumento}`);
     if (disciplineCode) labels.push(`Disciplina=${disciplineCode}`);
+    if (descricao.trim()) labels.push('Descrição');
+    if (autorChanged) labels.push(`Autor=${autorNomeFinal}`);
     if (status) labels.push(`Status=${status}`);
     if (dataEmissao) labels.push('Data de emissão');
     if (dataValidade) labels.push('Data de vencimento');
@@ -319,12 +351,75 @@ export function DocumentBatchEditModal({
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
+            {isMultiOrg ? (
+              <input
+                type="text"
+                placeholder="Nome do autor ou responsável — deixe vazio para não alterar"
+                value={autorNome}
+                onChange={(e) => setAutorNome(e.target.value)}
+                disabled={saving}
+                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+              />
+            ) : (
+              <>
+                <select
+                  value={autorOutro ? '__outro__' : autorSupplierId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '__outro__') {
+                      setAutorSupplierId('');
+                      setAutorOutro(true);
+                    } else {
+                      setAutorSupplierId(val);
+                      setAutorOutro(false);
+                      setAutorNome('');
+                    }
+                  }}
+                  disabled={saving}
+                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                >
+                  <option value="">— Não alterar —</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                  <option value="__outro__">Outro (digitar nome)</option>
+                </select>
+                {autorOutro && (
+                  <input
+                    type="text"
+                    placeholder="Nome do autor ou responsável..."
+                    value={autorNome}
+                    onChange={(e) => setAutorNome(e.target.value)}
+                    disabled={saving}
+                    autoFocus
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                  />
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-500">Descrição / Notas complementares</label>
+            <textarea
+              rows={3}
+              placeholder="Substitui a descrição dos documentos selecionados — deixe vazio para não alterar"
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              disabled={saving}
+              className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50 resize-none"
+            />
+          </div>
+
           {isMultiOrg && (
             <div className="flex items-start gap-2 p-3 rounded-[10px] bg-amber-50 border border-amber-200 text-amber-700 text-xs">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
                 Os documentos selecionados pertencem a organizações diferentes — Obra e Empresa
-                ficam desabilitados para não vincular um documento à organização errada.
+                ficam desabilitados, e o Autor só aceita nome digitado (sem vínculo com
+                fornecedor), para não vincular um documento à organização errada.
               </span>
             </div>
           )}

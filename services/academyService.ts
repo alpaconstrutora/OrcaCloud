@@ -602,21 +602,67 @@ export const academyService = {
 
     /**
      * Resolve o colaborador correspondente ao usuário logado.
+     *
+     * Duas fontes, nesta ordem:
+     *   1. `employees.user_id` — vínculo explícito, feito na ficha do
+     *      colaborador (migration 20270851000000). É o caminho confiável.
+     *   2. e-mail — fallback para quem ainda não foi vinculado. Mantido porque
+     *      o vínculo não foi backfillado em massa de propósito: casar e-mail
+     *      automaticamente ligaria a pessoa errada em base com e-mail repetido.
+     *
      * O recorte "só as minhas matrículas" é feito aqui, no cliente — a policy
      * é org-wide, coerente com o resto do RH (evita policy por-employee, que
      * dobraria o custo de cada query).
      */
     async getMyEmployeeId(orgId?: string | null): Promise<string | null> {
         const { data: auth } = await supabase.auth.getUser();
+        const userId = auth?.user?.id;
         const email = auth?.user?.email;
+        if (!userId && !email) return null;
+
+        if (userId) {
+            let porUsuario = supabase.from('employees').select('id').eq('user_id', userId).limit(1);
+            if (orgId) porUsuario = porUsuario.eq('org_id', orgId);
+
+            const { data, error } = await porUsuario;
+            if (error) throw error;
+            if (data?.[0]?.id) return data[0].id;
+        }
+
         if (!email) return null;
 
-        let query = supabase.from('employees').select('id').ilike('email', email).limit(1);
-        if (orgId) query = query.eq('org_id', orgId);
+        let porEmail = supabase.from('employees').select('id').ilike('email', email).limit(1);
+        if (orgId) porEmail = porEmail.eq('org_id', orgId);
 
-        const { data, error } = await query;
+        const { data, error } = await porEmail;
         if (error) throw error;
         return data?.[0]?.id ?? null;
+    },
+
+    /**
+     * Quantos treinamentos o usuário logado tem em aberto.
+     * Alimenta o badge de "Meus Treinamentos" na sidebar. Devolve 0 (e nunca
+     * lança) quando o usuário não é colaborador vinculado — o badge não pode
+     * derrubar o menu.
+     */
+    async countMyPending(orgId?: string | null): Promise<number> {
+        try {
+            const employeeId = await this.getMyEmployeeId(orgId);
+            if (!employeeId) return 0;
+
+            let query = supabase
+                .from('academy_enrollments')
+                .select('id', { count: 'exact', head: true })
+                .eq('employee_id', employeeId)
+                .in('status', ['NAO_INICIADO', 'EM_ANDAMENTO', 'AGUARDANDO_AVALIACAO', 'REPROVADO', 'EXPIRADO']);
+            if (orgId) query = query.eq('org_id', orgId);
+
+            const { count, error } = await query;
+            if (error) return 0;
+            return count ?? 0;
+        } catch {
+            return 0;
+        }
     },
 
     // ══ CONSUMO DA AULA (app logado) ════════════════════════════════════

@@ -10,13 +10,10 @@ import {
 } from './ui/TableUtils';
 import LaborScopeBar from './LaborScopeBar';
 import AcademyCatalogTab from './academy/AcademyCatalogTab';
-import AcademyClassroomTab from './academy/AcademyClassroomTab';
 import AcademyAssignmentsTab from './academy/AcademyAssignmentsTab';
 import AcademyPanels from './academy/AcademyPanels';
 import AcademyCourseBuilder from './academy/AcademyCourseBuilder';
-import AcademyPlayerView from './academy/AcademyPlayerView';
 import AcademyRecordSheet from './academy/AcademyRecordSheet';
-import { createAppChannel } from './academy/academyChannel';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { laborService, Employee } from '../services/laborService';
 import { trainingsService } from '../services/trainingsService';
@@ -29,23 +26,27 @@ import type {
 /**
  * Academia ÒPURA — container do submódulo Recursos Humanos › Treinamentos.
  *
- * Cinco visões da MESMA entidade (o treinamento é único; RH, SESMT, gestor e
- * obra apenas o enxergam com permissões diferentes):
- *   Catálogo · Sala de treinamento · Atribuições · Registros · Painéis
+ * Esta tela é de GESTÃO, e só isso:
+ *   Catálogo · Atribuições · Registros · Painéis
+ *
+ * O colaborador NÃO faz treinamento aqui. Quem tem login usa a área pessoal
+ * "Meus Treinamentos" (`components/academy/MeusTreinamentosView.tsx`, item
+ * solto na sidebar, sem guarda de módulo); quem não tem login — a maior parte
+ * da mão de obra — usa o Portal do Colaborador por token. O motivo é simples:
+ * esta tela está atrás de `canViewLabor`, e quem precisa FAZER treinamento
+ * justamente não tem permissão de RH.
  *
  * O conteúdo de cada aba mora em `components/academy/` — este arquivo só
- * orquestra. Duas interações trocam o conteúdo por uma TELA (padrão
- * ContractDetailView: seta de voltar + <h1>, sem overlay): montar conteúdo de
- * um curso e assistir a uma aula.
+ * orquestra. Montar conteúdo de um curso troca o conteúdo por uma TELA (padrão
+ * ContractDetailView: seta de voltar + <h1>, sem overlay).
  *
  * Spec: PLANO_MODULO_TREINAMENTOS.md
  */
 
-type TView = 'catalog' | 'classroom' | 'assignments' | 'records' | 'panels';
+type TView = 'catalog' | 'assignments' | 'records' | 'panels';
 
 const VIEWS: Array<{ id: TView; label: string }> = [
     { id: 'catalog',     label: 'Catálogo' },
-    { id: 'classroom',   label: 'Sala de treinamento' },
     { id: 'assignments', label: 'Atribuições' },
     { id: 'records',     label: 'Registros' },
     { id: 'panels',      label: 'Painéis' },
@@ -54,7 +55,6 @@ const VIEWS: Array<{ id: TView; label: string }> = [
 // O <h1> muda com a aba — senão o título mente (§19.1).
 const VIEW_HEADERS: Record<TView, { title: string; subtitle: string }> = {
     catalog:     { title: 'Catálogo de treinamentos', subtitle: 'Treinamentos internos, NRs e conteúdo EAD da organização.' },
-    classroom:   { title: 'Sala de treinamento',      subtitle: 'Os treinamentos atribuídos a você, com progresso e certificados.' },
     assignments: { title: 'Atribuições',              subtitle: 'Quem precisa fazer cada treinamento, com prazo e reciclagem.' },
     records:     { title: 'Registros de treinamento', subtitle: 'Evidências de participação e controle de vencimento.' },
     panels:      { title: 'Painéis de treinamento',   subtitle: 'Aderência da equipe e conformidade de NR.' },
@@ -124,10 +124,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
 
     // Telas (troca in-flow, não overlay)
     const [builderCourse, setBuilderCourse] = useState<TrainingCourse | null>(null);
-    const [aulaAberta, setAulaAberta] = useState<AcademyEnrollment | null>(null);
     const [recordSheet, setRecordSheet] = useState(false);
-
-    const appChannel = useMemo(() => createAppChannel(), []);
 
     const coursesKey = laborKeys.trainingCourses(orgId);
     const recordsKey = [...laborKeys.all, 'employeeTrainings', orgId, filterEmployee, filterStatus];
@@ -225,21 +222,6 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
         );
     }
 
-    if (aulaAberta) {
-        return (
-            <>
-                <AcademyPlayerView
-                    enrollmentId={aulaAberta.id}
-                    titulo={aulaAberta.course_nome || 'Treinamento'}
-                    subtitulo={aulaAberta.nr_referencia}
-                    channel={appChannel}
-                    onVoltar={() => { setAulaAberta(null); invalidate(); }}
-                />
-                <Toast />
-            </>
-        );
-    }
-
     const header = VIEW_HEADERS[view];
     const th = 'px-6 py-2 border-r border-gray-100';
     const td = 'px-6 py-2.5 border-r border-gray-100 text-sm font-normal';
@@ -253,7 +235,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitle}</p>
             </div>
 
-            {alerts.length > 0 && view !== 'classroom' && (
+            {alerts.length > 0 && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-[10px] flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
@@ -306,10 +288,6 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                     onMontarConteudo={setBuilderCourse}
                     notify={notify}
                 />
-            )}
-
-            {view === 'classroom' && (
-                <AcademyClassroomTab orgId={orgId} onAbrir={setAulaAberta} />
             )}
 
             {view === 'assignments' && (

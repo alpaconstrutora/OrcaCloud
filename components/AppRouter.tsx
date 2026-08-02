@@ -60,6 +60,7 @@ const FiscalModuleL         = React.lazy(() => import('./fiscal/FiscalModule').t
 const OperacionalModule     = React.lazy(() => import('./OperacionalModule'));
 const StructuralModule      = React.lazy(() => import('./StructuralModule'));
 const TasksModule           = React.lazy(() => import('./TasksModule'));
+const MeusTreinamentosView  = React.lazy(() => import('./academy/MeusTreinamentosView'));
 const ServicesCommercialModule = React.lazy(() => import('./ServicesCommercialModule'));
 const ServiceContractsModule   = React.lazy(() => import('./ServiceContractsModule'));
 const SalesManagementModule    = React.lazy(() => import('./SalesManagementModule'));
@@ -1200,6 +1201,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onChangeView={setActiveView}
         />
       );
+
+    // ── Meus Treinamentos (área pessoal do colaborador) ────────────────────────
+    // Sem guarda de módulo, igual a 'tarefas': quem precisa FAZER treinamento
+    // não tem permissão de RH. A gestão continua em RH › Treinamentos.
+    case 'meus-treinamentos':
+      return <MeusTreinamentosView orgId={activeOrganizationId ?? undefined} />;
 
     // ── Estrutural / Ferragem Armada ───────────────────────────────────────────
     case 'estrutural':

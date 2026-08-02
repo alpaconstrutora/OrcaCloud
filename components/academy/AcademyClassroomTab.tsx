@@ -71,8 +71,10 @@ const AcademyClassroomTab: React.FC<Props> = ({ orgId, onAbrir }) => {
             <div className="text-center py-12">
                 <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Seu usuário não está vinculado a um colaborador</h3>
-                <p className="text-sm text-gray-500">
-                    A Sala de Treinamento mostra os treinamentos atribuídos ao seu cadastro em Recursos Humanos.
+                <p className="text-sm text-gray-500 max-w-md mx-auto">
+                    Os treinamentos são atribuídos ao cadastro de colaborador, não ao login.
+                    Peça ao RH para abrir sua ficha em Recursos Humanos › Colaboradores e
+                    preencher o campo <span className="font-medium text-gray-700">Usuário do sistema</span>.
                 </p>
             </div>
         );

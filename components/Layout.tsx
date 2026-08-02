@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -7,6 +7,7 @@ import PreferencesSheet, { type ThemeMode } from './PreferencesSheet';
 import MyAccountSheet from './MyAccountSheet';
 import { notificationService } from '../services/notificationService';
 import { taskService } from '../services/taskService';
+import { academyService } from '../services/academyService';
 import { viewUrl } from '../lib/tabRouter';
 
 const ThemeModeIcon = ({ mode, className }: { mode: ThemeMode; className?: string }) => {
@@ -510,6 +511,7 @@ const Layout: React.FC<LayoutProps> = ({
     const items: CommandItem[] = [
       { id: 'dashboard', label: 'Dashboard', group: 'Geral', icon: LayoutDashboard },
       { id: 'tarefas', label: 'Minhas tarefas', group: 'Geral', icon: CheckSquare, shortcut: 'N' },
+      { id: 'meus-treinamentos', label: 'Meus treinamentos', group: 'Geral', icon: GraduationCap },
       { id: 'notifications-center', label: 'Notificações', group: 'Geral', icon: Bell },
       { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
       { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
@@ -600,6 +602,7 @@ const Layout: React.FC<LayoutProps> = ({
   }, [commandItems, openCommandPalette, runCommand]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [openTaskCount, setOpenTaskCount] = React.useState(0);
+  const [pendingTrainingCount, setPendingTrainingCount] = React.useState(0);
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
   const toastTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -635,6 +638,12 @@ const Layout: React.FC<LayoutProps> = ({
     taskService.openCount().then(setOpenTaskCount).catch(() => {});
     // Atualiza ao navegar para manter o badge sincronizado
   }, [activeView]);
+
+  // Badge de "Meus Treinamentos". countMyPending devolve 0 em vez de lançar
+  // quando o usuário não é colaborador vinculado — a maioria dos membros.
+  React.useEffect(() => {
+    academyService.countMyPending(activeOrganizationId).then(setPendingTrainingCount).catch(() => {});
+  }, [activeView, activeOrganizationId]);
 
   const fetchUnreadCount = React.useCallback(async () => {
     if (!profile.email && !isDev) return;
@@ -817,6 +826,10 @@ const Layout: React.FC<LayoutProps> = ({
               </NavDropdown>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
+              {/* Área pessoal, sem guarda de módulo — quem precisa FAZER
+                  treinamento não tem permissão de RH. A gestão fica em
+                  Recursos Humanos › Treinamentos. */}
+              <NavItem id="meus-treinamentos" icon={GraduationCap} label="Meus Treinamentos" badge={pendingTrainingCount || undefined} />
               <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
@@ -1295,6 +1308,7 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
+              <NavItem id="meus-treinamentos" icon={GraduationCap} label="Meus Treinamentos" badge={pendingTrainingCount || undefined} forceFull />
               <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} forceFull />
               {(profile.group === 'DESENVOLVEDOR' || isDevEmail || canManageOrganization) ? (
                 <div className="space-y-1 mb-4">

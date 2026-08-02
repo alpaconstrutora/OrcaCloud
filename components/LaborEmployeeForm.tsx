@@ -33,6 +33,13 @@ const ADMISSION_CHECKLIST_ITEMS = [
     'Foto 3x4', 'PIS/PASEP', 'Conta bancária', 'Exame admissional', 'ASO (Atestado de Saúde Ocupacional)'
 ];
 
+/** Membro da organização que já aceitou o convite (tem usuário em auth.users). */
+interface OrgMemberOption {
+    user_id: string;
+    name?: string | null;
+    email?: string | null;
+}
+
 const InputGroup: React.FC<{ label: string; children: React.ReactNode; icon?: React.ElementType }> = ({ label, children, icon: Icon }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
@@ -59,12 +66,14 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     const [loadingRubrics, setLoadingRubrics] = useState(false);
     const [companies, setCompanies] = useState<{ id: string; razao_social: string }[]>([]);
     const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
+    const [orgMembers, setOrgMembers] = useState<OrgMemberOption[]>([]);
     const [loadingRoles, setLoadingRoles] = useState(false);
     const [form, setForm] = useState<Partial<Employee>>({
         name: employee?.name || '',
         cpf: employee?.cpf || '',
         phone: employee?.phone || '',
         email: employee?.email || '',
+        user_id: employee?.user_id ?? null,
         contract_type: employee?.contract_type || 'CLT',
         role: employee?.role || ROLES[0],
         status: employee?.status || 'ATIVO',
@@ -168,6 +177,22 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             });
         return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [orgId]);
+
+    // Carrega os usuários do sistema da org, para o vínculo com o colaborador.
+    // Só entram membros que já aceitaram o convite (user_id preenchido) —
+    // convite pendente ainda não tem usuário em auth.users para apontar.
+    useEffect(() => {
+        if (!orgId) { setOrgMembers([]); return; }
+        let cancelled = false;
+        supabase.from('organization_members')
+            .select('user_id, name, email')
+            .eq('organization_id', orgId)
+            .not('user_id', 'is', null)
+            .then(({ data }) => {
+                if (!cancelled) setOrgMembers((data || []) as OrgMemberOption[]);
+            });
+        return () => { cancelled = true; };
     }, [orgId]);
 
     // Carrega cargos do catálogo quando empresa_id muda
@@ -349,6 +374,32 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                             </InputGroup>
                             <InputGroup label="Data de Admissão" icon={Calendar}>
                                 <input value={form.hire_date} onChange={e => setField('hire_date', e.target.value)} className={inputCls} type="date" />
+                            </InputGroup>
+                            {/* Vínculo com o login. Sem isto, "Meus Treinamentos" não
+                                consegue saber quais matrículas são desta pessoa. */}
+                            <InputGroup label="Usuário do sistema" icon={User}>
+                                <div className="relative">
+                                    <select
+                                        value={form.user_id || ''}
+                                        onChange={e => setField('user_id', e.target.value || null)}
+                                        className={inputCls + ' appearance-none pr-8'}
+                                    >
+                                        <option value="">Sem acesso ao sistema</option>
+                                        {orgMembers.map(m => (
+                                            <option key={m.user_id} value={m.user_id}>
+                                                {m.name || m.email}
+                                                {form.email && m.email
+                                                    && m.email.toLowerCase() === form.email.toLowerCase()
+                                                    ? ' — mesmo e-mail'
+                                                    : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    A maior parte da mão de obra não tem login e acessa pelo Portal do Colaborador.
+                                </p>
                             </InputGroup>
                         </div>
                     </div>

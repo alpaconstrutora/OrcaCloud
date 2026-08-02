@@ -68,6 +68,35 @@ avaliações → conclusão → certificado.**
 O registro manual presencial que existe hoje **não muda**: continua entrando em
 `employee_trainings` com `origem = 'MANUAL'`.
 
+### 2.1 Gestão e consumo são telas separadas
+
+Isto não é detalhe de layout — é o que faz o módulo funcionar para quem ele
+serve.
+
+| Quem | Onde | Como chega |
+|---|---|---|
+| RH, SESMT, gestor | **Recursos Humanos › Treinamentos** — catálogo, atribuições, registros, painéis | menu de RH, atrás de `canViewLabor` |
+| Colaborador **com** login | **Meus Treinamentos** — área pessoal | item solto na sidebar, **sem guarda de módulo**, ao lado de Minhas Tarefas |
+| Colaborador **sem** login (maior parte da mão de obra) | **Portal do Colaborador** | link `/portal?token=`, gerado pelo RH |
+
+O motivo da separação: a tela de RH está atrás de `canViewLabor`, e **quem
+precisa fazer treinamento normalmente não tem permissão de RH**. Deixar a sala
+de aula lá dentro tornaria a tela invisível justamente para o público-alvo.
+
+Não existe grupo de login COLABORADOR (`types/users.ts` — ProfileGroup tem
+USUARIO, CLIENTE, INVESTIDOR, DESENVOLVEDOR, FORNECEDOR, CORRETOR, PARCEIRO).
+Isso é intencional: operário de obra não cria conta, e por isso o Portal por
+token existe.
+
+**Vínculo usuário ↔ colaborador:** `employees.user_id` (migration
+`20270851000000`, sem FK para `auth.users` — tabela quente). Preenchido na ficha
+do colaborador, campo "Usuário do sistema"; `NULL` é o default e o caso comum.
+Sem esse vínculo, "Meus Treinamentos" não sabe quais matrículas são de quem — o
+casamento por e-mail continua só como fallback.
+
+O player é o mesmo componente nos dois canais (`AcademyPlayerView`), trocando
+apenas o `AcademyChannel` injetado — não há duplicação de tela.
+
 ### Versionamento — publicar não altera o passado
 
 Publicar a v2 **arquiva** a v1 e cria futuro; não toca em nenhuma matrícula,
@@ -95,7 +124,7 @@ passou sob a regra antiga.
 | Certificado | PDF com número único, QR e rota pública de validação |
 | Alertas | Pendência, prazo, vencimento de NR e reciclagem automática (cron diário) |
 | Painéis | Colaborador, gestor e RH |
-| Canais | App logado **e** Portal do Colaborador (`/portal?token=`) |
+| Canais | App logado **e** Portal do Colaborador (`/portal?token=`) — ver §2.1 |
 
 ### Etapa 2 — Operação corporativa
 

@@ -476,7 +476,10 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
     const confirm = useConfirm();
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
     const [generatingId, setGeneratingId] = useState<string | null>(null);
-    const [previewEmployee, setPreviewEmployee] = useState<string | null>(null);
+    // Guarda o token junto: sem ele as queries da Academia ficam desabilitadas
+    // (`enabled: !!portalToken`) e a prévia mostraria a seção vazia, dando a
+    // impressão de que o colaborador não tem treinamento nenhum.
+    const [previewEmployee, setPreviewEmployee] = useState<{ id: string; token: string } | null>(null);
     const [search, setSearch] = usePersistedState<string>('laborPortal:search', '');
 
     const tokensKey = ['portal', 'tokens', orgId];
@@ -546,7 +549,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                             <X className="w-4 h-4 text-slate-600" />
                         </button>
                         <div className="h-full overflow-y-auto">
-                            <PortalView employeeId={previewEmployee} orgId={orgId} onLogout={() => setPreviewEmployee(null)} />
+                            <PortalView employeeId={previewEmployee.id} orgId={orgId} portalToken={previewEmployee.token} onLogout={() => setPreviewEmployee(null)} />
                         </div>
                     </div>
                 </div>
@@ -593,7 +596,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                                                 Ativo
                                                 {tok.last_used_at && <span className="text-slate-400 ml-1">· Último acesso {tok.last_used_at.split('T')[0]}</span>}
                                             </div>
-                                            <button onClick={() => setPreviewEmployee(emp.id)} className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors" title="Prévia do portal">
+                                            <button onClick={() => setPreviewEmployee({ id: emp.id, token: tok.token })} className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-400 hover:text-indigo-600 transition-colors" title="Prévia do portal">
                                                 <Smartphone className="w-3.5 h-3.5" />
                                             </button>
                                             <button onClick={() => handleCopy(tok)} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-black transition-all ${copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>

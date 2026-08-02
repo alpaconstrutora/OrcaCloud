@@ -380,6 +380,12 @@ export interface Employee {
     role_id?: string | null;
     department_id?: string | null;
     user_email?: string | null;
+    /**
+     * Usuário do sistema (auth.users.id) vinculado a este colaborador.
+     * NULL = sem login — o caso mais comum, e o motivo do Portal do
+     * Colaborador por token existir. Migration 20270851000000.
+     */
+    user_id?: string | null;
     name: string;
     cpf?: string;
     phone?: string;

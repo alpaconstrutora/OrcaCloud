@@ -3285,7 +3285,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             {/* Header / Stats — variante flat (bare icon, sentence case, sem sombra),
                 igual à tela de referência SupplierList.tsx. Grade simétrica: os 4 KPIs
                 são métricas independentes, sem relação total→decomposição (guia §4.2). */}
-            {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (abas → botões →
+            {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (KPIs → botões →
                 toolbar acoplada) respira 12px, metade do space-y-6 do container raiz. */}
             <div className="relative mb-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

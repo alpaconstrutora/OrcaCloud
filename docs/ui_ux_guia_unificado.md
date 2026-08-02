@@ -24,9 +24,10 @@
 ## FONTE DA VERDADE (reconciliada)
 
 Referência canônica hoje: **`components/BankReconciliation.tsx`, aba Extrato
-Bancário** — a composição de título → KPIs → abas → botões de escopo → toolbar
+Bancário** — a composição de título → abas → KPIs → botões de escopo → toolbar
 acoplada à tabela é o melhor resultado que o app produziu (padrão adotado em
-2026-07-16), e é o alvo que telas novas devem copiar. Complementam como
+2026-07-16, ordem abas/KPIs corrigida em 2026-08-02), e é o alvo que telas
+novas devem copiar. Complementam como
 referência de **escala compacta madura**: `components/ClientList.tsx` (já
 nasceu compacta), `components/SupplierList.tsx` (F4/F5: régua desaninhada,
 resize, Shift+clique, sticky header) e `components/SupplyChainOrderList.tsx`
@@ -64,13 +65,16 @@ auditoria errado**, não por falta de informação. Os erros já cometidos:
    morar no componente **pai**, não na tela (ver §19.3).
 
 4. **Auditar arquivo por arquivo quando a tela é composta (pai+filho).** No
-   caso `FiscalModule` (2026-07-19), cada arquivo lido isoladamente estava
-   certo, e a árvore composta saiu errada: `FiscalModule` (pai:
-   título+abas+botões) e `FiscalDocuments` (filho: KPIs+tabela) passavam limpo
-   cada um por si; só compondo os dois dava para notar que abas+botões
-   apareciam *antes* do KPI do filho. **Título e KPI cards raramente bastam de
-   uma auditoria de arquivo único quando a tela é composta — sempre desenhar
-   (ou pedir print) da árvore final.** Ver §19.4.
+   caso `FiscalModule` (2026-07-19, quando a ordem vigente ainda era
+   `título → KPIs → abas`), cada arquivo lido isoladamente estava certo, e a
+   árvore composta saiu errada: `FiscalModule` (pai: título+abas+botões) e
+   `FiscalDocuments` (filho: KPIs+tabela) passavam limpo cada um por si; só
+   compondo os dois dava para notar que abas+botões apareciam *antes* do KPI
+   do filho — inversão da ordem que valia então. (Com a ordem atual,
+   §19.3/`tabsSlot`, abas antes de KPIs é o correto — mas o risco de auditar
+   arquivo isolado em tela composta continua o mesmo.) **Título e abas
+   raramente bastam de uma auditoria de arquivo único quando a tela é
+   composta — sempre desenhar (ou pedir print) da árvore final.** Ver §19.4.
 
 **Sempre rodar antes de reportar concluído:**
 
@@ -91,20 +95,25 @@ visualmente, **dizer isso** em vez de afirmar que está aplicado.
 
 ```
 1. Título (h1 + subtítulo)
-2. KPI cards
-3. Toolbar de abas          (só se a tela tiver abas — ver §19; costumam vir do PAI)
+2. Toolbar de abas          (só se a tela tiver abas — ver §19; costumam vir do PAI)
+3. KPI cards                (os KPIs refletem a aba ativa — por isso vêm DEPOIS das abas)
 4. Toolbar de botões        (só se a tela tiver controles de escopo / ação primária — §5.3)
 5. Tabela com toolbar de busca acoplada (busca + filtro avançado + filtros rápidos + colunas)
 ```
 
-Espaçamento vertical (ver §20.1): **24px do título até os KPIs**, depois
-**12px** (`mb-3`) entre cada barra de cromo (KPIs → abas → botões → toolbar da
+Espaçamento vertical (ver §20.1): **24px do título até as abas**, depois
+**12px** (`mb-3`) entre cada barra de cromo (abas → KPIs → botões → toolbar da
 tabela).
 
 ⚠️ **A ordem não é sugestão.** O caso mais comum de quebra é a barra de abas
 aparecer *antes* do título, porque o módulo pai a desenha no topo. É violação
 da anatomia mesmo que cada bloco isolado esteja estilizado certo — ver §19.3
 (`tabsSlot`) e §19.4 (`chromeSlot`).
+
+> ⚠️ Ordem invertida até 02/08/2026 (KPIs antes de abas). Corrigido porque os
+> KPIs mostram números da aba ativa — exibi-los antes da barra que decide qual
+> aba está ativa inverte a leitura (o dado aparece antes do controle que o
+> define). Referência: `BankReconciliation.tsx`.
 
 ---
 
@@ -1407,9 +1416,9 @@ Referência: `Settings.tsx` (2026-07).
 > poucas (até ~6) e planas; árvore lateral (esta) quando há hierarquia de 2
 > níveis na mesma tela; sidebar global (§19) quando é navegação entre módulos.
 
-### 19.3 `tabsSlot` — abas do pai posicionadas depois dos KPIs do filho
+### 19.3 `tabsSlot` — abas do pai posicionadas antes dos KPIs do filho
 
-**O conflito estrutural:** a anatomia exige `título → KPIs → abas`, mas as abas
+**O conflito estrutural:** a anatomia exige `título → abas → KPIs`, mas as abas
 costumam ser do componente **pai** enquanto título e KPIs são da tela filha.
 Renderizar no pai põe as abas *antes* do título — fora de ordem. Foi exatamente
 o erro em Contas a Pagar (2026-07-19): auditou-se `ContasPagarManager.tsx`
@@ -1424,7 +1433,7 @@ grep -rn "SuaTela" components/ --include=*.tsx | grep import
 
 **Solução — `tabsSlot`** (implementada em `ProjectFinancialManager` →
 `ContasPagarManager`, commit `cb6b0bd`): o pai monta a barra e passa como prop;
-a tela a posiciona entre os KPIs e a toolbar de botões.
+a tela a posiciona entre o título e os KPIs.
 
 ```tsx
 // No pai: monta a barra uma vez
@@ -1447,8 +1456,8 @@ interface Props { tabsSlot?: React.ReactNode; }
 
 <div className="space-y-6">
   <div>{/* 1. título */}</div>
-  <div className="grid … mb-3">{/* 2. KPIs */}</div>
-  {tabsSlot}                       {/* 3. abas, na posição correta */}
+  {tabsSlot}                       {/* 2. abas, na posição correta */}
+  <div className="grid … mb-3">{/* 3. KPIs */}</div>
   <div className="… mb-3">{/* 4. escopo */}</div>
   <div>{/* 5. card da tabela */}</div>
 </div>
@@ -1466,11 +1475,14 @@ interface Props { tabsSlot?: React.ReactNode; }
 ### 19.4 `chromeSlot` — quando o pai monta abas §19.1 **e** botões §5.3
 
 `FiscalModule.tsx` foi auditado, declarado "100% conforme" (cada arquivo lido
-isoladamente estava certo) e mesmo assim saiu fora de ordem: abas e botões
-(ambos no pai) apareciam *antes* dos KPIs, que vivem em cada filho
+isoladamente estava certo) e mesmo assim saiu fora de ordem (na regra vigente
+em 2026-07-19, `título → KPIs → abas`): abas e botões (ambos no pai)
+apareciam *antes* dos KPIs, que vivem em cada filho
 (`FiscalDocuments`/`FiscalJobs`/`FiscalRules`). O usuário só pegou com um print.
-**Auditar arquivo por arquivo não basta quando título/KPI e abas/botões
-pertencem a componentes diferentes — o que importa é a ordem no HTML final.**
+Com a ordem atual (`título → abas → KPIs`) esse arranjo específico passaria a
+estar correto — mas a lição do episódio continua valendo: **auditar arquivo
+por arquivo não basta quando título/abas e KPIs/botões pertencem a
+componentes diferentes — o que importa é a ordem no HTML final.**
 
 Generalização do `tabsSlot`: quando o pai monta **mais de um bloco de cromo**
 (abas §19.1 + botões §5.3), combine num único `chromeSlot` e passe pronto — não
@@ -1542,20 +1554,20 @@ Referência: `SupplierList.tsx`, `ClientList.tsx`, `InvestorList.tsx`.
 > linguagens visuais deliberadamente diferentes, não inconsistência a corrigir
 > aqui. Não migre sem decisão explícita (seria redesign).
 
-### 20.1 Ritmo de espaçamento do cromo — 24px até os KPIs, 12px depois
+### 20.1 Ritmo de espaçamento do cromo — 24px até as abas, 12px depois
 
-O `space-y-6` (24px) do container raiz governa o **conteúdo** — título → KPIs, e
-o último bloco de cromo → tabela. Já as barras de cromo empilhadas entre KPIs e
-tabela (abas §19 → botões §5.3 → toolbar acoplada §5.2) respiram **12px** entre
+O `space-y-6` (24px) do container raiz governa o **conteúdo** — título → abas, e
+o último bloco de cromo → tabela. Já as barras de cromo empilhadas entre abas e
+tabela (KPIs §4 → botões §5.3 → toolbar acoplada §5.2) respiram **12px** entre
 si: são controles da mesma tarefa.
 
 ```tsx
 <div className="space-y-6">
   <div>{/* h1 + p — §20 */}</div>
 
-  {/* mb-3 quebra o ritmo de 24px a partir daqui: KPIs e cromo são um bloco só */}
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">{/* KpiCard — §4 */}</div>
+  {/* mb-3 quebra o ritmo de 24px a partir daqui: abas e cromo são um bloco só */}
   <div className="... rounded-[10px] border border-gray-100 shadow-sm mb-3">{/* abas — §19.1 */}</div>
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">{/* KpiCard — §4 */}</div>
   <div className="... rounded-[10px] border border-gray-100 shadow-sm mb-3">{/* botões — §5.3 */}</div>
 
   <div>{/* toolbar acoplada + tabela — §5.2 */}</div>
@@ -1566,12 +1578,13 @@ si: são controles da mesma tarefa.
 > compila com `:where()`, que zera a especificidade, então qualquer `mb-*` no
 > filho vence limpo. **Não** vale para o Tailwind v3 (a técnica quebraria
 > silenciosamente).
-> ✅ O `mb-3` vai no **elemento de cima** de cada par: KPIs, abas e botões
+> ✅ O `mb-3` vai no **elemento de cima** de cada par: abas, KPIs e botões
 > carregam `mb-3`; a toolbar acoplada não carrega nada (usa o `space-y-6`).
 > ❌ Não aplicar `mb-3` no bloco de título — o respiro de 24px entre `<h1>` e
-> KPIs separa "identidade da tela" de "dados da tela". Regra rápida: 24px sempre
-> que a pergunta muda; 12px enquanto for a mesma pergunta.
-> ℹ️ Referência: `BankReconciliation.tsx` (aba Extrato), 2026-07-16.
+> abas separa "identidade da tela" de "controle da tela". Regra rápida: 24px
+> sempre que a pergunta muda; 12px enquanto for a mesma pergunta.
+> ℹ️ Referência: `BankReconciliation.tsx` (aba Extrato), 2026-07-16; ordem
+> abas/KPIs corrigida em 2026-08-02.
 
 ---
 
@@ -1698,8 +1711,8 @@ Percorrer antes de dizer "aplicado". Reportar item a item, não em bloco.
 | # | Verificar | Erro comum |
 |---|---|---|
 | 1 | `h1` solto + subtítulo `mt-1.5` (§20) | título dentro de card/hero |
-| 2 | `KpiCard`, cor semântica por KPI (§4) | card reimplementado à mão |
-| 3 | Abas em card branco, **depois dos KPIs** (§19.1/§19.3) | "tela sem abas" sem olhar o pai |
+| 2 | Abas em card branco, **antes dos KPIs** (§19.1/§19.3) | "tela sem abas" sem olhar o pai |
+| 3 | `KpiCard`, cor semântica por KPI (§4) | card reimplementado à mão |
 | 4 | Escopo em barra própria (§5.3) | escopo fundido na barra de busca |
 | 5 | Toolbar acoplada; **`px-6` + `border-r` nas células** (§5.2/§6.6) | `px-4` sem separador |
 | 5b | Se redimensiona: espaçador antes de "Ações" + botão de autofit (§6.1.1/§6.1.2) | borda de "Ações" anda ao arrastar coluna |

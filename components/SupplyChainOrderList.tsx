@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, FileCheck, X, RefreshCw, MoveHorizontal } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, AlertTriangle, FileCheck, X, RefreshCw, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -376,40 +376,11 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         <KpiCard
                             shadow={false}
                             size="sm"
-                            label="Confirmados"
-                            value={orders.filter(o => o.status === 'Confirmado').length}
-                            sub="Pedidos confirmados/entregues"
-                            icon={<Package className="w-4 h-4" />}
-                            color="purple"
-                        />
-                        <KpiCard
-                            shadow={false}
-                            size="sm"
-                            label="Lead Time Médio"
-                            value={kpis.leadTimeDays !== null ? `${kpis.leadTimeDays} dias` : '—'}
-                            sub={kpis.receivedCount > 0
-                                ? `Baseado em ${kpis.receivedCount + kpis.divergenceCount} pedido(s) concluído(s)`
-                                : 'Nenhum pedido concluído ainda'}
-                            icon={<TrendingUp className="w-4 h-4" />}
-                            color="blue"
-                        />
-                        <KpiCard
-                            shadow={false}
-                            size="sm"
                             label="Taxa de Divergência"
                             value={kpis.divergenceRate !== null ? `${kpis.divergenceRate}%` : '—'}
                             sub={`${kpis.divergenceCount} divergência(s) em ${kpis.divergenceCount + kpis.receivedCount} pedido(s)`}
                             icon={<AlertTriangle className="w-4 h-4" />}
                             color={divergenceHigh ? 'red' : 'amber'}
-                        />
-                        <KpiCard
-                            shadow={false}
-                            size="sm"
-                            label="Aprovação Financeira"
-                            value={kpis.financialApprovalRate !== null ? `${kpis.financialApprovalRate}%` : '—'}
-                            sub={`${kpis.approvedCount} de ${kpis.completedCount} pedido(s) aprovado(s)`}
-                            icon={<CheckCircle2 className="w-4 h-4" />}
-                            color="emerald"
                         />
                     </div>
                 );

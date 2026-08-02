@@ -526,6 +526,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             employees={employees}
                             onRefresh={refetchAll}
                             organizations={organizations}
+                            // Atribuição por obra. `projects` já chega sem projeto
+                            // de sistema e só com OBRA (REGRA #2/#3).
+                            projects={projects.map(p => ({ id: p.id, name: p.name }))}
                         />
                     )}
                     {activeTab === 'rh_dashboard' && (

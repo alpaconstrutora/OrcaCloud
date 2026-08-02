@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { validateDocumentFile } from '../lib/mimeValidation';
+import { trainingsService } from './trainingsService';
+import type { TrainingCategoria, TrainingCourse, EmployeeTraining } from '../types/academy';
 
 // ============================================================
 // TIPOS LOCAIS
@@ -340,48 +342,11 @@ export interface VacationBalance {
     updated_at?: string;
 }
 
-export type TrainingCategoria =
-    | 'NR_OBRIGATORIA' | 'INTEGRACAO' | 'DDS'
-    | 'QUALIDADE' | 'LIDERANCA' | 'TECNICO' | 'OUTROS';
-
-export interface TrainingCourse {
-    id: string;
-    org_id: string;
-    nome: string;
-    descricao?: string;
-    nr_referencia?: string;
-    categoria: TrainingCategoria;
-    carga_horaria: number;
-    validade_meses?: number;
-    instrutor?: string;
-    is_obrigatorio: boolean;
-    roles_obrigatorios: string[];
-    status: 'ATIVO' | 'INATIVO';
-    created_at?: string;
-    updated_at?: string;
-}
-
-export interface EmployeeTraining {
-    id: string;
-    org_id: string;
-    employee_id: string;
-    employee_name?: string;
-    course_id: string;
-    course_nome?: string;
-    nr_referencia?: string;
-    data_realizacao: string;
-    data_validade?: string;
-    instrutor?: string;
-    local?: string;
-    carga_horaria?: number;
-    certificado_url?: string;
-    nota?: number;
-    aprovado: boolean;
-    status: 'ATIVO' | 'VENCIDO' | 'PENDENTE';
-    observacoes?: string;
-    created_at?: string;
-    updated_at?: string;
-}
+// Treinamentos: os tipos moram em types/academy.ts desde a Academia ÒPURA
+// (o catálogo é compartilhado com o LMS). Re-exportados aqui para não quebrar
+// os call sites que já importavam de laborService.
+// (importados acima também, porque as assinaturas abaixo os usam localmente)
+export type { TrainingCategoria, TrainingCourse, EmployeeTraining };
 
 export interface RhKpis {
     headcount: { total: number; ativos: number; afastados: number; em_ferias: number };
@@ -1654,144 +1619,55 @@ export const laborService = {
     },
 
     // ── TRAININGS ──────────────────────────────────────────
+    // Implementação real em services/trainingsService.ts. Aqui ficam apenas
+    // wrappers delegantes, para que nenhum call site existente precise mudar.
 
-    async listTrainingCourses(orgId: string): Promise<TrainingCourse[]> {
-        const { data, error } = await supabase
-            .from('training_courses')
-            .select('id, org_id, nome, descricao, nr_referencia, categoria, carga_horaria, validade_meses, instrutor, is_obrigatorio, roles_obrigatorios, status, created_at, updated_at')
-            .eq('org_id', orgId)
-            .order('nome');
-        if (error) throw error;
-        return data || [];
+    async listTrainingCourses(orgId?: string | null): Promise<TrainingCourse[]> {
+        return trainingsService.listTrainingCourses(orgId);
     },
 
     async createTrainingCourse(course: Omit<TrainingCourse, 'id' | 'created_at' | 'updated_at'>): Promise<TrainingCourse> {
-        const { data, error } = await supabase
-            .from('training_courses')
-            .insert(course)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        return trainingsService.createTrainingCourse(course);
     },
 
     async updateTrainingCourse(id: string, updates: Partial<TrainingCourse>): Promise<TrainingCourse> {
-        const { id: _id, created_at: _ca, updated_at: _ua, ...clean } = updates;
-        const { data, error } = await supabase
-            .from('training_courses')
-            .update(clean)
-            .eq('id', id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        return trainingsService.updateTrainingCourse(id, updates);
     },
 
     async deleteTrainingCourse(id: string): Promise<void> {
-        const { error } = await supabase
-            .from('training_courses')
-            .update({ status: 'INATIVO' })
-            .eq('id', id);
-        if (error) throw error;
+        return trainingsService.deleteTrainingCourse(id);
     },
 
     async listEmployeeTrainings(filters: {
-        orgId: string;
+        orgId?: string | null;
         employeeId?: string;
         courseId?: string;
         status?: EmployeeTraining['status'];
+        origem?: EmployeeTraining['origem'];
     }): Promise<EmployeeTraining[]> {
-        let query = supabase
-            .from('employee_trainings')
-            .select(`
-                *,
-                employee:employees!employee_id(name),
-                course:training_courses!course_id(nome, nr_referencia)
-            `)
-            .eq('org_id', filters.orgId)
-            .order('data_realizacao', { ascending: false });
-
-        if (filters.employeeId) query = query.eq('employee_id', filters.employeeId);
-        if (filters.courseId)   query = query.eq('course_id', filters.courseId);
-        if (filters.status)     query = query.eq('status', filters.status);
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        type ETRow = EmployeeTraining & {
-            employee?: { name: string };
-            course?: { nome: string; nr_referencia?: string };
-        };
-        return (data || [] as ETRow[]).map((r: ETRow) => ({
-            ...r,
-            employee_name: r.employee?.name,
-            course_nome: r.course?.nome,
-            nr_referencia: r.course?.nr_referencia,
-        }));
+        return trainingsService.listEmployeeTrainings(filters);
     },
 
     async createEmployeeTraining(
         training: Omit<EmployeeTraining, 'id' | 'created_at' | 'updated_at' | 'employee_name' | 'course_nome' | 'nr_referencia'>
     ): Promise<EmployeeTraining> {
-        const { data, error } = await supabase
-            .from('employee_trainings')
-            .insert(training)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        return trainingsService.createEmployeeTraining(training);
     },
 
     async uploadTrainingCertificado(trainingId: string, orgId: string, file: File): Promise<string> {
-        const validation = validateDocumentFile(file);
-        if (!validation.valid) throw new Error(validation.error);
-
-        const ext = file.name.split('.').pop();
-        const path = `trainings/${orgId}/${trainingId}.${ext}`;
-        const { error } = await supabase.storage
-            .from('organization-assets')
-            .upload(path, file, { upsert: true });
-        if (error) throw error;
-        await supabase.from('employee_trainings').update({ certificado_url: path }).eq('id', trainingId);
-        return path;
+        return trainingsService.uploadTrainingCertificado(trainingId, orgId, file);
     },
 
     async updateEmployeeTraining(id: string, updates: Partial<EmployeeTraining>): Promise<EmployeeTraining> {
-        const { id: _id, created_at: _ca, updated_at: _ua, employee_name: _en, course_nome: _cn, nr_referencia: _nr, ...clean } = updates;
-        const { data, error } = await supabase
-            .from('employee_trainings')
-            .update(clean)
-            .eq('id', id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        return trainingsService.updateEmployeeTraining(id, updates);
     },
 
     async deleteEmployeeTraining(id: string): Promise<void> {
-        const { error } = await supabase.from('employee_trainings').delete().eq('id', id);
-        if (error) throw error;
+        return trainingsService.deleteEmployeeTraining(id);
     },
 
-    async getTrainingAlerts(orgId: string): Promise<EmployeeTraining[]> {
-        const in30 = new Date();
-        in30.setDate(in30.getDate() + 30);
-        const { data, error } = await supabase
-            .from('employee_trainings')
-            .select(`
-                *,
-                employee:employees!employee_id(name),
-                course:training_courses!course_id(nome, nr_referencia)
-            `)
-            .eq('org_id', orgId)
-            .lte('data_validade', in30.toISOString().split('T')[0])
-            .eq('status', 'ATIVO')
-            .order('data_validade');
-        if (error) throw error;
-        type ETRow = EmployeeTraining & { employee?: { name: string }; course?: { nome: string; nr_referencia?: string } };
-        return (data || [] as ETRow[]).map((r: ETRow) => ({
-            ...r, employee_name: r.employee?.name, course_nome: r.course?.nome, nr_referencia: r.course?.nr_referencia,
-        }));
+    async getTrainingAlerts(orgId?: string | null): Promise<EmployeeTraining[]> {
+        return trainingsService.getTrainingAlerts(orgId);
     },
 
     // ── RH KPIS (Sprint 5) ─────────────────────────────────

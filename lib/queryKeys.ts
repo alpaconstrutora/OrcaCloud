@@ -95,6 +95,33 @@ export const orgKeys = {
     list: ()               => ['organizations', 'list'] as const,
 } as const;
 
+// ── Academia ÒPURA (Treinamento e Desenvolvimento) ───────────────────────────
+// O catálogo de cursos continua sob `laborKeys.trainingCourses` — é a mesma
+// entidade. Aqui ficam só as chaves do conteúdo versionado e do consumo.
+export const academyKeys = {
+    all: ['academy'] as const,
+    versions:     (courseId: string)     => ['academy', 'versions', courseId] as const,
+    version:      (versionId: string)    => ['academy', 'version', versionId] as const,
+    publishedVersion: (courseId: string) => ['academy', 'publishedVersion', courseId] as const,
+    outline:      (versionId: string)    => ['academy', 'outline', versionId] as const,
+    questions:    (versionId: string)    => ['academy', 'questions', versionId] as const,
+    assessments:  (versionId: string)    => ['academy', 'assessments', versionId] as const,
+    assignments:  (orgId?: string | null) => ['academy', 'assignments', orgId ?? 'all'] as const,
+    enrollments:  (orgId?: string | null, employeeId?: string, status?: string) =>
+                      ['academy', 'enrollments', orgId ?? 'all', employeeId ?? 'all', status ?? 'all'] as const,
+    myEnrollments:(employeeId: string)   => ['academy', 'myEnrollments', employeeId] as const,
+    playerContent:(enrollmentId: string) => ['academy', 'playerContent', enrollmentId] as const,
+    accessLogs:   (enrollmentId: string) => ['academy', 'accessLogs', enrollmentId] as const,
+    certificates: (orgId?: string | null, employeeId?: string) =>
+                      ['academy', 'certificates', orgId ?? 'all', employeeId ?? 'all'] as const,
+    managerPanel: (orgId?: string | null) => ['academy', 'managerPanel', orgId ?? 'all'] as const,
+    hrPanel:      (orgId?: string | null) => ['academy', 'hrPanel', orgId ?? 'all'] as const,
+    // Portal externo mantém o namespace do portal (LaborPortal.tsx).
+    portalEnrollments: (token: string)   => ['portal', 'academy', 'enrollments', token] as const,
+    portalContent: (token: string, enrollmentId: string) =>
+                      ['portal', 'academy', 'content', token, enrollmentId] as const,
+} as const;
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**

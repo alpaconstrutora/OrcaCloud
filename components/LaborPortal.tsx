@@ -17,6 +17,11 @@ import Button from './ui/Button';
 import LaborScopeBar from './LaborScopeBar';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
+import AcademyPlayerView from './academy/AcademyPlayerView';
+import { createPortalChannel } from './academy/academyChannel';
+import { academyPortalService } from '../services/academyPortalService';
+import { academyKeys } from '../lib/queryKeys';
+import type { AcademyPortalEnrollment } from '../types/academy';
 
 // Helper: chama RPC SECURITY DEFINER e retorna array (funciona sem sessão Supabase)
 async function portalRpc<T>(fn: string, employeeId: string): Promise<T[]> {
@@ -31,11 +36,31 @@ interface PortalViewProps {
     employeeId: string;
     orgId: string;
     onLogout: () => void;
+    /**
+     * Token do link do portal. Presente só no acesso externo (`/portal?token=`).
+     * É o que habilita a Academia: todos os RPCs de treinamento recortam pelo
+     * token, nunca por employee_id cru.
+     */
+    portalToken?: string;
 }
 
-export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout }) => {
+export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout, portalToken }) => {
     const [activeSection, setActiveSection] = useState<'home' | 'ponto' | 'ferias' | 'docs' | 'treino' | 'folha'>('home');
     const [paystubOpen, setPaystubOpen] = useState<{ runId: string } | null>(null);
+    // Matrícula aberta na Academia — troca o conteúdo do portal pela sala de aula.
+    const [academiaAberta, setAcademiaAberta] = useState<AcademyPortalEnrollment | null>(null);
+
+    const portalChannel = React.useMemo(
+        () => portalToken ? createPortalChannel(portalToken) : null,
+        [portalToken]
+    );
+
+    const { data: academia = [] } = useQuery({
+        queryKey: portalToken ? academyKeys.portalEnrollments(portalToken) : ['portal', 'academy', 'none'],
+        queryFn: () => academyPortalService.listEnrollments(portalToken!),
+        staleTime: STALE.fast,
+        enabled: !!portalToken && activeSection === 'treino',
+    });
 
     const summaryKey = ['portal', 'summary', employeeId];
     const { data: summary, isLoading } = useQuery<PortalEmployeeSummary>({
@@ -107,6 +132,23 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     }
 
     const emp = summary?.employee;
+
+    // Sala de aula da Academia — troca o conteúdo do portal (não é overlay).
+    // Mesmo componente do app logado; só o canal muda.
+    if (academiaAberta && portalChannel) {
+        return (
+            <div className="max-w-md mx-auto h-full overflow-y-auto bg-white p-4">
+                <AcademyPlayerView
+                    enrollmentId={academiaAberta.id}
+                    titulo={academiaAberta.curso}
+                    subtitulo={academiaAberta.nr_referencia}
+                    channel={portalChannel}
+                    compacto
+                    onVoltar={() => setAcademiaAberta(null)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-md mx-auto h-full flex flex-col bg-white">
@@ -343,6 +385,51 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {/* Treinamentos */}
                 {activeSection === 'treino' && (
                     <div className="space-y-3">
+                        {/* Academia — treinamentos A FAZER (conteúdo EAD). Fica antes
+                            da evidência porque é o que exige ação do colaborador. */}
+                        {portalChannel && academia.length > 0 && (
+                            <div className="space-y-3 pb-2">
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Academia ÒPURA</p>
+                                {academia.map(m => {
+                                    const concluido = m.status === 'CONCLUIDO';
+                                    return (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => setAcademiaAberta(m)}
+                                            className={`w-full text-left p-3 rounded-xl border transition-colors ${
+                                                concluido ? 'border-emerald-200 bg-emerald-50' : 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100'
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold text-slate-800 truncate">{m.curso}</p>
+                                                    {m.nr_referencia && (
+                                                        <p className="text-xs font-black text-rose-600">{m.nr_referencia}</p>
+                                                    )}
+                                                    <p className="text-xs text-slate-400 mt-0.5">
+                                                        v{m.versao}
+                                                        {m.data_limite ? ` · prazo ${m.data_limite.split('-').reverse().join('/')}` : ''}
+                                                    </p>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-500 shrink-0">
+                                                    {Math.round(m.percentual)}%
+                                                </span>
+                                            </div>
+                                            <div className="h-1.5 bg-white/70 rounded-full overflow-hidden mt-2">
+                                                <div
+                                                    className={`h-full ${concluido ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                                                    style={{ width: `${Math.min(100, m.percentual)}%` }}
+                                                />
+                                            </div>
+                                            <p className="text-xs font-bold text-indigo-700 mt-2">
+                                                {concluido ? 'Ver certificado' : m.status === 'NAO_INICIADO' ? 'Começar' : 'Continuar'}
+                                            </p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus Treinamentos</p>
                         {trainings.length === 0 ? (
                             <div className="text-center py-10">

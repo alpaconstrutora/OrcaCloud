@@ -525,7 +525,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // de compra e venda; Locação (domain='LOCACAO') gera um contrato recorrente.
     const [linkedContract, setLinkedContract] = useState<Contract | null>(null);
     // Gerar Parcelas: alvo escolhido ('DEAL' = plano de pagamento da negociação)
-    const [generateTarget, setGenerateTarget] = useState<string>('DEAL');
+    /** Contrato (ou aditivo) que vai faturar. Vazio = nenhum carregado ainda. */
+    const [generateTarget, setGenerateTarget] = useState<string>('');
     const [generateTargets, setGenerateTargets] = useState<GenerateTarget[]>([]);
     const alvoSelecionado = generateTargets.find(t => t.id === generateTarget);
     const [generateResult, setGenerateResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -1048,19 +1049,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setGenerateInstallmentType('MENSAL');
         setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
         setGenerateFirstDueDate(formData.payment_due_date || formData.date || new Date().toISOString().split('T')[0]);
-        setGenerateTarget(targetId || 'DEAL');
+        // Sem 'DEAL': a negociação não é alvo de geração. Se o chamador não
+        // disse qual contrato, carregarAlvosDeGeracao escolhe o primeiro.
+        setGenerateTarget(targetId || '');
         setGenerateResult(null);
         void carregarAlvosDeGeracao();
         setShowGenerateModal(true);
     };
 
     /**
-     * Alvos possíveis da geração: a própria negociação (plano de pagamento) ou
-     * um CONTRATO da cadeia de renovação / o período de um ADITIVO.
-     *
-     * Locação tem duas origens de parcela — a série da negociação
-     * (`tx-{dealId}-…`) e a do contrato (`CONTRACT_RECURRING`). Sem escolher o
-     * alvo, não havia como gerar as parcelas de uma prorrogação por aqui.
+     * Alvos possíveis da geração: um CONTRATO da cadeia de renovação ou o
+     * período de um ADITIVO de prorrogação. A negociação NÃO é alvo — parcela
+     * é do contrato (2026-08-02).
      */
     const carregarAlvosDeGeracao = async () => {
         if (!linkedContract) { setGenerateTargets([]); return; }
@@ -1098,6 +1098,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 });
 
             setGenerateTargets(alvos);
+            // Pré-seleciona o primeiro contrato. O estado nasce em 'DEAL' por
+            // herança do modelo antigo, e como a opção "Negociação" deixou de
+            // existir no select, sem isto `alvoSelecionado` ficava indefinido e
+            // o botão "Gerar no contrato" travava mesmo com contrato gerado.
+            setGenerateTarget(prev => (alvos.some(a => a.id === prev) ? prev : (alvos[0]?.id ?? '')));
         } catch (e) {
             console.error('[DealModal] Erro ao carregar alvos de geração:', e);
             setGenerateTargets([]);

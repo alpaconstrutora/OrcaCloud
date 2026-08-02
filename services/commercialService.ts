@@ -1,7 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Property, PropertyDeal, PropertyStatus, DealUnit } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
-import { dealInstallmentService } from './dealInstallmentService';
 import { taxPayableService } from './taxPayableService';
 
 /**
@@ -672,37 +671,10 @@ export const commercialService = {
         // automaticamente: bastava salvar em PENDING/RESERVA para o plano de
         // pagamento — que serve para montar a PROPOSTA — virar recebível de um
         // negócio que ainda não fechou. Era a maior fonte de confusão do módulo.
-        // Publicar agora é ação explícita do usuário, pelo botão "Enviar ao
-        // Contas a Receber" da aba Parcelas (dealInstallmentService).
-        // NÃO reintroduza o sync aqui.
+        // Quem cria cobrança é o botão "Gerar parcelas" da aba Parcelas
+        // (`dealReceivablesService.gerar`), com confirmação. NÃO reintroduza
+        // nenhum sync financeiro aqui.
         const ACTIVE_STATUSES = ['COMPLETED', ...RESERVA_STATUSES];
-
-        // O plano de pagamento persiste em QUALQUER status — inclusive
-        // IN_NEGOTIATION (Proposta). Antes ele só sobrevivia porque era espelhado
-        // no JSONB `custom_installments`; agora a fonte da verdade é a tabela
-        // `deal_installments` (migration 20270849000000).
-        const planOrgId = result.organization_id || dbPayload.organization_id;
-        if (planOrgId) {
-            try {
-                await dealInstallmentService.saveForDeal(
-                    result.id,
-                    planOrgId,
-                    deal.custom_installments,
-                    deal.down_payment ?? result.down_payment ?? 0,
-                    {
-                        dealType: result.type,
-                        date: result.date,
-                        costCenterId: (result as any).cost_center_id ?? deal.cost_center_id ?? null,
-                        planoDeContasId: (result as any).plano_de_contas_id ?? deal.plano_de_contas_id ?? null,
-                        downPaymentPaymentType: deal.down_payment_payment_type ?? null,
-                        downPaymentInstallmentType: deal.down_payment_installment_type ?? null,
-                        downPaymentNotes: deal.down_payment_notes ?? null,
-                    },
-                );
-            } catch (e) {
-                console.error('[COMMERCIAL SERVICE] Falha ao salvar o plano de parcelas:', e);
-            }
-        }
 
         // Estágio ativo: atualiza unidade e tributos. Financeiro NÃO — ver acima.
         if (ACTIVE_STATUSES.includes(result.status)) {
@@ -740,9 +712,9 @@ export const commercialService = {
                 if (!orgId) throw new Error('[COMMERCIAL SERVICE] organization_id ausente.');
 
                 // ⚠️ NÃO chame syncDealToFinance / syncFinancialData aqui.
-                // Salvar a negociação não publica parcela em Contas a Receber —
-                // quem publica é o botão "Enviar ao Contas a Receber" da aba
-                // Parcelas (dealInstallmentService.publishToReceivables).
+                // Salvar a negociação não cria parcela em Contas a Receber —
+                // quem cria é o botão "Gerar parcelas" da aba
+                // Parcelas (dealReceivablesService.gerar).
 
                 // Tributos a Pagar: gera/atualiza os tributos (IRRF/PIS/COFINS/CSLL…)
                 // deste negócio de Venda de Ativo/Locação a partir de tax_settings.
@@ -775,11 +747,6 @@ export const commercialService = {
                 cancelOrgId
                     ? commercialFinanceService.deleteDealInstallments(result.id, cancelOrgId)
                         .then(() => console.log(`[COMMERCIAL SERVICE] Installments reversed for deal ${result.id} (distrato)`))
-                    : Promise.resolve(),
-                // (b2) Série única: tira de Contas a Receber o que ainda não foi
-                //      recebido e marca o resto como CANCELADA (auditável).
-                cancelOrgId
-                    ? dealInstallmentService.cancelForDeal(result.id, cancelOrgId)
                     : Promise.resolve(),
                 // (c) Estorna tributos a pagar pendentes deste negócio
                 cancelOrgId

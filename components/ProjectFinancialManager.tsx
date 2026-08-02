@@ -190,63 +190,35 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     const [isSaving, setIsSaving] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
 
+        /**
+         * ⚠️ APOSENTADO (2026-08-02) — não regenera mais nada.
+         *
+         * Este "Global Sync" varria as negociações da organização e reescrevia o
+         * vault comercial, materializando parcelas em Contas a Receber. Rodava ao
+         * abrir esta tela e ao abrir a Conciliação Bancária, então parcelas que o
+         * usuário havia removido voltavam sozinhas — foi um dos vazamentos
+         * relatados em 01–02/08/2026.
+         *
+         * No modelo atual só existe parcela REAL, criada pelo ato explícito de
+         * "Gerar parcelas" na aba Parcelas da negociação (dealReceivablesService).
+         * Nada gera cobrança por varredura. Mantido apenas para carregar as obras
+         * vinculadas (satélites), que é leitura pura.
+         */
         const handleGlobalSync = async (orgId: string, deals: PropertyDeal[]) => {
             if (isSyncing) return;
             setIsSyncing(true);
-            console.log('[FINANCIAL] Forced/Auto Global Sync Triggered for Org:', orgId);
             try {
-                // Carregar o estado atual do Vault comercial uma única vez no início
-                let targetProject = await commercialFinanceService.getOrCreateCommercialProject(orgId);
-                if (!targetProject) throw new Error('Cofre comercial não localizado');
-                
-                let currentSettings = { ...targetProject.settings } as ProjectSettings;
+                const targetProject = await commercialFinanceService.getOrCreateCommercialProject(orgId);
+                if (targetProject) setCommercialProject(targetProject);
 
-                // Sincronia Sequencial (Acúmulo em Memória) - EVITA CORRIDA DE DADOS
-                for (const deal of deals) {
-                    const syncResult = await commercialFinanceService.syncDealToFinance(deal, orgId, currentSettings, true);
-                    if (syncResult) {
-                        // Atualizar o snapshot de memória para a próxima iteração do loop
-                        currentSettings = {
-                            ...currentSettings,
-                            financialInfo: {
-                                ...currentSettings.financialInfo,
-                                totalValue: currentSettings.financialInfo?.totalValue ?? 0,
-                                paymentMethod: currentSettings.financialInfo?.paymentMethod ?? 'Parcelamento Próprio',
-                                installments: syncResult.installments,
-                                transactions: syncResult.transactions
-                            }
-                        };
-                    }
-                }
-                
-                // O GRANDE SAVE ATÔMICO: Gravar tudo de uma só vez no banco de dados
-                console.log(`[FINANCIAL] PERFORMING ATOMIC SAVE: Total items to persist: ${currentSettings.financialInfo?.installments?.length}`);
-                await projectService.saveProject({
-                    ...targetProject,
-                    settings: currentSettings
-                });
-
-                const updatedProj = { ...targetProject, settings: currentSettings };
-                setCommercialProject(updatedProj);
-                
-                // CARREGAR SATÉLITES: Trazer parcelas das obras vinculadas para o dashboard
+                // Satélites: parcelas das obras vinculadas, para o dashboard.
                 const linkedProjectIds = Array.from(new Set(deals.filter(d => d.linked_project_id).map(d => d.linked_project_id)));
                 if (linkedProjectIds.length > 0) {
                     const otherProjects = await Promise.all(linkedProjectIds.map(id => projectService.loadProject(id as string)));
                     setSatelliteProjects(otherProjects.filter(Boolean));
                 }
-
-                // Notificar o pai sobre a atualização do cesto financeiro
-                if (updatedProj.settings?.financialInfo) {
-                    onUpdateSettings({ ...settings, financialInfo: updatedProj.settings.financialInfo });
-                }
-                
-                console.log(`[FINANCIAL] Global Sync SUCCESS. Total items in Vault: ${updatedProj.settings?.financialInfo?.installments?.length || 0}`);
-                // LOOP INFINITO CORRIGIDO: Remover setRefreshTrigger(p => p + 1) daqui!
-                // Como já foi feito setCommercialProject e onUpdateSettings, o React já gerencia o state local
-                // sem precisar re-engatilhar o useEffect fetchInitialData.
         } catch (e) {
-            console.error('[Financial] Sync failed:', e);
+            console.error('[Financial] Carga do cofre comercial falhou:', e);
         } finally {
             setIsSyncing(false);
         }

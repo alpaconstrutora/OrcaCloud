@@ -1,31 +1,16 @@
 import { supabase } from '../lib/supabase';
 import { BrokerProposal, BrokerProposalUnit, BrokerProfile } from '../types';
 import { supplierService } from './supplierService';
-import { dealInstallmentService } from './dealInstallmentService';
 
 /**
- * Materializa o plano paramétrico da proposta (entrada + N mensais + balão) na
- * série única `deal_installments`. É o que faz a proposta, a negociação que
- * nascer dela e o contrato compartilharem literalmente as mesmas linhas —
- * `attachProposalToDeal` depois só troca o dono, sem reescrever nada.
+ * ⚠️ PROPOSTA NÃO GERA PARCELA (decisão do usuário, 2026-08-02).
  *
- * Falha aqui não derruba o envio da proposta: o plano paramétrico continua
- * gravado nas colunas do header.
+ * Em 01/08 esta camada materializava o plano paramétrico da proposta como
+ * linhas numa tabela de parcelas. Foi revertido: proposta é simulação —
+ * `down_payment`, `monthly_installments`, `monthly_value`, `balloon_value` e o
+ * snapshot do motor em `payment_plan`. Parcela só existe quando é cobrança
+ * real, e cobrança nasce na negociação (ver `dealReceivablesService`).
  */
-async function materializeProposalInstallments(p: BrokerProposal) {
-    if (!p?.id || !p.organization_id) return;
-    try {
-        await dealInstallmentService.saveForProposal(p.id, p.organization_id, {
-            downPayment: p.down_payment,
-            monthlyInstallments: p.monthly_installments,
-            monthlyValue: p.monthly_value,
-            balloonValue: p.balloon_value,
-            baseDate: p.created_at,
-        });
-    } catch (e) {
-        console.error('[BROKER SERVICE] Falha ao materializar as parcelas da proposta:', e);
-    }
-}
 
 /**
  * `broker_portal_proposal_units` só existe depois da migration 20270826000010.
@@ -463,7 +448,6 @@ export const brokerService = {
                 }
             }
             updated.units = units;
-            await materializeProposalInstallments(updated);
             return updated;
         } else {
             // Remove temporary ID if exists
@@ -488,7 +472,6 @@ export const brokerService = {
                 }
             }
             saved.units = units;
-            await materializeProposalInstallments(saved);
 
             // Notifica admins da organização — fire-and-forget (falha silenciosa)
             if (saved.id && saved.organization_id) {

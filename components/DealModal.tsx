@@ -19,9 +19,8 @@ import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
-import { dealInstallmentService } from '../services/dealInstallmentService';
-import { SETTLEMENT_LABEL, SettlementStatus } from '../types/dealInstallment';
 import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
+import { dealReceivablesService } from '../services/dealReceivablesService';
 import { buildRentalResolveContext } from '../services/rentalDocumentContextService';
 import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
@@ -288,7 +287,6 @@ const PARCELAS_COL_WIDTHS: Record<string, number> = {
     valor: 120,
     desconto: 170,
     valor_final: 120,
-    situacao: 120,
     origem: 170,
     tipo: 150,
     forma_pagto: 150,
@@ -303,10 +301,6 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'valor', label: 'Valor', sortable: false },
     { key: 'desconto', label: 'Desconto', sortable: false },
     { key: 'valor_final', label: 'Valor final', sortable: false },
-    // Situação da parcela em Contas a Receber. Existe porque salvar a negociação
-    // deixou de publicar sozinho (2026-08-01): sem esta coluna o usuário não
-    // teria como saber o que já virou cobrança e o que ainda é só plano.
-    { key: 'situacao', label: 'Situação', sortable: false },
     // De onde a linha vem, agora que a aba tem UMA tabela: o plano da negociação
     // ou um contrato (renovação/aditivo). Substituiu o seletor "Ver parcelas de".
     { key: 'origem', label: 'Origem', sortable: false },
@@ -319,20 +313,6 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'descricao', label: 'Descrição', sortable: false },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
-
-/**
- * Situação da parcela em Contas a Receber. §8 puro — texto colorido, sem
- * pílula, sem fundo, sem uppercase.
- */
-const SituacaoParcela: React.FC<{ status: SettlementStatus }> = ({ status }) => {
-    const cor: Record<SettlementStatus, string> = {
-        NAO_LANCADA: 'text-gray-500',
-        LANCADA: 'text-blue-700',
-        RECEBIDA: 'text-green-800',
-        CANCELADA: 'text-red-600',
-    };
-    return <span className={`text-sm font-normal ${cor[status]}`}>{SETTLEMENT_LABEL[status]}</span>;
-};
 
 const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab }) => {
     const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
@@ -383,8 +363,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 broker_commission_value: 0,
                 ...initialData
             });
-            setSelectedInstallmentIds(new Set());
-            setLastCheckedInstallmentIndex(null);
+            setSelectedEntryIds(new Set());
+            setLastEntryIndex(null);
         }
     }, [initialData, isOpen]);
 
@@ -468,8 +448,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // Seleção em lote das parcelas (Plano de Pagamento) — mesmo padrão de
     // BankReconciliation.tsx (Extrato Bancário): Set de ids + âncora de
     // Shift+clique (guia §10.1) + modal dedicado de edição em lote (§10).
-    const [selectedInstallmentIds, setSelectedInstallmentIds] = useState<Set<string>>(new Set());
-    const [lastCheckedInstallmentIndex, setLastCheckedInstallmentIndex] = useState<number | null>(null);
     // Colunas visíveis da aba Parcelas — compartilhada pelas duas tabelas (plano
     // de pagamento e parcelas do contrato), guia §5.2 (toolbar acoplada).
     const parcelasCols = useTableColumns(PARCELAS_COLUMNS, 'dealModalParcelasColumns');
@@ -506,7 +484,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             )}
         </colgroup>
     );
-    const [showInstallmentLoteModal, setShowInstallmentLoteModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
     const [generateInstallmentCount, setGenerateInstallmentCount] = useState(1);
@@ -517,61 +494,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     /** Data do 1º Pagamento no momento em que o campo recebeu o foco — base de
      *  comparação para perguntar (uma vez, no blur) se as parcelas recalculam. */
     const dueDateAoFocar = useRef<string>('');
-    const [showAddAdhocModal, setShowAddAdhocModal] = useState(false);
-    const [adhocPosition, setAdhocPosition] = useState(1);
-    const [adhocDate, setAdhocDate] = useState('');
-    const [adhocValue, setAdhocValue] = useState('');
-    const [showRecalcModal, setShowRecalcModal] = useState(false);
-    const [recalcSelectedTypes, setRecalcSelectedTypes] = useState<Set<NonNullable<PaymentInstallment['installmentType']>>>(new Set());
-
-    const handleInstallmentRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
-        const rows = formData.custom_installments || [];
-        if (shiftKey && lastCheckedInstallmentIndex !== null) {
-            const [start, end] = lastCheckedInstallmentIndex < index ? [lastCheckedInstallmentIndex, index] : [index, lastCheckedInstallmentIndex];
-            const rangeIds = rows.slice(start, end + 1).map(i => i.id);
-            setSelectedInstallmentIds(prev => new Set([...prev, ...rangeIds]));
-        } else {
-            setSelectedInstallmentIds(prev => {
-                const next = new Set(prev);
-                if (checked) next.add(id); else next.delete(id);
-                return next;
-            });
-            setLastCheckedInstallmentIndex(index);
-        }
-    };
-
-    /** Aplica em lote às parcelas selecionadas: desconto (sempre — setando ou
-     * removendo, igual sempre foi, recalculando o valor final de cada uma a
-     * partir da própria base) e, se informados, Forma de Pagamento e/ou Tipo
-     * de Pagamento (só quando o usuário escolheu algo além de "Não alterar"
-     * no modal — `undefined` aqui significa "não mexe nesse campo"). */
-    /**
-     * Pergunta se o Valor do Fechamento deve acompanhar o desconto.
-     *
-     * O desconto muda o que será COBRADO, não o preço combinado — por isso a
-     * decisão é do usuário: desconto comercial (o fechamento cai) × condição de
-     * pagamento (o preço fica, e a soma das parcelas passa a divergir de
-     * propósito, o que a faixa âmbar da aba Parcelas já sinaliza).
-     *
-     * ⚠️ O Valor do Fechamento é a SOMA DAS UNIDADES (aba Unidade, campo
-     * read-only). Aceitar aqui desacopla os dois: o total do negócio deixa de
-     * bater com o rateio por unidade. Por isso a pergunta diz isso.
-     */
-    const perguntarCorrigirFechamento = async (liquido: number) => {
-        const atual = formData.value || 0;
-        if (Math.abs(liquido - atual) < 0.01) return;
-        const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
-        const ok = await confirm({
-            title: 'Corrigir o Valor do Fechamento?',
-            message: `Com o desconto, a soma das parcelas passa a ser ${fmt(liquido)}, e o Valor do Fechamento é ${fmt(atual)}. `
-                + `Atualizar o fechamento para ${fmt(liquido)}? `
-                + 'O total deixa de ser a soma das unidades — mantenha como está se o desconto for só condição de pagamento.',
-            variant: 'default',
-            confirmLabel: 'Atualizar fechamento',
-            cancelLabel: 'Manter valor',
-        });
-        if (ok) setFormData(prev => ({ ...prev, value: Number(liquido.toFixed(2)) }));
-    };
 
     /**
      * Pergunta se o Valor Total do Contrato deve acompanhar o desconto.
@@ -599,51 +521,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (ok) setFormData(prev => ({ ...prev, contract_total_value: Number(somaCobrada.toFixed(2)) }));
     };
 
-    /** Soma líquida do plano (parcelas com desconto aplicado + entrada). */
-    const somaLiquidaPlano = (insts?: PaymentInstallment[]) =>
-        (insts ?? formData.custom_installments ?? []).reduce((acc, i) => acc + i.value, 0)
-        + (formData.down_payment || 0);
-
-    const applyBulkInstallmentEdit = (patch: {
-        discountType: 'VALUE' | 'PERCENT' | null;
-        discountAmount: number;
-        paymentType?: PaymentInstallment['paymentType'];
-        installmentType?: PaymentInstallment['installmentType'];
-    }) => {
-        setFormData(prev => {
-            const insts = (prev.custom_installments || []).map(inst => {
-                if (!selectedInstallmentIds.has(inst.id)) return inst;
-                const base = inst.originalValue ?? inst.value;
-                let finalValue = base;
-                if (patch.discountType === 'PERCENT') finalValue = base - (base * patch.discountAmount / 100);
-                else if (patch.discountType === 'VALUE') finalValue = base - patch.discountAmount;
-                finalValue = Math.max(0, finalValue);
-                const updated: PaymentInstallment = {
-                    ...inst,
-                    originalValue: base,
-                    discountType: patch.discountType ?? undefined,
-                    discountAmount: patch.discountType ? patch.discountAmount : undefined,
-                    value: Number(finalValue.toFixed(2)),
-                };
-                if (patch.paymentType !== undefined) updated.paymentType = patch.paymentType || undefined;
-                if (patch.installmentType !== undefined) updated.installmentType = patch.installmentType || undefined;
-                return updated;
-            });
-            return { ...prev, custom_installments: insts };
-        });
-        setShowInstallmentLoteModal(false);
-        setSelectedInstallmentIds(new Set());
-        // setFormData acima é assíncrono; o cálculo aqui reproduz o resultado
-        // para não perguntar com o valor antigo.
-        const liquido = (formData.custom_installments || []).reduce((acc, i) => {
-            if (!selectedInstallmentIds.has(i.id)) return acc + i.value;
-            const base = i.originalValue ?? i.value;
-            const desc = patch.discountType === 'PERCENT' ? (base * patch.discountAmount) / 100
-                : patch.discountType === 'VALUE' ? patch.discountAmount : 0;
-            return acc + Math.max(0, base - desc);
-        }, 0) + (formData.down_payment || 0);
-        void perguntarCorrigirFechamento(liquido);
-    };
 
     // Ponte Negociação → Contrato formal. Venda (domain='VENDAS') gera um contrato
     // de compra e venda; Locação (domain='LOCACAO') gera um contrato recorrente.
@@ -666,26 +543,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         __origem?: string;
     }[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
-    /* Série única (`deal_installments`): situação de cada parcela em Contas a
-       Receber. Indexada pelo `reference_id` porque o plano na tela ainda
-       trabalha com ids temporários — a chave estável é `tx-{deal}-custom-p{n}`
-       / `tx-{deal}-dp`, a mesma do upsert no financeiro. */
-    const [situacaoPorRef, setSituacaoPorRef] = useState<Record<string, SettlementStatus>>({});
-    /** `reference_id` → id da linha em `deal_installments`, para publicar/remover
-     *  apenas a seleção (a tabela da tela ainda trabalha com ids temporários). */
-    const [idPorRef, setIdPorRef] = useState<Record<string, string>>({});
-    const [publishing, setPublishing] = useState(false);
-    const refDaParcela = (index: number) => `tx-${formData.id}-custom-p${index + 1}`;
-    const refDaEntrada = () => `tx-${formData.id}-dp`;
-    /** Quantas linhas do plano ainda NÃO viraram cobrança — rótulo do botão. */
-    const naoLancadas = useMemo(() => {
-        const refs = (formData.custom_installments || []).map((_, i) => `tx-${formData.id}-custom-p${i + 1}`);
-        if ((formData.down_payment || 0) > 0) refs.push(`tx-${formData.id}-dp`);
-        return refs.filter(r => (situacaoPorRef[r] ?? 'NAO_LANCADA') === 'NAO_LANCADA').length;
-    }, [formData.custom_installments, formData.down_payment, formData.id, situacaoPorRef]);
-    const temLancadas = useMemo(
-        () => Object.values(situacaoPorRef).some(s => s === 'LANCADA' || s === 'RECEBIDA'),
-        [situacaoPorRef]);
     // Dimensões contábeis do cabeçalho (aba Forma de Pagamento). São DUAS
     // dimensões distintas — Centro de Custo é `cost_centers_v2`, Plano de Contas
     // é `plano_de_contas` (ver migration 20270822000013). Não intercambiáveis.
@@ -1030,88 +887,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, linkedContract]);
 
-    /** Relê a situação das parcelas na série única (traz de volta baixas feitas
-     *  em Contas a Receber / pelo webhook do Asaas). */
-    const recarregarSituacoes = useCallback(async () => {
-        const dealId = formData.id;
-        const orgId = formData.organization_id || organizationId;
-        if (!dealId || !orgId) { setSituacaoPorRef({}); setIdPorRef({}); return; }
-        try {
-            await dealInstallmentService.refreshSettlementStatus(dealId, orgId);
-            const rows = await dealInstallmentService.listByDeal(dealId, orgId);
-            setSituacaoPorRef(Object.fromEntries(rows.map(r => [r.referenceId, r.settlementStatus])));
-            setIdPorRef(Object.fromEntries(rows.map(r => [r.referenceId, r.id])));
-        } catch (e) {
-            console.error('[DealModal] Erro ao ler a situação das parcelas:', e);
-        }
-    }, [formData.id, formData.organization_id, organizationId]);
-
-    useEffect(() => {
-        if (activeTab === 'parcelas') void recarregarSituacoes();
-    }, [activeTab, recarregarSituacoes]);
-
-    /**
-     * "Enviar ao Contas a Receber" — a publicação é EXPLÍCITA desde 2026-08-01.
-     * Antes, salvar a negociação já materializava as parcelas do plano (que serve
-     * para montar a proposta) como recebíveis de um negócio ainda não fechado.
-     */
-    const handlePublicarParcelas = async (onlyIds?: string[]) => {
-        const dealId = formData.id;
-        const orgId = formData.organization_id || organizationId;
-        if (!dealId || !orgId) {
-            notifyError('Salve a negociação antes de enviar as parcelas ao Contas a Receber.');
-            return;
-        }
-        const quantas = onlyIds?.length ?? naoLancadas;
-        const ok = await confirm({
-            title: 'Enviar ao Contas a Receber?',
-            message: `${quantas} parcela(s) serão lançadas como recebíveis previstos. Você pode removê-las depois, desde que ainda não tenham sido recebidas.`,
-            variant: 'default',
-            confirmLabel: 'Enviar',
-        });
-        if (!ok) return;
-        setPublishing(true);
-        try {
-            const r = await dealInstallmentService.publishToReceivables(dealId, orgId, { onlyIds });
-            await recarregarSituacoes();
-            notifySuccess(
-                `${r.published} parcela(s) enviada(s) ao Contas a Receber.`
-                + (r.alreadyPublished > 0 ? ` ${r.alreadyPublished} já estavam lançadas.` : ''));
-        } catch (e) {
-            notifyError(e instanceof Error ? e.message : 'Erro ao enviar as parcelas.');
-        } finally {
-            setPublishing(false);
-        }
-    };
-
-    /** Contrapartida. Parcela já recebida/conciliada é preservada e NOMEADA no
-     *  toast — dizer "algumas foram preservadas" obrigaria a ir conferir. */
-    const handleRemoverDoContasAReceber = async (onlyIds?: string[]) => {
-        const dealId = formData.id;
-        const orgId = formData.organization_id || organizationId;
-        if (!dealId || !orgId) return;
-        const ok = await confirm({
-            title: 'Remover do Contas a Receber?',
-            message: 'As parcelas voltam a ser apenas plano de pagamento. Parcelas já recebidas ou conciliadas permanecem no financeiro.',
-            variant: 'warning',
-            confirmLabel: 'Remover',
-        });
-        if (!ok) return;
-        setPublishing(true);
-        try {
-            const r = await dealInstallmentService.unpublishFromReceivables(dealId, orgId, { onlyIds });
-            await recarregarSituacoes();
-            const preservadas = r.blocked.length > 0
-                ? ` Preservada(s): ${r.blocked.map(b => b.description).join(', ')}.`
-                : '';
-            notifySuccess(`${r.removed} parcela(s) removida(s) do Contas a Receber.${preservadas}`);
-        } catch (e) {
-            notifyError(e instanceof Error ? e.message : 'Erro ao remover as parcelas.');
-        } finally {
-            setPublishing(false);
-        }
-    };
-
     useEffect(() => {
         // SÉRIE ÚNICA (2026-08-01): a aba tem UMA tabela só. Antes existia um
         // seletor "Ver parcelas de" que alternava entre o plano da negociação e
@@ -1121,20 +896,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // coluna "Origem".
         setSelectedEntryIds(new Set());
         setLastEntryIndex(null);
-        const alvos = generateTargets.filter(t => t.kind === 'CONTRACT');
-        if (alvos.length === 0) { setContractEntries([]); return; }
         let ativo = true;
         setLoadingEntries(true);
-        Promise.all(alvos.map(a =>
-            contractService.listFinancialEntries(a.contract)
-                .then(rows => rows.map(r => ({ ...r, __origem: a.label as string })))
-                .catch(e => { console.error('[DealModal] Erro ao listar parcelas do contrato:', e); return []; })
-        ))
-            .then(listas => { if (ativo) setContractEntries(listas.flat()); })
-            .finally(() => { if (ativo) setLoadingEntries(false); });
+        recarregarParcelas().finally(() => { if (ativo) setLoadingEntries(false); });
         return () => { ativo = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [generateTargets]);
+    }, [generateTargets, formData.id]);
 
     /**
      * Edita uma parcela do contrato. Atualiza a tela na hora (otimista) e grava;
@@ -1167,7 +934,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         void contractService.updateFinancialEntry(entryId, patch)
             .then(async () => {
                 if (!recalcula) return;
-                const rows = await recarregarParcelasDeContratos();
+                const rows = await recarregarParcelas();
                 if (mexeuNoDesconto) {
                     await perguntarCorrigirTotalContrato(
                         rows.reduce((s, r) => s + (Number(r.amount) || 0), 0));
@@ -1175,7 +942,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             })
             .catch(async (err) => {
                 notifyError(err instanceof Error ? err.message : 'Erro ao salvar a parcela.');
-                await recarregarParcelasDeContratos();
+                await recarregarParcelas();
             });
     };
 
@@ -1185,18 +952,33 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * qualquer recarga é a lista inteira. Devolve as linhas para quem precisa
      * somar (ex.: conferir o total do contrato depois de um desconto).
      */
-    const recarregarParcelasDeContratos = useCallback(async () => {
+    /**
+     * Recarrega TODAS as cobranças desta negociação — as dela própria e as dos
+     * contratos. Desde 2026-08-02 existe uma fonte só: `internal_transactions`.
+     * Não há rascunho nem "parcela de proposta": o que está na tabela é o que
+     * está em Contas a Receber.
+     */
+    const recarregarParcelas = useCallback(async () => {
+        const orgId = formData.organization_id || organizationId;
         const alvos = generateTargets.filter(t => t.kind === 'CONTRACT');
-        if (alvos.length === 0) { setContractEntries([]); return []; }
-        const listas = await Promise.all(alvos.map(a =>
+
+        const daNegociacao = formData.id
+            ? await dealReceivablesService.listByDeal(formData.id, orgId)
+                .then(rows => rows.map(r => ({ ...r, __origem: 'Negociação' })))
+                .catch(e => { console.error('[DealModal] Erro ao listar parcelas da negociação:', e); return []; })
+            : [];
+
+        const dosContratos = await Promise.all(alvos.map(a =>
             contractService.listFinancialEntries(a.contract)
                 .then(rows => rows.map(r => ({ ...r, __origem: a.label as string })))
                 .catch(() => [])
         ));
-        const todas = listas.flat();
+
+        const todas = [...daNegociacao, ...dosContratos.flat()]
+            .sort((a, b) => (a.transaction_date || '').localeCompare(b.transaction_date || ''));
         setContractEntries(todas);
         return todas;
-    }, [generateTargets]);
+    }, [generateTargets, formData.id, formData.organization_id, organizationId]);
 
     /** Seleção com intervalo por Shift+clique — mesmo comportamento do plano. */
     const handleEntryRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean, visiveis: string[]) => {
@@ -1236,7 +1018,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     ...(patch.installmentType !== undefined ? { installment_type: patch.installmentType || null } : {}),
                 });
             }
-            const rows = await recarregarParcelasDeContratos();
+            const rows = await recarregarParcelas();
             if (rows.length > 0) {
                 // Mesmo desvio do desconto avulso: a soma cobrada deixa de bater
                 // com o total acordado, e quem decide é o usuário.
@@ -1414,7 +1196,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 }
                 : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(ini)} a ${fmtDateBR(fim)}) já estão pagas ou conciliadas e não são refeitas.` });
             // A tabela na tela ficou desatualizada depois do refazimento.
-            await recarregarParcelasDeContratos();
+            await recarregarParcelas();
         } catch (e) {
             // Log detalhado: o erro do PostgREST traz code/details/hint que a
             // mensagem sozinha esconde — sem isso, "não gerou" fica indepurável.
@@ -1437,281 +1219,97 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
     };
 
+    /**
+     * "Gerar parcelas" — o ÚNICO ato que cria cobrança para a negociação.
+     *
+     * Desde 2026-08-02 não existe rascunho: a parcela nasce direto em Contas a
+     * Receber (`dealReceivablesService.gerar`). Por isso a confirmação diz, com
+     * todas as letras, que vai lançar — antes o usuário montava o cronograma
+     * achando que planejava, e o sistema faturava em silêncio.
+     *
+     * Regerar substitui a série; parcela já recebida/conciliada nunca é tocada
+     * e volta nomeada no aviso.
+     */
     const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>, installmentCount: number, firstDueDate: string) => {
-        if (formData.id) {
-            setLoading(true);
-            try {
-                const orgId = formData.organization_id || organizationId || '';
-                const { hasPaid, paidCount } = await commercialFinanceService.hasPaidInstallments(formData.id, orgId);
-                if (hasPaid) {
-                    notifyError(`Não é possível regerar as parcelas. Esta negociação possui ${paidCount} parcela(s) com status "PAGO" no módulo financeiro. Para habilitar a regeração, você deve primeiro reverter o status dessas parcelas para "PENDENTE" no financeiro.`);
-                    setLoading(false);
-                    return;
-                }
-            } catch (err) {
-                console.error('[DealModal] Error checking paid installments:', err);
-            } finally {
-                setLoading(false);
-            }
+        const orgId = formData.organization_id || organizationId || '';
+        if (!formData.id || !orgId) {
+            notifyError('Salve a negociação antes de gerar as parcelas.');
+            return;
         }
 
-        // Um Plano de Pagamento pode combinar vários Tipos ao mesmo tempo (10
-        // mensais + 3 semestrais, por exemplo). Gerar Parcelas SUBSTITUI só o
-        // BLOCO do Tipo escolhido (cria se não existir, resubstitui se já
-        // existir) — os demais tipos ficam intactos. Parcelas Avulsas nunca
-        // entram no rateio nem são tocadas aqui (são criadas uma a uma via
-        // handleConfirmAddAdhocInstallment).
-        //
-        // Como todos os blocos regulares (mensal+trimestral+semestral+anual)
-        // dividem o MESMO total (Valor − Entrada − Avulsas), acrescentar ou
-        // resubstituir um bloco muda quantas parcelas dividem esse total —
-        // por isso os blocos preservados são recalculados junto (mesmo valor
-        // por parcela em todos, só a última parcela do bloco recém-gerado
-        // absorve o resto do arredondamento).
         const intervalMonths = intervalMonthsForType(paymentTypes, installmentType);
         const count = Math.max(1, Math.floor(Number(installmentCount) || 1));
+        const entradaValor = formData.down_payment || 0;
+        // Locação não desconta a entrada do total (mesma regra do motor antigo).
+        const total = Math.max(0, (formData.value || 0) - (formData.type === 'SALE' ? entradaValor : 0));
+        // Rateio com centavos exatos: a última parcela absorve o arredondamento.
+        const per = Math.floor((total / count) * 100) / 100;
+        const remainder = Number((total - per * count).toFixed(2));
 
-        setFormData(prev => {
-            const allExisting = prev.custom_installments || [];
-            const adhoc = allExisting.filter(i => i.installmentType === 'AVULSA');
-            // Uma parcela pertence ao BLOCO-ALVO (será substituída pelas novas)
-            // quando é do tipo escolhido OU quando é legada/sem tipo (installmentType
-            // nulo — deals antigos e parcelas semeadas pelo espelho de Locações).
-            // Sem tratar o caso sem-tipo aqui, elas caíam em otherBlocks e eram
-            // PRESERVADAS: gerar 36 mensais sobre 36 sem-tipo resultava em 72.
-            const isTargetGroup = (i: PaymentInstallment) =>
-                i.installmentType === installmentType || !i.installmentType;
-            // Blocos de OUTROS tipos — preservados (data/id/desconto/forma de
-            // pagamento/observação mantidos), só o valor é recalculado abaixo.
-            const otherBlocks = allExisting.filter(i => i.installmentType !== 'AVULSA' && !isTargetGroup(i));
-
-            const downPayment = prev.down_payment || 0;
-            const baseValue = prev.value || 0;
-            const adhocTotal = adhoc.reduce((sum, i) => sum + (i.originalValue ?? i.value), 0);
-            const total = Math.max(0, baseValue - downPayment - adhocTotal);
-            const totalRegularCount = otherBlocks.length + count;
-            // Rateio igual com centavos exatos: todas as parcelas regulares (de
-            // TODOS os tipos combinados) recebem `per`; a última parcela do
-            // bloco recém-gerado absorve o resto do arredondamento, para a soma
-            // bater exatamente com `total`.
-            const per = Math.floor((total / totalRegularCount) * 100) / 100;
-            const remainder = Number((total - per * totalRegularCount).toFixed(2));
-
-            // Recalcula os blocos preservados com a nova base — reaplicando o
-            // desconto de cada parcela (se houver), igual a updateInstallmentDiscount.
-            const recalculatedOtherBlocks = otherBlocks.map(inst => {
-                const discType = inst.discountType;
-                const discAmt = inst.discountAmount || 0;
-                let finalValue = per;
-                if (discType === 'PERCENT') finalValue = per - (per * discAmt / 100);
-                else if (discType === 'VALUE') finalValue = per - discAmt;
-                return { ...inst, originalValue: per, value: Number(Math.max(0, finalValue).toFixed(2)) };
-            });
-
-            const stamp = Date.now();
-            const newBlock: PaymentInstallment[] = [];
-            for (let i = 1; i <= count; i++) {
-                const isLast = i === count;
-                const value = isLast ? Number((per + remainder).toFixed(2)) : per;
-
-                // firstDueDate ancora a parcela 1 (vem do campo "Data do 1º Pagamento"
-                // do modal — sugerida pelo sistema, mas o usuário pode ter trocado); as
-                // demais somam o intervalo do Tipo de Pagamento a partir dela. Meio-dia
-                // UTC evita o bug de fuso que retrocede 1 dia em UTC-3.
-                const date = new Date(firstDueDate + 'T12:00:00Z');
-                date.setUTCMonth(date.getUTCMonth() + (i - 1) * intervalMonths);
-                newBlock.push({
-                    id: `temp-${stamp}-${i}`,
-                    description: `Parcela ${i}/${count}`,
-                    dueDate: date.toISOString().split('T')[0],
-                    value,
-                    status: 'PENDING',
-                    dealId: prev.id,
-                    installmentType
-                });
-            }
-            // Recompõe preservando a ORDEM ORIGINAL do array — Avulsas e outros
-            // tipos ficam exatamente na posição em que já estavam (uma Avulsa
-            // inserida como "Parcela 1" continua sendo a 1ª depois de gerar outro
-            // tipo, não pula pro fim da lista). O bloco do tipo-alvo entra no
-            // lugar onde já aparecia (1ª ocorrência antiga); se o tipo nunca
-            // existiu, é anexado ao fim, por falta de posição de referência.
-            const recalculatedOtherById = new Map(recalculatedOtherBlocks.map(inst => [inst.id, inst]));
-            let targetInserted = false;
-            const merged: PaymentInstallment[] = [];
-            for (const inst of allExisting) {
-                // Avulsas ficam intactas na posição original.
-                if (inst.installmentType === 'AVULSA') { merged.push(inst); continue; }
-                // Bloco-alvo (tipo escolhido OU legado sem tipo) → substituído de
-                // uma vez na 1ª ocorrência; as demais ocorrências são descartadas.
-                if (isTargetGroup(inst)) {
-                    if (!targetInserted) {
-                        merged.push(...newBlock);
-                        targetInserted = true;
-                    }
-                    continue;
-                }
-                merged.push(recalculatedOtherById.get(inst.id) ?? inst);
-            }
-            if (!targetInserted) merged.push(...newBlock);
-
-            return {
-                ...prev,
-                installments: totalRegularCount,
-                payment_due_date: firstDueDate,
-                custom_installments: merged
-            };
-        });
-        // Cronograma novo → limpa qualquer seleção de parcela (os ids mudaram).
-        setSelectedInstallmentIds(new Set());
-        setLastCheckedInstallmentIndex(null);
-        setShowGenerateModal(false);
-    };
-
-    /** Abre o modal de Parcela Avulsa. Posição parte do fim da lista atual
-     * (append) por padrão — o usuário escolhe outra posição (ex: "Parcela 1")
-     * se quiser inserir a avulsa no meio do cronograma. */
-    const handleOpenAddAdhocModal = () => {
-        const total = formData.custom_installments?.length ?? 0;
-        setAdhocPosition(total + 1);
-        setAdhocDate(new Date().toISOString().split('T')[0]);
-        setAdhocValue('');
-        setShowAddAdhocModal(true);
-    };
-
-    /** Insere UMA parcela avulsa na posição escolhida — as demais parcelas não
-     * têm data/valor/desconto alterados, só a posição delas na lista muda (o
-     * número "Parcela N" exibido em cada linha é a própria posição no array,
-     * então "atualiza" sozinho ao inserir no meio). Fora da série regular:
-     * não entra no rateio do gerador nem é afetada por ele (handleConfirm
-     * GenerateInstallments filtra installmentType==='AVULSA' à parte). */
-    const handleConfirmAddAdhocInstallment = () => {
-        setFormData(prev => {
-            const existing = prev.custom_installments || [];
-            const insertAt = Math.min(Math.max(1, Math.floor(adhocPosition) || 1), existing.length + 1) - 1;
-            const newInst: PaymentInstallment = {
-                id: `temp-${Date.now()}-avulsa`,
-                description: `Parcela Avulsa (posição ${insertAt + 1})`,
-                dueDate: adhocDate || new Date().toISOString().split('T')[0],
-                value: parseFloat(adhocValue) || 0,
+        const novas: PaymentInstallment[] = [];
+        for (let i = 1; i <= count; i++) {
+            // Meio-dia UTC evita o bug de fuso que retrocede 1 dia em UTC-3.
+            const date = new Date(firstDueDate + 'T12:00:00Z');
+            date.setUTCMonth(date.getUTCMonth() + (i - 1) * intervalMonths);
+            novas.push({
+                id: `p${i}`,
+                description: `Parcela ${i}/${count}`,
+                dueDate: date.toISOString().split('T')[0],
+                value: i === count ? Number((per + remainder).toFixed(2)) : per,
                 status: 'PENDING',
-                dealId: prev.id,
-                installmentType: 'AVULSA'
-            };
-            const updated = [...existing];
-            updated.splice(insertAt, 0, newInst);
-            return { ...prev, custom_installments: updated };
-        });
-        setShowAddAdhocModal(false);
-    };
-
-    /** Abre o modal de Recalcular com nenhum tipo pré-selecionado — o usuário
-     * escolhe quais tipos absorvem o ajuste (ex: acrescentou uma Avulsa depois
-     * do plano já fechado e agora a soma passou do Valor Total; recalcular as
-     * mensais redistribui a diferença só nelas, sem tocar Entrada/Avulsas/
-     * outros tipos). */
-    const handleOpenRecalcModal = () => {
-        setRecalcSelectedTypes(new Set());
-        setShowRecalcModal(true);
-    };
-
-    const handleToggleRecalcType = (type: NonNullable<PaymentInstallment['installmentType']>) => {
-        setRecalcSelectedTypes(prev => {
-            const next = new Set(prev);
-            if (next.has(type)) next.delete(type); else next.add(type);
-            return next;
-        });
-    };
-
-    /**
-     * Recalcula só o VALOR das parcelas dos tipos marcados — não mexe em data,
-     * id, forma de pagamento ou observação, e não cria/remove parcela nenhuma
-     * (isso é papel de Gerar Parcelas / Parcela Avulsa). Entrada, Avulsas e
-     * qualquer tipo NÃO marcado são tratados como fixos: seus valores atuais
-     * saem do Valor Total antes de dividir o restante pelas parcelas marcadas.
-     *
-     *   pool = Valor Total − Entrada − (Avulsas + tipos não marcados)
-     *   valor por parcela marcada = pool / nº de parcelas marcadas
-     *
-     * A última parcela marcada absorve o resto do arredondamento, igual ao
-     * rateio de Gerar Parcelas — e reaplica desconto já existente na parcela,
-     * igual a updateInstallmentDiscount.
-     */
-    const handleConfirmRecalc = () => {
-        if (recalcSelectedTypes.size === 0) return;
-        setFormData(prev => {
-            const existing = prev.custom_installments || [];
-            const selectedRows = existing.filter(i => i.installmentType && recalcSelectedTypes.has(i.installmentType));
-            if (selectedRows.length === 0) return prev;
-
-            const fixedTotal = existing
-                .filter(i => !(i.installmentType && recalcSelectedTypes.has(i.installmentType)))
-                .reduce((sum, i) => sum + (i.originalValue ?? i.value), 0);
-
-            const downPayment = prev.down_payment || 0;
-            const baseValue = prev.value || 0;
-            const pool = Math.max(0, baseValue - downPayment - fixedTotal);
-            const per = Math.floor((pool / selectedRows.length) * 100) / 100;
-            const remainder = Number((pool - per * selectedRows.length).toFixed(2));
-
-            let seen = 0;
-            const updated = existing.map(inst => {
-                if (!inst.installmentType || !recalcSelectedTypes.has(inst.installmentType)) return inst;
-                seen++;
-                const isLast = seen === selectedRows.length;
-                const base = isLast ? Number((per + remainder).toFixed(2)) : per;
-                const discType = inst.discountType;
-                const discAmt = inst.discountAmount || 0;
-                let finalValue = base;
-                if (discType === 'PERCENT') finalValue = base - (base * discAmt / 100);
-                else if (discType === 'VALUE') finalValue = base - discAmt;
-                return { ...inst, originalValue: base, value: Number(Math.max(0, finalValue).toFixed(2)) };
+                dealId: formData.id,
+                installmentType,
             });
+        }
 
-            return { ...prev, custom_installments: updated };
+        const totalLinhas = novas.length + (entradaValor > 0 ? 1 : 0);
+        const jaExistem = contractEntries.filter(e => (e.reference_id || '').startsWith(`tx-${formData.id}-`)).length;
+        const ok = await confirm({
+            title: 'Gerar e lançar as parcelas?',
+            message: `${totalLinhas} parcela(s) serão LANÇADAS em Contas a Receber agora`
+                + (entradaValor > 0 ? ' (incluindo a Entrada)' : '')
+                + '.'
+                + (jaExistem > 0
+                    ? ` As ${jaExistem} parcela(s) atuais desta negociação serão substituídas — as já recebidas são preservadas.`
+                    : ''),
+            variant: 'warning',
+            confirmLabel: 'Gerar e lançar',
         });
-        setShowRecalcModal(false);
+        if (!ok) return;
+
+        setLoading(true);
+        try {
+            const r = await dealReceivablesService.gerar(formData.id, orgId, novas, entradaValor, {
+                dealType: formData.type,
+                date: formData.date,
+                costCenterId: formData.cost_center_id ?? null,
+                planoDeContasId: formData.plano_de_contas_id ?? null,
+                downPaymentPaymentType: formData.down_payment_payment_type ?? null,
+                downPaymentInstallmentType: formData.down_payment_installment_type ?? null,
+                downPaymentNotes: formData.down_payment_notes ?? null,
+            });
+            // Espelho no formulário: `contractService.createFromDeal` lê
+            // custom_installments[0].value para o valor do aluguel do contrato.
+            setFormData(prev => ({
+                ...prev,
+                installments: count,
+                payment_due_date: firstDueDate,
+                custom_installments: novas,
+            }));
+            await recarregarParcelas();
+            const preservadas = r.preservadas.length > 0
+                ? ` Preservada(s) por já estarem recebidas: ${r.preservadas.map(x => x.description).join(', ')}.`
+                : '';
+            notifySuccess(`${r.criadas} parcela(s) lançadas em Contas a Receber.${preservadas}`);
+        } catch (e) {
+            notifyError(e instanceof Error ? e.message : 'Erro ao gerar as parcelas.');
+        } finally {
+            setLoading(false);
+            setSelectedEntryIds(new Set());
+            setShowGenerateModal(false);
+        }
     };
 
-    const handleRemoveInstallment = (id: string) => {
-        setFormData(prev => ({
-            ...prev,
-            custom_installments: (prev.custom_installments || []).filter(i => i.id !== id)
-        }));
-        setSelectedInstallmentIds(prev => {
-            if (!prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
-    };
-
-    /**
-     * Recalcula o valor final da parcela a partir do valor bruto + desconto
-     * (R$ ou %). `value` continua sendo o que materializa em Contas a Receber
-     * — editar o valor bruto, o tipo de desconto ou o valor do desconto sempre
-     * recalcula `value` a partir da base (`originalValue`), nunca deixando os
-     * dois soltos e fora de sincronia.
-     */
-    const updateInstallmentDiscount = (
-        index: number,
-        patch: Partial<Pick<PaymentInstallment, 'originalValue' | 'discountType' | 'discountAmount'>>
-    ) => {
-        setFormData(prev => {
-            const insts = [...(prev.custom_installments || [])];
-            const inst = insts[index];
-            const merged = { ...inst, ...patch };
-            const base = merged.originalValue ?? inst.value;
-            const discType = merged.discountType;
-            const discAmt = merged.discountAmount || 0;
-            let finalValue = base;
-            if (discType === 'PERCENT') finalValue = base - (base * discAmt / 100);
-            else if (discType === 'VALUE') finalValue = base - discAmt;
-            finalValue = Math.max(0, finalValue);
-            insts[index] = { ...merged, originalValue: base, value: Number(finalValue.toFixed(2)) };
-            return { ...prev, custom_installments: insts };
-        });
-    };
 
     /**
      * Handler do campo "Data do 1º Pagamento". Se já existem parcelas geradas
@@ -2602,11 +2200,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         editáveis inline §7.1, lote §10, vazio §12, escala §16.
                     ══════════════════════════════════════════ */}
                     {activeTab === 'parcelas' && (() => {
-                        const parcelas = formData.custom_installments || [];
-                        const entrada = formData.down_payment || 0;
-                        const somaBruta = parcelas.reduce((s, i) => s + (i.originalValue ?? i.value), 0) + entrada;
+                        /* A aba lista COBRANÇAS REAIS (internal_transactions). Não há
+                           mais rascunho: o que aparece aqui está em Contas a Receber. */
+                        const somaBruta = contractEntries.reduce((s, e) => s + (e.original_amount ?? e.amount), 0);
                         const bate = Math.abs(somaBruta - (formData.value || 0)) < 0.01;
-                        const todasSelecionadas = parcelas.length > 0 && parcelas.every(i => selectedInstallmentIds.has(i.id));
                         // Célula editável dentro de TD: mesma tipografia do texto (§7.1).
                         const CELL = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-50 focus:bg-white focus:border-blue-400 outline-none transition-all';
                         // Mesma caixa da célula editável, em estado bloqueado: parcela paga
@@ -2659,40 +2256,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     <MoveHorizontal className="w-4 h-4" />
                                                 </button>
                                             </div>
-                                            {parcelas.some(i => i.installmentType && i.installmentType !== 'AVULSA') && (
-                                                <button type="button" onClick={handleOpenRecalcModal}
-                                                    className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all">
-                                                    <RefreshCw className="w-4 h-4" /> Recalcular
-                                                </button>
-                                            )}
-                                            <button type="button" onClick={handleOpenAddAdhocModal}
-                                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
-                                                <Plus className="w-4 h-4" /> Parcela avulsa
-                                            </button>
-                                            {/* Publicação EXPLÍCITA em Contas a Receber. Mesmo padrão do
-                                                "Lançar Financeiro" de ContractDetailView — outline emerald,
-                                                para o usuário reconhecer a ação. Os dois botões coexistem
-                                                quando parte da série já foi lançada e parte não. */}
-                                            {naoLancadas > 0 && (
-                                                <button type="button" onClick={() => void handlePublicarParcelas()}
-                                                    disabled={publishing || !formData.id}
-                                                    title={formData.id
-                                                        ? 'Lançar as parcelas deste plano em Contas a Receber'
-                                                        : 'Salve a negociação antes de enviar as parcelas'}
-                                                    className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-all active:scale-95 disabled:opacity-50">
-                                                    <DollarSign className="w-4 h-4" />
-                                                    {publishing ? 'Enviando…' : `Enviar ao Contas a Receber (${naoLancadas})`}
-                                                </button>
-                                            )}
-                                            {temLancadas && (
-                                                <button type="button" onClick={() => void handleRemoverDoContasAReceber()}
-                                                    disabled={publishing}
-                                                    title="Remover estas parcelas de Contas a Receber (as já recebidas são preservadas)"
-                                                    className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50">
-                                                    <ArrowLeft className="w-4 h-4 text-gray-500" />
-                                                    Remover do Contas a Receber
-                                                </button>
-                                            )}
+                                            {/* "Recalcular" e "Parcela avulsa" saíram em 2026-08-02:
+                                                mexiam num rascunho que não existe mais. Hoje a linha
+                                                da tabela É a cobrança — edite a célula, exclua a
+                                                linha, ou refaça a série em "Gerar parcelas". */}
                                             <button type="button" onClick={() => handleOpenGenerateModal()} disabled={loading}
                                                 className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
                                                 <Plus className="w-[15px] h-[15px]" />
@@ -2703,7 +2270,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     {/* Só é "vazio" quando NENHUMA das origens tem linha — o
                                         plano da negociação, a Entrada e as parcelas de
                                         contrato agora dividem a mesma tabela. */}
-                                    {parcelas.length === 0 && entrada <= 0 && contractEntries.length === 0 ? (
+                                    {contractEntries.length === 0 ? (
                                         /* Empty state — §12 (sem moldura própria dentro do card) */
                                         <div className="text-center py-12">
                                             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -2723,12 +2290,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         insere "na posição N"), então reordenar mentiria. */}
                                                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                         <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
-                                                            {parcelas.length > 0 && (
+                                                            {contractEntries.length > 0 && (
                                                                 <input
                                                                     type="checkbox"
                                                                     title="Selecionar todas"
-                                                                    checked={todasSelecionadas}
-                                                                    onChange={() => setSelectedInstallmentIds(todasSelecionadas ? new Set() : new Set(parcelas.map(i => i.id)))}
+                                                                    checked={contractEntries.length > 0 && contractEntries.every(e => selectedEntryIds.has(e.id))}
+                                                                    onChange={() => setSelectedEntryIds(
+                                                                        contractEntries.every(e => selectedEntryIds.has(e.id))
+                                                                            ? new Set()
+                                                                            : new Set(contractEntries.map(e => e.id)))}
                                                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                                 />
                                                             )}
@@ -2745,9 +2315,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('valor_final') && (
                                                             <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final<parcelasResize.ResizeHandle colKey="valor_final" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('situacao') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Situação<parcelasResize.ResizeHandle colKey="situacao" /></th>
                                                         )}
                                                         {parcelasCols.visibleColumns.includes('origem') && (
                                                             <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Origem<parcelasResize.ResizeHandle colKey="origem" /></th>
@@ -2777,254 +2344,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     {/* Entrada — não é item de custom_installments (é o campo
                                                         down_payment), mas entra como 1ª linha para receber tipo,
                                                         forma e descrição igual às demais. */}
-                                                    {entrada > 0 && (
-                                                        <tr className="bg-blue-50/40">
-                                                            <td className="px-4 py-2.5 border-r border-gray-100"></td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">Entr.</td>
-                                                            {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <input type="date" value={formData.date}
-                                                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                                                        className={CELL} />
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('valor') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <input type="number" value={formData.down_payment ?? ''}
-                                                                        onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
-                                                                        className={CELL} />
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('desconto') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-400">—</td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entrada)}
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('situacao') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <SituacaoParcela status={situacaoPorRef[refDaEntrada()] ?? 'NAO_LANCADA'} />
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('origem') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">Negociação</td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('tipo') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <select
-                                                                        value={formData.down_payment_installment_type ?? 'SINAL'}
-                                                                        onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
-                                                                        className={`${CELL} cursor-pointer`}>
-                                                                        {installmentTypeOptions.map(t => (
-                                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <select
-                                                                        value={formData.down_payment_payment_type ?? ''}
-                                                                        onChange={(e) => setFormData({ ...formData, down_payment_payment_type: (e.target.value || undefined) as PaymentInstallment['paymentType'] })}
-                                                                        className={`${CELL} cursor-pointer`}>
-                                                                        <option value="">Forma Pagto.</option>
-                                                                        <option value="PIX">PIX</option>
-                                                                        <option value="TED">TED</option>
-                                                                        <option value="DOC">DOC</option>
-                                                                        <option value="DINHEIRO">Dinheiro</option>
-                                                                        <option value="CHEQUE">Cheque</option>
-                                                                        <option value="PERMUTA">Permuta</option>
-                                                                    </select>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('centro_custo') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('plano_contas') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('descricao') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <input type="text" value={formData.down_payment_notes ?? ''}
-                                                                        onChange={(e) => setFormData({ ...formData, down_payment_notes: e.target.value })}
-                                                                        placeholder="Descrição / observação" className={CELL} />
-                                                                </td>
-                                                            )}
-                                                            <td aria-hidden="true"></td>
-                                                            {parcelasCols.visibleColumns.includes('actions') && (
-                                                                <td className="px-6 py-2.5"></td>
-                                                            )}
-                                                        </tr>
-                                                    )}
-
-                                                    {parcelas.map((inst, index) => (
-                                                        <tr key={inst.id}
-                                                            className={`hover:bg-blue-50/50 transition-colors ${selectedInstallmentIds.has(inst.id) ? 'bg-blue-50/60' : ''}`}>
-                                                            <td className="px-4 py-2.5 border-r border-gray-100 text-center">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
-                                                                    checked={selectedInstallmentIds.has(inst.id)}
-                                                                    onChange={(e) => handleInstallmentRowCheck(inst.id, index, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
-                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                                />
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{index + 1}</td>
-                                                            {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <input
-                                                                        type="date"
-                                                                        value={inst.dueDate}
-                                                                        onChange={(e) => {
-                                                                            const newInsts = [...parcelas];
-                                                                            newInsts[index] = { ...inst, dueDate: e.target.value };
-                                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                                        }}
-                                                                        className={CELL}
-                                                                    />
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('valor') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <input
-                                                                        type="number"
-                                                                        value={inst.originalValue ?? inst.value}
-                                                                        onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
-                                                                        className={CELL}
-                                                                    />
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('desconto') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <select
-                                                                            value={inst.discountType ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const type = e.target.value as 'VALUE' | 'PERCENT' | '';
-                                                                                updateInstallmentDiscount(index, {
-                                                                                    discountType: type || undefined,
-                                                                                    discountAmount: type ? inst.discountAmount : undefined
-                                                                                });
-                                                                                // Tirar o desconto também mexe no líquido — mesma pergunta.
-                                                                                if (!type) {
-                                                                                    const base = inst.originalValue ?? inst.value;
-                                                                                    void perguntarCorrigirFechamento(
-                                                                                        somaLiquidaPlano() - inst.value + base);
-                                                                                }
-                                                                            }}
-                                                                            className={`${CELL} cursor-pointer`}>
-                                                                            <option value="">Sem desconto</option>
-                                                                            <option value="VALUE">R$</option>
-                                                                            <option value="PERCENT">%</option>
-                                                                        </select>
-                                                                        {/* A pergunta sobre corrigir o fechamento sai no BLUR, não a
-                                                                            cada tecla — perguntar a cada dígito abriria o modal no
-                                                                            meio da digitação. */}
-                                                                        {inst.discountType && (
-                                                                            <input
-                                                                                type="number" min="0" step="0.01"
-                                                                                value={inst.discountAmount ?? ''}
-                                                                                onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
-                                                                                onBlur={() => void perguntarCorrigirFechamento(somaLiquidaPlano())}
-                                                                                placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
-                                                                                className={`${CELL} w-24`}
-                                                                            />
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('situacao') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <SituacaoParcela status={situacaoPorRef[refDaParcela(index)] ?? 'NAO_LANCADA'} />
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('origem') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">Negociação</td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('tipo') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <select
-                                                                        value={inst.installmentType ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const newInsts = [...parcelas];
-                                                                            newInsts[index] = { ...inst, installmentType: (e.target.value || undefined) as PaymentInstallment['installmentType'] };
-                                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                                        }}
-                                                                        className={`${CELL} cursor-pointer`}>
-                                                                        <option value="">Tipo Pagto.</option>
-                                                                        {installmentTypeOptions.map(t => (
-                                                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <select
-                                                                        value={inst.paymentType ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const newInsts = [...parcelas];
-                                                                            newInsts[index] = { ...inst, paymentType: (e.target.value || undefined) as PaymentInstallment['paymentType'] };
-                                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                                        }}
-                                                                        className={`${CELL} cursor-pointer`}>
-                                                                        <option value="">Forma Pagto.</option>
-                                                                        <option value="PIX">PIX</option>
-                                                                        <option value="TED">TED</option>
-                                                                        <option value="DOC">DOC</option>
-                                                                        <option value="DINHEIRO">Dinheiro</option>
-                                                                        <option value="CHEQUE">Cheque</option>
-                                                                        <option value="PERMUTA">Permuta</option>
-                                                                    </select>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('centro_custo') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('plano_contas') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
-                                                                </td>
-                                                            )}
-                                                            {parcelasCols.visibleColumns.includes('descricao') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={inst.notes ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const newInsts = [...parcelas];
-                                                                            newInsts[index] = { ...inst, notes: e.target.value };
-                                                                            setFormData({ ...formData, custom_installments: newInsts });
-                                                                        }}
-                                                                        placeholder="Descrição / observação"
-                                                                        className={CELL}
-                                                                    />
-                                                                </td>
-                                                            )}
-                                                            <td aria-hidden="true"></td>
-                                                            {parcelasCols.visibleColumns.includes('actions') && (
-                                                                <td className="px-6 py-2.5 text-right">
-                                                                    <div className="flex items-center justify-end gap-1.5">
-                                                                        <ActionIconButton kind="delete" title="Remover parcela"
-                                                                            onClick={() => handleRemoveInstallment(inst.id)} />
-                                                                    </div>
-                                                                </td>
-                                                            )}
-                                                        </tr>
-                                                    ))}
                                                         {[...contractEntries]
                                                             .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
                                                             .map((e, i) => {
@@ -3127,13 +2446,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
                                                                             </td>
                                                                         )}
-                                                                        {parcelasCols.visibleColumns.includes('situacao') && (
-                                                                            /* Série do contrato: por definição já está em Contas
-                                                                               a Receber — o status vem do próprio lançamento. */
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <SituacaoParcela status={pago ? 'RECEBIDA' : 'LANCADA'} />
-                                                                            </td>
-                                                                        )}
                                                                         {parcelasCols.visibleColumns.includes('origem') && (
                                                                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
                                                                                 {e.__origem || 'Contrato'}
@@ -3224,7 +2536,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     )}
                                 </div>
 
-                                {!bate && parcelas.length > 0 && (
+                                {!bate && contractEntries.length > 0 && (
                                     <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] p-3 text-sm">
                                         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                                         <span>
@@ -3800,59 +3112,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     </div>
                 )}
 
-                {/* Barra de ação em lote — parcelas selecionadas no Plano de Pagamento
-                    (guia §10: fixa no rodapé, fora do fluxo normal). */}
-                {activeTab === 'parcelas' && selectedInstallmentIds.size > 0 && (
-                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
-                        <span className="flex-1 text-sm font-bold whitespace-nowrap">
-                            {selectedInstallmentIds.size} parcela{selectedInstallmentIds.size !== 1 ? 's' : ''} selecionada{selectedInstallmentIds.size !== 1 ? 's' : ''}
-                            <span className="ml-2 font-normal opacity-75">
-                                · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                    (formData.custom_installments || [])
-                                        .filter(i => selectedInstallmentIds.has(i.id))
-                                        .reduce((s, i) => s + (i.originalValue ?? i.value), 0)
-                                )}
-                            </span>
-                        </span>
-                        <button
-                            onClick={() => setShowInstallmentLoteModal(true)}
-                            className="flex items-center gap-2 px-3 py-2 bg-white text-blue-700 rounded-[6px] font-bold text-button uppercase tracking-widest hover:bg-blue-50 transition-colors"
-                        >
-                            <Pencil className="w-3.5 h-3.5" />
-                            Editar em Lote
-                        </button>
-                        {/* Publicar só o que está selecionado — mesma ação da toolbar,
-                            restrita à seleção (guia §10). Os ids da tela são temporários,
-                            então a ponte é o `reference_id` → id da linha real. */}
-                        <button
-                            onClick={() => {
-                                const ids = (formData.custom_installments || [])
-                                    .map((inst, i) => (selectedInstallmentIds.has(inst.id) ? idPorRef[refDaParcela(i)] : null))
-                                    .filter((v): v is string => !!v);
-                                if (ids.length === 0) {
-                                    notifyError('Salve a negociação antes de enviar estas parcelas.');
-                                    return;
-                                }
-                                void handlePublicarParcelas(ids);
-                            }}
-                            disabled={publishing}
-                            className="flex items-center gap-2 px-3 py-2 bg-white text-emerald-700 rounded-[6px] font-bold text-button uppercase tracking-widest hover:bg-emerald-50 transition-colors disabled:opacity-50"
-                        >
-                            <DollarSign className="w-3.5 h-3.5" />
-                            Enviar ao Contas a Receber
-                        </button>
-                        <button
-                            onClick={() => setSelectedInstallmentIds(new Set())}
-                            className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-[6px] font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                            Desmarcar
-                        </button>
-                    </div>
-                )}
-
-                {/* Mesma barra, para a série do CONTRATO (§10). As duas nunca
-                    aparecem juntas: o seletor mostra uma série de cada vez. */}
+                {/* Ações em lote sobre as parcelas selecionadas (§10). Uma barra
+                    só: desde 2026-08-02 toda linha da tabela é cobrança real. */}
                 {activeTab === 'parcelas' && selectedEntryIds.size > 0 && (
                     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
                         <span className="flex-1 text-sm font-bold whitespace-nowrap">
@@ -3904,15 +3165,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         installmentTypes={installmentTypeOptions}
                         onClose={() => setShowEntryLoteModal(false)}
                         onSave={applyBulkEntryEdit}
-                    />
-                )}
-
-                {showInstallmentLoteModal && (
-                    <InstallmentLoteDiscountModal
-                        installments={(formData.custom_installments || []).filter(i => selectedInstallmentIds.has(i.id))}
-                        installmentTypes={installmentTypeOptions}
-                        onClose={() => setShowInstallmentLoteModal(false)}
-                        onSave={applyBulkInstallmentEdit}
                     />
                 )}
 
@@ -4084,178 +3336,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                                 >
                                     {loading ? 'Gerando...' : alvoSelecionado ? 'Gerar no contrato' : 'Gerar Parcelas'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {showAddAdhocModal && (
-                    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                        <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
-                            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900">Parcela Avulsa</h2>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                        Parcela fora da série regular, inserida na posição escolhida.
-                                    </p>
-                                </div>
-                                <button onClick={() => setShowAddAdhocModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-
-                            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-                                <div>
-                                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Qual será a parcela</label>
-                                    <select
-                                        value={adhocPosition}
-                                        onChange={(e) => setAdhocPosition(parseInt(e.target.value) || 1)}
-                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    >
-                                        {Array.from({ length: (formData.custom_installments?.length ?? 0) + 1 }, (_, idx) => idx + 1).map(n => (
-                                            <option key={n} value={n}>Parcela {n}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        As demais parcelas deslocam a posição a partir daqui — datas e valores delas não mudam.
-                                    </p>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Data</label>
-                                        <input
-                                            type="date"
-                                            value={adhocDate}
-                                            onChange={(e) => setAdhocDate(e.target.value)}
-                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Valor (R$)</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={adhocValue}
-                                            onChange={(e) => setAdhocValue(e.target.value)}
-                                            placeholder="0,00"
-                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-gray-400">
-                                    Forma de pagamento e descrição ficam editáveis na própria linha, depois de criada.
-                                </p>
-                            </div>
-
-                            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddAdhocModal(false)}
-                                    className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleConfirmAddAdhocInstallment}
-                                    className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all active:scale-95"
-                                >
-                                    Criar Parcela
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {showRecalcModal && (
-                    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-                        <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
-                            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900">Recalcular Parcelas</h2>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                        Escolha quais tipos absorvem o ajuste — os demais (Entrada, Avulsas e tipos não marcados) ficam com o valor atual.
-                                    </p>
-                                </div>
-                                <button onClick={() => setShowRecalcModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-
-                            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-                                {(() => {
-                                    const existing = formData.custom_installments || [];
-                                    const typeGroups = new Map<NonNullable<PaymentInstallment['installmentType']>, { count: number; total: number }>();
-                                    existing.forEach(i => {
-                                        if (!i.installmentType || i.installmentType === 'AVULSA') return;
-                                        const g = typeGroups.get(i.installmentType) || { count: 0, total: 0 };
-                                        g.count++;
-                                        g.total += (i.originalValue ?? i.value);
-                                        typeGroups.set(i.installmentType, g);
-                                    });
-
-                                    return (
-                                        <div className="space-y-2">
-                                            {Array.from(typeGroups.entries()).map(([type, g]) => (
-                                                <label key={type} className="flex items-center justify-between gap-3 p-3 bg-gray-50 border border-gray-200 rounded-[6px] cursor-pointer hover:bg-gray-100 transition-colors">
-                                                    <span className="flex items-center gap-3">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={recalcSelectedTypes.has(type)}
-                                                            onChange={() => handleToggleRecalcType(type)}
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                        />
-                                                        <span className="text-sm font-bold text-gray-700">{typeLabel(type)}</span>
-                                                        <span className="text-xs text-gray-400">({g.count} parcela{g.count !== 1 ? 's' : ''})</span>
-                                                    </span>
-                                                    <span className="text-xs font-semibold text-gray-500">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(g.total)}
-                                                    </span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    );
-                                })()}
-
-                                {recalcSelectedTypes.size > 0 && (() => {
-                                    const existing = formData.custom_installments || [];
-                                    const selectedRows = existing.filter(i => i.installmentType && recalcSelectedTypes.has(i.installmentType));
-                                    const fixedTotal = existing
-                                        .filter(i => !(i.installmentType && recalcSelectedTypes.has(i.installmentType)))
-                                        .reduce((sum, i) => sum + (i.originalValue ?? i.value), 0);
-                                    const downPayment = formData.down_payment || 0;
-                                    const baseValue = formData.value || 0;
-                                    const pool = Math.max(0, baseValue - downPayment - fixedTotal);
-                                    const per = selectedRows.length > 0 ? Math.floor((pool / selectedRows.length) * 100) / 100 : 0;
-                                    const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
-
-                                    return (
-                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-[6px] text-xs text-amber-800 space-y-1">
-                                            <p>Valor da negociação {fmt(baseValue)} − Entrada {fmt(downPayment)} − Avulsas/outros tipos {fmt(fixedTotal)} = {fmt(pool)}</p>
-                                            <p className="font-black">{fmt(pool)} ÷ {selectedRows.length} parcela{selectedRows.length !== 1 ? 's' : ''} = {fmt(per)} cada</p>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-
-                            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowRecalcModal(false)}
-                                    className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={recalcSelectedTypes.size === 0}
-                                    onClick={handleConfirmRecalc}
-                                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 ${recalcSelectedTypes.size === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700'}`}
-                                >
-                                    Recalcular
                                 </button>
                             </div>
                         </div>

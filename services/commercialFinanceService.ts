@@ -2,7 +2,6 @@ import { supabase } from '../lib/supabase';
 import { PropertyDeal, ProjectSettings, PaymentInstallment, FinancialTransaction } from '../types';
 import { projectService } from './projectService';
 import { brokerService } from './brokerService';
-import { dealInstallmentService, toPaymentInstallment } from './dealInstallmentService';
 
 // Supabase project row as returned by .select('id, name, settings') / .select('*')
 interface CommercialProjectRow {
@@ -15,261 +14,24 @@ interface CommercialProjectRow {
 
 export const commercialFinanceService = {
     /**
-     * Sincroniza uma negociação com o cofre financeiro de uma organização específica.
-     * Retorna os dados atualizados para acumulação em lote (Operação Átomo).
-     * @param deal A venda vinda do comercial
-     * @param targetOrganizationId ID da organização onde os dados devem ser salvos
-     * @param currentSettings Configurações atuais do projeto (para acumulação sequencial)
+     * ⚠️ APOSENTADA (2026-08-02) — mantida só para não quebrar os chamadores.
+     *
+     * Materializava as parcelas da negociação em Contas a Receber a partir do
+     * cronograma, e era chamada em LOTE por `syncAllOrganizationDeals` ao abrir
+     * a Conciliação Bancária e o Financeiro do projeto. Resultado: parcelas de
+     * negócios que nem tinham fechado apareciam — e reapareciam — sozinhas no
+     * financeiro. Foi a origem da confusão relatada em 01–02/08/2026.
+     *
+     * No modelo atual só existe parcela REAL, criada pelo ato explícito de
+     * "Gerar parcelas" (`services/dealReceivablesService.ts`). Nada gera cobrança
+     * por varredura nem como efeito colateral de abrir uma tela.
+     *
+     * NÃO reimplemente aqui. Se precisar criar cobrança, use dealReceivablesService.
      */
-    async syncDealToFinance(deal: PropertyDeal, targetOrganizationId: string, currentSettings?: ProjectSettings, isGlobalSync: boolean = false) {
+    async syncDealToFinance(deal: PropertyDeal, targetOrganizationId: string) {
         if (!targetOrganizationId) throw new Error('[COMMERCIAL-FINANCE] organizationId obrigatório — acesso cross-tenant não permitido');
-        // Garante que o deal pertence à org solicitada
-        if (deal.organization_id && deal.organization_id !== targetOrganizationId) {
-            throw new Error(`[COMMERCIAL-FINANCE] Cross-tenant bloqueado: deal ${deal.id} pertence à org ${deal.organization_id}, não ${targetOrganizationId}`);
-        }
-        const orgToUse = targetOrganizationId;
-
-        // ⚠️ SÉRIE ÚNICA (2026-08-01): negócio cujas parcelas já vivem em
-        // `deal_installments` NUNCA é materializado por aqui. Sem este guard, o
-        // `syncAllOrganizationDeals` — disparado ao abrir a Conciliação Bancária
-        // e o Financeiro do projeto — republicaria em Contas a Receber tudo o
-        // que o usuário tirou de lá pelo botão "Remover do Contas a Receber".
-        // Publicar é ação explícita: dealInstallmentService.publishToReceivables.
-        if (await dealInstallmentService.hasRows(deal.id)) {
-            console.log(`[COMMERCIAL-FINANCE] Skip: Deal #${deal.id.substring(0, 8)} usa a série única (deal_installments).`);
-            return null;
-        }
-
-        console.log(`[COMMERCIAL-FINANCE] Processing Deal #${deal.id} for Org: ${orgToUse}`);
-
-        // DEVE bater com FINANCIAL_STATUSES de commercialService.saveDeal — antes as duas
-        // listas divergiam (faltavam RESERVA/CONTRATO/ASSINATURA aqui), então negócios
-        // nessas etapas eram chamados pelo saveDeal e rejeitados aqui, sem gerar recebível.
-        const allowedStatuses = ['COMPLETED', 'PENDING', 'APPROVED', 'WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA'];
-        if (!allowedStatuses.includes(deal.status || '')) {
-            console.log(`[COMMERCIAL-FINANCE] Skip: Invalid status "${deal.status}"`);
-            return null;
-        }
-
-        // 1. Localizar o Projeto de destino (Vault)
-        let commercialProject = await this.getOrCreateCommercialProject(orgToUse);
-        if (!commercialProject) throw new Error('Falha ao localizar/criar projeto Vault');
-
-        // Se estivermos salvando ativamente (comercial -> financeiro), limpamos vestígios globais primeiro.
-        // Isso evita duplicidades se o deal foi movido de organização ou existe em projetos órfãos.
-        const globalStates: PaymentInstallment[] = [];
-        if (!isGlobalSync) {
-            console.log(`[COMMERCIAL-FINANCE] Omniscient Purge for Deal #${deal.id.substring(0,8)}...`);
-            const { data: allProj } = await supabase.from('projects').select('settings')
-                .eq('name', 'Gestão Comercial')
-                .filter('settings->>organizationId', 'eq', orgToUse);
-            allProj?.forEach(p => {
-                const insts: PaymentInstallment[] | undefined = (p.settings as ProjectSettings)?.financialInfo?.installments;
-                if (insts) {
-                    const matches = insts.filter(i => i.dealId === deal.id || (i.description || '').includes(deal.id.substring(0, 8)));
-                    globalStates.push(...matches);
-                }
-            });
-
-            // Executamos a purga física global
-            await this.deleteDealInstallments(deal.id, orgToUse);
-            
-            // Recarregamos o projeto alvo (que agora deve estar limpo deste deal)
-            commercialProject = await this.getOrCreateCommercialProject(orgToUse);
-        }
-
-        // Se passarmos o settings atual (em loop), usamos ele. Senão, carregamos do projeto.
-        const settings = currentSettings || (commercialProject.settings as ProjectSettings);
-        const info = settings.financialInfo || { totalValue: 0, installments: [], transactions: [] };
-        
-        // Unificar estados para soberania (locais + capturados globalmente antes da purga)
-        const allExistingInstallments = [...(info.installments || []), ...globalStates];
-
-
-        let clientName = 'Indefinido';
-        let propertyName = 'Indefinido';
-        let propertyNumber = '';
-
-        try {
-            if (deal.client_id) {
-                const { data: clientData } = await supabase.from('clients').select('name').eq('id', deal.client_id).single();
-                if (clientData) clientName = clientData.name;
-            }
-            if (deal.property_id) {
-                const { data: propData } = await supabase.from('commercial_properties').select('name, number').eq('id', deal.property_id).single();
-                if (propData) {
-                    propertyName = propData.name;
-                    propertyNumber = propData.number || propData.name;
-                }
-            }
-        } catch (e) { console.error('Error fetching ref names:', e); }
-
-        // Um contrato pode reunir várias unidades (apto + vaga + box). O rateio
-        // por unidade fica na tabela commercial_deal_units; aqui basta o rótulo
-        // completo — a cobrança continua sendo UMA série de parcelas sobre o total.
-        let propertyIds: string[] = deal.property_id ? [deal.property_id] : [];
-        let propertyNames = propertyName;
-        try {
-            const { data: unitRows } = await supabase
-                .from('commercial_deal_units')
-                .select('property_id, is_primary')
-                .eq('deal_id', deal.id);
-            if (unitRows && unitRows.length > 0) {
-                propertyIds = unitRows.map(u => u.property_id as string);
-                const { data: props } = await supabase
-                    .from('commercial_properties')
-                    .select('id, name')
-                    .in('id', propertyIds);
-                const nameById = new Map((props || []).map(p => [p.id as string, (p.name as string) || '']));
-                propertyNames = propertyIds.map(id => nameById.get(id) || '').filter(Boolean).join(' + ') || propertyName;
-            }
-        } catch (e) { console.error('Error fetching deal units:', e); }
-
-        const metadata = {
-            dealId: deal.id,
-            dealType: deal.type,
-            clientId: deal.client_id,
-            clientName,
-            // Unidade principal — mantida para não quebrar os consumidores legados
-            // que leem metadata.propertyId (BI, Conciliação, Portal do Cliente).
-            propertyId: deal.property_id,
-            propertyName,
-            /** Todas as unidades do contrato. */
-            propertyIds,
-            /** Rótulo concatenado ("Apto 101 + Vaga 12"). */
-            propertyNames,
-            linkedProjectId: deal.linked_project_id,
-            // Dimensões contábeis do CABEÇALHO (aba Forma de Pagamento). Ficam no
-            // metadata de propósito: assim as três formas de gerar parcelas
-            // (customizadas, cronograma padrão e a Entrada) herdam sem repetição,
-            // e o espelho em internal_transactions as encontra no mesmo lugar.
-            // Não são editáveis por parcela — na aba Parcelas são só leitura.
-            costCenterId: deal.cost_center_id ?? null,
-            planoDeContasId: deal.plano_de_contas_id ?? null
-        };
-
-        // 2. RECUPERAR LANÇAMENTOS EXISTENTES NO LOTE ATUAL
-        const currentInstallments = info.installments || [];
-        const currentTransactions = info.transactions || [];
-        // 2B. ISOLAR LANÇAMENTOS
-        // 2B. ISOLAR LANÇAMENTOS DO CONTRATO ATUAL PARA SUBSTITUIÇÃO
-        // Esta é a parte crítica para evitar duplicidade: identificamos TUDO que pertence a este Deal
-        const isDealInstallment = (i: PaymentInstallment): boolean => {
-            const shortId = deal.id.substring(0, 8);
-            return i.dealId === deal.id || (i.description || '').includes(`Deal #${shortId}`) || (i.id || '').includes(shortId);
-        };
-
-        const thisDealInstallments = currentInstallments.filter(isDealInstallment);
-
-        // PURGA: Removemos TUDO do deal atual do lote original.
-        // O que sobrar (otherInstallments) sāo parcelas de OUTRAS negociações que devem ser preservadas.
-        const otherInstallments = currentInstallments.filter(i => !isDealInstallment(i));
-
-        const newInstallments: PaymentInstallment[] = [];
-
-        const getStatus = (id: string, value: number, description: string, defStatus: string) => {
-            const ex = allExistingInstallments.find((oi: PaymentInstallment) =>
-                oi.id === id ||
-                (Math.abs(oi.value - value) < 0.01 && oi.description === description) ||
-                (oi.dealId === deal.id && (oi.description || '').includes(description.substring(0, 15)))
-            );
-            return ex ? { status: ex.status, paymentDate: ex.paymentDate } : { status: defStatus, paymentDate: undefined };
-        };
-
-        // 4. Lógica de Geração Não Destrutiva (Soberania Customizada)
-        if (isGlobalSync && thisDealInstallments.length > 0) {
-            // CASO 1: Sincronia Global de um contrato que JÁ ESTÁ NO COFRE.
-            // Preservamos o histórico (parcelas customizadas, quebras manuais, edições do financeiro).
-            // O Global Sync atua apenas como corretor de conectividade (metadata) e detector de calotes (cancelamentos).
-            console.log(`[COMMERCIAL-FINANCE] Preserving ${thisDealInstallments.length} established installments for Deal #${deal.id.substring(0,8)}`);
-            thisDealInstallments.forEach((ex: PaymentInstallment) => {
-                newInstallments.push({
-                    ...ex,
-                    ...metadata,
-                    status: (deal.status === 'CANCELLED' || deal.status === 'IN_NEGOTIATION') ? 'CANCELLED' : ex.status
-                });
-            });
-        } 
-        else if (deal.custom_installments && deal.custom_installments.length > 0) {
-            // CASO 2: Salvamento Ativo do Comercial COM Cronograma Customizado (ex: Waldir 36 parcelas flexíveis)
-            const downPayment = deal.down_payment || 0;
-            
-            // Adicionar Sinal/Entrada se houver (o custom_installments não inclui a entrada, apenas as parcelas)
-            if (downPayment > 0) {
-                const dpId = `tx-${deal.id}-dp`;
-                const dpDesc = `Receita: ${deal.type === 'SALE' ? 'Venda' : 'Aluguel'} - Sinal (Entrada)`;
-                const sd = getStatus(dpId, downPayment, dpDesc, 'PENDING');
-                newInstallments.push({
-                    id: dpId,
-                    description: dpDesc,
-                    dueDate: deal.date || new Date().toISOString().split('T')[0],
-                    value: Number(downPayment.toFixed(2)),
-                    status: sd.status as PaymentInstallment['status'],
-                    paymentDate: sd.paymentDate,
-                    paymentType: deal.down_payment_payment_type,
-                    installmentType: deal.down_payment_installment_type,
-                    notes: deal.down_payment_notes,
-                    ...metadata
-                });
-            }
-            
-            console.log(`[COMMERCIAL-FINANCE] Saving ${deal.custom_installments.length} CUSTOM installments${downPayment > 0 ? ' + Entrada' : ''} for Deal #${deal.id.substring(0,8)}`);
-            deal.custom_installments.forEach((custom: PaymentInstallment, idx: number) => {
-                const sd = getStatus(custom.id, custom.value, custom.description, custom.status);
-                newInstallments.push({
-                    ...custom,
-                    ...metadata,
-                    paymentDate: sd.paymentDate,
-                    status: sd.status as PaymentInstallment['status'],
-                    // id original vem de DealModal como `temp-${Date.now()}-${i}` — não embute
-                    // o dealId, então uma parcela customizada excluída junto com o negócio é
-                    // impossível de achar/limpar depois (deleteDealInstallments casa por
-                    // 'tx-{dealId}-%'). Reescreve para um id estável e rastreável ao deal.
-                    // getStatus acima já casa por value+description além do id, então preserva
-                    // status/paymentDate de execuções anteriores mesmo trocando o id agora.
-                    id: `tx-${deal.id}-custom-p${idx + 1}`
-                });
-            });
-        }
-        else {
-            // CASO 3: Resoluçāo Matemática Crua (Contrato simples ou Novo via DB)
-            const installments = deal.installments || 0;
-            const downPayment = deal.down_payment || 0;
-            const installmentValue = installments > 0 ? (deal.value - (deal.type === 'RENTAL' ? 0 : downPayment)) / installments : 0;
-
-            console.log(`[COMMERCIAL-FINANCE] Generating standard schedule for Deal #${deal.id.substring(0,8)} (DP: ${downPayment}, Inst: ${installments})`);
-
-            // Adicionar Sinal
-            if (downPayment > 0) {
-                const id = `tx-${deal.id}-dp`;
-                const desc = `Receita: ${deal.type === 'SALE' ? 'Venda' : 'Aluguel'} - Sinal (Entrada) - Deal #${deal.id.substring(0, 8)}`;
-                const sd = getStatus(id, downPayment, desc, 'PENDING');
-                newInstallments.push({ id, description: desc, dueDate: deal.date || new Date().toISOString().split('T')[0], value: Number(downPayment.toFixed(2)), status: sd.status as PaymentInstallment['status'], paymentDate: sd.paymentDate, paymentType: deal.down_payment_payment_type, installmentType: deal.down_payment_installment_type, notes: deal.down_payment_notes, ...metadata });
-            }
-
-            // Adicionar Parcelas Regulares
-            if (installments > 0) {
-                for (let i = 1; i <= installments; i++) {
-                    const id = `tx-${deal.id}-p${i}`;
-                    const date = new Date(deal.date || Date.now());
-                    date.setMonth(date.getMonth() + i);
-                    const desc = `Receita: ${deal.type === 'SALE' ? 'Venda' : 'Aluguel'} - Parcela ${i}/${installments} - Deal #${deal.id.substring(0, 8)}`;
-                    const sd = getStatus(id, installmentValue, desc, 'PENDING');
-                    newInstallments.push({ ...metadata, id, description: desc, dueDate: date.toISOString().split('T')[0], value: Number(installmentValue.toFixed(2)), status: sd.status as PaymentInstallment['status'],paymentDate: sd.paymentDate });
-                }
-            }
-        }
-
-        const updatedInstallments = [...newInstallments, ...otherInstallments];
-        const updatedTransactions = [...currentTransactions]; // Mantendo transactions por enquanto
-
-        return {
-            installments: updatedInstallments,
-            transactions: updatedTransactions,
-            commercialProject,
-            clientName,
-            propertyNumber
-        };
+        console.log(`[COMMERCIAL-FINANCE] syncDealToFinance aposentado — nada feito para o deal ${(deal?.id || '').substring(0, 8)}.`);
+        return null;
     },
 
     async getOrCreateCommercialProject(organizationId: string) {
@@ -520,13 +282,6 @@ export const commercialFinanceService = {
         try {
             console.log(`[COMMERCIAL-FINANCE] Auditing paid installments for Deal ${dealId} (Org: ${organizationId})`);
 
-            // Série única primeiro (fonte da verdade); vault só como legado.
-            const rows = await dealInstallmentService.listByDeal(dealId, organizationId);
-            if (rows.length > 0) {
-                const pagas = rows.filter(r => r.settlementStatus === 'RECEBIDA').length;
-                return { hasPaid: pagas > 0, paidCount: pagas };
-            }
-
             // 1. Carregar projetos de Gestão Comercial da organização
             const { data: projects, error } = await supabase
                 .from('projects')
@@ -577,18 +332,6 @@ export const commercialFinanceService = {
      */
     async getDealInstallments(dealId: string, organizationId: string): Promise<PaymentInstallment[]> {
         if (!organizationId || !dealId) return [];
-        try {
-            // Fonte da verdade desde 2026-08-01: a tabela `deal_installments`.
-            // O vault só responde por negócios anteriores ao backfill.
-            const rows = await dealInstallmentService.listByDeal(dealId, organizationId);
-            if (rows.length > 0) {
-                return rows
-                    .filter(r => r.sequence > 0) // Entrada é editada à parte
-                    .map(toPaymentInstallment);
-            }
-        } catch (e) {
-            console.error('[COMMERCIAL-FINANCE] getDealInstallments (série única):', e);
-        }
         try {
             const { data: projects, error } = await supabase
                 .from('projects')
@@ -887,26 +630,35 @@ export const commercialFinanceService = {
             }
         });
 
-        // Série única: o Portal do Cliente mostra o que foi PUBLICADO em Contas a
-        // Receber — parcela que ainda é só plano/proposta não é cobrança e não
-        // pode aparecer para o cliente. Sem esta união o portal esvaziaria para
-        // todo negócio criado depois da migração.
+        // Cobranças reais do cliente. Desde 2026-08-02 a parcela da negociação
+        // vive em `internal_transactions` (só existe parcela que é cobrança), e
+        // o vault acima responde apenas por negócios legados. Sem esta parte o
+        // Portal do Cliente esvaziaria para tudo criado dali em diante.
         try {
-            const { data: deals } = await supabase
-                .from('commercial_deals')
-                .select('id')
-                .eq('client_id', clientId)
-                .eq('organization_id', organizationId);
-            for (const d of deals || []) {
-                const rows = await dealInstallmentService.listByDeal(d.id as string, organizationId);
-                consolidated.push(
-                    ...rows
-                        .filter(r => !!r.publishedAt && r.settlementStatus !== 'CANCELADA')
-                        .map(r => ({ ...toPaymentInstallment(r), clientId })),
-                );
+            const { data: rows, error } = await supabase
+                .from('internal_transactions')
+                .select('id, reference_id, transaction_date, due_date, amount, description, status, business_status')
+                .eq('organization_id', organizationId)
+                .eq('direction', 'CREDIT')
+                .eq('party_id', clientId)
+                .neq('status', 'CANCELLED');
+            if (error) throw error;
+            const jaVistos = new Set(consolidated.map(i => i.id));
+            for (const r of rows || []) {
+                if (jaVistos.has(r.id as string)) continue;
+                const pago = r.status === 'CONCILIATED'
+                    || ['RECEBIDO', 'PAGO'].includes((r.business_status as string) || '');
+                consolidated.push({
+                    id: r.id as string,
+                    dueDate: (r.due_date as string) || (r.transaction_date as string),
+                    value: Number(r.amount) || 0,
+                    status: pago ? 'PAID' : 'PENDING',
+                    description: (r.description as string) || '',
+                    clientId,
+                });
             }
         } catch (e) {
-            console.error('[COMMERCIAL-FINANCE] listAllClientInstallments (série única):', e);
+            console.error('[COMMERCIAL-FINANCE] listAllClientInstallments (cobranças reais):', e);
         }
 
         return consolidated;
@@ -934,15 +686,32 @@ export const commercialFinanceService = {
             return;
         }
 
-        // 2. Coletar todas as parcelas deste deal. Série única primeiro — sem
-        //    isto, "todas pagas → COMPLETED/SOLD" pararia de funcionar para
-        //    negócios que não existem mais no vault.
+        // 2. Coletar as parcelas deste deal. As cobranças reais vêm de
+        //    `internal_transactions`; sem isto, "todas pagas → COMPLETED/SOLD"
+        //    pararia de funcionar para todo negócio criado a partir de 02/08.
         let dealInstallments: PaymentInstallment[] = [];
         try {
-            const rows = await dealInstallmentService.listByDeal(dealId, organizationId);
-            dealInstallments.push(...rows.filter(r => !!r.publishedAt).map(toPaymentInstallment));
+            const { data: rows } = await supabase
+                .from('internal_transactions')
+                .select('id, transaction_date, due_date, amount, description, status, business_status')
+                .eq('organization_id', organizationId)
+                .eq('direction', 'CREDIT')
+                .like('reference_id', `tx-${dealId}-%`)
+                .neq('status', 'CANCELLED');
+            for (const r of rows || []) {
+                const pago = r.status === 'CONCILIATED'
+                    || ['RECEBIDO', 'PAGO'].includes((r.business_status as string) || '');
+                dealInstallments.push({
+                    id: r.id as string,
+                    dueDate: (r.due_date as string) || (r.transaction_date as string),
+                    value: Number(r.amount) || 0,
+                    status: pago ? 'PAID' : 'PENDING',
+                    description: (r.description as string) || '',
+                    dealId,
+                });
+            }
         } catch (e) {
-            console.error('[COMMERCIAL-RECONCILE] série única:', e);
+            console.error('[COMMERCIAL-RECONCILE] cobranças reais:', e);
         }
         // Vault só entra quando a série única não respondeu (negócio legado):
         // somar as duas duplicaria a mesma parcela e travaria a reconciliação.

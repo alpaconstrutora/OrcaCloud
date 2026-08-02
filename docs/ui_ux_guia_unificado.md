@@ -834,6 +834,38 @@ vertical própria e o `<thead>` fica fixo no topo dessa área.
 
 ---
 
+### 6.7 Paginação — rodapé da tabela
+
+Tabela que pode passar de algumas centenas de linhas tem rodapé de paginação.
+Referência: `BankReconciliation.tsx`, aba Extrato.
+
+**Regras:**
+
+- **Nunca `.limit(N)` fixo na consulta.** O PostgREST corta em 1000 linhas por
+  requisição; um `.limit()` no service vira teto silencioso e a tela some com
+  dado sem avisar ninguém. Buscar o recorte inteiro paginando com `.range()`
+  até a página vir incompleta; paginar depois, em memória, na renderização.
+  Se paginar **no servidor**, então a contagem tem que vir de `count: 'exact'` —
+  nunca do tamanho do array recebido.
+- Ordenação da consulta paginada precisa de **desempate determinístico**
+  (ex.: `.order('transaction_date').order('id')`). Só o campo visível empata e
+  o Postgres não garante ordem estável entre páginas: linhas repetem ou somem.
+- Rodapé: `flex items-center justify-between gap-4 px-6 py-3 border-t
+  border-gray-100 text-sm text-gray-500`.
+  - Esquerda: `"1–100 de 4.312"` + `<select>` de tamanho de página
+    (50 / 100 / 200 / 500).
+  - Direita: `Anterior` · `Página X de Y` · `Próxima`, botões
+    `h-8 px-3 rounded-[6px] border border-gray-200 bg-white` com
+    `disabled:opacity-40 disabled:cursor-not-allowed` nos extremos.
+- **Tamanho da página persiste** (`usePersistedState`), **página atual não** —
+  qualquer mudança de recorte (busca, filtro, período, conta) volta para a 1.
+- "Selecionar todos" do `<thead>` marca **só a página visível**. Marcar linha
+  que o usuário não está vendo é armadilha em ação de lote.
+- Shift+clique (§10.1) recorta sobre a **lista inteira filtrada**, não sobre a
+  página — passar o índice global (`pageStart + i`), não o índice da página.
+
+---
+
 ## 7. TABELA — `<tbody>` e TDs
 
 ### Linha (`<tr>`)

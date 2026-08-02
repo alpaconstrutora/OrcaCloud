@@ -55,6 +55,28 @@ const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string
     prolabore: { title: 'Pró-labore', subtitle: 'Lançamentos categorizados como Pró-labore no extrato — aprove, feche o mês e envie o total ao RH.' },
 };
 
+/** O PostgREST devolve no máximo 1000 linhas por requisição. Qualquer `.limit(N)`
+ *  fixo aqui vira teto silencioso: com o filtro de ano cheio, uma conta movimentada
+ *  passava de 2000 lançamentos e a tela mostrava só os mais recentes (dez→jul),
+ *  como se janeiro–junho não existissem. Paginamos até esgotar. */
+const PAGE_SIZE = 1000;
+
+async function fetchAllPages<T>(
+    buildQuery: () => PromiseLike<{ data: T[] | null; error: unknown }> & {
+        range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>;
+    }
+): Promise<{ data: T[]; error: unknown }> {
+    const all: T[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+        if (error) return { data: all, error };
+        const page = data || [];
+        all.push(...page);
+        if (page.length < PAGE_SIZE) break;
+    }
+    return { data: all, error: null };
+}
+
 interface BankReconciliationProps {
     organizationId: string;
     /** Aba a exibir ao entrar pela rota (ex.: 'statement' via menu "Extrato Bancário",
@@ -432,6 +454,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [internalSortField, setInternalSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'entity'>('date');
     const [matchSortOrder, setMatchSortOrder] = useState<'desc' | 'asc'>('desc');
     const [flowFilter, setFlowFilter] = usePersistedState<'ALL' | 'INCOME' | 'EXPENSE'>('extratoBancario:flowFilter', 'ALL');
+    // Paginação do Extrato: a busca traz o período inteiro (sem teto), a tabela
+    // renderiza uma página por vez. O tamanho da página fica persistido; a página
+    // atual não — sempre começa na 1 quando o recorte muda.
+    const [statementPageSize, setStatementPageSize] = usePersistedState<number>('extratoBancario:pageSize', 100);
+    const [statementPage, setStatementPage] = useState(1);
     const [importingMessage, setImportingMessage] = useState<string | null>(null);
 
     const sortedBankTransactions = useMemo(() => {
@@ -495,6 +522,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             return 0;
         });
     }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, statementAdvancedFilters.rules]);
+
+    const statementTotalPages = Math.max(1, Math.ceil(sortedBankTransactions.length / statementPageSize));
+    // Se o recorte encolheu e a página atual não existe mais, cai na última válida
+    // (evita tabela vazia com "página 7 de 3").
+    const statementCurrentPage = Math.min(statementPage, statementTotalPages);
+    const statementPageStart = (statementCurrentPage - 1) * statementPageSize;
+    const pagedBankTransactions = useMemo(
+        () => sortedBankTransactions.slice(statementPageStart, statementPageStart + statementPageSize),
+        [sortedBankTransactions, statementPageStart, statementPageSize]
+    );
 
     const sortedInternalTransactions = useMemo(() => {
         let filtered = [...internalTransactions];
@@ -820,6 +857,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     useEffect(() => {
         localStorage.setItem('reconciliation_active_tab', activeView);
     }, [activeView]);
+
+    // Qualquer mudança de recorte volta o Extrato para a primeira página.
+    useEffect(() => {
+        setStatementPage(1);
+    }, [bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, statementAdvancedFilters.rules, selectedAccountId, competencia, startDate, endDate]);
 
     useEffect(() => {
         localStorage.setItem('reconciliation_bank_cat_filter', JSON.stringify(bankCategoryFilter));
@@ -1222,51 +1264,62 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     : `${competencia}-${String(new Date(+competencia.split('-')[0], +competencia.split('-')[1], 0).getDate()).padStart(2, '0')}`)
                 : endDate;
 
-            // Load Bank Transactions
-            let bankQuery = supabase
-                .from('bank_transactions')
-                .select('*')
-                .eq('bank_account_id', selectedAccountId);
-            
-            if (activeView === 'pending' || activeView === 'center' || activeView === 'statement') {
-                bankQuery = bankQuery.in('status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
-            } else {
-                bankQuery = bankQuery.in('status', ['MATCHED']);
-            }
-
-            if (effStart) bankQuery = bankQuery.gte('transaction_date', effStart);
-            if (effEnd)   bankQuery = bankQuery.lte('transaction_date', effEnd);
-
             const isPendingView = activeView === 'pending' || activeView === 'center' || activeView === 'statement';
 
+            // Load Bank Transactions
+            const buildBankQuery = () => {
+                let q = supabase
+                    .from('bank_transactions')
+                    .select('*')
+                    .eq('bank_account_id', selectedAccountId);
+
+                // Extrato = espelho do que o banco mandou. NÃO filtra por status:
+                // lançamento já conciliado (MATCHED) ou de período fechado (LOCKED)
+                // continua sendo extrato. Filtrar aqui fazia meses inteiros já
+                // conciliados sumirem da tela — parecia recorte de data.
+                // As abas Pendentes/Central, sim, são recortes por status.
+                if (activeView === 'statement') {
+                    // sem filtro de status
+                } else if (isPendingView) {
+                    q = q.in('status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
+                } else {
+                    q = q.in('status', ['MATCHED']);
+                }
+
+                if (effStart) q = q.gte('transaction_date', effStart);
+                if (effEnd)   q = q.lte('transaction_date', effEnd);
+
+                // A ordenação precisa ser determinística entre páginas: transaction_date
+                // sozinho empata muito (vários lançamentos no mesmo dia) e o desempate do
+                // Postgres não é estável, o que faria linhas repetirem ou sumirem no range.
+                return q.order('transaction_date', { ascending: false }).order('id', { ascending: false });
+            };
+
             // Load Internal Transactions based on view
-            let iTxQuery = supabase
-                .from('internal_transactions')
-                .select('*')
-                .order('transaction_date', { ascending: false });
+            const buildITxQuery = () => {
+                let q = supabase
+                    .from('internal_transactions')
+                    .select('*');
 
-            if (organizationId) {
-                iTxQuery = iTxQuery.eq('organization_id', organizationId);
-            }
+                if (organizationId) {
+                    q = q.eq('organization_id', organizationId);
+                }
 
-            if (isPendingView) {
-                iTxQuery = iTxQuery.eq('status', 'PENDING');
-            } else {
-                iTxQuery = iTxQuery.eq('status', 'CONCILIATED');
-            }
+                q = q.eq('status', isPendingView ? 'PENDING' : 'CONCILIATED');
 
-            if (effStart) iTxQuery = iTxQuery.gte('transaction_date', effStart);
-            if (effEnd)   iTxQuery = iTxQuery.lte('transaction_date', effEnd);
+                if (effStart) q = q.gte('transaction_date', effStart);
+                if (effEnd)   q = q.lte('transaction_date', effEnd);
 
-            iTxQuery = iTxQuery.limit(2000);
+                return q.order('transaction_date', { ascending: false }).order('id', { ascending: false });
+            };
 
             const orgForProj = effectiveOrgId || organizationId;
 
             // Dispara em paralelo tudo que não depende uma da outra (supabase-js resolve com
             // { error } em vez de rejeitar, então uma falha aqui não derruba o Promise.all).
             const [bankResult, iTxResult, rescueResult, projResult] = await Promise.all([
-                bankQuery.order('transaction_date', { ascending: false }).limit(2000),
-                iTxQuery,
+                fetchAllPages<BankTransaction>(buildBankQuery as never),
+                fetchAllPages<InternalTransaction>(buildITxQuery as never),
                 // --- BUSCA CIRÚRGICA LADO DIREITO (400k / WALDIR) --- só relevante na aba Pendentes
                 (isPendingView && organizationId)
                     ? (() => {
@@ -1345,7 +1398,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 if (commercialMatches.length > 0) {
                     const existingIds = new Set(finalITxs.map(t => t.id));
                     const uniqueNew = commercialMatches.filter(t => !existingIds.has(t.id));
-                    finalITxs = [...finalITxs, ...uniqueNew];
+                    finalITxs = [...finalITxs, ...(uniqueNew as unknown as InternalTransaction[])];
                 }
             }
 
@@ -4328,13 +4381,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         <input
                                                             type="checkbox"
                                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                            checked={sortedBankTransactions.length > 0 && sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
+                                                            checked={pagedBankTransactions.length > 0 && pagedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
                                                             onChange={(e) => {
+                                                                // Marca só o que está visível na página — marcar linha
+                                                                // que o usuário não vê seria armadilha numa ação em lote.
                                                                 if (e.target.checked) {
-                                                                    setSelectedBankTxIds(new Set([...selectedBankTxIds, ...sortedBankTransactions.map(tx => tx.id)]));
+                                                                    setSelectedBankTxIds(new Set([...selectedBankTxIds, ...pagedBankTransactions.map(tx => tx.id)]));
                                                                 } else {
                                                                     const next = new Set(selectedBankTxIds);
-                                                                    sortedBankTransactions.forEach(tx => next.delete(tx.id));
+                                                                    pagedBankTransactions.forEach(tx => next.delete(tx.id));
                                                                     setSelectedBankTxIds(next);
                                                                 }
                                                             }}
@@ -4436,7 +4491,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
-                                                {sortedBankTransactions.map((tx, rowIndex) => {
+                                                {pagedBankTransactions.map((tx, pageRowIndex) => {
+                                                    // Índice global — o Shift+clique (§10.1) recorta
+                                                    // sobre a lista inteira, não sobre a página.
+                                                    const rowIndex = statementPageStart + pageRowIndex;
                                                     const cpKey = (tx.counterparty_name || '').trim().toLowerCase();
                                                     const cpRegistered = tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey);
                                                     return (
@@ -4597,6 +4655,44 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 })}
                                             </tbody>
                                         </table>
+                                        </div>
+                                        {/* Rodapé de paginação (§6.7) — o carregamento traz o período
+                                            inteiro; aqui só se navega sobre o que já está em memória. */}
+                                        <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
+                                            <div className="flex items-center gap-2">
+                                                <span>
+                                                    {sortedBankTransactions.length === 0
+                                                        ? 'Nenhum lançamento'
+                                                        : `${statementPageStart + 1}–${Math.min(statementPageStart + statementPageSize, sortedBankTransactions.length)} de ${sortedBankTransactions.length}`}
+                                                </span>
+                                                <select
+                                                    value={statementPageSize}
+                                                    onChange={(e) => { setStatementPageSize(Number(e.target.value)); setStatementPage(1); }}
+                                                    className="h-8 px-2 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600"
+                                                    title="Lançamentos por página"
+                                                >
+                                                    {[50, 100, 200, 500].map(n => (
+                                                        <option key={n} value={n}>{n} por página</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setStatementPage(p => Math.max(1, p - 1))}
+                                                    disabled={statementCurrentPage <= 1}
+                                                    className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                                >
+                                                    Anterior
+                                                </button>
+                                                <span>Página {statementCurrentPage} de {statementTotalPages}</span>
+                                                <button
+                                                    onClick={() => setStatementPage(p => Math.min(statementTotalPages, p + 1))}
+                                                    disabled={statementCurrentPage >= statementTotalPages}
+                                                    className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                                >
+                                                    Próxima
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )

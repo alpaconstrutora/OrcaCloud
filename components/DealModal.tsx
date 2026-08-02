@@ -1174,6 +1174,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 // anual) — usá-la como cadência gerava uma parcela por ano.
                 cycleOverride: maxCount ? 'Mensal' : undefined,
                 replaceExisting: true,
+                // "Data do 1º Pagamento" do modal ancora a série. Ela era lida
+                // só pelo gerador da negociação, que foi removido — o campo
+                // ficou na tela sem efeito até esta correção (02/08/2026).
+                firstDueDate: generateFirstDueDate || undefined,
             });
             // O modal continua ABERTO com o resultado: as parcelas de contrato vão
             // para Contas a Receber (internal_transactions), NÃO para o plano de

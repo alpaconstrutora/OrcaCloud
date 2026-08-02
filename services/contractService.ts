@@ -759,6 +759,12 @@ export async function generateRecurringInstallmentsForPeriod(
         /** Regerar refaz a série: apaga as parcelas ainda PREVISTAS do período e
          *  reinsere com o valor/quantidade atuais. Pagas nunca são tocadas. */
         replaceExisting?: boolean;
+        /** Data do 1º Pagamento escolhida no modal. Quando vem, ela ANCORA a
+         *  série: a 1ª parcela cai exatamente nesse dia, e o dia do mês das
+         *  seguintes passa a ser o dela — `due_day` do contrato é ignorado.
+         *  Sem isto o campo ficava na tela sem efeito: a série era sempre
+         *  ancorada em start_date + due_day (regressão relatada em 02/08/2026). */
+        firstDueDate?: string;
     },
 ): Promise<{ inserted: number; skipped: number; removed: number; dueDates: string[] }> {
     const { fromDate, toDate, amount, maxCount, replaceExisting } = opts;
@@ -781,16 +787,20 @@ export async function generateRecurringInstallmentsForPeriod(
     // sem end_date, virando janela de poucos meses) truncava a série: 60
     // parcelas acordadas geravam 6.
     const n = maxCount && maxCount > 0 ? Math.floor(maxCount) : 0;
+    // Data do 1º Pagamento manda sobre a âncora do contrato, quando informada.
+    const ancora = opts.firstDueDate ? opts.firstDueDate.slice(0, 10) : null;
+    const diaDoVencimento = ancora ? Number(ancora.slice(8, 10)) : contract.due_day;
     let dueDates = buildRecurringDueDates({
-        startDate: contract.start_date,
-        from: fromDate,
+        startDate: ancora || contract.start_date,
+        from: ancora || fromDate,
         // HORIZONTE_ABERTO: com N definido, quem corta a série é o slice abaixo,
         // não a data final. O laço de buildRecurringDueDates já tem guarda de
         // 1200 iterações, então isso não é loop infinito.
         to: n > 0 ? '9999-12-31' : toDate,
-        dueDay: contract.due_day,
+        dueDay: diaDoVencimento,
         billingCycle: cycle,
-        paymentDays: contract.payment_days,
+        // Com âncora explícita o offset já está embutido na data escolhida.
+        paymentDays: ancora ? 0 : contract.payment_days,
     });
     if (n > 0) dueDates = dueDates.slice(0, n);
     // Janela sem nenhum vencimento é quase sempre erro de cadastro (ciclo ou dia

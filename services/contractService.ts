@@ -61,6 +61,29 @@ function isReceivableContract(contract: { domain?: string | null; direction?: st
 }
 
 /**
+ * Contrato COMERCIAL (locação/venda) só fatura depois de assinado.
+ *
+ * Antes de 02/08/2026 o motor lançava em Contas a Receber assim que o contrato
+ * existia — inclusive em ASSINATURA, ou seja, antes de o cliente assinar. Junto
+ * com o auto-lançamento da negociação, era isso que enchia o financeiro de
+ * cobrança de negócio que ainda não fechou. O usuário mandou eliminar.
+ *
+ * Suprimentos/Serviços NÃO passam por aqui: são Contas a Pagar, com fluxo de
+ * aprovação próprio, e mexer neles não foi pedido.
+ *
+ * Assinado = `signature_status = 'SIGNED'` OU `status = 'Ativo'` (contratos
+ * antigos e os que são ativados à mão, sem passar por assinatura eletrônica).
+ */
+function podeFaturarContratoComercial(contract: {
+    domain?: string | null; status?: string | null; signature_status?: string | null;
+}): boolean {
+    const comercial = contract.domain === 'LOCACAO' || contract.domain === 'VENDAS';
+    if (!comercial) return true;
+    return contract.signature_status === 'SIGNED'
+        || (contract.status || '').toLowerCase() === 'ativo';
+}
+
+/**
  * Resolve a contraparte cadastrada de um contrato para popular party_type/party_name
  * (e party_id) nos lançamentos internos.
  * Recebível → cliente; pagável → fornecedor (ver isReceivableContract).
@@ -393,6 +416,11 @@ function isContractTx(t: any, contractTag: string, measurementIds: string[]): bo
 // Writes to both: project JSONB (Despesas tab) and internal_transactions table (Conciliação tab).
 async function syncParceladoScheduleToFinance(contract: Contract) {
     if (!contract.payment_schedule?.length || contract.is_recurring) return;
+    // Só fatura contrato comercial depois de assinado — ver podeFaturarContratoComercial.
+    if (!podeFaturarContratoComercial(contract)) {
+        console.log(`[CONTRACTS] Contrato ${contract.number || contract.id} ainda não assinado — nada lançado em Contas a Receber.`);
+        return;
+    }
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Fornecedor');
         const tag = `[contract:${contract.id}]`;
@@ -592,6 +620,11 @@ export function buildRecurringDueDates(opts: {
 //   • Without end_date: generates from start up to 12 cycles into the future
 async function syncRecurringToFinance(contract: Contract) {
     if (!contract.is_recurring || !contract.original_value) return;
+    // Só fatura contrato comercial depois de assinado — ver podeFaturarContratoComercial.
+    if (!podeFaturarContratoComercial(contract)) {
+        console.log(`[CONTRACTS] Contrato ${contract.number || contract.id} ainda não assinado — nada lançado em Contas a Receber.`);
+        return;
+    }
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Contrato Recorrente');
 
@@ -732,6 +765,14 @@ export async function generateRecurringInstallmentsForPeriod(
     const cycle = opts.cycleOverride || contract.billing_cycle;
     if (!contract.is_recurring) throw new Error('Geração por período só se aplica a contrato recorrente.');
     if (!(amount > 0)) throw new Error('Valor da parcela deve ser maior que zero.');
+    // Só fatura contrato comercial depois de assinado — aqui a recusa é
+    // explícita (erro visível), porque este caminho vem de um clique do usuário
+    // em "Gerar parcelas", e falhar em silêncio pareceria que nada aconteceu.
+    if (!podeFaturarContratoComercial(contract)) {
+        throw new Error(
+            `O contrato ${contract.number || ''} ainda não está assinado, então não pode gerar cobrança. `
+            + 'Conclua a assinatura (ou marque o contrato como Ativo) e gere as parcelas depois.');
+    }
 
     // Quem chama pode mandar o Nº de Parcelas explicitamente (campo da aba Forma
     // de Pagamento). Nesse caso ele MANDA sobre a janela: a vigência define só
@@ -876,6 +917,11 @@ export async function generateRecurringInstallmentsForPeriod(
 async function syncAVistaToFinance(contract: Contract) {
     if (contract.is_recurring || contract.payment_term_type === 'Parcelado') return;
     if (!contract.original_value || contract.original_value <= 0) return;
+    // Só fatura contrato comercial depois de assinado — ver podeFaturarContratoComercial.
+    if (!podeFaturarContratoComercial(contract)) {
+        console.log(`[CONTRACTS] Contrato ${contract.number || contract.id} ainda não assinado — nada lançado em Contas a Receber.`);
+        return;
+    }
     try {
         const supplierName = await resolveSupplierName(contract.supplier_id, 'Fornecedor');
         const tag = `[contract:${contract.id}]`;

@@ -75,7 +75,7 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
     }, [linhas, colunas.sortColumn, colunas.sortDirection]);
 
     const th = 'px-6 py-2 border-r border-gray-100';
-    const td = 'px-6 py-2.5 border-r border-gray-100 text-sm font-normal';
+    const td = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
 
     if (carregando) {
         return (

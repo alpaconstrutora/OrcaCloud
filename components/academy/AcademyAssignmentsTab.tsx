@@ -148,7 +148,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
     }, [assignments, search, colunas.sortColumn, colunas.sortDirection, nomeDoAlvo]);
 
     const th = 'px-6 py-2 border-r border-gray-100';
-    const td = 'px-6 py-2.5 border-r border-gray-100 text-sm font-normal';
+    const td = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
 
     return (
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
@@ -160,7 +160,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar treinamento ou alvo..."
-                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
 

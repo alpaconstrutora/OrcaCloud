@@ -378,10 +378,25 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                     </div>
 
                     {modulos.length === 0 ? (
-                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12">
+                        // O estado vazio precisa ENSINAR: sem módulo não existe
+                        // botão "+ Aula", e é aí que mora o upload de vídeo.
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12 px-6">
                             <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum módulo criado</h3>
-                            <p className="text-sm text-gray-500">Comece criando um módulo e adicione as aulas nele.</p>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Comece criando um módulo</h3>
+                            <p className="text-sm text-gray-500 max-w-md mx-auto">
+                                O <span className="font-medium text-gray-700">módulo</span> agrupa as aulas
+                                (ex: "Segurança em altura"). Dentro dele aparece o botão
+                                <span className="font-medium text-gray-700"> + Aula</span>, onde você envia o
+                                vídeo, o PDF ou escreve o conteúdo.
+                            </p>
+                            <button
+                                onClick={criarModulo}
+                                disabled={somenteLeitura}
+                                title={somenteLeitura ? 'Versão não editável' : undefined}
+                                className="mt-6 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
+                            >
+                                <Plus className="w-[15px] h-[15px]" /> Criar primeiro módulo
+                            </button>
                         </div>
                     ) : modulos.map(m => {
                         const doModulo = aulas.filter(a => a.module_id === m.id).sort((a, b) => a.ordem - b.ordem);

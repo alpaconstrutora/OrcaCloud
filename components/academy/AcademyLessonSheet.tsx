@@ -45,6 +45,29 @@ interface Props {
     notify: (msg: string, tipo?: 'success' | 'error') => void;
 }
 
+/**
+ * Lê a duração real do vídeo/áudio escolhido, em segundos.
+ *
+ * Isto não é conveniência: a duração é o DENOMINADOR do percentual assistido.
+ * Sem ela o progresso fica travado em 0% e a aula nunca pode ser concluída —
+ * o aluno assiste tudo e o botão continua recusando.
+ */
+function lerDuracao(file: File): Promise<number | null> {
+    return new Promise(resolve => {
+        const url = URL.createObjectURL(file);
+        const el = document.createElement(file.type.startsWith('audio') ? 'audio' : 'video');
+        const limpar = () => URL.revokeObjectURL(url);
+
+        el.preload = 'metadata';
+        el.onloadedmetadata = () => {
+            limpar();
+            resolve(Number.isFinite(el.duration) && el.duration > 0 ? Math.round(el.duration) : null);
+        };
+        el.onerror = () => { limpar(); resolve(null); };
+        el.src = url;
+    });
+}
+
 const AcademyLessonSheet: React.FC<Props> = ({
     open, onClose, orgId, courseId, versionId, modules, lesson, defaultModuleId, onSaved, notify,
 }) => {
@@ -52,6 +75,7 @@ const AcademyLessonSheet: React.FC<Props> = ({
     const fileRef = useRef<HTMLInputElement>(null);
     const [salvando, setSalvando] = useState(false);
     const [arquivo, setArquivo] = useState<File | null>(null);
+    const [lendoDuracao, setLendoDuracao] = useState(false);
 
     const [form, setForm] = useState({
         module_id: lesson?.module_id || defaultModuleId || modules[0]?.id || '',
@@ -217,7 +241,19 @@ const AcademyLessonSheet: React.FC<Props> = ({
                                 ref={fileRef}
                                 type="file"
                                 className="hidden"
-                                onChange={e => setArquivo(e.target.files?.[0] || null)}
+                                onChange={async e => {
+                                    const f = e.target.files?.[0] || null;
+                                    setArquivo(f);
+                                    if (!f || !['VIDEO_UPLOAD', 'AUDIO'].includes(form.tipo)) return;
+
+                                    // Preenche a duração sozinho: deixá-la em branco
+                                    // trava o progresso em 0% e a aula fica impossível
+                                    // de concluir.
+                                    setLendoDuracao(true);
+                                    const segundos = await lerDuracao(f);
+                                    setLendoDuracao(false);
+                                    if (segundos) set('duracao_segundos', segundos);
+                                }}
                             />
                         </Campo>
                     )}
@@ -245,7 +281,12 @@ const AcademyLessonSheet: React.FC<Props> = ({
 
                     <div className="grid grid-cols-2 gap-4">
                         {['VIDEO_UPLOAD', 'VIDEO_LINK', 'AUDIO'].includes(form.tipo) && (
-                            <Campo label="Duração (segundos)" ajuda="Base do percentual assistido.">
+                            <Campo
+                                label="Duração (segundos)"
+                                ajuda={lendoDuracao
+                                    ? 'Lendo a duração do arquivo...'
+                                    : 'Preenchida sozinha ao anexar o arquivo. É o denominador do percentual assistido — sem ela, a aula nunca conclui.'}
+                            >
                                 <input
                                     type="number" min="0"
                                     value={form.duracao_segundos ?? ''}

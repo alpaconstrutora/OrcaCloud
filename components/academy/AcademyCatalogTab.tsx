@@ -80,6 +80,34 @@ const AcademyCatalogTab: React.FC<Props> = ({
         return () => { cancelado = true; };
     }, [courses]);
 
+    /**
+     * Abre o construtor de conteúdo.
+     *
+     * Treinamento nasce PRESENCIAL, e o construtor só faz sentido em EAD/Híbrido.
+     * Em vez de esconder o botão (o que deixava o caminho do vídeo indescobrível),
+     * pergunta e habilita na hora.
+     */
+    const abrirConteudo = async (c: TrainingCourse) => {
+        const ehEad = c.modalidade && c.modalidade !== 'PRESENCIAL';
+        if (ehEad) { onMontarConteudo(c); return; }
+
+        const ok = await confirm({
+            title: 'Habilitar conteúdo a distância?',
+            message: `"${c.nome}" está marcado como Presencial, então hoje só aceita registro de participação. Para montar aulas, vídeos e avaliação, ele passa a ser Híbrido — o registro presencial continua funcionando igual.`,
+            variant: 'default',
+            confirmLabel: 'Habilitar e montar conteúdo',
+        });
+        if (!ok) return;
+
+        try {
+            const atualizado = await trainingsService.updateTrainingCourse(c.id, { modalidade: 'HIBRIDO' });
+            onCoursesChange(prev => prev.map(x => x.id === c.id ? atualizado : x));   // §22
+            onMontarConteudo(atualizado);
+        } catch (e: any) {
+            notify('Não foi possível habilitar o conteúdo: ' + (e?.message || ''), 'error');
+        }
+    };
+
     const inativar = async (c: TrainingCourse) => {
         const ok = await confirm({
             title: 'Inativar treinamento?',
@@ -117,7 +145,7 @@ const AcademyCatalogTab: React.FC<Props> = ({
     }, [courses, search, colunas.sortColumn, colunas.sortDirection, versoes]);
 
     const th = 'px-6 py-2 border-r border-gray-100';
-    const td = 'px-6 py-2.5 border-r border-gray-100 text-sm font-normal';
+    const td = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
 
     return (
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
@@ -129,7 +157,7 @@ const AcademyCatalogTab: React.FC<Props> = ({
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar treinamento ou NR..."
-                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -224,9 +252,11 @@ const AcademyCatalogTab: React.FC<Props> = ({
                                         )}
                                         {colunas.visibleColumns.includes('conteudo') && (
                                             <td className={td}>
-                                                {!ead ? <span className="text-gray-400">—</span>
+                                                {/* Explica em vez de omitir: "—" não dizia se faltava
+                                                    conteúdo ou se o treinamento nem aceita conteúdo. */}
+                                                {!ead ? <span className="text-gray-400">Presencial — sem conteúdo</span>
                                                     : versoes[c.id] === 'rascunho'
-                                                        ? <span className="text-amber-700">Rascunho</span>
+                                                        ? <span className="text-amber-700">Rascunho — não publicado</span>
                                                         : versoes[c.id]
                                                             ? <span className="text-emerald-700">{versoes[c.id]}</span>
                                                             : <span className="text-gray-400">Sem conteúdo</span>}
@@ -244,14 +274,17 @@ const AcademyCatalogTab: React.FC<Props> = ({
                                         {colunas.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    {ead && (
-                                                        <button
-                                                            onClick={() => onMontarConteudo(c)}
-                                                            className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                                                        >
-                                                            <Layers className="w-4 h-4" /> Montar conteúdo
-                                                        </button>
-                                                    )}
+                                                    {/* Sempre visível, inclusive em treinamento presencial: antes o
+                                                        botão simplesmente não existia, e não havia como descobrir
+                                                        que o caminho do conteúdo passava por trocar a modalidade. */}
+                                                    <button
+                                                        onClick={() => abrirConteudo(c)}
+                                                        disabled={!podeEditar}
+                                                        title={!podeEditar ? 'Você não tem permissão para editar o catálogo' : undefined}
+                                                        className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-40 disabled:hover:bg-transparent"
+                                                    >
+                                                        <Layers className="w-4 h-4" /> Montar conteúdo
+                                                    </button>
                                                     <ActionIconButton
                                                         kind="edit"
                                                         onClick={() => setSheet({ course: c })}

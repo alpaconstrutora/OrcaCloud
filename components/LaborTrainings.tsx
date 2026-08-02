@@ -116,7 +116,12 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
 
-    const [view, setView] = usePersistedState<TView>('laborTrainings:view', 'catalog');
+    const [viewSalva, setView] = usePersistedState<TView>('laborTrainings:view', 'catalog');
+    // A aba 'classroom' saiu daqui na Etapa 1.1 (virou "Meus Treinamentos"),
+    // mas continua gravada no localStorage de quem já tinha usado a tela.
+    // Sem esta normalização, VIEW_HEADERS[view] vem undefined e a tela quebra
+    // em `header.title`. Vale para qualquer aba que venha a ser removida.
+    const view: TView = VIEWS.some(v => v.id === viewSalva) ? viewSalva : 'catalog';
     const [search, setSearch] = usePersistedState('laborTrainings:search', '');
     const [filterEmployee, setFilterEmployee] = usePersistedState('laborTrainings:employee', '');
     const [filterStatus, setFilterStatus] = usePersistedState<EmployeeTraining['status'] | ''>('laborTrainings:status', '');

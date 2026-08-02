@@ -20,7 +20,6 @@ import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
-import { dealReceivablesService } from '../services/dealReceivablesService';
 import { buildRentalResolveContext } from '../services/rentalDocumentContextService';
 import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
@@ -962,19 +961,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         const orgId = formData.organization_id || organizationId;
         const alvos = generateTargets.filter(t => t.kind === 'CONTRACT');
 
-        const daNegociacao = formData.id
-            ? await dealReceivablesService.listByDeal(formData.id, orgId)
-                .then(rows => rows.map(r => ({ ...r, __origem: 'Negociação' })))
-                .catch(e => { console.error('[DealModal] Erro ao listar parcelas da negociação:', e); return []; })
-            : [];
-
         const dosContratos = await Promise.all(alvos.map(a =>
             contractService.listFinancialEntries(a.contract)
                 .then(rows => rows.map(r => ({ ...r, __origem: a.label as string })))
                 .catch(() => [])
         ));
 
-        const todas = [...daNegociacao, ...dosContratos.flat()]
+        const todas = [...dosContratos.flat()]
             .sort((a, b) => (a.transaction_date || '').localeCompare(b.transaction_date || ''));
         setContractEntries(todas);
         return todas;
@@ -1219,96 +1212,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
     };
 
-    /**
-     * "Gerar parcelas" — o ÚNICO ato que cria cobrança para a negociação.
-     *
-     * Desde 2026-08-02 não existe rascunho: a parcela nasce direto em Contas a
-     * Receber (`dealReceivablesService.gerar`). Por isso a confirmação diz, com
-     * todas as letras, que vai lançar — antes o usuário montava o cronograma
-     * achando que planejava, e o sistema faturava em silêncio.
-     *
-     * Regerar substitui a série; parcela já recebida/conciliada nunca é tocada
-     * e volta nomeada no aviso.
-     */
-    const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>, installmentCount: number, firstDueDate: string) => {
-        const orgId = formData.organization_id || organizationId || '';
-        if (!formData.id || !orgId) {
-            notifyError('Salve a negociação antes de gerar as parcelas.');
-            return;
-        }
-
-        const intervalMonths = intervalMonthsForType(paymentTypes, installmentType);
-        const count = Math.max(1, Math.floor(Number(installmentCount) || 1));
-        const entradaValor = formData.down_payment || 0;
-        // Locação não desconta a entrada do total (mesma regra do motor antigo).
-        const total = Math.max(0, (formData.value || 0) - (formData.type === 'SALE' ? entradaValor : 0));
-        // Rateio com centavos exatos: a última parcela absorve o arredondamento.
-        const per = Math.floor((total / count) * 100) / 100;
-        const remainder = Number((total - per * count).toFixed(2));
-
-        const novas: PaymentInstallment[] = [];
-        for (let i = 1; i <= count; i++) {
-            // Meio-dia UTC evita o bug de fuso que retrocede 1 dia em UTC-3.
-            const date = new Date(firstDueDate + 'T12:00:00Z');
-            date.setUTCMonth(date.getUTCMonth() + (i - 1) * intervalMonths);
-            novas.push({
-                id: `p${i}`,
-                description: `Parcela ${i}/${count}`,
-                dueDate: date.toISOString().split('T')[0],
-                value: i === count ? Number((per + remainder).toFixed(2)) : per,
-                status: 'PENDING',
-                dealId: formData.id,
-                installmentType,
-            });
-        }
-
-        const totalLinhas = novas.length + (entradaValor > 0 ? 1 : 0);
-        const jaExistem = contractEntries.filter(e => (e.reference_id || '').startsWith(`tx-${formData.id}-`)).length;
-        const ok = await confirm({
-            title: 'Gerar e lançar as parcelas?',
-            message: `${totalLinhas} parcela(s) serão LANÇADAS em Contas a Receber agora`
-                + (entradaValor > 0 ? ' (incluindo a Entrada)' : '')
-                + '.'
-                + (jaExistem > 0
-                    ? ` As ${jaExistem} parcela(s) atuais desta negociação serão substituídas — as já recebidas são preservadas.`
-                    : ''),
-            variant: 'warning',
-            confirmLabel: 'Gerar e lançar',
-        });
-        if (!ok) return;
-
-        setLoading(true);
-        try {
-            const r = await dealReceivablesService.gerar(formData.id, orgId, novas, entradaValor, {
-                dealType: formData.type,
-                date: formData.date,
-                costCenterId: formData.cost_center_id ?? null,
-                planoDeContasId: formData.plano_de_contas_id ?? null,
-                downPaymentPaymentType: formData.down_payment_payment_type ?? null,
-                downPaymentInstallmentType: formData.down_payment_installment_type ?? null,
-                downPaymentNotes: formData.down_payment_notes ?? null,
-            });
-            // Espelho no formulário: `contractService.createFromDeal` lê
-            // custom_installments[0].value para o valor do aluguel do contrato.
-            setFormData(prev => ({
-                ...prev,
-                installments: count,
-                payment_due_date: firstDueDate,
-                custom_installments: novas,
-            }));
-            await recarregarParcelas();
-            const preservadas = r.preservadas.length > 0
-                ? ` Preservada(s) por já estarem recebidas: ${r.preservadas.map(x => x.description).join(', ')}.`
-                : '';
-            notifySuccess(`${r.criadas} parcela(s) lançadas em Contas a Receber.${preservadas}`);
-        } catch (e) {
-            notifyError(e instanceof Error ? e.message : 'Erro ao gerar as parcelas.');
-        } finally {
-            setLoading(false);
-            setSelectedEntryIds(new Set());
-            setShowGenerateModal(false);
-        }
-    };
+    /* A NEGOCIAÇÃO NÃO GERA PARCELA (2026-08-02, ordem do usuário).
+       Parcela é do CONTRATO: gere o contrato e fature por ele. O handler que
+       criava a série da negociação foi removido daqui — não o recrie. */
 
 
     /**
@@ -3184,10 +3090,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             </div>
 
                             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-                                {/* Alvo da geração. Locação tem DUAS origens de parcela — a
-                                    série da negociação e a do contrato — e a prorrogação por
-                                    aditivo cria um período novo que não existe na negociação.
-                                    Sem escolher aqui, não havia como gerar aquelas parcelas. */}
+                                {/* Alvo da geração. Desde 2026-08-02 a NEGOCIAÇÃO não tem
+                                    parcelas: parcela é do CONTRATO. Aqui só se escolhe qual
+                                    contrato (ou aditivo de prorrogação) vai faturar. */}
                                 {generateTargets.length > 0 && (
                                     <div>
                                         <label className="text-xs font-semibold text-slate-500 mb-1 block">Gerar parcelas para</label>
@@ -3196,7 +3101,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             onChange={(e) => setGenerateTarget(e.target.value)}
                                             className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                                         >
-                                            <option value="DEAL">Negociação — plano de pagamento</option>
                                             {generateTargets.map(t => (
                                                 <option key={t.id} value={t.id}>
                                                     {t.label} · {fmtDateBR(t.fromDate)} a {fmtDateBR(t.toDate)}
@@ -3206,7 +3110,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <p className="text-xs text-gray-400 mt-1">
                                             {alvoSelecionado
                                                 ? `Cobrança mensal no dia ${alvoSelecionado.contract.due_day ?? '—'}, a partir de ${fmtDateBR(alvoSelecionado.fromDate)}. Gerar de novo REFAZ a série: as parcelas previstas são recriadas com os valores atuais; as já pagas são mantidas.`
-                                                : 'As parcelas entram no plano de pagamento desta negociação.'}
+                                                : 'Escolha o contrato que vai faturar.'}
                                         </p>
                                     </div>
                                 )}
@@ -3329,13 +3233,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </button>
                                 <button
                                     type="button"
-                                    disabled={loading}
-                                    onClick={() => (alvoSelecionado
-                                        ? handleGenerateForContract(alvoSelecionado)
-                                        : handleConfirmGenerateInstallments(generateInstallmentType, generateInstallmentCount, generateFirstDueDate))}
-                                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    disabled={loading || !alvoSelecionado}
+                                    title={alvoSelecionado ? undefined : 'Gere o contrato primeiro — parcela é do contrato, não da negociação.'}
+                                    onClick={() => alvoSelecionado && handleGenerateForContract(alvoSelecionado)}
+                                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 ${loading || !alvoSelecionado ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                                 >
-                                    {loading ? 'Gerando...' : alvoSelecionado ? 'Gerar no contrato' : 'Gerar Parcelas'}
+                                    {loading ? 'Gerando...' : 'Gerar no contrato'}
                                 </button>
                             </div>
                         </div>

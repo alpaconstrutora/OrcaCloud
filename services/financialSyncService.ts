@@ -32,7 +32,21 @@ export const financialSyncService = {
         const internalTxs: Record<string, unknown>[] = [];
 
         // 1. Processar Parcelas (Receitas)
-        if (info.installments && info.installments.length > 0) {
+        //
+        // ⚠️ O VAULT COMERCIAL NÃO MATERIALIZA MAIS PARCELAS.
+        // Desde 2026-08-01 as parcelas de Vendas/Locações vivem em
+        // `deal_installments` e só vão para Contas a Receber pelo botão "Enviar
+        // ao Contas a Receber" (dealInstallmentService.publishToReceivables).
+        //
+        // Sem este corte, o JSONB legado do vault continua sendo uma bomba: a
+        // Conciliação Bancária (BankReconciliation) varre TODOS os projetos e
+        // chama esta função direto — sem passar por syncDealToFinance, onde fica
+        // o guard — e cada varredura reinseria em Contas a Receber tudo que o
+        // usuário tinha acabado de tirar de lá. Foi exatamente o que aconteceu.
+        //
+        // Obra de verdade continua materializando normalmente: lá a parcela é do
+        // projeto, não de uma negociação.
+        if (!isVault && info.installments && info.installments.length > 0) {
             info.installments.forEach(inst => {
                 internalTxs.push({
                     organization_id: organizationId,

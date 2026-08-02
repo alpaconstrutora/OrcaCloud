@@ -491,7 +491,10 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 // e a regra de VENCIDO da view dependia dele estar preenchido.
                 business_status: 'PREVISTO',
             }));
-            await supabase.from('internal_transactions').insert(internalRows);
+            // UPSERT: reference_id embute a parcela e o vencimento é editável —
+            // ver nota em generateRecurringInstallmentsForPeriod (erro 23505).
+            await supabase.from('internal_transactions')
+                .upsert(internalRows, { onConflict: 'organization_id,reference_id,entry_type' });
             console.log(`[CONTRACTS] Synced ${internalRows.length} parcelado txs to internal_transactions`);
         }
     } catch (e) {
@@ -657,7 +660,8 @@ async function syncRecurringToFinance(contract: Contract) {
         } else if (contract.organization_id) {
             const party = await resolveContractParty(contract, supplierName);
             const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
-            await supabase.from('internal_transactions').insert(transactions.map(tx => ({
+            // UPSERT — mesma razão de generateRecurringInstallmentsForPeriod (23505).
+            await supabase.from('internal_transactions').upsert(transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
                 // ⚠️ Um reference_id POR PARCELA. A constraint
@@ -685,7 +689,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 // Status de NEGÓCIO exibido/filtrado em Contas a Receber. Ficava nulo,
                 // e a regra de VENCIDO da view dependia dele estar preenchido.
                 business_status: 'PREVISTO',
-            })));
+            })), { onConflict: 'organization_id,reference_id,entry_type' });
         }
         console.log(`[CONTRACTS] Generated ${transactions.length} recurring entries for contract ${contract.id} (from current month)`);
     } catch (e) {
@@ -836,7 +840,14 @@ export async function generateRecurringInstallmentsForPeriod(
     const party = await resolveContractParty(contract, supplierName);
     const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
 
-    const { error } = await supabase.from('internal_transactions').insert(novos.map((d, i) => ({
+    // UPSERT, não INSERT (corrigido 2026-08-02, erro 23505 em produção).
+    // `reference_id` embute a DATA (`{contrato}-p{data}`), mas a checagem de
+    // duplicidade acima filtra por `due_date` dentro da janela. Como o
+    // vencimento é editável na aba Parcelas, uma parcela cuja data foi alterada
+    // fica com reference_id de uma data e due_date de outra: a consulta não a
+    // encontra, não a apaga, e o INSERT colidia com
+    // internal_transactions_org_ref_key. Com upsert, a linha é atualizada.
+    const { error } = await supabase.from('internal_transactions').upsert(novos.map((d, i) => ({
         organization_id: contract.organization_id,
         source_system: 'CONTRACT_RECURRING',
         // Um id por parcela — ver a nota em syncRecurringToFinance.
@@ -854,7 +865,7 @@ export async function generateRecurringInstallmentsForPeriod(
         party_name: party.party_name,
         status: 'PENDING',
         business_status: 'PREVISTO',
-    })));
+    })), { onConflict: 'organization_id,reference_id,entry_type' });
     if (error) throw error;
 
     console.log(`[CONTRACTS] Prorrogação: ${novos.length} parcela(s) geradas para ${contract.number} (${fromDate} → ${toDate})`);

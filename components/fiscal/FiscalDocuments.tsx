@@ -35,6 +35,12 @@ const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 const fmtDate = (d: string) =>
   d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+/**
+ * O número da NF-e (nNF) não é persistido em coluna própria — é extraído da
+ * chave de acesso (44 dígitos), posições 26-34 do layout padrão da SEFAZ.
+ */
+const nfNumber = (accessKey: string | null | undefined) =>
+  accessKey && accessKey.length === 44 ? String(Number(accessKey.slice(25, 34))) : '—';
 
 const CATEGORY_COLORS: Record<string, string> = {
   'aço': 'text-amber-600',
@@ -62,6 +68,7 @@ const PIPELINE_STEPS = [
 // Colunas da tabela principal (lista de documentos)
 const COLUMNS: ColumnConfig[] = [
   { key: 'code', label: 'Código', sortable: true },
+  { key: 'nf_number', label: 'Nº NF-e', sortable: true },
   // Status é constante ("Processado") nesta lista — nfe_invoices só contém
   // documentos que já passaram pelo pipeline com sucesso; sem valor variável, sem ordenação.
   { key: 'status', label: 'Status', sortable: false },
@@ -571,19 +578,21 @@ function DocumentDetail({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="inline-flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1">
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${
-              tab === t.key ? 'bg-blue-600 text-white' : t.hasCritical ? 'text-red-600 hover:text-red-700' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Tabs — anatomia canônica §19.1: card externo + trilho cinza + aba ativa branca */}
+      <div className="bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="inline-flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${
+                tab === t.key ? 'bg-white text-blue-600 shadow-sm' : t.hasCritical ? 'text-red-600 hover:text-red-700' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'data' && (
@@ -827,6 +836,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
         case 'value': return (a.total_value - b.total_value) * dir;
         case 'link': return (Number(!!a.linked_transaction_id) - Number(!!b.linked_transaction_id)) * dir;
         case 'code': return (a.code ?? '').localeCompare(b.code ?? '', 'pt-BR', { numeric: true }) * dir;
+        case 'nf_number': return nfNumber(a.access_key).localeCompare(nfNumber(b.access_key), 'pt-BR', { numeric: true }) * dir;
         case 'order': return (orderNumbers[a.purchase_order_id ?? ''] ?? '').localeCompare(orderNumbers[b.purchase_order_id ?? ''] ?? '', 'pt-BR', { numeric: true }) * dir;
         case 'payable': return (Number(!!a.linked_transaction_id) - Number(!!b.linked_transaction_id)) * dir;
       }
@@ -921,6 +931,11 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
                     className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                 )}
+                {tableColumns.visibleColumns.includes('nf_number') && (
+                  <SortableHeader colKey="nf_number" label="Nº NF-e" uppercase={false}
+                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                )}
                 {tableColumns.visibleColumns.includes('status') && (
                   <SortableHeader colKey="status" label="Status" sortable={false} uppercase={false}
                     className="px-6 py-2 border-r border-gray-100" />
@@ -969,6 +984,9 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                 >
                   {tableColumns.visibleColumns.includes('code') && (
                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{inv.code ?? '—'}</td>
+                  )}
+                  {tableColumns.visibleColumns.includes('nf_number') && (
+                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{nfNumber(inv.access_key)}</td>
                   )}
                   {tableColumns.visibleColumns.includes('status') && (
                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-emerald-700">Processado</td>

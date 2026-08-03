@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, FileText, FileDown, Loader2, AlertCircle, Settings, File, AlertTriangle } from 'lucide-react';
+import { FileText, FileDown, Loader2, AlertCircle, Settings, File, AlertTriangle } from 'lucide-react';
 import { saveAs } from 'file-saver';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
@@ -205,38 +206,14 @@ const EmitDocumentModal: React.FC<Props> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-            <div className="absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-2xl overflow-hidden border-l border-gray-200 animate-in slide-in-from-right duration-300">
-                <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-8 py-6">
-                    <div className="flex items-start gap-5 flex-1 min-w-0">
-                        <div className="flex flex-col items-center gap-2 shrink-0">
-                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
-                                <FileDown className="w-6 h-6" />
-                            </div>
-                            <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
-                                EMITIR
-                            </div>
-                        </div>
-                        <div className="flex-1 min-w-0 flex flex-col gap-1">
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Emitir Documento</h2>
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Contrato:</span>
-                                    <span className="text-xs font-bold text-gray-600 uppercase">{contract.number}</span>
-                                </div>
-                            </div>
-                            <p className="text-sm text-gray-500 font-medium leading-tight">
-                                Escolha o modelo e o cliente para gerar o documento.
-                            </p>
-                        </div>
-                    </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors">
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
+        <Sheet open onClose={onClose} size="2xl">
+            <SheetHeader onClose={onClose}>
+                <SheetTitle>Emitir documento — {contract.number}</SheetTitle>
+                <SheetDescription>Escolha o modelo e o cliente para gerar o documento.</SheetDescription>
+            </SheetHeader>
 
-                <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+            <SheetPanel className="px-6 py-4">
+                <div className="space-y-4">
                     {loading ? (
                         <div className="space-y-2">
                             {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-gray-50 dark:bg-gray-700/50 rounded-lg animate-pulse" />)}
@@ -252,8 +229,8 @@ const EmitDocumentModal: React.FC<Props> = ({
                                     </Button>
                                 )}
                                 {onFallbackPdf && (
-                                    <button onClick={onFallbackPdf} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
-                                        <FileDown className="w-4 h-4" /> Gerar PDF do sistema
+                                    <button onClick={onFallbackPdf} className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] text-[13px] font-medium hover:bg-gray-50 transition-all active:scale-95">
+                                        <FileDown className="w-[15px] h-[15px]" /> Gerar PDF do sistema
                                     </button>
                                 )}
                             </div>
@@ -262,11 +239,11 @@ const EmitDocumentModal: React.FC<Props> = ({
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-form-label font-medium text-gray-500 mb-1">Modelo *</label>
+                                    <label className="block text-xs font-semibold text-gray-500 mb-1.5">Modelo *</label>
                                     <select
                                         value={templateId}
                                         onChange={e => setTemplateId(e.target.value)}
-                                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     >
                                         <option value="">Selecione um modelo…</option>
                                         {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -278,18 +255,18 @@ const EmitDocumentModal: React.FC<Props> = ({
                                        `if (organizationId)`, então com "Todas as organizações"
                                        ficaria vazio e sem ninguém para escolher. */
                                     <div>
-                                        <label className="block text-form-label font-medium text-gray-500 mb-1">Cliente</label>
-                                        <p className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 truncate">
+                                        <label className="block text-xs font-semibold text-gray-500 mb-1.5">Cliente</label>
+                                        <p className="w-full h-9 flex items-center rounded-[6px] border border-gray-200 bg-gray-50 px-3 text-sm font-normal text-gray-700 truncate">
                                             {ctx.client?.name || '—'}
                                         </p>
                                     </div>
                                 ) : (
                                     <div>
-                                        <label className="block text-form-label font-medium text-gray-500 mb-1">Cliente</label>
+                                        <label className="block text-xs font-semibold text-gray-500 mb-1.5">Cliente</label>
                                         <select
                                             value={clientId}
                                             onChange={e => setClientId(e.target.value)}
-                                            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                         >
                                             <option value="">Sem cliente</option>
                                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -347,37 +324,35 @@ const EmitDocumentModal: React.FC<Props> = ({
                     )}
 
                     {error && (
-                        <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                        <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                             <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {error}
                         </div>
                     )}
                 </div>
+            </SheetPanel>
 
-                {templates.length > 0 && (
-                    <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
-                        <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={() => emit('docx')}
-                            disabled={!template || busy !== null}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
-                        >
-                            {busy === 'docx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <File className="w-4 h-4 text-blue-600" />}
-                            {busy === 'docx' ? 'Gerando…' : 'Baixar .docx'}
-                        </button>
-                        <Button
-                            onClick={() => emit('pdf')}
-                            disabled={!template || busy !== null}
-                            className="gap-2"
-                        >
-                            {busy === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                            {busy === 'pdf' ? 'Gerando PDF…' : 'Baixar PDF'}
-                        </Button>
-                    </div>
-                )}
-            </div>
-        </div>
+            {templates.length > 0 && (
+                <SheetFooter>
+                    <Button variant="ghost" size="lg" onClick={onClose}>Cancelar</Button>
+                    <button
+                        onClick={() => emit('docx')}
+                        disabled={!template || busy !== null}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
+                    >
+                        {busy === 'docx' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <File className="w-[15px] h-[15px]" />}
+                        {busy === 'docx' ? 'Gerando…' : 'Baixar .docx'}
+                    </button>
+                    <button
+                        onClick={() => emit('pdf')}
+                        disabled={!template || busy !== null}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
+                    >
+                        {busy === 'pdf' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileDown className="w-[15px] h-[15px]" />}
+                        {busy === 'pdf' ? 'Gerando PDF…' : 'Baixar PDF'}
+                    </button>
+                </SheetFooter>
+            )}
+        </Sheet>
     );
 };
 

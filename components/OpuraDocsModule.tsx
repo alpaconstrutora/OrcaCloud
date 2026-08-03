@@ -231,6 +231,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [partnerWorkspaces, setPartnerWorkspaces] = React.useState<PartnerWorkspace[]>([]);
   const [shareModalOpen, setShareModalOpen] = React.useState(false);
   const [shareDocIds, setShareDocIds] = React.useState<string[]>([]);
+  // Escopo PASTA: quando preenchido, o compartilhamento com parceiro grava o vínculo
+  // com a pasta (partner_shared_folders) em vez de N vínculos de documento — a
+  // subárvore inteira aparece no portal e arquivo novo entra sozinho.
+  // Cliente/colaborador continuam por documento (não têm árvore de pastas no portal).
+  const [shareFolder, setShareFolder] = React.useState<{ id: string; name: string } | null>(null);
   const [selectedShareWorkspaceId, setSelectedShareWorkspaceId] = React.useState('');
   const [sharingSubmitting, setSharingSubmitting] = React.useState(false);
   const [docAlreadySharedWith, setDocAlreadySharedWith] = React.useState<{ partner_workspace_id: string; supplier_name: string; doc_count: number }[]>([]);
@@ -962,11 +967,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                // Os docIds servem ao compartilhamento com cliente/colaborador (que é por
+                // documento) e à leitura de "compartilhado com". Para o PARCEIRO, quem vale
+                // é a pasta em si — por isso ela vai junto no escopo.
                 const treeIds = getFolderTreeIds(folder.id);
                 const targetProjectId = selectedProjectId !== 'all' ? selectedProjectId : undefined;
-                documentService.listDocuments(activeOrganizationId || undefined, { folderIds: treeIds, projectId: targetProjectId }).then(data => {
-                  openShareModal(data.map(d => d.id));
-                }).catch(console.error);
+                documentService.listDocuments(activeOrganizationId || undefined, { folderIds: treeIds, projectId: targetProjectId })
+                  .then(data => openShareModal(data.map(d => d.id), { id: folder.id, name: folder.name }))
+                  .catch(console.error);
               }}
               className="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50"
               title="Compartilhar toda a pasta"
@@ -1120,12 +1128,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   }, [partnerWorkspaces, shareTargetSupplierId]);
 
   // Abrir modal de compartilhamento em lote ou unitário com parceiro
-  const openShareModal = async (docIds: string[]) => {
-    if (docIds.length === 0) {
+  const openShareModal = async (docIds: string[], folder?: { id: string; name: string }) => {
+    // Pasta vazia continua compartilhável: o vínculo é com a pasta, e os arquivos que
+    // chegarem depois entram sozinhos. Sem pasta no escopo, sem documento = nada a fazer.
+    if (docIds.length === 0 && !folder) {
       notify('Nenhum documento encontrado nesta pasta/disciplina.', 'error');
       return;
     }
     setShareDocIds(docIds);
+    setShareFolder(folder || null);
     setShareAudience('parceiro');
     setSelectedShareWorkspaceId('');
     setSelectedShareClientId('');
@@ -1152,14 +1163,30 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         .then((emps: any[]) => setPortalShareEmployees(emps.map((e) => ({ id: e.id, name: e.name }))))
         .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar colaboradores:', err));
     }
-    // Carrega para TODOS os documentos do escopo (1 documento, ou N de uma disciplina/pasta),
-    // agregando por destinatário — é o que a seção "compartilhado com" exibe nos 3 modos.
+    await loadShareRecipients(docIds, folder || null);
+  };
+
+  // Carrega para TODOS os documentos do escopo (1 documento, ou N de uma disciplina/pasta),
+  // agregando por destinatário — é o que a seção "compartilhado com" exibe nos 3 modos.
+  // Quando o escopo é uma pasta, o vínculo de PASTA entra na mesma lista e conta como
+  // cobertura total (doc_count = total), porque ele não é parcial por definição: pega a
+  // subárvore inteira, hoje e no futuro.
+  const loadShareRecipients = async (docIds: string[], folder: { id: string; name: string } | null) => {
     try {
-      const [sharings, portalSharings] = await Promise.all([
+      const [sharings, portalSharings, folderSharings] = await Promise.all([
         partnerService.listSharingsForDocuments(docIds),
         documentService.listPortalSharingsForDocuments(docIds),
+        folder ? partnerService.listSharingsForFolder(folder.id) : Promise.resolve([]),
       ]);
-      setDocAlreadySharedWith(sharings);
+
+      const merged = [...sharings];
+      for (const fs of folderSharings) {
+        const existing = merged.find((s) => s.partner_workspace_id === fs.partner_workspace_id);
+        if (existing) existing.doc_count = docIds.length;
+        else merged.push({ ...fs, doc_count: docIds.length });
+      }
+
+      setDocAlreadySharedWith(merged);
       setDocAlreadySharedWithPortal(portalSharings);
     } catch (err) {
       console.error('[OpuraDocsModule] Erro ao carregar compartilhamentos existentes do documento:', err);
@@ -1168,29 +1195,29 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Recarrega a lista "compartilhado com" após uma revogação — mantém o modal aberto.
   const reloadShareRecipients = async () => {
-    try {
-      const [sharings, portalSharings] = await Promise.all([
-        partnerService.listSharingsForDocuments(shareDocIds),
-        documentService.listPortalSharingsForDocuments(shareDocIds),
-      ]);
-      setDocAlreadySharedWith(sharings);
-      setDocAlreadySharedWithPortal(portalSharings);
-    } catch (err) {
-      console.error('[OpuraDocsModule] Erro ao recarregar compartilhamentos:', err);
-    }
+    await loadShareRecipients(shareDocIds, shareFolder);
   };
 
   // Revogar acesso de um parceiro a todos os documentos do escopo atual.
   const handleUnshareFromPartner = async (workspaceId: string, supplierName: string) => {
+    const escopo = shareFolder
+      ? `a pasta "${shareFolder.name}" e todo o seu conteúdo`
+      : (shareDocIds.length > 1 ? `estes ${shareDocIds.length} documentos` : 'este documento');
     const ok = await confirm({
       title: 'Revogar compartilhamento?',
-      message: `${supplierName} deixará de ter acesso a ${shareDocIds.length > 1 ? `estes ${shareDocIds.length} documentos` : 'este documento'} no Portal do Parceiro.`,
+      message: `${supplierName} deixará de ter acesso a ${escopo} no Portal do Parceiro.`,
       variant: 'danger',
       confirmLabel: 'Revogar',
     });
     if (!ok) return;
     setUnsharingId(workspaceId);
     try {
+      // Revoga os dois vínculos: o de pasta e os de documento avulso que possam existir
+      // para os mesmos arquivos (inclusive os criados antes de a pasta virar entidade
+      // compartilhável) — senão o acesso sobrevive por um caminho e a tela mente.
+      if (shareFolder) {
+        await partnerService.unshareFolder(workspaceId, shareFolder.id);
+      }
       await partnerService.unshareDocumentsBatch(workspaceId, shareDocIds);
       await reloadShareRecipients();
       notify('Acesso revogado.');
@@ -1232,18 +1259,34 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Compartilhar o documento selecionado com o workspace de parceiro escolhido
   const handleShareWithPartner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (shareDocIds.length === 0 || !selectedShareWorkspaceId) return;
+    if ((shareDocIds.length === 0 && !shareFolder) || !selectedShareWorkspaceId) return;
     const chosenWorkspace = partnerWorkspaces.find((w) => w.id === selectedShareWorkspaceId);
     setSharingSubmitting(true);
     try {
-      await partnerService.shareDocumentsBatch(
-        selectedShareWorkspaceId,
-        shareDocIds,
-        currentProfile?.email || 'sistema'
-      );
+      // Escopo PASTA: grava UM vínculo com a pasta. Não expande em N documentos — é
+      // justamente isso que faz a subárvore inteira (inclusive pastas vazias) aparecer
+      // no portal e o arquivo adicionado depois chegar ao parceiro sozinho.
+      if (shareFolder) {
+        await partnerService.shareFolder(
+          selectedShareWorkspaceId,
+          shareFolder.id,
+          currentProfile?.email || 'sistema'
+        );
+      } else {
+        await partnerService.shareDocumentsBatch(
+          selectedShareWorkspaceId,
+          shareDocIds,
+          currentProfile?.email || 'sistema'
+        );
+      }
       setShareModalOpen(false);
       setShareDocIds([]);
-      notify(`${shareDocIds.length} documento(s) compartilhado(s) com ${chosenWorkspace?.supplier_name || 'o parceiro'} com sucesso.`);
+      setShareFolder(null);
+      notify(
+        shareFolder
+          ? `Pasta "${shareFolder.name}" compartilhada com ${chosenWorkspace?.supplier_name || 'o parceiro'} — o conteúdo atual e o que for adicionado depois.`
+          : `${shareDocIds.length} documento(s) compartilhado(s) com ${chosenWorkspace?.supplier_name || 'o parceiro'} com sucesso.`
+      );
     } catch (err: any) {
       if (err?.code === '23505' || /duplicate key/i.test(err?.message || '')) {
         notify('Este documento já está compartilhado com este parceiro.', 'error');
@@ -1276,6 +1319,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       );
       setShareModalOpen(false);
       setShareDocIds([]);
+      setShareFolder(null);
       const targetName = shareAudience === 'cliente'
         ? portalShareClients.find((c) => c.id === selectedShareClientId)?.name
         : portalShareEmployees.find((e) => e.id === selectedShareEmployeeId)?.name;
@@ -3536,13 +3580,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               <div className="flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-orange-500" />
                 <h3 className="font-black text-slate-800 text-sm">
-                    Compartilhar {shareDocIds.length > 1 && `(${shareDocIds.length} arquivos)`}
+                    {shareFolder
+                      ? `Compartilhar pasta "${shareFolder.name}"`
+                      : `Compartilhar ${shareDocIds.length > 1 ? `(${shareDocIds.length} arquivos)` : ''}`}
                   </h3>
                 </div>
                 <button
                   onClick={() => {
                     setShareModalOpen(false);
                     setShareDocIds([]);
+                    setShareFolder(null);
                   }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
               >
@@ -3574,6 +3621,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             {shareAudience === 'parceiro' && (
               <form onSubmit={handleShareWithPartner} className="p-6 space-y-4">
+                {shareFolder && (
+                  <div className="bg-orange-50/60 border border-orange-100 rounded-[8px] px-3 py-2.5">
+                    <p className="text-xs text-orange-700">
+                      A pasta inteira será compartilhada, com subpastas — inclusive as vazias.
+                      Documento adicionado a ela depois passa a aparecer para o parceiro automaticamente.
+                    </p>
+                  </div>
+                )}
                 {docAlreadySharedWith.length > 0 && (
                   <div className="bg-slate-50 border border-slate-100 rounded-[8px] p-2.5">
                     <p className="text-xs font-semibold text-slate-500 mb-1.5 px-1">Compartilhado com</p>
@@ -3636,6 +3691,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     onClick={() => {
                       setShareModalOpen(false);
                       setShareDocIds([]);
+                      setShareFolder(null);
                     }}
                     className="px-4 py-2.5 border border-slate-200 text-slate-500 font-medium rounded-[6px] hover:bg-slate-50 transition-colors"
                   >
@@ -3735,6 +3791,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     onClick={() => {
                       setShareModalOpen(false);
                       setShareDocIds([]);
+                      setShareFolder(null);
                     }}
                     className="px-4 py-2.5 border border-slate-200 text-slate-500 font-medium rounded-[6px] hover:bg-slate-50 transition-colors"
                   >

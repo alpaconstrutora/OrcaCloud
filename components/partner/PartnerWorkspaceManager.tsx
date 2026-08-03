@@ -40,6 +40,7 @@ import {
   PartnerUser,
   PartnerRequest,
   PartnerSharedDocument,
+  PartnerSharedFolder,
   PartnerConversation,
   PartnerMessage,
   PartnerRole,
@@ -78,6 +79,9 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // Detalhes do Workspace Selecionado
   const [partnerUsers, setPartnerUsers] = useState<PartnerUser[]>([]);
   const [sharedDocs, setSharedDocs] = useState<PartnerSharedDocument[]>([]);
+  // Pastas compartilhadas: vínculo com a pasta (não com os arquivos que estavam nela),
+  // então a subárvore inteira vai para o portal e arquivo novo entra sozinho.
+  const [sharedFolders, setSharedFolders] = useState<PartnerSharedFolder[]>([]);
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [portalToken, setPortalToken] = useState<PartnerPortalToken | null>(null);
@@ -231,6 +235,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         setPartnerUsers(users);
         const docs = await partnerService.listSharedDocuments(selectedWorkspace.id);
         setSharedDocs(docs);
+        setSharedFolders(await partnerService.listSharedFolders(selectedWorkspace.id));
         const reqs = await partnerService.listRequests(selectedWorkspace.id);
         setRequests(reqs);
 
@@ -503,6 +508,24 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     }
   };
 
+  // Remover Compartilhamento de Pasta — o parceiro perde a pasta inteira de uma vez.
+  const handleUnshareFolder = async (folderId: string, folderName: string) => {
+    if (!selectedWorkspace) return;
+    const ok = await confirm({
+      title: 'Remover compartilhamento da pasta?',
+      message: `O parceiro deixará de ver a pasta "${folderName}", suas subpastas e todo o conteúdo delas.`,
+      variant: 'danger',
+      confirmLabel: 'Remover',
+    });
+    if (!ok) return;
+    try {
+      await partnerService.unshareFolder(selectedWorkspace.id, folderId);
+      setSharedFolders((prev) => prev.filter((sf) => sf.folder_id !== folderId));
+    } catch (err) {
+      console.error('Erro ao remover compartilhamento de pasta:', err);
+    }
+  };
+
   // Responder/Atualizar status de solicitação
   const handleUpdateRequestStatus = async (req: PartnerRequest, status: PartnerRequest['status']) => {
     try {
@@ -710,7 +733,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   ${activeSubTab === 'documentos' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
               >
                 <FolderOpen className="w-4 h-4" />
-                Documentos GED ({sharedDocs.length})
+                Documentos GED ({sharedFolders.length > 0 ? `${sharedFolders.length} pasta(s) + ${sharedDocs.length}` : sharedDocs.length})
               </button>
               <button
                 onClick={() => setActiveSubTab('contratos')}
@@ -868,6 +891,40 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   </Button>
                 </div>
 
+                {sharedFolders.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <h4 className="text-xs font-semibold text-gray-500">Pastas compartilhadas</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {sharedFolders.map((sf) => (
+                        <div key={sf.id} className="bg-orange-50/40 border border-orange-100 p-3 rounded-2xl flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="p-1.5 bg-white text-orange-500 rounded-xl shrink-0"><FolderOpen className="w-4 h-4" /></div>
+                            <div className="min-w-0">
+                              <h4 className="text-xs font-bold text-gray-900 truncate">{sf.folder?.name || 'Pasta removida'}</h4>
+                              <p className="text-xs text-gray-500">
+                                {sf.include_subfolders ? 'Inclui subpastas' : 'Só esta pasta'} · {new Date(sf.shared_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleUnshareFolder(sf.folder_id, sf.folder?.name || 'sem nome')}
+                            title="Remover Compartilhamento"
+                            className="shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      O parceiro vê a pasta inteira, com subpastas, e o que for adicionado a ela depois.
+                      Os arquivos abaixo são compartilhamentos avulsos, além dessas pastas.
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sharedDocs.map((sd) => (
                     <div key={sd.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm hover:border-gray-300 transition-all relative group">
@@ -900,7 +957,9 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   ))}
                   {sharedDocs.length === 0 && (
                     <div className="col-span-full text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
-                      Nenhum documento compartilhado com este parceiro.
+                      {sharedFolders.length > 0
+                        ? 'Nenhum arquivo avulso — este parceiro recebe os documentos pelas pastas acima.'
+                        : 'Nenhum documento compartilhado com este parceiro.'}
                     </div>
                   )}
                 </div>

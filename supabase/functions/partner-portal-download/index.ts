@@ -52,17 +52,20 @@ serve(async (req: Request) => {
     if (!isOwnUpload) {
         // Caso 2: confirma que o arquivo pedido é de fato a versão ativa de um documento
         // atualmente compartilhado com este workspace (não deixa passar path arbitrário).
-        const { data: shared, error: sharedError } = await admin
-            .from('partner_shared_documents')
-            .select('document:opura_documents!inner(active_version:opura_document_versions!fk_active_version(storage_path))')
-            .eq('partner_workspace_id', tok.workspace_id);
+        //
+        // A checagem vive na RPC partner_portal_can_download (migration 20270861000000)
+        // e não mais aqui: compartilhamento agora tem DUAS origens — o vínculo avulso em
+        // partner_shared_documents e a PASTA compartilhada (partner_shared_folders, cuja
+        // subárvore é expandida no banco). Ler só a primeira tabela negava o download de
+        // todo arquivo que chega ao parceiro por pasta.
+        const { data: allowed, error: checkError } = await admin
+            .rpc('partner_portal_can_download', { p_token: token, p_storage_path: storagePath });
 
-        if (sharedError) {
-            console.error('[partner-portal-download] erro ao validar vínculo:', sharedError);
+        if (checkError) {
+            console.error('[partner-portal-download] erro ao validar vínculo:', checkError);
             return json({ error: 'Erro ao validar acesso ao documento' }, 500);
         }
 
-        const allowed = (shared || []).some((row: any) => row.document?.active_version?.storage_path === storagePath);
         if (!allowed) {
             return json({ error: 'Documento não compartilhado com este parceiro' }, 403);
         }

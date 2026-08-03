@@ -6,6 +6,7 @@ import {
   PartnerMessage,
   PartnerRequest,
   PartnerSharedDocument,
+  PartnerSharedFolder,
   OpuraDocumentCategoria
 } from '../types';
 import { documentService } from './documentService';
@@ -354,31 +355,37 @@ export const partnerService = {
     documents: PartnerSharedDocument[];
     folders: { id: string; name: string; parent_id: string | null; naming_mask: string | null }[];
     disciplines: { code: string; name: string }[];
+    // Pastas compartilhadas explicitamente (raiz + subárvore): aparecem na sidebar do
+    // portal mesmo sem documento dentro. Ver migration 20270861000000.
+    sharedFolderIds: string[];
   }> {
-    const documents = await this.listSharedDocuments(workspaceId);
-
     const { data: treeData, error: treeError } = await supabase.rpc('partner_get_shared_document_tree', {
       p_workspace_id: workspaceId,
     });
 
     if (!treeError && treeData) {
+      // `documents` vem da RPC, não de listSharedDocuments: além dos vínculos avulsos
+      // (partner_shared_documents) ela inclui os documentos que estão DENTRO de uma
+      // pasta compartilhada — que não existem como linha em partner_shared_documents
+      // e por isso o cliente não teria como descobrir sozinho.
       return {
-        documents,
+        documents: ((treeData as any).documents || []) as PartnerSharedDocument[],
         folders: ((treeData as any).folders || []) as any[],
         disciplines: ((treeData as any).disciplines || []) as any[],
+        sharedFolderIds: ((treeData as any).shared_folder_ids || []) as string[],
       };
     }
 
-    if (treeError) {
-      console.error('[PARTNER SERVICE] RPC da árvore indisponível, tentando leitura direta:', treeError);
-    }
+    console.error('[PARTNER SERVICE] RPC da árvore indisponível, tentando leitura direta:', treeError);
+
+    const documents = await this.listSharedDocuments(workspaceId);
 
     const orgIds = Array.from(new Set(
       documents.map((sd) => (sd.document as any)?.organization_id).filter(Boolean)
     )) as string[];
 
     if (orgIds.length === 0) {
-      return { documents, folders: [], disciplines: [] };
+      return { documents, folders: [], disciplines: [], sharedFolderIds: [] };
     }
 
     let folders: { id: string; name: string; parent_id: string | null; naming_mask: string | null }[] = [];
@@ -404,7 +411,93 @@ export const partnerService = {
       console.error('[PARTNER SERVICE] Disciplinas indisponíveis para a árvore do portal (best-effort):', err);
     }
 
-    return { documents, folders, disciplines };
+    return { documents, folders, disciplines, sharedFolderIds: [] };
+  },
+
+  // --- Shared Folders ---
+  // Compartilhar a PASTA (não os arquivos que estavam nela no momento do clique):
+  // a subárvore inteira aparece no portal, inclusive pastas vazias, e documento
+  // adicionado depois entra automaticamente. Ver migration 20270861000000.
+
+  async listSharedFolders(workspaceId: string): Promise<PartnerSharedFolder[]> {
+    const { data, error } = await supabase
+      .from('partner_shared_folders')
+      .select('*, folder:opura_folders(id, name, parent_id)')
+      .eq('partner_workspace_id', workspaceId)
+      .order('shared_at', { ascending: false });
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error listing shared folders:', error);
+      throw error;
+    }
+
+    return (data || []) as PartnerSharedFolder[];
+  },
+
+  async shareFolder(
+    workspaceId: string,
+    folderId: string,
+    sharedBy: string,
+    includeSubfolders: boolean = true
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('partner_shared_folders')
+      .upsert(
+        {
+          partner_workspace_id: workspaceId,
+          folder_id: folderId,
+          include_subfolders: includeSubfolders,
+          shared_by: sharedBy,
+        },
+        { onConflict: 'partner_workspace_id,folder_id' }
+      );
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error sharing folder:', error);
+      throw error;
+    }
+
+    const { data: folder } = await supabase
+      .from('opura_folders')
+      .select('name, organization_id')
+      .eq('id', folderId)
+      .maybeSingle();
+
+    this.notifyPartnersOfSharedDocument(workspaceId, `pasta "${folder?.name || 'sem nome'}"`, sharedBy).catch((err) => {
+      console.error('[PARTNER SERVICE] Erro ao notificar parceiros sobre pasta compartilhada:', err);
+    });
+  },
+
+  async unshareFolder(workspaceId: string, folderId: string): Promise<void> {
+    const { error } = await supabase
+      .from('partner_shared_folders')
+      .delete()
+      .eq('partner_workspace_id', workspaceId)
+      .eq('folder_id', folderId);
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error unsharing folder:', error);
+      throw error;
+    }
+  },
+
+  // Com quais parceiros uma pasta já está compartilhada — alimenta a seção
+  // "compartilhado com" do modal quando o escopo é uma pasta.
+  async listSharingsForFolder(folderId: string): Promise<{ partner_workspace_id: string; supplier_name: string }[]> {
+    const { data, error } = await supabase
+      .from('partner_shared_folders')
+      .select('partner_workspace_id, workspace:partner_workspaces(supplier:suppliers(name))')
+      .eq('folder_id', folderId);
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error listing sharings for folder:', error);
+      throw error;
+    }
+
+    return (data || []).map((row: any) => ({
+      partner_workspace_id: row.partner_workspace_id,
+      supplier_name: row.workspace?.supplier?.name || 'Fornecedor sem nome',
+    }));
   },
 
   // Com quais workspaces de parceiro um documento já está compartilhado (evita reshare duplicado sem perceber)

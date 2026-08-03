@@ -77,6 +77,19 @@ export interface PartnerSharedDocument {
   document?: OpuraDocument; // Carregado via Join
 }
 
+// Pasta compartilhada com o parceiro. Diferente de PartnerSharedDocument, o vínculo
+// é com a PASTA: a subárvore inteira fica visível no portal (inclusive pastas vazias)
+// e documento adicionado depois entra automaticamente. Ver migration 20270861000000.
+export interface PartnerSharedFolder {
+  id: string;
+  partner_workspace_id: string;
+  folder_id: string;
+  include_subfolders: boolean;
+  shared_by: string;
+  shared_at: string;
+  folder?: { id: string; name: string; parent_id: string | null }; // Carregado via Join
+}
+
 // Tipos de Insert/Update
 export type PartnerWorkspaceInsert = Omit<PartnerWorkspace, 'id' | 'created_at' | 'updated_at'>;
 export type PartnerWorkspaceUpdate = Partial<PartnerWorkspaceInsert>;

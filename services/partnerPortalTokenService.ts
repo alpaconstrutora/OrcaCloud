@@ -65,6 +65,9 @@ export const partnerPortalTokenService = {
     documents: any[];
     folders: { id: string; name: string; parent_id: string | null; naming_mask: string | null }[];
     disciplines: { code: string; name: string }[];
+    // Pastas compartilhadas explicitamente (raiz + subárvore): aparecem na sidebar
+    // mesmo sem documento dentro. Ver migration 20270861000000.
+    sharedFolderIds: string[];
   }> {
     const { data, error } = await supabase.rpc('partner_portal_get_shared_documents', { p_token: token });
     if (error) throw error;
@@ -73,6 +76,7 @@ export const partnerPortalTokenService = {
       documents: payload.data || [],
       folders: payload.folders || [],
       disciplines: payload.disciplines || [],
+      sharedFolderIds: payload.shared_folder_ids || [],
     };
   },
 

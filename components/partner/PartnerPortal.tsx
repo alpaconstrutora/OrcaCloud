@@ -296,6 +296,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // documentos (RPC no link público / partnerService no autenticado).
   const [sharedFolders, setSharedFolders] = React.useState<PortalFolder[]>([]);
   const [sharedDisciplines, setSharedDisciplines] = React.useState<PortalDiscipline[]>([]);
+  // Pastas compartilhadas explicitamente (raízes + subárvore, vindas do servidor). Elas
+  // aparecem MESMO VAZIAS — é a diferença entre "compartilhei a pasta" e "compartilhei os
+  // arquivos que estavam nela". Vazio nos modos degradados, aí vale só a poda por documento.
+  const [sharedFolderIds, setSharedFolderIds] = React.useState<string[]>([]);
   const [selectedFolderId, setSelectedFolderId] = React.useState<string | null>(null);
   const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = React.useState<string[]>([]);
@@ -352,16 +356,24 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       inner.set(disc, (inner.get(disc) || 0) + 1);
     };
 
+    // Marca uma pasta e toda a cadeia de pais como relevante (a hierarquia precisa
+    // fechar até a raiz, senão o nó fica órfão e some da sidebar).
+    const markWithAncestors = (folderId: string) => {
+      let cur: string | null = folderId;
+      while (cur && folderById.has(cur)) {
+        relevantFolderIds.add(cur);
+        cur = folderById.get(cur)!.parent_id;
+      }
+    };
+
+    // Pasta compartilhada é relevante por si só — não depende de ter documento dentro.
+    sharedFolderIds.forEach(markWithAncestors);
+
     sharedOpuraDocuments.forEach((doc) => {
       const disc = resolveDisciplineCode(doc);
       if (doc.folder_id && folderById.has(doc.folder_id)) {
         bump(doc.folder_id, disc);
-        // marca a pasta e toda a cadeia de pais como relevante
-        let cur: string | null = doc.folder_id;
-        while (cur && folderById.has(cur)) {
-          relevantFolderIds.add(cur);
-          cur = folderById.get(cur)!.parent_id;
-        }
+        markWithAncestors(doc.folder_id);
       } else {
         bump(NO_FOLDER, disc);
       }
@@ -381,7 +393,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     };
 
     return { docCountByFolderDisc, relevantFolderIds, directCount, subtreeCount };
-  }, [sharedOpuraDocuments, folderById, sharedFolders, resolveDisciplineCode]);
+  }, [sharedOpuraDocuments, folderById, sharedFolders, sharedFolderIds, resolveDisciplineCode]);
 
   const rootFolders = React.useMemo(
     () => sharedFolders.filter((f) => (f.parent_id === null || !folderById.has(f.parent_id)) && tree.relevantFolderIds.has(f.id)),
@@ -537,6 +549,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             setSharedDocs(bundle.documents);
             setSharedFolders(bundle.folders);
             setSharedDisciplines(bundle.disciplines);
+            setSharedFolderIds(bundle.sharedFolderIds);
           } else if (activeTab === 'contratos') {
             setContracts(await partnerPortalTokenService.getContracts(portalToken!));
           } else if (activeTab === 'financeiro') {
@@ -572,6 +585,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           setSharedDocs(treeData.documents);
           setSharedFolders(treeData.folders);
           setSharedDisciplines(treeData.disciplines);
+          setSharedFolderIds(treeData.sharedFolderIds);
         } else if (activeTab === 'contratos') {
           const { data: cts } = await supabase.from('contracts').select('*').eq('supplier_id', workspace.supplier_id);
           setContracts(cts || []);

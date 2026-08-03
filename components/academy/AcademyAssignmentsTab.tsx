@@ -106,7 +106,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
     const processarAgora = async () => {
         setProcessando(true);
         try {
-            const r = await academyService.runAlerts(7);
+            const r = await academyService.runAlerts(7, orgId);
             await carregar();
 
             // "0 criadas" sem explicação faz o RH clicar de novo achando que

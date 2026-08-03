@@ -55,7 +55,9 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         [portalToken]
     );
 
-    const { data: academia = [] } = useQuery({
+    const {
+        data: academia = [], isLoading: academiaCarregando, error: academiaErro,
+    } = useQuery({
         queryKey: portalToken ? academyKeys.portalEnrollments(portalToken) : ['portal', 'academy', 'none'],
         queryFn: () => academyPortalService.listEnrollments(portalToken!),
         staleTime: STALE.fast,
@@ -387,9 +389,44 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                     <div className="space-y-3">
                         {/* Academia — treinamentos A FAZER (conteúdo EAD). Fica antes
                             da evidência porque é o que exige ação do colaborador. */}
-                        {portalChannel && academia.length > 0 && (
+                        {portalChannel && (
                             <div className="space-y-3 pb-2">
                                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Academia ÒPURA</p>
+
+                                {/* Estes três estados existiam e eram invisíveis: a seção
+                                    inteira sumia quando a lista vinha vazia OU quando a
+                                    chamada falhava, e o colaborador só via "nenhum
+                                    treinamento registrado" logo abaixo. */}
+                                {academiaCarregando && (
+                                    <div className="flex items-center gap-2 py-4">
+                                        <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                                        <span className="text-sm text-slate-400">Carregando treinamentos...</span>
+                                    </div>
+                                )}
+
+                                {!academiaCarregando && academiaErro && (
+                                    <div className="p-3 rounded-xl border border-rose-200 bg-rose-50">
+                                        <p className="text-sm font-bold text-rose-800">
+                                            Não foi possível carregar seus treinamentos
+                                        </p>
+                                        <p className="text-xs text-rose-600 mt-1">
+                                            {(academiaErro as Error)?.message || 'Tente abrir o link novamente.'}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!academiaCarregando && !academiaErro && academia.length === 0 && (
+                                    <div className="p-3 rounded-xl border border-slate-100 bg-slate-50">
+                                        <p className="text-sm text-slate-500">
+                                            Nenhum treinamento atribuído a você no momento.
+                                        </p>
+                                        <p className="text-xs text-slate-400 mt-1">
+                                            Se você esperava algum, confirme com o RH se a atribuição
+                                            foi feita para o seu cadastro.
+                                        </p>
+                                    </div>
+                                )}
+
                                 {academia.map(m => {
                                     const concluido = m.status === 'CONCLUIDO';
                                     return (

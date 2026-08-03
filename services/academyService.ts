@@ -571,12 +571,17 @@ export const academyService = {
         return ((data || []) as Array<{ employee_id: string }>).map(r => r.employee_id);
     },
 
-    /** Materializa atribuições, expira prazos e cria reciclagens (idempotente). */
-    async runAlerts(daysAhead = 7): Promise<{
+    /**
+     * Materializa atribuições, expira prazos e cria reciclagens (idempotente).
+     * Recorta pela org ativa: sem isso, uma atribuição de outra organização
+     * derrubava a execução inteira.
+     */
+    async runAlerts(daysAhead = 7, orgId?: string | null): Promise<{
         expiradas: number; novas: number; reciclagens: number; notificadas: number;
     }> {
         const { data, error } = await supabase.rpc('generate_academy_alerts', {
             p_days_ahead: daysAhead,
+            p_org_id: orgId ?? null,
         });
         if (error) throw error;
         return data;

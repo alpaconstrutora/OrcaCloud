@@ -97,8 +97,31 @@ export interface AcademyCourseVersion {
     publicada_em?: string;
     publicada_por?: string;
     arquivada_em?: string;
+    /** Impacto gravado no ato da publicação — não dá para recalcular depois. */
+    reciclagens_geradas?: number;
+    migradas_geradas?: number;
     created_at?: string;
     updated_at?: string;
+}
+
+/** Uma linha do histórico de versões (aba Versões do construtor). */
+export interface AcademyVersionHistoryRow {
+    id: string;
+    versao: number;
+    status: AcademyVersionStatus;
+    titulo_versao?: string;
+    notas_versao?: string;
+    publicada_em?: string;
+    /** Nome de quem publicou — resolvido no servidor; nunca um UUID cru. */
+    publicada_por_nome?: string;
+    arquivada_em?: string;
+    reciclagens_geradas?: number;
+    migradas_geradas?: number;
+    modulos: number;
+    aulas: number;
+    matriculas: number;
+    concluidas: number;
+    criada_em?: string;
 }
 
 /** Prévia do impacto da publicação (bloco de contexto do useConfirm). */
@@ -468,6 +491,8 @@ export interface AcademyPlayerContent {
         exige_aceite: boolean;
         texto_aceite?: string;
         ordem_obrigatoria: boolean;
+        /** Quando o aluno deu ciência da mudança desta versão. */
+        ciencia_em?: string;
     };
     modulos: AcademyPlayerModule[];
     materiais: Array<{

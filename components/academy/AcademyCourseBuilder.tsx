@@ -7,6 +7,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import AcademyLessonSheet from './AcademyLessonSheet';
 import AcademyModuleSheet from './AcademyModuleSheet';
+import AcademyVersionHistory from './AcademyVersionHistory';
 import AcademyMaterialsPanel from './AcademyMaterialsPanel';
 import AcademyQuestionBankPanel from './AcademyQuestionBankPanel';
 import { academyService } from '../../services/academyService';
@@ -23,13 +24,14 @@ import type {
  * matrículas e certificados da anterior permanecem intactos.
  */
 
-type Aba = 'conteudo' | 'materiais' | 'avaliacoes' | 'regras';
+type Aba = 'conteudo' | 'materiais' | 'avaliacoes' | 'regras' | 'versoes';
 
 const ABAS: Array<{ id: Aba; label: string }> = [
     { id: 'conteudo',   label: 'Conteúdo' },
     { id: 'materiais',  label: 'Materiais' },
     { id: 'avaliacoes', label: 'Avaliações' },
     { id: 'regras',     label: 'Regras de conclusão' },
+    { id: 'versoes',    label: 'Versões' },
 ];
 
 const inputCls = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
@@ -111,7 +113,18 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
     };
 
     const publicar = async () => {
-        if (!versaoId) return;
+        if (!versaoId || !versao) return;
+
+        // Substituir conteúdo vigente sem registrar o motivo torna a evidência
+        // inauditável. O servidor também recusa — aqui é só para não empurrar o
+        // usuário até o confirm e falhar no fim.
+        const substituiOutra = versoes.some(v => v.status === 'PUBLICADA' && v.id !== versaoId);
+        if (substituiOutra && !(versao.notas_versao || '').trim()) {
+            setAba('regras');
+            notify('Descreva o que mudou nesta versão antes de publicar — o campo está em Regras de conclusão.', 'error');
+            return;
+        }
+
         setPublicando(true);
         try {
             const p = await academyService.getPublishPreview(versaoId);
@@ -535,14 +548,22 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">O que mudou nesta versão</label>
+                        <label className="text-xs font-semibold text-gray-500">
+                            O que mudou nesta versão
+                            {versoes.some(v => v.status === 'PUBLICADA' && v.id !== versao.id) && ' *'}
+                        </label>
                         <textarea
                             value={versao.notas_versao ?? ''}
                             onChange={e => salvarRegra('notas_versao', e.target.value)}
                             disabled={somenteLeitura}
-                            placeholder="Aparece para quem for fazer a reciclagem."
+                            placeholder="Ex: incluída a NR-35 revisão 2026 e novo procedimento de ancoragem."
                             className={inputCls + ' resize-none h-20'}
                         />
+                        <p className="text-xs text-gray-400">
+                            Aparece para quem for fazer a reciclagem e fica no histórico de versões.
+                            Obrigatório quando esta versão substitui outra já publicada — sem isso,
+                            anos depois ninguém sabe por que a versão anterior deixou de valer.
+                        </p>
                     </div>
 
                     <div className="space-y-2 border-t border-gray-100 pt-4">
@@ -578,6 +599,15 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                         </div>
                     )}
                 </div>
+            )}
+
+            {aba === 'versoes' && (
+                <AcademyVersionHistory
+                    courseId={course.id}
+                    // Recarrega quando o quadro de versões muda (publicar/arquivar).
+                    revalidarEm={versoes.map(v => `${v.id}:${v.status}`).join('|')}
+                    notify={notify}
+                />
             )}
 
             {moduloSheet && versao && (

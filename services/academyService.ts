@@ -24,7 +24,7 @@ import type {
     AcademyAttemptStart, AcademyAttemptResult, AcademyHeartbeatResult,
     AcademyCompleteLessonResult, AcademyFinalizeResult, AcademyCertificate,
     AcademyCertificateValidation, AcademyPlayerContent, AcademyPortalEnrollment,
-    AcademyManagerRow, AcademyHrKpis, AcademyLessonTipo,
+    AcademyManagerRow, AcademyHrKpis, AcademyLessonTipo, AcademyVersionHistoryRow,
 } from '../types/academy';
 
 export const ACADEMY_BUCKET = 'academy-media';
@@ -148,6 +148,18 @@ export const academyService = {
         });
         if (error) throw error;
         return data;
+    },
+
+    /**
+     * Histórico de versões para auditoria: quem publicou (nome, não UUID),
+     * quando, o que mudou e qual foi o impacto.
+     */
+    async listVersionHistory(courseId: string): Promise<AcademyVersionHistoryRow[]> {
+        const { data, error } = await supabase.rpc('fn_academy_version_history', {
+            p_course_id: courseId,
+        });
+        if (error) throw error;
+        return (data || []) as AcademyVersionHistoryRow[];
     },
 
     async archiveVersion(versionId: string): Promise<void> {
@@ -679,7 +691,7 @@ export const academyService = {
         const enrollment = enrollRes.data as any;
         const versionId = versionRes.data.version_id as string;
 
-        const [versao, modulos, aulas, materiais, avaliacoes, progresso, tentativas] = await Promise.all([
+        const [versao, modulos, aulas, materiais, avaliacoes, progresso, tentativas, ciencia] = await Promise.all([
             supabase.from('academy_course_versions').select(VERSION_COLS).eq('id', versionId).single(),
             supabase.from('academy_modules').select(MODULE_COLS).eq('version_id', versionId).order('ordem'),
             supabase.from('academy_lessons').select(LESSON_COLS).eq('version_id', versionId).order('ordem'),
@@ -691,6 +703,13 @@ export const academyService = {
             supabase.from('academy_attempts')
                 .select('assessment_id, nota, status')
                 .eq('enrollment_id', enrollmentId),
+            // A PRIMEIRA ciência é a que vale como evidência.
+            supabase.from('academy_access_logs')
+                .select('created_at')
+                .eq('enrollment_id', enrollmentId)
+                .eq('evento', 'CIENCIA_VERSAO')
+                .order('created_at', { ascending: true })
+                .limit(1),
         ]);
 
         if (versao.error) throw versao.error;
@@ -719,6 +738,7 @@ export const academyService = {
                 exige_aceite: v.regra_exige_aceite,
                 texto_aceite: v.regra_texto_aceite ?? undefined,
                 ordem_obrigatoria: v.regra_ordem_obrigatoria,
+                ciencia_em: (ciencia.data?.[0]?.created_at as string) ?? undefined,
             },
             modulos: (modulos.data || []).map((m: any) => ({
                 id: m.id, titulo: m.titulo, descricao: m.descricao ?? undefined, ordem: m.ordem,
@@ -808,6 +828,16 @@ export const academyService = {
         });
         if (error) throw error;
         return data as AcademyAttemptResult;
+    },
+
+    /** Ciência da mudança de versão. Idempotente: a primeira é a que vale. */
+    async ackVersion(enrollmentId: string): Promise<string> {
+        const { data, error } = await supabase.rpc('academy_ack_version', {
+            p_enrollment_id: enrollmentId,
+            p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        });
+        if (error) throw error;
+        return data as string;
     },
 
     async accept(enrollmentId: string): Promise<void> {

@@ -24,6 +24,8 @@ export interface AcademyChannel {
     startAttempt(enrollmentId: string, assessmentId: string): Promise<AcademyAttemptStart>;
     submitAttempt(a: { enrollmentId: string; attemptId: string; answers: Array<{ question_id: string; option_ids: string[] }> }): Promise<AcademyAttemptResult>;
     accept(enrollmentId: string): Promise<void>;
+    /** Ciência da mudança de versão (evidência no log). */
+    ackVersion(enrollmentId: string): Promise<string>;
     finalize(enrollmentId: string): Promise<AcademyFinalizeResult>;
     /** URL temporária da mídia da aula (15 min). */
     getLessonMediaUrl(lessonId: string): Promise<string>;
@@ -42,6 +44,7 @@ export function createAppChannel(): AcademyChannel {
         startAttempt: (e, a) => academyService.startAttempt(e, a),
         submitAttempt: a => academyService.submitAttempt(a),
         accept: e => academyService.accept(e),
+        ackVersion: e => academyService.ackVersion(e),
         finalize: e => academyService.finalize(e),
 
         async getLessonMediaUrl(lessonId) {
@@ -76,6 +79,7 @@ export function createPortalChannel(token: string): AcademyChannel {
         startAttempt: (e, a) => academyPortalService.startAttempt(token, e, a),
         submitAttempt: a => academyPortalService.submitAttempt({ token, ...a }),
         accept: e => academyPortalService.accept(token, e),
+        ackVersion: e => academyPortalService.ackVersion(token, e),
         finalize: e => academyPortalService.finalize(token, e),
         getLessonMediaUrl: lessonId => academyPortalService.getMediaUrl({ token, lessonId }),
         getMaterialUrl: materialId => academyPortalService.getMediaUrl({ token, materialId }),

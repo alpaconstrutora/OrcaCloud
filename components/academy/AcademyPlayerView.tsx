@@ -22,6 +22,10 @@ import type { AcademyChannel } from './academyChannel';
  * chama o servidor e reage à resposta (inclusive quando ele nega).
  */
 
+/** Timestamp completo — é ISO com hora, então new Date() é seguro aqui. */
+const fmtDataHora = (iso?: string) =>
+    iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+
 interface Props {
     enrollmentId: string;
     titulo: string;
@@ -44,6 +48,7 @@ const AcademyPlayerView: React.FC<Props> = ({
     const [aviso, setAviso] = useState<string | null>(null);
     const [concluindo, setConcluindo] = useState(false);
     const [baixandoCert, setBaixandoCert] = useState(false);
+    const [dandoCiencia, setDandoCiencia] = useState(false);
     const [provaAberta, setProvaAberta] = useState<{ id: string; titulo: string } | null>(null);
 
     const getPosicaoRef = useRef<() => number>(() => 0);
@@ -118,6 +123,18 @@ const AcademyPlayerView: React.FC<Props> = ({
             setAviso(e?.message || 'Não foi possível concluir a aula.');
         } finally {
             setConcluindo(false);
+        }
+    };
+
+    const darCiencia = async () => {
+        setDandoCiencia(true);
+        try {
+            await channel.ackVersion(enrollmentId);
+            await carregar();
+        } catch (e: any) {
+            setAviso(e?.message || 'Não foi possível registrar a ciência.');
+        } finally {
+            setDandoCiencia(false);
         }
     };
 
@@ -258,12 +275,44 @@ const AcademyPlayerView: React.FC<Props> = ({
         <div className="space-y-6 animate-in fade-in duration-500 pb-4">
             {Cabecalho}
 
+            {/* Ciência da mudança: só mostrar o aviso não prova que a pessoa
+                leu. O clique vira evento no log append-only, junto com data,
+                canal e user agent — é isso que sustenta a evidência depois. */}
             {conteudo.versao.notas_versao && (
-                <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] flex items-start gap-3">
-                    <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-xs font-semibold text-blue-900">O que mudou nesta versão</p>
-                        <p className="text-xs text-blue-700 mt-1">{conteudo.versao.notas_versao}</p>
+                <div className={`p-4 rounded-[10px] flex items-start gap-3 border ${
+                    conteudo.versao.ciencia_em
+                        ? 'bg-gray-50 border-gray-200'
+                        : 'bg-amber-50 border-amber-200'
+                }`}>
+                    <ShieldCheck className={`w-5 h-5 shrink-0 mt-0.5 ${
+                        conteudo.versao.ciencia_em ? 'text-gray-400' : 'text-amber-600'
+                    }`} />
+                    <div className="min-w-0 flex-1">
+                        <p className={`text-xs font-semibold ${
+                            conteudo.versao.ciencia_em ? 'text-gray-700' : 'text-amber-900'
+                        }`}>
+                            O que mudou nesta versão
+                        </p>
+                        <p className={`text-xs mt-1 ${
+                            conteudo.versao.ciencia_em ? 'text-gray-500' : 'text-amber-800'
+                        }`}>
+                            {conteudo.versao.notas_versao}
+                        </p>
+
+                        {conteudo.versao.ciencia_em ? (
+                            <p className="text-xs text-gray-400 mt-2">
+                                Ciência registrada em {fmtDataHora(conteudo.versao.ciencia_em)}.
+                            </p>
+                        ) : (
+                            <button
+                                onClick={darCiencia}
+                                disabled={dandoCiencia}
+                                className="mt-3 flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
+                            >
+                                {dandoCiencia ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : null}
+                                Li e entendi a mudança
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

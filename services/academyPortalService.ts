@@ -102,6 +102,17 @@ export const academyPortalService = {
         return data as AcademyAttemptResult;
     },
 
+    /** Ciência da mudança de versão. Idempotente: a primeira é a que vale. */
+    async ackVersion(token: string, enrollmentId: string): Promise<string> {
+        const { data, error } = await supabase.rpc('academy_portal_ack_version', {
+            p_token: token,
+            p_enrollment_id: enrollmentId,
+            p_user_agent: ua(),
+        });
+        if (error) throw error;
+        return data as string;
+    },
+
     async accept(token: string, enrollmentId: string): Promise<void> {
         const { error } = await supabase.rpc('academy_portal_accept', {
             p_token: token,

@@ -82,6 +82,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // Pastas compartilhadas: vínculo com a pasta (não com os arquivos que estavam nela),
   // então a subárvore inteira vai para o portal e arquivo novo entra sozinho.
   const [sharedFolders, setSharedFolders] = useState<PartnerSharedFolder[]>([]);
+  // Quais dos documentos listados vêm de vínculo avulso (os demais chegam por pasta).
+  const [avulsoDocIds, setAvulsoDocIds] = useState<Set<string>>(new Set());
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [portalToken, setPortalToken] = useState<PartnerPortalToken | null>(null);
@@ -233,8 +235,18 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       try {
         const users = await partnerService.listPartnerUsers(selectedWorkspace.id);
         setPartnerUsers(users);
-        const docs = await partnerService.listSharedDocuments(selectedWorkspace.id);
-        setSharedDocs(docs);
+        // A lista tem que mostrar o que o PARCEIRO recebe — não só os vínculos avulsos.
+        // listSharedDocuments enxerga apenas partner_shared_documents, então um workspace
+        // que recebe tudo por PASTA aparecia com a lista vazia, sem o admin ter como ver
+        // quais arquivos o fornecedor está enxergando. A árvore é a mesma fonte do portal.
+        const [tree, avulsos] = await Promise.all([
+          partnerService.listSharedDocumentTree(selectedWorkspace.id),
+          partnerService.listSharedDocuments(selectedWorkspace.id),
+        ]);
+        setSharedDocs(tree.documents);
+        // Só o vínculo avulso pode ser revogado individualmente; o que vem por pasta
+        // só sai removendo a pasta (senão o botão mentiria: apagaria linha nenhuma).
+        setAvulsoDocIds(new Set(avulsos.map((sd) => sd.document_id)));
         setSharedFolders(await partnerService.listSharedFolders(selectedWorkspace.id));
         const reqs = await partnerService.listRequests(selectedWorkspace.id);
         setRequests(reqs);
@@ -773,7 +785,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   ${activeSubTab === 'documentos' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
               >
                 <FolderOpen className="w-4 h-4" />
-                Documentos GED ({sharedFolders.length > 0 ? `${sharedFolders.length} pasta(s) + ${sharedDocs.length}` : sharedDocs.length})
+                Documentos GED ({sharedFolders.length > 0 ? `${sharedFolders.length} pasta(s) · ${sharedDocs.length} arquivo(s)` : sharedDocs.length})
               </button>
               <button
                 onClick={() => setActiveSubTab('contratos')}
@@ -960,7 +972,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                     </div>
                     <p className="text-xs text-gray-400">
                       O parceiro vê a pasta inteira, com subpastas, e o que for adicionado a ela depois.
-                      Os arquivos abaixo são compartilhamentos avulsos, além dessas pastas.
+                      A lista abaixo mostra os arquivos que ele enxerga hoje — pelas pastas e por vínculo avulso.
                     </p>
                   </div>
                 )}
@@ -968,9 +980,11 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {sharedDocs.map((sd) => (
                     <div key={sd.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm hover:border-gray-300 transition-all relative group">
-                      <Button variant="ghost" size="icon" onClick={() => handleUnshareDoc(sd.document_id)} title="Remover Compartilhamento" className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all">
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
+                      {avulsoDocIds.has(sd.document_id) && (
+                        <Button variant="ghost" size="icon" onClick={() => handleUnshareDoc(sd.document_id)} title="Remover Compartilhamento" className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all">
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                       
                       <div className="flex items-start justify-between">
                         <div className="p-2 bg-orange-50 text-orange-500 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
@@ -981,7 +995,9 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                         <p className="text-xs text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
                       </div>
                       <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
-                        <span>Compartilhado: {new Date(sd.shared_at).toLocaleDateString()}</span>
+                        <span>
+                          {avulsoDocIds.has(sd.document_id) ? 'Avulso' : 'Pela pasta'} · {new Date(sd.shared_at).toLocaleDateString()}
+                        </span>
                         {sd.document?.active_version?.storage_path && (
                           <button
                             type="button"
@@ -998,7 +1014,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   {sharedDocs.length === 0 && (
                     <div className="col-span-full text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
                       {sharedFolders.length > 0
-                        ? 'Nenhum arquivo avulso — este parceiro recebe os documentos pelas pastas acima.'
+                        ? 'As pastas acima ainda não têm nenhum arquivo dentro.'
                         : 'Nenhum documento compartilhado com este parceiro.'}
                     </div>
                   )}

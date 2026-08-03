@@ -6,6 +6,7 @@ import {
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import AcademyLessonSheet from './AcademyLessonSheet';
+import AcademyModuleSheet from './AcademyModuleSheet';
 import AcademyMaterialsPanel from './AcademyMaterialsPanel';
 import AcademyQuestionBankPanel from './AcademyQuestionBankPanel';
 import { academyService } from '../../services/academyService';
@@ -50,6 +51,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
     const [modulos, setModulos] = useState<AcademyModule[]>([]);
     const [aulas, setAulas] = useState<AcademyLesson[]>([]);
     const [aulaSheet, setAulaSheet] = useState<{ lesson: AcademyLesson | null; moduleId?: string } | null>(null);
+    const [moduloSheet, setModuloSheet] = useState<{ module: AcademyModule | null } | null>(null);
     const [publicando, setPublicando] = useState(false);
 
     const versao = useMemo(() => versoes.find(v => v.id === versaoId) ?? null, [versoes, versaoId]);
@@ -162,27 +164,12 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
 
     // ── Módulos e aulas ─────────────────────────────────────────────────
 
-    const criarModulo = async () => {
-        if (!versaoId) return;
-        try {
-            const m = await academyService.createModule({
-                org_id: orgId, version_id: versaoId,
-                titulo: `Módulo ${modulos.length + 1}`,
-                ordem: modulos.length, obrigatorio: true,
-            });
-            setModulos(prev => [...prev, m]);   // §22: atualiza array local
-        } catch (e: any) {
-            notify('Erro ao criar módulo: ' + (e?.message || ''), 'error');
-        }
-    };
-
-    const renomearModulo = async (m: AcademyModule, titulo: string) => {
-        setModulos(prev => prev.map(x => x.id === m.id ? { ...x, titulo } : x));
-        try {
-            await academyService.updateModule(m.id, { titulo });
-        } catch {
-            notify('Não foi possível renomear o módulo.', 'error');
-        }
+    /** §22: mexe no array local em vez de recarregar a estrutura inteira. */
+    const aoSalvarModulo = (salvo: AcademyModule, criado: boolean) => {
+        setModulos(prev => criado
+            ? [...prev, salvo]
+            : prev.map(x => x.id === salvo.id ? salvo : x));
+        notify(criado ? 'Módulo criado.' : 'Módulo atualizado.');
     };
 
     const excluirModulo = async (m: AcademyModule) => {
@@ -368,7 +355,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                 <div className="space-y-3">
                     <div className="flex items-center justify-end">
                         <button
-                            onClick={criarModulo}
+                            onClick={() => setModuloSheet({ module: null })}
                             disabled={somenteLeitura}
                             title={somenteLeitura ? 'Versão não editável' : undefined}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
@@ -390,7 +377,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                                 vídeo, o PDF ou escreve o conteúdo.
                             </p>
                             <button
-                                onClick={criarModulo}
+                                onClick={() => setModuloSheet({ module: null })}
                                 disabled={somenteLeitura}
                                 title={somenteLeitura ? 'Versão não editável' : undefined}
                                 className="mt-6 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
@@ -403,14 +390,15 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                         return (
                             <div key={m.id} className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                                 <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-                                    <input
-                                        value={m.titulo}
-                                        onChange={e => renomearModulo(m, e.target.value)}
-                                        disabled={somenteLeitura}
-                                        className="flex-1 px-2 py-1 bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 rounded-[6px] text-sm font-medium text-gray-900 outline-none transition-all disabled:hover:border-transparent"
-                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">{m.titulo}</p>
+                                        {m.descricao && (
+                                            <p className="text-xs text-gray-400 truncate">{m.descricao}</p>
+                                        )}
+                                    </div>
                                     <span className="text-sm font-normal text-gray-400 shrink-0">
                                         {doModulo.length} aula{doModulo.length === 1 ? '' : 's'}
+                                        {!m.obrigatorio && ' · apoio'}
                                     </span>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                         <button
@@ -420,6 +408,11 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                                         >
                                             <Plus className="w-3.5 h-3.5" /> Aula
                                         </button>
+                                        <ActionIconButton
+                                            kind="edit"
+                                            onClick={() => setModuloSheet({ module: m })}
+                                            disabled={somenteLeitura}
+                                        />
                                         <ActionIconButton
                                             kind="delete"
                                             onClick={() => excluirModulo(m)}
@@ -585,6 +578,19 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                         </div>
                     )}
                 </div>
+            )}
+
+            {moduloSheet && versao && (
+                <AcademyModuleSheet
+                    open
+                    onClose={() => setModuloSheet(null)}
+                    orgId={orgId}
+                    versionId={versao.id}
+                    module={moduloSheet.module}
+                    totalModulos={modulos.length}
+                    onSaved={aoSalvarModulo}
+                    notify={notify}
+                />
             )}
 
             {aulaSheet && versao && (

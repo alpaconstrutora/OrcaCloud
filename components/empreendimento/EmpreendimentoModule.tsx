@@ -1,9 +1,9 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Building2, Search, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { KpiCard } from '../ui/KpiCard';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import { empreendimentoService, EmpreendimentoOrphanSummary } from '../../services/empreendimentoService';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
@@ -42,6 +42,14 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  code: 120,
+  name: 320,
+  status: 140,
+  vgv: 160,
+  actions: 90,
+};
+
 export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, onChangeView, onLoadProject }) => {
   // "Todas as organizações" não bloqueia o cadastro: o modal pede a org num seletor próprio.
   const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
@@ -51,6 +59,15 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = usePersistedState<string>('empreendimentoList:search', '');
   const tableColumns = useTableColumns(COLUMNS, 'empreendimentoListColumns');
+  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'empreendimentoListColWidths');
+  // table-layout:fixed + largura total explícita — mesma razão do padrão em SupplierList
+  // (ver comentário lá): evita o navegador redistribuir espaço sobrando entre colunas
+  // com <col> de largura fixa ao arrastar uma borda.
+  const tableTotalWidth = (tableColumns.visibleColumns.includes('code') ? cols.getWidth('code') : 0)
+    + (tableColumns.visibleColumns.includes('name') ? cols.getWidth('name') : 0)
+    + (tableColumns.visibleColumns.includes('status') ? cols.getWidth('status') : 0)
+    + (tableColumns.visibleColumns.includes('vgv') ? cols.getWidth('vgv') : 0)
+    + cols.getWidth('actions');
   const [selected, setSelected] = React.useState<Empreendimento | null>(null);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Empreendimento | null>(null);
@@ -268,6 +285,14 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                 onToggleColumn={tableColumns.toggleColumn}
                 onReset={tableColumns.resetColumns}
               />
+              {/* Autofit sob comando explícito — nunca automático (ver doc de autoFit em TableUtils) */}
+              <button
+                onClick={() => cols.autoFit()}
+                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                title="Ajustar largura das colunas ao conteúdo"
+              >
+                <MoveHorizontal className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Botão primário (§8) — ação de cadastro pouco frequente, mora aqui porque a
@@ -298,35 +323,58 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+              <colgroup>
+                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
+                {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                {tableColumns.visibleColumns.includes('vgv') && <col data-col-key="vgv" style={{ width: `${cols.getWidth('vgv')}px` }} />}
+                {/* espaçador sem largura fixa — absorve a sobra quando a tabela é mais
+                    estreita que o container (ver comentário equivalente em SupplierList) */}
+                <col />
+                {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+              </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                   {tableColumns.visibleColumns.includes('code') && (
                     <SortableHeader colKey="code" label="Código" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                       onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                      <cols.ResizeHandle colKey="code" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('name') && (
                     <SortableHeader colKey="name" label="Empreendimento" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                       onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="name" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('status') && (
                     <SortableHeader colKey="status" label="Status" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                       onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                      <cols.ResizeHandle colKey="status" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('vgv') && (
                     <SortableHeader colKey="vgv" label="VGV total" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                       onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                      <cols.ResizeHandle colKey="vgv" />
+                    </SortableHeader>
                   )}
+                  {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                  <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
-                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                      Ações
+                      <cols.ResizeHandle colKey="actions" />
+                    </th>
                   )}
                 </tr>
               </thead>
@@ -367,6 +415,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                         {item.vgv_total != null ? `R$ ${item.vgv_total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '—'}
                       </td>
                     )}
+                    <td aria-hidden="true" className="border-r border-gray-100" />
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">
                         {/* Abrir = clique na linha (ação dominante, §9.1). Ações restantes: só Excluir. */}

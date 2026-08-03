@@ -646,6 +646,48 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   }, [workspaces, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, workspaceStats, orgNames]);
 
   // Ativar/desativar direto da tabela, sem precisar abrir o detalhe
+  // "Remover" (não "excluir"): o que sai é o ACESSO do fornecedor ao portal — o
+  // cadastro dele em Suprimentos continua intacto. Diferente de desativar, porém,
+  // leva junto tudo que pende do workspace (cascata no banco), então a confirmação
+  // enumera o que será perdido em vez de perguntar só "tem certeza?".
+  const handleDeleteWorkspace = async (ws: PartnerWorkspace) => {
+    let impacto: Awaited<ReturnType<typeof partnerService.getWorkspaceDeletionImpact>> | null = null;
+    try {
+      impacto = await partnerService.getWorkspaceDeletionImpact(ws.id);
+    } catch (err) {
+      console.error('Erro ao levantar o impacto da exclusão:', err);
+    }
+
+    const perdas = impacto
+      ? [
+          impacto.users > 0 && `${impacto.users} usuário(s) do parceiro`,
+          impacto.conversations > 0 && `${impacto.conversations} conversa(s) e todas as mensagens`,
+          impacto.requests > 0 && `${impacto.requests} solicitação(ões)`,
+          impacto.sharedDocuments > 0 && `${impacto.sharedDocuments} documento(s) compartilhado(s)`,
+          impacto.sharedFolders > 0 && `${impacto.sharedFolders} pasta(s) compartilhada(s)`,
+          impacto.hasToken && 'o link de acesso (deixa de funcionar na hora)',
+        ].filter(Boolean)
+      : [];
+
+    const ok = await confirm({
+      title: `Remover o parceiro ${ws.supplier_name}?`,
+      message: perdas.length > 0
+        ? `Isto remove junto, sem desfazer: ${perdas.join('; ')}. Para tirar o acesso sem perder nada disso, use Suspender.`
+        : 'Este workspace não tem nada pendurado. O fornecedor continua cadastrado em Suprimentos — some apenas o acesso dele ao Portal do Parceiro.',
+      variant: 'danger',
+      confirmLabel: 'Remover',
+    });
+    if (!ok) return;
+
+    try {
+      await partnerService.deleteWorkspace(ws.id);
+      setWorkspaces((prev) => prev.filter((w) => w.id !== ws.id));
+      if (selectedWorkspace?.id === ws.id) setSelectedWorkspace(null);
+    } catch (err) {
+      console.error('Erro ao excluir workspace do parceiro:', err);
+    }
+  };
+
   const handleToggleActiveInline = async (ws: PartnerWorkspace, e: React.MouseEvent) => {
     e.stopPropagation();
     const toggled = await partnerService.saveWorkspace({ ...ws, is_active: !ws.is_active });
@@ -702,7 +744,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                       ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
                       : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}
                 >
-                  {selectedWorkspace.is_active ? 'Workspace Ativo' : 'Workspace Inativo'}
+                  {selectedWorkspace.is_active ? 'Workspace Ativo' : 'Workspace Suspenso'}
                 </button>
               </div>
             </div>
@@ -1257,35 +1299,36 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                               <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                 {/* StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
                                 <span className={`text-sm font-normal ${ws.is_active ? 'text-emerald-700' : 'text-gray-500'}`}>
-                                  {ws.is_active ? 'Ativo' : 'Inativo'}
+                                  {ws.is_active ? 'Ativo' : 'Suspenso'}
                                 </span>
                               </td>
                             )}
                             <td className="px-6 py-2.5 text-right">
                               {/* Editar/gerenciar = clique na linha (ação dominante, §9.1). Ações aqui são só o que sobra. */}
                               <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  onClick={() => { setSelectedWorkspace(ws); setTokenModalOpen(true); }}
+                                <ActionIconButton
+                                  kind="view"
+                                  icon={<Link2 className="w-4 h-4" />}
                                   title="Link de Acesso"
-                                  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-purple-600 hover:border-purple-100 rounded-xl transition-all shadow-sm active:scale-95"
-                                >
-                                  <Link2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => { setSelectedWorkspace(ws); setPreviewOpen(true); }}
+                                  onClick={() => { setSelectedWorkspace(ws); setTokenModalOpen(true); }}
+                                />
+                                <ActionIconButton
+                                  kind="view"
                                   title="Visualizar como Parceiro"
-                                  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
-                                <button
+                                  onClick={() => { setSelectedWorkspace(ws); setPreviewOpen(true); }}
+                                />
+                                <ActionIconButton
+                                  kind="lock"
+                                  icon={ws.is_active ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                                  tone={ws.is_active ? 'attention' : 'neutral'}
+                                  title={ws.is_active ? 'Suspender' : 'Reativar'}
                                   onClick={(e) => handleToggleActiveInline(ws, e)}
-                                  title={ws.is_active ? 'Desativar' : 'Ativar'}
-                                  className={`p-2.5 bg-white border rounded-xl transition-all shadow-sm active:scale-95
-                                    ${ws.is_active ? 'border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-100' : 'border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-100'}`}
-                                >
-                                  {ws.is_active ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                                </button>
+                                />
+                                <ActionIconButton
+                                  kind="delete"
+                                  title="Remover Parceiro"
+                                  onClick={() => handleDeleteWorkspace(ws)}
+                                />
                               </div>
                             </td>
                           </tr>

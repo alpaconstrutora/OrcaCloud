@@ -110,6 +110,47 @@ export const partnerService = {
     }
   },
 
+  // O que se perde ao excluir um workspace. TODAS as tabelas filhas têm
+  // ON DELETE CASCADE (partner_users, partner_conversations -> partner_messages,
+  // partner_requests, partner_shared_documents, partner_shared_folders,
+  // partner_portal_tokens), então excluir apaga o histórico junto — a confirmação
+  // precisa dizer isso com número, não com "tem certeza?".
+  async getWorkspaceDeletionImpact(workspaceId: string): Promise<{
+    users: number; conversations: number; requests: number;
+    sharedDocuments: number; sharedFolders: number; hasToken: boolean;
+  }> {
+    const count = async (table: string, column: string): Promise<number> => {
+      const { count: n } = await supabase
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq(column, workspaceId);
+      return n || 0;
+    };
+
+    const [users, conversations, requests, sharedDocuments, sharedFolders, tokens] = await Promise.all([
+      count('partner_users', 'partner_workspace_id'),
+      count('partner_conversations', 'partner_workspace_id'),
+      count('partner_requests', 'partner_workspace_id'),
+      count('partner_shared_documents', 'partner_workspace_id'),
+      count('partner_shared_folders', 'partner_workspace_id'),
+      count('partner_portal_tokens', 'workspace_id'),
+    ]);
+
+    return { users, conversations, requests, sharedDocuments, sharedFolders, hasToken: tokens > 0 };
+  },
+
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    const { error } = await supabase
+      .from('partner_workspaces')
+      .delete()
+      .eq('id', workspaceId);
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error deleting workspace:', error);
+      throw error;
+    }
+  },
+
   // --- Partner Users ---
   async listPartnerUsers(workspaceId: string): Promise<PartnerUser[]> {
     const { data, error } = await supabase

@@ -12,6 +12,7 @@ import { Contract } from '../types/contracts';
 import { Client, Organization } from '../types/users';
 import { ProjectSettings } from '../types/project';
 import Button from './ui/Button';
+import { isChunkLoadError, reloadOnceForChunkError } from '../utils/chunkLoadError';
 
 interface Props {
     organizationId: string;
@@ -187,8 +188,13 @@ const EmitDocumentModal: React.FC<Props> = ({
             }
             onClose();
         } catch (e) {
+            if (isChunkLoadError(e) && reloadOnceForChunkError()) {
+                return;
+            }
             const raw = e instanceof Error ? e.message : '';
-            const msg = /multi error|templat/i.test(raw)
+            const msg = isChunkLoadError(e)
+                ? 'Uma atualização do sistema foi detectada. Recarregue a página e tente novamente.'
+                : /multi error|templat/i.test(raw)
                 ? 'Erro ao processar o modelo. Verifique se o .docx é válido e tente novamente.'
                 : raw || 'Falha ao gerar o documento.';
             setError(msg);

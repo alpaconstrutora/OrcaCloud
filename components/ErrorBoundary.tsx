@@ -1,15 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
+import { isChunkLoadError, reloadOnceForChunkError } from '../utils/chunkLoadError';
 
 const CHUNK_RELOAD_KEY = 'chunk_reload_attempted';
-
-function isChunkLoadError(error: Error): boolean {
-    return (
-        error.message?.includes('Failed to fetch dynamically imported module') ||
-        error.message?.includes('Importing a module script failed') ||
-        error.name === 'ChunkLoadError'
-    );
-}
 
 interface Props {
     children?: ReactNode;
@@ -35,13 +28,8 @@ export class ErrorBoundary extends Component<Props, State> {
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error('Uncaught error:', error, errorInfo);
 
-        if (isChunkLoadError(error)) {
-            const alreadyRetried = sessionStorage.getItem(CHUNK_RELOAD_KEY);
-            if (!alreadyRetried) {
-                sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
-                window.location.reload();
-                return;
-            }
+        if (isChunkLoadError(error) && reloadOnceForChunkError()) {
+            return;
         }
 
         this.setState({ error, errorInfo });

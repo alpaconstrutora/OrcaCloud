@@ -17,7 +17,9 @@ import { convertPdfToImage } from '../../utils/pdfToImage';
 import { ElectricalTakeoffView } from './ElectricalTakeoffView';
 import { useToast } from '../../hooks/useToast';
 import { OpuraElectricalProject, OpuraElectricalVersion, OpuraElectricalPlan, OpuraElectricalRoom, OpuraElectricalPoint, OpuraElectricalWall, OpuraElectricalConduit, WireAnnotation } from '../../types/electrical';
-import { detectNewRooms } from '../../utils/geometry/roomDetection';
+import { detectNewRooms, extractFacesFromWalls, arePolygonsSimilar } from '../../utils/geometry/roomDetection';
+import { RoomSummaryPanel } from './RoomSummaryPanel';
+import { RoomTypology, getPolygonCentroid, distributePointsOnPolygon, calculateReceptacles } from './utils/nbr5410';
 
 interface ElectricalEditorViewProps {
   organizationId: string;
@@ -49,6 +51,7 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
   const [drawingConduitSource, setDrawingConduitSource] = useState<string | null>(null);
   const [selectedConduitId, setSelectedConduitId] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
 
   // Undo/Redo State
   const [history, setHistory] = useState<CanvasState[]>([]);
@@ -1197,6 +1200,54 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
     }
   };
 
+
+  const handleAutoDistribute = async (roomId: string, typology: RoomTypology) => {
+    const room = rooms.find(r => r.id === roomId);
+    if (!room || !room.polygonPoints) return;
+    if (!plan) return;
+
+    const reqs = calculateReceptacles(room.areaSqm || 0, room.perimeterM || 0, typology);
+    const pointsToPlace = distributePointsOnPolygon(room.polygonPoints, reqs.count);
+    const centroid = getPolygonCentroid(room.polygonPoints);
+
+    try {
+      const newDbPoints: any[] = [];
+      // Insert Ceiling Light (Teto)
+      const ceilingPoint = await electricalProjectService.createPoint({
+          organizationId: getSafeOrgId(),
+          roomId: room.id,
+          pointType: 'LUM_TETO',
+          voltage: 0,
+          canvasX: centroid.x,
+          canvasY: centroid.y
+      });
+      newDbPoints.push(ceilingPoint);
+
+      // Insert Outlets (Tomadas)
+      for (const pt of pointsToPlace) {
+        const p = await electricalProjectService.createPoint({
+          organizationId: getSafeOrgId(),
+          roomId: room.id,
+          pointType: 'TOM_BAIXA', // generic low outlet
+          voltage: 0,
+          canvasX: pt.x,
+          canvasY: pt.y
+        });
+        newDbPoints.push(p);
+      }
+
+      setPoints(prev => {
+        const newPoints = [...prev, ...newDbPoints];
+        pushHistoryState({ walls, rooms, points: newPoints });
+        return newPoints;
+      });
+      showToast('Pontos distribuídos com sucesso!', 'success');
+    } catch(err) {
+      console.error(err);
+      showToast('Erro ao distribuir pontos.', 'error');
+    }
+  };
+
   const handleRenameRoom = async (roomId: string, newName: string) => {
     try {
       const updated = await electricalProjectService.updateRoom(roomId, { name: newName });
@@ -2217,7 +2268,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   strokeWidth={2}
                                   closed
                                   tension={0}
-                                  listening={false}
+                                    listening={true}
+                                    onPointerDown={(e) => {
+                                      if (tool === 'select') {
+                                        e.cancelBubble = true;
+                                        setSelectedRoomId(room.id);
+                                        setSelectedWallId(null);
+                                        setSelectedPointId(null);
+                                        setSelectedConduitId(null);
+                                        setSelectedElementId(null);
+                                      }
+                                    }}
                                 />
                                 <Text
                                   x={centerX - 50}
@@ -2228,6 +2289,17 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                                   fontStyle="bold"
                                   align="center"
                                   width={100}
+                                    listening={true}
+                                    onPointerDown={(e) => {
+                                      if (tool === 'select') {
+                                        e.cancelBubble = true;
+                                        setSelectedRoomId(room.id);
+                                        setSelectedWallId(null);
+                                        setSelectedPointId(null);
+                                        setSelectedConduitId(null);
+                                        setSelectedElementId(null);
+                                      }
+                                    }}
                                 />
                               </Group>
                             );
@@ -2517,6 +2589,13 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
                   }
                 }}
                 onClose={() => setSelectedPointId(null)}
+              />
+            ) : selectedRoomId && rooms.find(r => r.id === selectedRoomId) ? (
+              <RoomSummaryPanel
+                room={rooms.find(r => r.id === selectedRoomId)!}
+                onUpdateName={(newName) => handleRenameRoom(selectedRoomId, newName)}
+                onAutoDistribute={(typology) => handleAutoDistribute(selectedRoomId, typology)}
+                onClose={() => setSelectedRoomId(null)}
               />
             ) : (
               <div className="flex flex-col h-full overflow-hidden">

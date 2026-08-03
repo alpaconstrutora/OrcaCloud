@@ -31,6 +31,7 @@ import { supplierService, getSupplierDisplayName } from '../../services/supplier
 import { appSettingsService } from '../../services/appSettingsService';
 import { organizationService } from '../../services/organizationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { DocumentsTable } from '../documents/DocumentsTable';
 import { useConfirm } from '../ui/confirm';
 import { KpiCard } from '../ui/KpiCard';
 
@@ -44,7 +45,8 @@ import {
   PartnerConversation,
   PartnerMessage,
   PartnerRole,
-  Contract
+  Contract,
+  OpuraDocument
 } from '../../types';
 
 interface PartnerWorkspaceManagerProps {
@@ -60,6 +62,19 @@ const PARTNER_COLUMNS: ColumnConfig[] = [
   { key: 'documents', label: 'Documentos', sortable: true },
   { key: 'requests', label: 'Solicitações', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
+];
+
+// Mesmas colunas do GED (OpuraDocsModule) e do Portal do Parceiro — as tres telas
+// usam a mesma <DocumentsTable>, entao as colunas tem que bater.
+const WS_DOC_COLUMNS: ColumnConfig[] = [
+  { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'autor', label: 'Autor', sortable: true },
+  { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
+  { key: 'project_id', label: 'Obra Vinculada', sortable: true },
+  { key: 'data_emissao', label: 'Emissão', sortable: true },
+  { key: 'data_validade', label: 'Validade', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 const CATEGORIA_LABELS: Record<string, string> = {
@@ -117,6 +132,12 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // Tela de listagem (KPI + tabela, ui_ux_guia_unificado.md) — filtros sobrevivem a navegação (§3)
   const [searchTerm, setSearchTerm] = usePersistedState('partnerWorkspaceList:search', '');
   const tableColumns = useTableColumns(PARTNER_COLUMNS, 'partnerWorkspaceListColumns');
+  const wsDocColumns = useTableColumns(WS_DOC_COLUMNS, 'partnerWsDocsColumns');
+  // <DocumentsTable> recebe OpuraDocument, não o vínculo — mesma derivação do portal.
+  const sharedDocuments = useMemo(
+    () => sharedDocs.map((sd) => sd.document).filter((d): d is OpuraDocument => !!d),
+    [sharedDocs]
+  );
   const [workspaceStats, setWorkspaceStats] = useState<Record<string, { users: number; documents: number; requestsOpen: number }>>({});
   const [orgNames, setOrgNames] = useState<Record<string, string>>({});
 
@@ -937,10 +958,22 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-gray-800">Documentos GED Compartilhados</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                      <ColumnConfigButton
+                        columns={WS_DOC_COLUMNS.filter((c) => c.key !== 'actions')}
+                        visibleColumns={wsDocColumns.visibleColumns}
+                        showColumnConfig={wsDocColumns.showColumnConfig}
+                        onToggleShow={() => wsDocColumns.setShowColumnConfig(!wsDocColumns.showColumnConfig)}
+                        onToggleColumn={wsDocColumns.toggleColumn}
+                        onReset={wsDocColumns.resetColumns}
+                      />
+                    </div>
                   <Button onClick={() => setIsShareDocModalOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/10">
                     <Share2 className="w-4 h-4" />
                     Compartilhar Arquivo
                   </Button>
+                  </div>
                 </div>
 
                 {sharedFolders.length > 0 && (
@@ -977,48 +1010,42 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {sharedDocs.map((sd) => (
-                    <div key={sd.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm hover:border-gray-300 transition-all relative group">
-                      {avulsoDocIds.has(sd.document_id) && (
-                        <Button variant="ghost" size="icon" onClick={() => handleUnshareDoc(sd.document_id)} title="Remover Compartilhamento" className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all">
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
+                {/* Mesma <DocumentsTable> do GED e do Portal do Parceiro — fonte única de
+                    layout. A grade de cards que existia aqui só aguentava os poucos
+                    vínculos avulsos; com a pasta inteira compartilhada vira uma parede
+                    de 65 cards, e ainda por cima num padrão que o GED não usa. */}
+                <DocumentsTable
+                  documents={sharedDocuments}
+                  tableColumns={wsDocColumns}
+                  resolveProjectName={() => '-'}
+                  renderActions={(doc) => (
+                    <>
+                      {doc.active_version?.storage_path && (
+                        <ActionIconButton
+                          kind="view"
+                          title="Abrir documento"
+                          onClick={() => handleViewSharedDocument(doc.active_version!.storage_path)}
+                        />
                       )}
-                      
-                      <div className="flex items-start justify-between">
-                        <div className="p-2 bg-orange-50 text-orange-500 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
-                        <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">{sd.document?.categoria}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-xs font-bold text-gray-900 truncate">{sd.document?.nome}</h4>
-                        <p className="text-xs text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
-                        <span>
-                          {avulsoDocIds.has(sd.document_id) ? 'Avulso' : 'Pela pasta'} · {new Date(sd.shared_at).toLocaleDateString()}
-                        </span>
-                        {sd.document?.active_version?.storage_path && (
-                          <button
-                            type="button"
-                            onClick={() => handleViewSharedDocument(sd.document!.active_version!.storage_path)}
-                            className="flex items-center gap-0.5 text-orange-500 hover:text-orange-600 font-semibold"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            <span>Ver</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {sharedDocs.length === 0 && (
-                    <div className="col-span-full text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
+                      {/* Só o vínculo avulso é revogável aqui; o que chega por pasta sai
+                          removendo a pasta (senão o botão apagaria linha nenhuma). */}
+                      {avulsoDocIds.has(doc.id) && (
+                        <ActionIconButton
+                          kind="delete"
+                          title="Remover Compartilhamento"
+                          onClick={() => handleUnshareDoc(doc.id)}
+                        />
+                      )}
+                    </>
+                  )}
+                  emptyState={
+                    <div className="text-sm text-slate-400 font-medium">
                       {sharedFolders.length > 0
                         ? 'As pastas acima ainda não têm nenhum arquivo dentro.'
                         : 'Nenhum documento compartilhado com este parceiro.'}
                     </div>
-                  )}
-                </div>
+                  }
+                />
               </div>
             )}
 

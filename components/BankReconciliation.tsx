@@ -3859,7 +3859,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden min-h-[400px]">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden min-h-[400px]">
                         {matches.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center p-12 text-center py-32">
                                 <div className="w-20 h-20 bg-emerald-50 text-emerald-200 rounded-3xl flex items-center justify-center mb-6">
@@ -3868,34 +3868,145 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 <h5 className="text-sm font-black text-gray-400 uppercase mb-2">Nenhuma conciliação</h5>
                                 <p className="text-xs text-gray-400 max-w-[200px]">Os vínculos efetuados aparecerão aqui.</p>
                             </div>
-                        ) : (
-                            <div className={`divide-y divide-gray-50 uppercase ${conciliatedViewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4 p-4 lg:p-6' : ''}`}>
-                                {/* Column Headers only for list mode */}
-                                {conciliatedViewMode === 'list' && (
-                                    <div className="grid grid-cols-[1fr_120px_140px_60px_1fr_120px_140px_80px] gap-4 px-8 py-4 bg-gray-50/50 border-b border-gray-50 text-xs font-black text-gray-400 uppercase tracking-widest items-center">
-                                        <div>Extrato: Descrição</div>
-                                        <div 
-                                            className="flex items-center justify-center gap-2 cursor-pointer hover:text-emerald-600 transition-colors bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm"
-                                            onClick={() => setMatchSortOrder(matchSortOrder === 'desc' ? 'asc' : 'desc')}
-                                        >
-                                            Data <ArrowUpDown className="w-3 h-3" />
-                                        </div>
-                                        <div className="text-right">Valor</div>
-                                        <div className="flex justify-center italic text-emerald-500/50 text-[8px]">Link</div>
-                                        <div>Interno: Descrição</div>
-                                        <div className="text-center">Data</div>
-                                        <div className="text-right">Valor</div>
-                                        <div className="text-center">Ações</div>
+                        ) : conciliatedViewMode === 'list' ? (
+                            <div className="overflow-auto max-h-[70vh]">
+                                <div className="grid grid-cols-[1fr_120px_140px_60px_1fr_120px_140px_80px] sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 items-center">
+                                    <div className="px-6 py-2 border-r border-gray-100">Extrato: descrição</div>
+                                    <div
+                                        className="flex items-center justify-center gap-1.5 px-6 py-2 border-r border-gray-100 cursor-pointer hover:text-blue-600 transition-colors"
+                                        onClick={() => setMatchSortOrder(matchSortOrder === 'desc' ? 'asc' : 'desc')}
+                                    >
+                                        Data <ArrowUpDown className="w-3 h-3" />
                                     </div>
-                                )}
+                                    <div className="px-6 py-2 border-r border-gray-100 text-right">Valor</div>
+                                    <div className="px-6 py-2 border-r border-gray-100 text-center">Vínculo</div>
+                                    <div className="px-6 py-2 border-r border-gray-100">Interno: descrição</div>
+                                    <div className="px-6 py-2 border-r border-gray-100 text-center">Data</div>
+                                    <div className="px-6 py-2 border-r border-gray-100 text-right">Valor</div>
+                                    <div className="px-6 py-2 text-center">Ações</div>
+                                </div>
+                                <div className="divide-y divide-gray-50">
+                                    {sortedMatches.map(m => {
+                                        const bTx = m.bank_transaction;
+                                        const iTx = m.internal_transaction;
+                                        if (!bTx || !iTx) return null;
 
+                                        return (
+                                            <div key={m.id} className="grid grid-cols-[1fr_120px_140px_60px_1fr_120px_140px_80px] hover:bg-gray-50 transition-all group items-stretch">
+                                                {/* Bank Description */}
+                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center gap-4 min-w-0">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bTx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                        <FileText className="w-5 h-5" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                                                        <p className="text-sm font-normal text-gray-700 break-words" title={bTx.description_normalized || bTx.description_raw}>
+                                                            {bTx.description_normalized || bTx.description_raw}
+                                                        </p>
+                                                        <LazySelect
+                                                            value={bTx.category || ''}
+                                                            currentLabel={bTx.category || ''}
+                                                            onChange={(v) => handleUpdateBankCategory(bTx.id, v)}
+                                                            options={categoryOptions}
+                                                            placeholder="Pendente"
+                                                            className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
+                                                                bTx.category
+                                                                    ? 'text-gray-900 bg-gray-50 border-gray-100'
+                                                                    : 'text-gray-400 bg-white border-dashed border-gray-200'
+                                                            }`}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Bank Date */}
+                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-center gap-2">
+                                                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                    <span className="text-sm font-normal text-gray-600 leading-none">
+                                                        {formatDateBR(bTx.transaction_date)}
+                                                    </span>
+                                                </div>
+
+                                                {/* Bank Amount */}
+                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-end">
+                                                    <p className={`text-sm font-medium ${bTx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                        {formatMoney(bTx.amount)}
+                                                    </p>
+                                                </div>
+
+                                                {/* Central Interaction */}
+                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-center">
+                                                    <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-sm">
+                                                        <Check className="w-4 h-4" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Internal Description */}
+                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center gap-4 min-w-0">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iTx.direction === 'DEBIT' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
+                                                        <Briefcase className="w-5 h-5" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1 flex flex-col gap-1">
+                                                        <p className="text-sm font-normal text-gray-700 break-words">
+                                                            {iTx.description}
+                                                        </p>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-normal text-gray-400 shrink-0">
+                                                                {iTx.source_system}
+                                                            </span>
+                                                            <LazySelect
+                                                                value={iTx.category || ''}
+                                                                currentLabel={iTx.category || ''}
+                                                                onChange={(v) => handleUpdateInternalCategory(iTx.id, v)}
+                                                                options={categoryOptions}
+                                                                placeholder="Pendente"
+                                                                className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
+                                                                    iTx.category
+                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100'
+                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200'
+                                                                }`}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Internal Date */}
+                                                <div className="px-6 py-2.5 border-r border-gray-100 flex items-center justify-center gap-2">
+                                                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                    <span className="text-sm font-normal text-gray-600 leading-none">
+                                                        {formatDateBR(iTx.transaction_date)}
+                                                    </span>
+                                                </div>
+
+                                                {/* Internal Amount */}
+                                                <div className="px-6 py-2.5 border-r border-gray-100 flex flex-col items-end justify-center">
+                                                    <p className="text-sm font-medium text-gray-800">
+                                                        {formatMoney(iTx.amount)}
+                                                    </p>
+                                                    <span className="text-xs font-normal text-emerald-600">Vinculado</span>
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div className="px-6 py-2.5 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        tone="attention"
+                                                        title="Desfazer vínculo"
+                                                        icon={<ArrowRightLeft className="w-4 h-4" />}
+                                                        onClick={() => handleUndoMatch(m.id, bTx.id, iTx.id)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 lg:p-6">
                                 {sortedMatches.map(m => {
                                     const bTx = m.bank_transaction;
                                     const iTx = m.internal_transaction;
                                     if (!bTx || !iTx) return null;
-                                    
-                                    if (conciliatedViewMode === 'grid') {
-                                        return (
+
+                                    return (
                                             <div key={m.id} className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm relative group overflow-hidden hover:shadow-md transition-all">
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div className="flex items-center gap-3">
@@ -3911,7 +4022,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 onChange={(v) => handleUpdateBankCategory(bTx.id, v)}
                                                                 options={categoryOptions}
                                                                 placeholder="Pendente"
-                                                                className={`text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
+                                                                className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
                                                                     bTx.category
                                                                         ? 'text-gray-900 bg-gray-50 border-gray-100'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200'
@@ -3948,7 +4059,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 onChange={(v) => handleUpdateInternalCategory(iTx.id, v)}
                                                                 options={categoryOptions}
                                                                 placeholder="Pendente"
-                                                                className={`text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
+                                                                className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
                                                                     iTx.category
                                                                         ? 'text-gray-900 bg-gray-50 border-gray-100'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200'
@@ -3974,113 +4085,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </div>
                                             </div>
                                         );
-                                    }
-
-                                    return (
-                                        <div key={m.id} className="relative grid grid-cols-[1fr_120px_140px_60px_1fr_120px_140px_80px] gap-4 p-6 hover:bg-gray-50 transition-all group items-center">
-                                            {/* Bank Description */}
-                                            <div className="flex items-center gap-4 min-w-0">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bTx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                    <FileText className="w-5 h-5" />
-                                                </div>
-                                                <div className="min-w-0 flex-1 flex flex-col gap-1">
-                                                    <p className="text-sm font-bold text-gray-900 uppercase break-words" title={bTx.description_normalized || bTx.description_raw}>
-                                                        {bTx.description_normalized || bTx.description_raw}
-                                                    </p>
-                                                    <LazySelect
-                                                        value={bTx.category || ''}
-                                                        currentLabel={bTx.category || ''}
-                                                        onChange={(v) => handleUpdateBankCategory(bTx.id, v)}
-                                                        options={categoryOptions}
-                                                        placeholder="Pendente"
-                                                        className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
-                                                            bTx.category
-                                                                ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                                : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                        }`}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Bank Date */}
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                <span className="text-xs font-black text-gray-400 uppercase leading-none">
-                                                    {formatDateBR(bTx.transaction_date)}
-                                                </span>
-                                            </div>
-
-                                            {/* Bank Amount */}
-                                            <div className="text-right">
-                                                <p className={`text-sm font-black ${bTx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                    {formatMoney(bTx.amount)}
-                                                </p>
-                                            </div>
-
-                                            {/* Central Interaction */}
-                                            <div className="flex justify-center">
-                                                <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-sm">
-                                                    <Check className="w-4 h-4" />
-                                                </div>
-                                            </div>
-
-                                            {/* Internal Description */}
-                                            <div className="flex items-center gap-4 min-w-0">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iTx.direction === 'DEBIT' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
-                                                    <Briefcase className="w-5 h-5" />
-                                                </div>
-                                                <div className="min-w-0 flex-1 flex flex-col gap-1">
-                                                    <p className="text-sm font-bold text-gray-900 uppercase break-words">
-                                                        {iTx.description}
-                                                    </p>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded shrink-0">
-                                                            {iTx.source_system}
-                                                        </span>
-                                                        <LazySelect
-                                                            value={iTx.category || ''}
-                                                            currentLabel={iTx.category || ''}
-                                                            onChange={(v) => handleUpdateInternalCategory(iTx.id, v)}
-                                                            options={categoryOptions}
-                                                            placeholder="Pendente"
-                                                            className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
-                                                                iTx.category
-                                                                    ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                                    : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                            }`}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Internal Date */}
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                <span className="text-xs font-black text-gray-400 uppercase leading-none">
-                                                    {formatDateBR(iTx.transaction_date)}
-                                                </span>
-                                            </div>
-
-                                            {/* Internal Amount */}
-                                            <div className="text-right">
-                                                <p className="text-sm font-black text-gray-900">
-                                                    {formatMoney(iTx.amount)}
-                                                </p>
-                                                <span className="text-[9px] font-black text-emerald-600 uppercase">Vinculado</span>
-                                            </div>
-
-                                            {/* Actions */}
-                                            <div className="flex justify-center">
-                                                <button 
-                                                    onClick={() => handleUndoMatch(m.id, bTx.id, iTx.id)}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                                    title="Desfazer Vínculo"
-                                                >
-                                                    <ArrowRightLeft className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
                                 })}
                             </div>
                         )}
@@ -4883,7 +4887,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="counterparty" label="Contraparte" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
                                                             <pendingBankResize.ResizeHandle colKey="counterparty" />
                                                         </SortableHeader>
@@ -4893,18 +4897,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="category" label="Categoria" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
                                                             <pendingBankResize.ResizeHandle colKey="category" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingBankResize.ResizeHandle colKey="project" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingBankResize.ResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}
@@ -4913,7 +4917,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="date" label="Data" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
                                                         >
                                                             <pendingBankResize.ResizeHandle colKey="date" />
                                                         </SortableHeader>
@@ -4923,7 +4927,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="amount" label="Valor" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 text-right overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
                                                         >
                                                             <pendingBankResize.ResizeHandle colKey="amount" />
                                                         </SortableHeader>
@@ -4931,7 +4935,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingBankColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap text-table-header font-semibold text-gray-500">
+                                                        <th className="px-6 py-2 text-right relative overflow-hidden whitespace-nowrap text-table-header font-semibold text-gray-500">
                                                             Ações
                                                             <pendingBankResize.ResizeHandle colKey="actions" />
                                                         </th>
@@ -4965,7 +4969,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     />
                                                                 </td>
                                                                 {pendingBankColumns.visibleColumns.includes('counterparty') && (
-                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.counterparty_name || ''}
                                                                         currentLabel={tx.counterparty_name || ''}
@@ -4977,7 +4981,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 </td>
                                                                 )}
                                                                 {pendingBankColumns.visibleColumns.includes('category') && (
-                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.category || ''}
                                                                         currentLabel={tx.category || ''}
@@ -4989,7 +4993,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 </td>
                                                                 )}
                                                                 {pendingBankColumns.visibleColumns.includes('project') && (
-                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.project_id || ''}
                                                                         currentLabel={projectName(tx.project_id) || ''}
@@ -5001,7 +5005,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 </td>
                                                                 )}
                                                                 {pendingBankColumns.visibleColumns.includes('costCenter') && (
-                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.cost_center_id || ''}
                                                                         currentLabel={costCenterName(tx.cost_center_id) || ''}
@@ -5013,19 +5017,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 </td>
                                                                 )}
                                                                 {pendingBankColumns.visibleColumns.includes('date') && (
-                                                                <td className={`px-4 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
+                                                                <td className={`px-6 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
                                                                     {formatDateBR(tx.transaction_date)}
                                                                 </td>
                                                                 )}
                                                                 {pendingBankColumns.visibleColumns.includes('amount') && (
-                                                                <td className={`px-4 ${cellPad} border-r border-gray-100 text-right text-sm font-medium whitespace-nowrap ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                <td className={`px-6 ${cellPad} border-r border-gray-100 text-right text-sm font-medium whitespace-nowrap ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
                                                                     {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                                 </td>
                                                                 )}
                                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                                 {pendingBankColumns.visibleColumns.includes('actions') && (
-                                                                <td className={`px-4 ${cellPad} text-right whitespace-nowrap`} onClick={(e) => e.stopPropagation()}>
+                                                                <td className={`px-6 ${cellPad} text-right whitespace-nowrap`} onClick={(e) => e.stopPropagation()}>
                                                                     <div className="flex items-center justify-end gap-1.5">
                                                                         {tx.status === 'RULE_APPLIED' ? (
                                                                             <>
@@ -5056,7 +5060,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             </tr>
                                                             {suggestion && cand && (
                                                                 <tr className="bg-gradient-to-r from-purple-50 to-indigo-50">
-                                                                    <td colSpan={visibleColCount} className="px-4 py-2">
+                                                                    <td colSpan={visibleColCount} className="px-6 py-2">
                                                                         <div className="flex items-center justify-between gap-3">
                                                                             <div className="flex items-center gap-3 min-w-0">
                                                                                 <Zap className="w-3.5 h-3.5 text-purple-600 shrink-0" />
@@ -5416,7 +5420,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="description" label="Descrição" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'description' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('description'), setInternalSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
                                                             <pendingInternalResize.ResizeHandle colKey="description" />
                                                         </SortableHeader>
@@ -5426,7 +5430,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="party" label="Cliente" uppercase={false}
                                                             sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
                                                             <pendingInternalResize.ResizeHandle colKey="client" />
                                                         </SortableHeader>
@@ -5436,7 +5440,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="party" label="Credor" uppercase={false}
                                                             sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
                                                             <pendingInternalResize.ResizeHandle colKey="creditor" />
                                                         </SortableHeader>
@@ -5446,18 +5450,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="category" label="Categoria" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'category' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('category'), setInternalSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                                         >
                                                             <pendingInternalResize.ResizeHandle colKey="category" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingInternalResize.ResizeHandle colKey="project" />
                                                         </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
                                                             <pendingInternalResize.ResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}
@@ -5466,7 +5470,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="date" label="Data" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'date' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('date'), setInternalSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
                                                         >
                                                             <pendingInternalResize.ResizeHandle colKey="date" />
                                                         </SortableHeader>
@@ -5476,7 +5480,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             colKey="amount" label="Valor" uppercase={false}
                                                             sortColumn={internalSortField} sortDirection={internalSortOrder}
                                                             onSort={() => internalSortField === 'amount' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('amount'), setInternalSortOrder('asc'))}
-                                                            className="px-4 py-2 border-r border-gray-100 text-right overflow-hidden"
+                                                            className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
                                                         >
                                                             <pendingInternalResize.ResizeHandle colKey="amount" />
                                                         </SortableHeader>
@@ -5484,7 +5488,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingInternalColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-4 py-2 text-right relative overflow-hidden whitespace-nowrap text-table-header font-semibold text-gray-500">
+                                                        <th className="px-6 py-2 text-right relative overflow-hidden whitespace-nowrap text-table-header font-semibold text-gray-500">
                                                             Ações
                                                             <pendingInternalResize.ResizeHandle colKey="actions" />
                                                         </th>
@@ -5513,7 +5517,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 />
                                                             </td>
                                                             {pendingInternalColumns.visibleColumns.includes('description') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100`}>
                                                                 <div className="flex items-center gap-2 min-w-0">
                                                                     <p className="text-sm font-normal text-gray-900 truncate" title={displayTitle(tx)}>
                                                                         {displayTitle(tx)}
@@ -5541,21 +5545,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('client') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
                                                                 {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT'
                                                                     ? (displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
                                                                     : <span className="text-gray-300">—</span>}
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('creditor') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
                                                                 {!(tx.party_type === 'CLIENT' || tx.direction === 'CREDIT')
                                                                     ? (displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
                                                                     : <span className="text-gray-300">—</span>}
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('category') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100`}>
                                                                 <LazySelect
                                                                     value={tx.category || ''}
                                                                     currentLabel={tx.category || ''}
@@ -5567,29 +5571,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('project') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-sky-700 truncate max-w-[110px]`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-sky-700 truncate max-w-[110px]`}>
                                                                 {projectName(tx.project_id) || <span className="text-gray-300">—</span>}
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('costCenter') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-violet-700 truncate max-w-[130px]`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-violet-700 truncate max-w-[130px]`}>
                                                                 {costCenterName(tx.cost_center_id) || <span className="text-gray-300">—</span>}
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('date') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
                                                                 {formatDateBR(displayDate(tx))}
                                                             </td>
                                                             )}
                                                             {pendingInternalColumns.visibleColumns.includes('amount') && (
-                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-right text-sm font-medium text-gray-900 whitespace-nowrap`}>
+                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-right text-sm font-medium text-gray-900 whitespace-nowrap`}>
                                                                 {formatMoney(tx.amount)}
                                                             </td>
                                                             )}
                                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {pendingInternalColumns.visibleColumns.includes('actions') && (
-                                                            <td className={`px-4 ${cellPad} text-right whitespace-nowrap`}>
+                                                            <td className={`px-6 ${cellPad} text-right whitespace-nowrap`}>
                                                                 <div className="flex items-center justify-end gap-1">
                                                                     {tx.source_system === 'MANUAL' && (
                                                                         <>

@@ -59,6 +59,18 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
     const versao = useMemo(() => versoes.find(v => v.id === versaoId) ?? null, [versoes, versaoId]);
     const somenteLeitura = !podeEditar || versao?.status !== 'RASCUNHO';
 
+    /**
+     * Botão cinza sem explicação é o mesmo que botão quebrado. Todo controle
+     * desabilitado desta tela diz por que está assim e o que fazer.
+     */
+    const motivoTravado = !podeEditar
+        ? 'Você não tem permissão para editar este conteúdo'
+        : versao?.status === 'PUBLICADA'
+            ? 'Versão vigente é travada — crie uma nova versão para editar'
+            : versao?.status === 'ARQUIVADA'
+                ? 'Versão arquivada, mantida apenas como evidência'
+                : undefined;
+
     const carregarVersoes = useCallback(async (preferir?: string) => {
         const lista = await academyService.listVersions(course.id);
         setVersoes(lista);
@@ -337,13 +349,32 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
             {somenteLeitura && (
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-[10px] flex items-start gap-3">
                     <Info className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
-                    <p className="text-xs font-medium text-gray-600">
-                        {versao.status === 'PUBLICADA'
-                            ? 'Esta é a versão vigente e não pode ser editada. Crie uma nova versão para alterar o conteúdo — a evidência de quem já concluiu fica preservada.'
-                            : versao.status === 'ARQUIVADA'
-                                ? 'Versão arquivada, mantida apenas como evidência.'
-                                : 'Você não tem permissão para editar este conteúdo.'}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-gray-600">
+                            {versao.status === 'PUBLICADA'
+                                ? 'Esta é a versão vigente, então o conteúdo está travado — é o que garante que a evidência de quem já concluiu continue valendo. Para alterar qualquer coisa, inclusive um módulo, crie uma nova versão.'
+                                : versao.status === 'ARQUIVADA'
+                                    ? 'Versão arquivada, mantida apenas como evidência. Selecione a versão vigente acima para trabalhar no conteúdo atual.'
+                                    : 'Você não tem permissão para editar este conteúdo.'}
+                        </p>
+
+                        {versao.status === 'PUBLICADA' && podeEditar && (
+                            <>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Correção sem impacto (um erro de digitação, por exemplo) não precisa
+                                    obrigar ninguém a refazer o treinamento: na nova versão, desmarque
+                                    <span className="font-medium"> “Publicar esta versão obriga reciclagem”</span> em
+                                    Regras de conclusão antes de publicar.
+                                </p>
+                                <button
+                                    onClick={abrirRascunho}
+                                    className="mt-3 flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" /> Criar nova versão para editar
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -370,7 +401,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                         <button
                             onClick={() => setModuloSheet({ module: null })}
                             disabled={somenteLeitura}
-                            title={somenteLeitura ? 'Versão não editável' : undefined}
+                            title={motivoTravado ?? 'Criar um módulo nesta versão'}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
                         >
                             <Plus className="w-[15px] h-[15px]" /> Novo módulo
@@ -392,7 +423,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                             <button
                                 onClick={() => setModuloSheet({ module: null })}
                                 disabled={somenteLeitura}
-                                title={somenteLeitura ? 'Versão não editável' : undefined}
+                                title={motivoTravado}
                                 className="mt-6 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
                             >
                                 <Plus className="w-[15px] h-[15px]" /> Criar primeiro módulo
@@ -417,17 +448,20 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                                         <button
                                             onClick={() => setAulaSheet({ lesson: null, moduleId: m.id })}
                                             disabled={somenteLeitura}
+                                            title={motivoTravado ?? 'Adicionar aula neste módulo'}
                                             className="flex items-center gap-1.5 h-8 px-2.5 rounded-[6px] text-sm font-medium text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-40"
                                         >
                                             <Plus className="w-3.5 h-3.5" /> Aula
                                         </button>
                                         <ActionIconButton
                                             kind="edit"
+                                            title={motivoTravado ?? 'Editar módulo'}
                                             onClick={() => setModuloSheet({ module: m })}
                                             disabled={somenteLeitura}
                                         />
                                         <ActionIconButton
                                             kind="delete"
+                                            title={motivoTravado ?? 'Excluir módulo'}
                                             onClick={() => excluirModulo(m)}
                                             disabled={somenteLeitura}
                                         />
@@ -454,11 +488,13 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                                                 <div className="flex items-center gap-1.5 shrink-0">
                                                     <ActionIconButton
                                                         kind="edit"
+                                                        title={motivoTravado ?? 'Editar aula'}
                                                         onClick={() => setAulaSheet({ lesson: a })}
                                                         disabled={somenteLeitura}
                                                     />
                                                     <ActionIconButton
                                                         kind="delete"
+                                                        title={motivoTravado ?? 'Excluir aula'}
                                                         onClick={() => excluirAula(a)}
                                                         disabled={somenteLeitura}
                                                     />

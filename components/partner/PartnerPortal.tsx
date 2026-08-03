@@ -567,13 +567,18 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         }
 
         if (activeTab === 'dashboard') {
-          // Carrega resumos rápidos
-          const docs = await partnerService.listSharedDocuments(workspace.id);
-          setSharedDocs(docs);
+          // Mesma fonte da aba Documentos (e do modo token, que usa o `.data` da
+          // RPC): listSharedDocuments traz SÓ os vínculos avulsos, então o resumo
+          // do dashboard ficava menor que a lista real sempre que o parceiro
+          // recebia documentos por PASTA.
+          const treeData = await partnerService.listSharedDocumentTree(workspace.id);
+          setSharedDocs(treeData.documents);
+          setSharedFolders(treeData.folders);
+          setSharedDisciplines(treeData.disciplines);
+          setSharedFolderIds(treeData.sharedFolderIds);
           const reqs = await partnerService.listRequests(workspace.id);
           setRequests(reqs);
-          const { data: cts } = await supabase.from('contracts').select('*').eq('supplier_id', workspace.supplier_id);
-          setContracts(cts || []);
+          setContracts(await partnerService.listContracts(workspace.id));
         } else if (activeTab === 'conversas') {
           const convs = await partnerService.listConversations(workspace.id);
           setConversations(convs);
@@ -587,12 +592,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           setSharedDisciplines(treeData.disciplines);
           setSharedFolderIds(treeData.sharedFolderIds);
         } else if (activeTab === 'contratos') {
-          const { data: cts } = await supabase.from('contracts').select('*').eq('supplier_id', workspace.supplier_id);
-          setContracts(cts || []);
+          setContracts(await partnerService.listContracts(workspace.id));
         } else if (activeTab === 'financeiro') {
           setFinancialsLoading(true);
           try {
-            const res = await partnerService.listFinancials(workspace.supplier_id);
+            const res = await partnerService.listFinancials(workspace.id);
             setFinancials(res);
           } finally {
             setFinancialsLoading(false);
@@ -614,11 +618,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // diretamente, então nesse modo a atualização é por polling em vez de subscription.)
   useEffect(() => {
     if (!selectedConversation) return;
+    // No modo autenticado a RPC exige o workspace para confirmar que a conversa
+    // é dele — sem workspace carregado não há o que buscar.
+    if (!isTokenMode && !workspace) return;
 
     const loadMessages = async () => {
       const msgs = isTokenMode
         ? await partnerPortalTokenService.getMessages(portalToken!, selectedConversation.id)
-        : await partnerService.listMessages(selectedConversation.id);
+        : await partnerService.listMessages(workspace!.id, selectedConversation.id);
       setMessages(msgs);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
@@ -651,7 +658,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConversation, isTokenMode, portalToken]);
+    // `workspace` entra nas deps: no modo autenticado o carregamento agora depende
+    // dele, e sem isso o efeito não roda de novo quando o workspace chega.
+  }, [selectedConversation, isTokenMode, portalToken, workspace]);
 
   // Ações do Chat
   const handleSendMessage = async (e: React.FormEvent) => {

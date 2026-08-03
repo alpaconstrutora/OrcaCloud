@@ -253,11 +253,9 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         setConversations(convs);
         setSelectedConversation(convs.length > 0 ? convs[0] : null);
 
-        const { data: fullContracts } = await supabase
-          .from('contracts')
-          .select('*')
-          .eq('supplier_id', selectedWorkspace.supplier_id);
-        setWorkspaceContracts((fullContracts || []) as Contract[]);
+        // Mesma consulta que o parceiro enxerga (no app e pelo link) — se o lado
+        // interno listar por outro caminho, os dois voltam a divergir.
+        setWorkspaceContracts(await partnerService.listContracts(selectedWorkspace.id) as Contract[]);
       } catch (err) {
         console.error('Erro ao carregar detalhes do workspace:', err);
       }
@@ -268,10 +266,10 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
   // 3. Mensagens do canal selecionado + Realtime
   useEffect(() => {
-    if (!selectedConversation) return;
+    if (!selectedConversation || !selectedWorkspace) return;
 
     const loadMessages = async () => {
-      const msgs = await partnerService.listMessages(selectedConversation.id);
+      const msgs = await partnerService.listMessages(selectedWorkspace.id, selectedConversation.id);
       setMessages(msgs);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
@@ -298,7 +296,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConversation]);
+  }, [selectedConversation, selectedWorkspace]);
 
   // Responder no canal do parceiro (lado interno)
   const handleSendMessage = async (e: React.FormEvent) => {

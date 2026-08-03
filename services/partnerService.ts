@@ -191,28 +191,19 @@ export const partnerService = {
   // sem isso a aba Conversas ficava permanentemente vazia (nunca existiu ação
   // na UI, admin ou parceiro, para criar o primeiro canal).
   async listConversations(workspaceId: string): Promise<PartnerConversation[]> {
-    const { data, error } = await supabase
-      .from('partner_conversations')
-      .select('*')
-      .eq('partner_workspace_id', workspaceId)
-      .order('name');
+    // Mesma implementação do link público (partner_ws_conversations, migration
+    // 20270863000000), inclusive a criação do canal "Geral" na primeira leitura —
+    // que já existia nos dois modos, só que escrita duas vezes.
+    const { data, error } = await supabase.rpc('partner_get_conversations', {
+      p_workspace_id: workspaceId,
+    });
 
     if (error) {
       console.error('[PARTNER SERVICE] Error listing conversations:', error);
       throw error;
     }
 
-    if (data && data.length > 0) {
-      return data as PartnerConversation[];
-    }
-
-    try {
-      const general = await this.saveConversation({ partner_workspace_id: workspaceId, name: 'Geral' });
-      return [general];
-    } catch (err) {
-      console.error('[PARTNER SERVICE] Error auto-creating default conversation:', err);
-      return [];
-    }
+    return ((data as any)?.data || []) as PartnerConversation[];
   },
 
   async saveConversation(conversation: Partial<PartnerConversation>): Promise<PartnerConversation> {
@@ -244,19 +235,20 @@ export const partnerService = {
     }
   },
 
-  async listMessages(conversationId: string): Promise<PartnerMessage[]> {
-    const { data, error } = await supabase
-      .from('partner_messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
+  // workspaceId é obrigatório: a RPC confirma que a conversa pertence a ele antes
+  // de devolver as mensagens (mesma checagem do modo token).
+  async listMessages(workspaceId: string, conversationId: string): Promise<PartnerMessage[]> {
+    const { data, error } = await supabase.rpc('partner_get_messages', {
+      p_workspace_id: workspaceId,
+      p_conversation_id: conversationId,
+    });
 
     if (error) {
       console.error('[PARTNER SERVICE] Error listing messages:', error);
       throw error;
     }
 
-    return (data || []) as PartnerMessage[];
+    return ((data as any)?.data || []) as PartnerMessage[];
   },
 
   async sendMessage(message: Partial<PartnerMessage>): Promise<PartnerMessage> {
@@ -276,18 +268,32 @@ export const partnerService = {
 
   // --- Requests ---
   async listRequests(workspaceId: string): Promise<PartnerRequest[]> {
-    const { data, error } = await supabase
-      .from('partner_requests')
-      .select('*')
-      .eq('partner_workspace_id', workspaceId)
-      .order('created_at', { ascending: false });
+    const { data, error } = await supabase.rpc('partner_get_requests', {
+      p_workspace_id: workspaceId,
+    });
 
     if (error) {
       console.error('[PARTNER SERVICE] Error listing requests:', error);
       throw error;
     }
 
-    return (data || []) as PartnerRequest[];
+    return ((data as any)?.data || []) as PartnerRequest[];
+  },
+
+  // Contratos do fornecedor do workspace — mesma consulta do link público
+  // (partner_ws_contracts). O portal lia `contracts` direto, sob RLS, e o
+  // resultado divergia do que o parceiro via pelo link.
+  async listContracts(workspaceId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('partner_get_contracts', {
+      p_workspace_id: workspaceId,
+    });
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error listing contracts:', error);
+      throw error;
+    }
+
+    return ((data as any)?.data || []) as any[];
   },
 
   async saveRequest(request: Partial<PartnerRequest>): Promise<PartnerRequest> {
@@ -661,71 +667,36 @@ export const partnerService = {
     return documentService.generateDownloadUrl(storagePath);
   },
 
-  // --- Financeiro (modo autenticado — login de partner_users) ---
-  // Espelha partner_portal_get_financials (RPC do modo token): parcelas/contas a pagar,
-  // medições (com NF) e retenção, restritas por supplier_id via as policies
-  // *_select_partner (internal_transactions/contract_retention_releases).
-  async listFinancials(supplierId: string, contractId?: string): Promise<{
+  // --- Financeiro (modo app) ---
+  // Mesma implementação do link público: as duas cascas chamam partner_ws_financials
+  // (migration 20270863000000). Antes isto era uma segunda consulta, montada à mão
+  // sobre as tabelas — e duas implementações do mesmo dado divergem.
+  async listFinancials(workspaceId: string, contractId?: string): Promise<{
     contracts: { id: string; number: string; title: string | null; current_value: number; retention_rate: number | null; status: string }[];
     installments: { id: string; transaction_date: string; amount: number; direction: string; description: string | null; status: string; business_status: string | null; installment_type: string | null; source_system: string }[];
     measurements: { id: string; contract_id: string; number: number; period_start: string | null; period_end: string | null; status: string; total_value: number; retention_value: number; net_value: number; invoice_url: string | null }[];
     retention: { retained: number; released: number; balance: number };
   }> {
-    let contractQuery = supabase
-      .from('contracts')
-      .select('id, number, title, current_value, retention_rate, status')
-      .eq('supplier_id', supplierId)
-      .or('domain.eq.SUPRIMENTOS,domain.is.null');
-    if (contractId) contractQuery = contractQuery.eq('id', contractId);
-    const { data: contracts, error: cErr } = await contractQuery;
-    if (cErr) throw cErr;
+    const vazio = { contracts: [], installments: [], measurements: [], retention: { retained: 0, released: 0, balance: 0 } };
 
-    const contractIds = (contracts || []).map((c: any) => c.id);
-    if (contractIds.length === 0) {
-      return { contracts: [], installments: [], measurements: [], retention: { retained: 0, released: 0, balance: 0 } };
+    const { data, error } = await supabase.rpc('partner_get_financials', {
+      p_workspace_id: workspaceId,
+      p_contract_id: contractId ?? null,
+    });
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error listing financials:', error);
+      throw error;
     }
 
-    const { data: measurements, error: mErr } = await supabase
-      .from('contract_measurements')
-      .select('id, contract_id, number, period_start, period_end, status, total_value, retention_value, net_value, invoice_url')
-      .in('contract_id', contractIds)
-      .order('number', { ascending: false });
-    if (mErr) throw mErr;
-    const measurementIds = (measurements || []).map((m: any) => m.id);
-
-    const installmentCols = 'id, transaction_date, amount, direction, description, status, business_status, installment_type, source_system, reference_id';
-    const [{ data: byContract, error: e1 }, byMeasurement] = await Promise.all([
-      supabase
-        .from('internal_transactions')
-        .select(installmentCols)
-        .in('source_system', ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING'])
-        .or(contractIds.map((id: string) => `reference_id.like.${id}%`).join(',')),
-      measurementIds.length > 0
-        ? supabase
-            .from('internal_transactions')
-            .select(installmentCols)
-            .eq('source_system', 'CONTRACT_MEASUREMENT')
-            .in('reference_id', measurementIds)
-        : Promise.resolve({ data: [], error: null } as any),
-    ]);
-    if (e1) throw e1;
-    if (byMeasurement.error) throw byMeasurement.error;
-
-    const { data: releases, error: rErr } = await supabase
-      .from('contract_retention_releases')
-      .select('amount')
-      .in('contract_id', contractIds);
-    if (rErr) throw rErr;
-
-    const retained = (measurements || []).reduce((sum: number, m: any) => sum + (Number(m.retention_value) || 0), 0);
-    const released = (releases || []).reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0);
+    const payload = data as any;
+    if (!payload?.valid) return vazio as any;
 
     return {
-      contracts: (contracts || []) as any,
-      installments: [...(byContract || []), ...(byMeasurement.data || [])]
-        .sort((a: any, b: any) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()),
-      measurements: (measurements || []) as any,
-      retention: { retained, released, balance: retained - released },
+      contracts: payload.contracts || [],
+      installments: payload.installments || [],
+      measurements: payload.measurements || [],
+      retention: payload.retention || vazio.retention,
     };
   },
 

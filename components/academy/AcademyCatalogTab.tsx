@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Layers, Plus, Search, Shield } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
+import { useOrganizationPicker } from '../ui/useOrganizationPicker';
+import { useStore } from '../../store/useStore';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
@@ -45,9 +47,22 @@ const AcademyCatalogTab: React.FC<Props> = ({
     orgId, courses, carregando, podeEditar, onCoursesChange, onMontarConteudo, notify,
 }) => {
     const confirm = useConfirm();
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrgId = orgId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const [sheetOrgId, setSheetOrgId] = useState<string | null | undefined>(orgId);
     const [search, setSearch] = usePersistedState('academyCatalog:search', '');
     const colunas = useTableColumns(COLUMNS, 'academyCatalogColumns');
     const [sheet, setSheet] = useState<{ course: TrainingCourse | null } | null>(null);
+
+    const handleNewCourse = async () => {
+        const orgIdResolved = effectiveOrgId ?? (await pickOrganization()) ?? undefined;
+        if (!orgIdResolved) return;
+        setSheetOrgId(orgIdResolved);
+        setSheet({ course: null });
+    };
     const [cargos, setCargos] = useState<Array<{ id: string; nome: string }>>([]);
     // course_id → "v3 vigente" | "rascunho" | undefined
     const [versoes, setVersoes] = useState<Record<string, string>>({});
@@ -171,10 +186,9 @@ const AcademyCatalogTab: React.FC<Props> = ({
                         />
                     </div>
                     <button
-                        onClick={() => setSheet({ course: null })}
-                        disabled={!podeEditar || !orgId}
-                        title={!podeEditar ? 'Você não tem permissão para editar o catálogo'
-                             : !orgId ? 'Selecione uma organização para criar um treinamento' : undefined}
+                        onClick={handleNewCourse}
+                        disabled={!podeEditar}
+                        title={!podeEditar ? 'Você não tem permissão para editar o catálogo' : undefined}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-50"
                     >
                         <Plus className="w-[15px] h-[15px]" /> Novo treinamento
@@ -287,7 +301,7 @@ const AcademyCatalogTab: React.FC<Props> = ({
                                                     </button>
                                                     <ActionIconButton
                                                         kind="edit"
-                                                        onClick={() => setSheet({ course: c })}
+                                                        onClick={() => { setSheetOrgId(c.org_id); setSheet({ course: c }); }}
                                                         disabled={!podeEditar}
                                                     />
                                                     <ActionIconButton
@@ -307,11 +321,11 @@ const AcademyCatalogTab: React.FC<Props> = ({
                 </div>
             )}
 
-            {sheet && orgId && (
+            {sheet && sheetOrgId && (
                 <AcademyCourseSheet
                     open
                     onClose={() => setSheet(null)}
-                    orgId={orgId}
+                    orgId={sheetOrgId}
                     course={sheet.course}
                     cargos={cargos}
                     onSaved={(salvo, criado) => {
@@ -323,6 +337,8 @@ const AcademyCatalogTab: React.FC<Props> = ({
                     notify={notify}
                 />
             )}
+
+            {orgPickerModal}
         </div>
     );
 };

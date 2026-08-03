@@ -11,6 +11,7 @@ import {
 import { Building2, Plus, Check, X, Search, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -27,14 +28,20 @@ const colorTextClass = (colorKey: string) => colorClasses(colorKey).match(/text-
 
 const EmpreendimentoTypesSettings: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const organizations = useStore(state => state.organizations);
     const orgId = activeOrganizationId ?? undefined;
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
 
     const [types, setTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
     const [loading, setLoading] = React.useState(false);
 
     const [isAdding, setIsAdding] = React.useState(false);
+    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editName, setEditName] = React.useState('');
     const [editCategory, setEditCategory] = React.useState<EmpreendimentoMotorCategory>('vertical');
@@ -61,9 +68,9 @@ const EmpreendimentoTypesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editName.trim()) return;
-        if (!orgId) { showToast('Selecione uma organização para criar um tipo de empreendimento.', 'error'); return; }
+        if (!createOrgId) { showToast('Selecione uma organização para criar um tipo de empreendimento.', 'error'); return; }
         try {
-            await empreendimentoTypeService.create({ name: editName.trim(), motor_category: editCategory, color: editColor, description: null, organization_id: orgId });
+            await empreendimentoTypeService.create({ name: editName.trim(), motor_category: editCategory, color: editColor, description: null, organization_id: createOrgId });
             showToast('Tipo de empreendimento criado com sucesso', 'success');
             cancelEdit();
             loadTypes();
@@ -96,9 +103,10 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (type: EmpreendimentoTypeRecord) => {
-        if (!orgId) { showToast('Selecione uma organização para duplicar um tipo de empreendimento.', 'error'); return; }
+        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!targetOrgId) return;
         try {
-            await empreendimentoTypeService.duplicate(type, orgId);
+            await empreendimentoTypeService.duplicate(type, targetOrgId);
             showToast('Tipo de empreendimento duplicado com sucesso', 'success');
             loadTypes();
         } catch (error: any) {
@@ -114,7 +122,10 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         setIsAdding(false);
     };
 
-    const startAdd = () => {
+    const startAdd = async () => {
+        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!targetOrgId) return;
+        setCreateOrgId(targetOrgId);
         setIsAdding(true);
         setEditingId(null);
         setEditName('');
@@ -124,6 +135,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
 
     const cancelEdit = () => {
         setIsAdding(false);
+        setCreateOrgId(undefined);
         setEditingId(null);
         setEditName('');
         setEditCategory('vertical');
@@ -165,9 +177,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                 {!isAdding && !editingId && (
                     <button
                         onClick={startAdd}
-                        disabled={!orgId}
-                        title={!orgId ? 'Selecione uma organização específica para criar um tipo de empreendimento.' : undefined}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                     >
                         <Plus className="w-[15px] h-[15px]" />
                         Novo tipo
@@ -341,6 +351,8 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                     {localToast.message}
                 </div>
             )}
+
+            {orgPickerModal}
         </div>
     );
 };

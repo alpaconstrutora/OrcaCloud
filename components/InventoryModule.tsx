@@ -29,6 +29,7 @@ import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import type {
@@ -67,14 +68,13 @@ type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transfere
 
 // ─── Modal de movimento manual ────────────────────────────────────────────────
 interface MovementModalProps {
-    orgId: string;
     warehouses: WarehouseType[];
     defaultType: 'in' | 'out' | 'adjust';
     onClose: () => void;
     onCreated: () => void;
 }
 
-const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaultType, onClose, onCreated }) => {
+const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, onClose, onCreated }) => {
     const [form, setForm] = React.useState<CreateStockMovementInput>({
         warehouseId: warehouses[0]?.id ?? '',
         inputDescription: '',
@@ -89,14 +89,18 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
     const [saving, setSaving] = React.useState(false);
     const [err, setErr] = React.useState('');
 
+    // Em "Todas as organizações" a lista de almoxarifados cruza várias orgs —
+    // a organização do movimento vem do almoxarifado escolhido, não de um seletor à parte.
     const save = async () => {
         if (!form.warehouseId || !form.inputDescription || form.quantity <= 0) {
             setErr('Preencha almoxarifado, insumo e quantidade.');
             return;
         }
+        const warehouse = warehouses.find(w => w.id === form.warehouseId);
+        if (!warehouse) { setErr('Almoxarifado inválido.'); return; }
         setSaving(true);
         try {
-            await inventoryService.createMovement(orgId, form);
+            await inventoryService.createMovement(warehouse.organizationId, form);
             onCreated();
         } catch (e: unknown) {
             setErr((e as Error).message);
@@ -350,7 +354,27 @@ const COLUMNS_MOVIMENTOS: ColumnConfig[] = [
 
 // ─── Módulo principal ──────────────────────────────────────────────────────────
 export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
-    const { projects } = useStore();
+    const { projects, organizations } = useStore();
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const [createWarehouseOrgId, setCreateWarehouseOrgId] = React.useState<string | undefined>(undefined);
+    const [createRequestOrgId, setCreateRequestOrgId] = React.useState<string | undefined>(undefined);
+
+    const handleNewWarehouse = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateWarehouseOrgId(orgId);
+        setWarehouseModal(true);
+    };
+
+    const handleNewRequest = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateRequestOrgId(orgId);
+        setShowRequestModal(true);
+    };
 
     const [tab, setTab] = React.useState<Tab>('saldos');
     const [loading, setLoading] = React.useState(false);
@@ -444,17 +468,13 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 <div className="flex gap-2">
                     <button
                         onClick={() => setMovementModal('in')}
-                        disabled={!activeOrganizationId}
-                        title={!activeOrganizationId ? 'Selecione uma organização específica para registrar movimentações' : undefined}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
                     >
                         <ArrowDownCircle className="w-4 h-4" /> Entrada
                     </button>
                     <Button
                         variant="danger"
                         onClick={() => setMovementModal('out')}
-                        disabled={!activeOrganizationId}
-                        title={!activeOrganizationId ? 'Selecione uma organização específica para registrar movimentações' : undefined}
                     >
                         <ArrowUpCircle className="w-4 h-4" /> Saída
                     </Button>
@@ -783,8 +803,6 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                 <Button
                                     variant="secondary"
                                     onClick={() => setMovementModal('adjust')}
-                                    disabled={!activeOrganizationId}
-                                    title={!activeOrganizationId ? 'Selecione uma organização específica para registrar ajuste' : undefined}
                                     className="!py-1.5 !px-3 text-sm text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100 transition-colors"
                                 >
                                     <Plus className="w-3.5 h-3.5 mr-1" /> Ajuste
@@ -865,8 +883,6 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             <div className="flex justify-end">
                                 <Button
                                     onClick={() => setTransferModal(true)}
-                                    disabled={!activeOrganizationId}
-                                    title={!activeOrganizationId ? 'Selecione uma organização específica para criar transferência' : undefined}
                                 >
                                     <Plus className="w-4 h-4 mr-2" /> Nova Transferência
                                 </Button>
@@ -952,11 +968,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     {tab === 'almoxarifados' && (
                         <div className="space-y-4">
                             <div className="flex justify-end">
-                                <Button
-                                    onClick={() => setWarehouseModal(true)}
-                                    disabled={!activeOrganizationId}
-                                    title={!activeOrganizationId ? 'Selecione uma organização específica para criar almoxarifado' : undefined}
-                                >
+                                <Button onClick={handleNewWarehouse}>
                                     <Plus className="w-4 h-4 mr-2" /> Novo Almoxarifado
                                 </Button>
                             </div>
@@ -1059,15 +1071,16 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     )}
 
                     {/* ── TAB: REQUISIÇÕES ── */}
-                    {tab === 'requisicoes' && activeOrganizationId && (
+                    {tab === 'requisicoes' && (
                         <RequisitionsTab
-                            orgId={activeOrganizationId}
+                            createOrgId={createRequestOrgId}
+                            onNewRequest={handleNewRequest}
                             warehouses={warehouses.filter(w => w.isActive)}
                             requests={requests}
                             reqFilter={reqFilter}
                             setReqFilter={setReqFilter}
                             showRequestModal={showRequestModal}
-                            setShowRequestModal={setShowRequestModal}
+                            setShowRequestModal={(v) => { setShowRequestModal(v); if (!v) setCreateRequestOrgId(undefined); }}
                             approvingRequest={approvingRequest}
                             setApprovingRequest={setApprovingRequest}
                             reload={() => inventoryService.listMaterialRequests(activeOrganizationId).then(setRequests)}
@@ -1081,27 +1094,27 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 </>
             )}
 
-            {movementModal && activeOrganizationId && (
+            {movementModal && (
                 <MovementModal
-                    orgId={activeOrganizationId}
                     warehouses={warehouses.filter(w => w.isActive)}
                     defaultType={movementModal}
                     onClose={() => setMovementModal(null)}
                     onCreated={() => { setMovementModal(null); load(); }}
                 />
             )}
-            {warehouseModal && activeOrganizationId && (
+            {warehouseModal && (warehouseModal !== true ? warehouseModal.organizationId : createWarehouseOrgId) && (
                 <WarehouseModal
-                    orgId={activeOrganizationId}
+                    orgId={warehouseModal !== true ? warehouseModal.organizationId : createWarehouseOrgId!}
                     projects={projects.filter(p => p.id).map(p => ({ id: p.id as string, name: p.name }))}
                     existing={warehouseModal !== true ? warehouseModal : undefined}
-                    onClose={() => setWarehouseModal(null)}
-                    onSaved={() => { setWarehouseModal(null); load(); }}
+                    onClose={() => { setWarehouseModal(null); setCreateWarehouseOrgId(undefined); }}
+                    onSaved={() => { setWarehouseModal(null); setCreateWarehouseOrgId(undefined); load(); }}
                 />
             )}
-            {transferModal && activeOrganizationId && (
+
+            {orgPickerModal}
+            {transferModal && (
                 <TransferModal
-                    orgId={activeOrganizationId}
                     warehouses={warehouses.filter(w => w.isActive)}
                     onClose={() => setTransferModal(false)}
                     onCreated={() => { setTransferModal(false); load(); }}
@@ -1113,13 +1126,12 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 
 // ─── Modal de transferência ────────────────────────────────────────────────────
 interface TransferModalProps {
-    orgId: string;
     warehouses: WarehouseType[];
     onClose: () => void;
     onCreated: () => void;
 }
 
-const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClose, onCreated }) => {
+const TransferModal: React.FC<TransferModalProps> = ({ warehouses, onClose, onCreated }) => {
     const keyRef = React.useRef(0);
     const [form, setForm] = React.useState<CreateTransferInput>({
         fromWarehouseId: warehouses[0]?.id ?? '',
@@ -1148,9 +1160,11 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
         if (form.fromWarehouseId === form.toWarehouseId) { setErr('Origem e destino não podem ser iguais.'); return; }
         const validItems = form.items.filter(i => i.inputDescription && i.quantity > 0);
         if (validItems.length === 0) { setErr('Adicione ao menos um item com quantidade.'); return; }
+        const fromWarehouse = warehouses.find(w => w.id === form.fromWarehouseId);
+        if (!fromWarehouse) { setErr('Almoxarifado de origem inválido.'); return; }
         setSaving(true);
         try {
-            await inventoryService.createTransfer(orgId, { ...form, items: validItems });
+            await inventoryService.createTransfer(fromWarehouse.organizationId, { ...form, items: validItems });
             onCreated();
         } catch (e: unknown) {
             setErr((e as Error).message);
@@ -1279,7 +1293,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 interface RequisitionsTabProps {
-    orgId: string;
+    /** Resolvida (efetiva ou via seletor de organização) antes de abrir o modal de nova requisição. */
+    createOrgId: string | undefined;
+    onNewRequest: () => void;
     warehouses: WarehouseType[];
     requests: MaterialRequest[];
     reqFilter: string;
@@ -1292,7 +1308,7 @@ interface RequisitionsTabProps {
 }
 
 const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
-    orgId, warehouses, requests, reqFilter, setReqFilter,
+    createOrgId, onNewRequest, warehouses, requests, reqFilter, setReqFilter,
     showRequestModal, setShowRequestModal, approvingRequest, setApprovingRequest, reload,
 }) => {
     const [delivering, setDelivering] = React.useState<string | null>(null);
@@ -1376,7 +1392,7 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                         </button>
                     ))}
                 </div>
-                <Button variant="primary" onClick={() => setShowRequestModal(true)}>
+                <Button variant="primary" onClick={onNewRequest}>
                     <Plus className="w-4 h-4 mr-1" /> Nova Requisição
                 </Button>
             </div>
@@ -1509,9 +1525,9 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                 ))}
             </div>
 
-            {showRequestModal && (
+            {showRequestModal && createOrgId && (
                 <RequestModal
-                    orgId={orgId}
+                    orgId={createOrgId}
                     warehouses={warehouses}
                     onClose={() => setShowRequestModal(false)}
                     onCreated={() => { setShowRequestModal(false); reload(); }}

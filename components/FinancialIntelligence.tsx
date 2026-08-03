@@ -18,6 +18,8 @@ import type { ReportSchedule, ReportFrequency, ReportType } from '../services/re
 import { KpiCard } from './ui/KpiCard';
 import { usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useStore } from '../store/useStore';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -405,6 +407,12 @@ interface Props {
 
 export default function FinancialIntelligence({ organizationId, onNavigate }: Props) {
     const confirm = useConfirm();
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const [createScheduleOrgId, setCreateScheduleOrgId] = useState<string | undefined>(undefined);
     const [tab, setTab]               = usePersistedState<Tab>('financialIntelligence:tab', 'alertas');
     const [alerts, setAlerts]         = useState<FinancialAlert[]>([]);
     const [scorecards, setScorecards] = useState<ProjectScorecard[]>([]);
@@ -423,8 +431,17 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
     const [sendMsg, setSendMsg]             = useState<string | null>(null);
 
     // Em "Todas as organizações" editar usa a org do próprio agendamento;
-    // só criar um novo exige que o usuário escolha uma.
-    const scheduleFormOrganizationId = organizationId || editTarget?.organization_id;
+    // criar um novo resolve via effectiveOrganizationId ou o seletor (handleNewSchedule).
+    const scheduleFormOrganizationId = editTarget?.organization_id ?? createScheduleOrgId;
+
+    const handleNewSchedule = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateScheduleOrgId(orgId);
+        setShowForm(true);
+        setEditTarget(null);
+        setSendMsg(null);
+    };
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -458,7 +475,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
 
     async function handleScheduleSave(s: ReportSchedule) {
         setSchedules(prev => prev.some(x => x.id === s.id) ? prev.map(x => x.id === s.id ? s : x) : [...prev, s]);
-        setShowForm(false); setEditTarget(null);
+        setShowForm(false); setEditTarget(null); setCreateScheduleOrgId(undefined);
     }
 
     async function handleDelete(id: string) {
@@ -720,10 +737,8 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                     <p className="text-xs text-gray-500">Relatórios enviados automaticamente por e-mail com alertas, scorecard e projeção.</p>
                                     {!showForm && !editTarget && (
                                         <button
-                                            onClick={() => { setShowForm(true); setEditTarget(null); setSendMsg(null); }}
-                                            disabled={!organizationId}
-                                            title={!organizationId ? 'Selecione uma organização específica para criar um agendamento' : undefined}
-                                            className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-button font-black hover:bg-violet-700 transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            onClick={handleNewSchedule}
+                                            className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-button font-black hover:bg-violet-700 transition-colors flex-shrink-0"
                                         >
                                             <Plus className="w-3.5 h-3.5" />
                                             Novo
@@ -737,7 +752,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                         organizationId={scheduleFormOrganizationId}
                                         initial={editTarget}
                                         onSave={handleScheduleSave}
-                                        onCancel={() => { setShowForm(false); setEditTarget(null); }}
+                                        onCancel={() => { setShowForm(false); setEditTarget(null); setCreateScheduleOrgId(undefined); }}
                                     />
                                 )}
 
@@ -878,6 +893,8 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                     </>
                 )}
             </div>
+
+            {orgPickerModal}
         </div>
     );
 }

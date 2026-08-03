@@ -9,6 +9,8 @@ import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import CostCenterV2ImportModal from './CostCenterV2ImportModal';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useStore } from '../store/useStore';
 import { costCenterService } from '../services/costCenterService';
 import { exportService } from '../services/exportService';
 import { CostCenterV2 } from '../types/financial';
@@ -36,6 +38,12 @@ interface FormState {
 const EMPTY_FORM: FormState = { parent_id: '', name: '', description: '' };
 
 const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) => {
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+
     const [items, setItems] = useState<CostCenterV2[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = usePersistedState('costCenterModule:search', '');
@@ -44,6 +52,8 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const [sheetOpen, setSheetOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<CostCenterV2 | null>(null);
     const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
+    const [createOrgId, setCreateOrgId] = useState<string | undefined>(undefined);
+    const [importOrgId, setImportOrgId] = useState<string | undefined>(undefined);
     const [saving, setSaving] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -136,7 +146,10 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const toggleExpand = (id: string) => setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
     const toggleExpandAll = () => setExpandedIds(allExpanded ? {} : Object.fromEntries(parentIds.map(id => [id, true])));
 
-    const openCreate = (parentId?: string) => {
+    const openCreate = async (parentId?: string) => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateOrgId(orgId);
         setEditingItem(null);
         setFormData({ parent_id: parentId || '', name: '', description: '' });
         setSheetOpen(true);
@@ -152,13 +165,14 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         setSheetOpen(false);
         setEditingItem(null);
         setFormData(EMPTY_FORM);
+        setCreateOrgId(undefined);
     };
 
     const editingHasChildren = editingItem ? (childrenByParent.get(editingItem.id)?.length ?? 0) > 0 : false;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name.trim() || !organizationId) return;
+        if (!formData.name.trim() || (!editingItem && !createOrgId)) return;
         setSaving(true);
         try {
             if (editingItem) {
@@ -169,7 +183,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                 });
             } else {
                 await costCenterService.create({
-                    organization_id: organizationId,
+                    organization_id: createOrgId!,
                     parent_id: formData.parent_id || null,
                     name: formData.name.trim(),
                     description: formData.description.trim() || undefined,
@@ -267,10 +281,14 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                             <FileDown className="w-4 h-4" />
                         </button>
                         <button
-                            onClick={() => setShowImportModal(true)}
+                            onClick={async () => {
+                                const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+                                if (!orgId) return;
+                                setImportOrgId(orgId);
+                                setShowImportModal(true);
+                            }}
                             title="Importar"
-                            disabled={!organizationId}
-                            className="h-9 w-9 flex items-center justify-center text-gray-500 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                            className="h-9 w-9 flex items-center justify-center text-gray-500 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95"
                         >
                             <Upload className="w-4 h-4" />
                         </button>
@@ -308,9 +326,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
 
                     <button
                         onClick={() => openCreate()}
-                        title={!organizationId ? 'Selecione uma organização para criar um centro de custo' : undefined}
-                        disabled={!organizationId}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:pointer-events-none"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                     >
                         <Plus className="w-[15px] h-[15px]" />
                         Novo
@@ -473,13 +489,15 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                 </form>
             </Sheet>
 
-            {showImportModal && organizationId && (
+            {showImportModal && importOrgId && (
                 <CostCenterV2ImportModal
-                    organizationId={organizationId}
-                    onClose={() => setShowImportModal(false)}
+                    organizationId={importOrgId}
+                    onClose={() => { setShowImportModal(false); setImportOrgId(undefined); }}
                     onSuccess={load}
                 />
             )}
+
+            {orgPickerModal}
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

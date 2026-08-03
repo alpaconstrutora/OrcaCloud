@@ -30,12 +30,13 @@ export interface TaxSettingInput {
 export const DEFAULT_TAX_MODULES: string[] = ['Imposto de Renda', 'PIS', 'COFINS', 'CSLL', 'IRRF'];
 
 export const taxSettingsService = {
-    async list(organizationId: string): Promise<TaxSetting[]> {
-        const { data, error } = await supabase
+    async list(organizationId?: string): Promise<TaxSetting[]> {
+        let query = supabase
             .from('tax_settings')
             .select('id, organization_id, nome, aliquota, base_calculo, regra_retencao, ativo, aplica_venda_ativo, aplica_locacao')
-            .eq('organization_id', organizationId)
             .order('nome');
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        const { data, error } = await query;
         if (error) throw error;
         return data ?? [];
     },

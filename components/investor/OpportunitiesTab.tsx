@@ -12,6 +12,8 @@ import OpportunityForm from './OpportunityForm';
 import OpportunityDetail from './OpportunityDetail';
 import InterestsPanel from './InterestsPanel';
 import Button from '../ui/Button';
+import { useOrganizationPicker } from '../ui/useOrganizationPicker';
+import { useStore } from '../../store/useStore';
 
 interface Props {
     opportunities: InvestorOpportunity[];
@@ -43,11 +45,25 @@ const OpportunitiesTab: React.FC<Props> = ({
     const [editing, setEditing] = React.useState<InvestorOpportunity | null | 'new'>(null);
     const [saving, setSaving] = React.useState(false);
     const [adminTab, setAdminTab] = React.useState<AdminTab>('opportunities');
+    const organizations = useStore(state => state.organizations);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
+
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido (handleNew).
+    const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
 
     // Em "Todas as organizações" não há org selecionada: editar usa a org da própria
-    // oportunidade; só criar do zero exige que o usuário escolha uma.
+    // oportunidade; criar do zero resolve via effectiveOrganizationId/handleNew.
     const editingOrganizationId =
-        organizationId || (editing && editing !== 'new' ? editing.organization_id : undefined);
+        organizationId || (editing && editing !== 'new' ? editing.organization_id : createOrgId);
+
+    const handleNew = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateOrgId(orgId);
+        setEditing('new');
+    };
 
     const handleSave = async (
         data: Omit<InvestorOpportunity, 'id' | 'created_at'>,
@@ -86,6 +102,7 @@ const OpportunitiesTab: React.FC<Props> = ({
             }
 
             setEditing(null);
+            setCreateOrgId(undefined);
         } catch (err) {
             console.error('Erro ao salvar oportunidade', err);
             alert('Erro ao salvar. Tente novamente.');
@@ -170,9 +187,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                 {isAdmin && adminTab === 'opportunities' && (
                     <Button
                         variant="primary"
-                        disabled={!organizationId}
-                        title={!organizationId ? 'Selecione uma organização específica para criar uma oportunidade' : undefined}
-                        onClick={() => setEditing('new')}
+                        onClick={handleNew}
                     >
                         <Plus className="w-4 h-4" />
                         Nova Oportunidade
@@ -238,9 +253,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                 <Button
                                     variant="primary"
                                     className="mt-4"
-                                    disabled={!organizationId}
-                                    title={!organizationId ? 'Selecione uma organização específica para criar uma oportunidade' : undefined}
-                                    onClick={() => setEditing('new')}
+                                    onClick={handleNew}
                                 >
                                     Criar primeira oportunidade
                                 </Button>
@@ -529,9 +542,11 @@ const OpportunitiesTab: React.FC<Props> = ({
                     initial={editing === 'new' ? undefined : editing}
                     organizationId={editingOrganizationId}
                     onSave={handleSave}
-                    onClose={() => { if (!saving) setEditing(null); }}
+                    onClose={() => { if (!saving) { setEditing(null); setCreateOrgId(undefined); } }}
                 />
             )}
+
+            {orgPickerModal}
         </div>
     );
 };

@@ -13,6 +13,8 @@ import ServicesOpportunityModal from './ServicesOpportunityModal';
 import ServicesPipelineConfigModal from './ServicesPipelineConfigModal';
 import { KpiCard } from '../ui/KpiCard';
 import { usePersistedState } from '../ui/TableUtils';
+import { useOrganizationPicker } from '../ui/useOrganizationPicker';
+import { useStore } from '../../store/useStore';
 
 interface KPIs {
   activeLeads: number;
@@ -23,7 +25,8 @@ interface KPIs {
 
 interface Props {
   organizationId: string | null;
-  onNavigate: (view: ServicesView, opportunityId?: string, opportunityOrgId?: string) => void;
+  // `opportunityLabel`: nome do contato, só para rotular a trilha do §23.
+  onNavigate: (view: ServicesView, opportunityId?: string, opportunityOrgId?: string, opportunityLabel?: string) => void;
 }
 
 const STAGES: { id: OpportunityStage; label: string; hex: string }[] = [
@@ -181,7 +184,7 @@ const PipelineColumn: React.FC<{
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: () => void;
-  onNavigate: (view: ServicesView, id: string, orgId?: string) => void;
+  onNavigate: (view: ServicesView, id: string, orgId?: string, label?: string) => void;
   setDraggingId: (id: string) => void;
   onAddNew?: () => void;
 }> = ({ id, label, hex, cards, loading, isOver, readonly, draggingId, onDragOver, onDragLeave, onDrop, onNavigate, setDraggingId, onAddNew }) => (
@@ -228,7 +231,7 @@ const PipelineColumn: React.FC<{
             opp={opp}
             stageHex={hex}
             isDragging={draggingId === opp.id}
-            onClick={() => onNavigate('opportunity', opp.id, opp.organization_id)}
+            onClick={() => onNavigate('opportunity', opp.id, opp.organization_id, opp.contact_name)}
             onDragStart={e => {
               if (readonly) { e.preventDefault(); return; }
               e.dataTransfer.effectAllowed = 'move';
@@ -253,6 +256,13 @@ const PipelineColumn: React.FC<{
 
 // ── Pipeline principal ────────────────────────────────────────────────────────
 const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
+  const organizations = useStore(state => state.organizations);
+  // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+  // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+  const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+  const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+  const [createLeadOrgId, setCreateLeadOrgId] = useState<string | undefined>(undefined);
+
   const [opportunities, setOpportunities] = useState<ServiceOpportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -379,10 +389,13 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
             <Settings size={16} />
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
-            disabled={!organizationId}
-            title={!organizationId ? 'Selecione uma organização específica para criar um lead' : undefined}
-            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={async () => {
+              const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+              if (!orgId) return;
+              setCreateLeadOrgId(orgId);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
           >
             <Plus className="w-[15px] h-[15px]" /> Novo Lead
           </button>
@@ -490,13 +503,15 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
         </div>
       </div>
 
-      {isModalOpen && organizationId && (
+      {isModalOpen && createLeadOrgId && (
         <ServicesOpportunityModal
-          organizationId={organizationId}
-          onClose={() => setIsModalOpen(false)}
-          onSaved={() => { setIsModalOpen(false); load(); loadKpis(); }}
+          organizationId={createLeadOrgId}
+          onClose={() => { setIsModalOpen(false); setCreateLeadOrgId(undefined); }}
+          onSaved={() => { setIsModalOpen(false); setCreateLeadOrgId(undefined); load(); loadKpis(); }}
         />
       )}
+
+      {orgPickerModal}
 
       {showConfig && organizationId && (
         <ServicesPipelineConfigModal

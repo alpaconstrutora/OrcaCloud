@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Landmark, Plus, Check, X, Search, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { useToast } from '../hooks/useToast';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -25,28 +26,33 @@ const inputCls = 'w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm f
 
 const TaxSettingsManager: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const qc = useQueryClient();
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('taxSettings:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'taxSettingsColumns');
 
     const [isAdding, setIsAdding] = React.useState(false);
+    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [form, setForm] = React.useState<TaxSettingInput>(emptyForm);
 
     const { data: items = [], isLoading } = useQuery({
         queryKey: ['tax-settings', activeOrganizationId],
-        queryFn: () => taxSettingsService.list(activeOrganizationId!),
-        enabled: !!activeOrganizationId,
+        queryFn: () => taxSettingsService.list(activeOrganizationId ?? undefined),
         staleTime: STALE.normal,
     });
 
     const invalidate = () => qc.invalidateQueries({ queryKey: ['tax-settings', activeOrganizationId] });
 
     const createMut = useMutation({
-        mutationFn: (input: TaxSettingInput) => taxSettingsService.create(activeOrganizationId!, input),
+        mutationFn: ({ orgId, input }: { orgId: string; input: TaxSettingInput }) => taxSettingsService.create(orgId, input),
         onSuccess: () => { cancelEdit(); invalidate(); showToast('Tributo criado com sucesso', 'success'); },
         onError: (e: any) => showToast(e.message?.includes('unique') ? 'Já existe um tributo com esse nome.' : (e.message || 'Erro ao criar.'), 'error'),
     });
@@ -64,7 +70,7 @@ const TaxSettingsManager: React.FC = () => {
     });
 
     const seedMut = useMutation({
-        mutationFn: () => taxSettingsService.seedDefaults(activeOrganizationId!),
+        mutationFn: (orgId: string) => taxSettingsService.seedDefaults(orgId),
         onSuccess: (count) => {
             invalidate();
             showToast(count > 0 ? `${count} tributo(s) padrão criado(s).` : 'Os 5 tributos padrão já estão cadastrados.', 'success');
@@ -72,19 +78,30 @@ const TaxSettingsManager: React.FC = () => {
         onError: (e: any) => showToast(e.message || 'Erro ao criar tributos padrão.', 'error'),
     });
 
-    const startAdd = () => { setIsAdding(true); setEditingId(null); setForm(emptyForm); };
+    const handleSeedDefaults = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        seedMut.mutate(orgId);
+    };
+
+    const startAdd = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateOrgId(orgId);
+        setIsAdding(true); setEditingId(null); setForm(emptyForm);
+    };
     const startEdit = (item: TaxSetting) => {
         setEditingId(item.id);
         setIsAdding(false);
         setForm({ nome: item.nome, aliquota: item.aliquota, base_calculo: item.base_calculo, regra_retencao: item.regra_retencao, ativo: item.ativo, aplica_venda_ativo: item.aplica_venda_ativo, aplica_locacao: item.aplica_locacao });
     };
-    const cancelEdit = () => { setIsAdding(false); setEditingId(null); setForm(emptyForm); };
+    const cancelEdit = () => { setIsAdding(false); setCreateOrgId(undefined); setEditingId(null); setForm(emptyForm); };
 
     const handleSave = () => {
         if (!form.nome.trim()) return;
         const input: TaxSettingInput = { ...form, nome: form.nome.trim() };
         if (editingId) updateMut.mutate({ id: editingId, input });
-        else createMut.mutate(input);
+        else if (createOrgId) createMut.mutate({ orgId: createOrgId, input });
     };
 
     const handleDelete = async (item: TaxSetting) => {
@@ -132,8 +149,8 @@ const TaxSettingsManager: React.FC = () => {
                 <div className="flex items-center gap-2 shrink-0">
                     {missingDefaults && (
                         <button
-                            onClick={() => seedMut.mutate()}
-                            disabled={seedMut.isPending || !activeOrganizationId}
+                            onClick={handleSeedDefaults}
+                            disabled={seedMut.isPending}
                             title="Criar Imposto de Renda, PIS, COFINS, CSLL e IRRF"
                             className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all disabled:opacity-50"
                         >
@@ -144,9 +161,7 @@ const TaxSettingsManager: React.FC = () => {
                     {!isAdding && !editingId && (
                         <button
                             onClick={startAdd}
-                            disabled={!activeOrganizationId}
-                            title={!activeOrganizationId ? 'Selecione uma organização específica para criar um tributo.' : undefined}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                         >
                             <Plus className="w-[15px] h-[15px]" />
                             Novo tributo
@@ -156,13 +171,6 @@ const TaxSettingsManager: React.FC = () => {
             </div>
 
             <div className="mt-6 border-t border-gray-100 pt-6 space-y-3">
-                {!activeOrganizationId && (
-                    <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-100 rounded-[10px] text-xs text-blue-700 font-medium">
-                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
-                        Selecione uma organização específica para ver e cadastrar tributos.
-                    </div>
-                )}
-
                 {(isAdding || editingId) && (
                     <div className="flex items-start gap-2 p-2 border border-indigo-200 rounded-[10px] bg-indigo-50/50 flex-wrap">
                         <input
@@ -343,6 +351,8 @@ const TaxSettingsManager: React.FC = () => {
                     {localToast.message}
                 </div>
             )}
+
+            {orgPickerModal}
         </div>
     );
 };

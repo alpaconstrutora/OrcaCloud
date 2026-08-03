@@ -18,6 +18,8 @@ import { Sheet } from './ui/sheet';
 import { useConfirm } from './ui/confirm';
 import { formatDateBR as fmtDate } from './ui/Format';
 import { DocumentPicker } from './ui/DocumentPicker';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useStore } from '../store/useStore';
 
 // ─── rótulos ────────────────────────────────────────────────
 
@@ -636,12 +638,33 @@ interface Props {
 }
 
 export default function ProcessosModule({ organizationId = '', userId = '', userEmail = '' }: Props) {
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = organizationId || (organizations.length === 1 ? organizations[0].id : undefined);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const [modalOrgId, setModalOrgId] = useState<string | undefined>(undefined);
+
     const [tab, setTab] = useState<Tab>('pendente');
     const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
     const [showStart, setShowStart] = useState(false);
     const [showNewTemplate, setShowNewTemplate] = useState(false);
     const [openInstanceId, setOpenInstanceId] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleStartProcess = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setModalOrgId(orgId);
+        setShowStart(true);
+    };
+
+    const handleNewTemplate = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setModalOrgId(orgId);
+        setShowNewTemplate(true);
+    };
 
     useEffect(() => {
         processService.listTemplates(organizationId || null).then(setTemplates).catch(() => {});
@@ -667,10 +690,7 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                             <p className="text-xs text-gray-500">Fluxos padronizados, auditáveis e executáveis</p>
                         </div>
                     </div>
-                    <Button size="sm" onClick={() => {
-                        if (!organizationId) { alert('Selecione uma organização específica para iniciar um processo.'); return; }
-                        setShowStart(true);
-                    }}><Plus className="w-3.5 h-3.5" /> Iniciar Processo</Button>
+                    <Button size="sm" onClick={handleStartProcess}><Plus className="w-3.5 h-3.5" /> Iniciar Processo</Button>
                 </div>
                 <div className="flex items-center gap-1 border-b border-gray-100 -mb-4 -mx-6 px-6">
                     {TABS.map(t => {
@@ -693,20 +713,23 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                 {tab === 'pendente'  && <PendingList key={refreshKey} organizationId={organizationId} userId={userId} onOpen={setOpenInstanceId} />}
                 {tab === 'processos' && <InstanceList key={refreshKey} organizationId={organizationId} onOpen={setOpenInstanceId} />}
                 {tab === 'dashboard' && <ProcessDashboard key={refreshKey} organizationId={organizationId} />}
-                {tab === 'templates' && <TemplateList organizationId={organizationId} onCreate={() => {
-                    if (!organizationId) { alert('Selecione uma organização específica para criar um template.'); return; }
-                    setShowNewTemplate(true);
-                }} />}
+                {tab === 'templates' && <TemplateList organizationId={organizationId} onCreate={handleNewTemplate} />}
             </div>
 
-            <StartInstanceModal
-                open={showStart} onClose={() => setShowStart(false)} organizationId={organizationId} userId={userId}
-                templates={templates} onStarted={(id) => { setOpenInstanceId(id); setRefreshKey(k => k + 1); }}
-            />
-            <NewTemplateModal
-                open={showNewTemplate} onClose={() => setShowNewTemplate(false)} organizationId={organizationId}
-                onCreated={() => setRefreshKey(k => k + 1)}
-            />
+            {showStart && modalOrgId && (
+                <StartInstanceModal
+                    open={showStart} onClose={() => { setShowStart(false); setModalOrgId(undefined); }} organizationId={modalOrgId} userId={userId}
+                    templates={templates} onStarted={(id) => { setOpenInstanceId(id); setRefreshKey(k => k + 1); }}
+                />
+            )}
+            {showNewTemplate && modalOrgId && (
+                <NewTemplateModal
+                    open={showNewTemplate} onClose={() => { setShowNewTemplate(false); setModalOrgId(undefined); }} organizationId={modalOrgId}
+                    onCreated={() => setRefreshKey(k => k + 1)}
+                />
+            )}
+
+            {orgPickerModal}
             <InstanceDetail
                 open={!!openInstanceId} onClose={() => setOpenInstanceId(null)} instanceId={openInstanceId}
                 organizationId={organizationId} userId={userId} userEmail={userEmail}

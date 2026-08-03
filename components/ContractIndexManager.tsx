@@ -3,6 +3,7 @@ import { TrendingUp, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-reac
 import ActionIconButton from './ui/ActionIconButton';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
 import { useStore } from '../store/useStore';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 const COLUMNS: ColumnConfig[] = [
@@ -23,6 +24,11 @@ const fmtVal = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits:
 
 const ContractIndexManager: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
     const [selectedIndex, setSelectedIndex] = useState<IndexName>('INCC-M');
     const [values, setValues] = useState<ContractIndexValue[]>([]);
     const [loading, setLoading] = useState(false);
@@ -63,13 +69,14 @@ const ContractIndexManager: React.FC = () => {
     useEffect(() => { loadValues(); }, [loadValues]);
 
     const handleAdd = async () => {
-        if (!activeOrganizationId) return;
         const v = parseFloat(newValue.replace(',', '.'));
         if (isNaN(v) || v <= 0 || !newMonth) return;
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
         setSaving(true);
         try {
             const [y, m] = newMonth.split('-').map(Number);
-            await contractIndexService.upsert(activeOrganizationId, selectedIndex, new Date(y, m - 1, 1), v);
+            await contractIndexService.upsert(orgId, selectedIndex, new Date(y, m - 1, 1), v);
             setNewValue('');
             notify('Valor salvo.', 'success');
             loadValues();
@@ -224,6 +231,8 @@ const ContractIndexManager: React.FC = () => {
                     </table>
                 )}
             </div>
+
+            {orgPickerModal}
         </div>
     );
 };

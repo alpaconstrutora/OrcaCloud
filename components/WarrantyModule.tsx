@@ -2,6 +2,8 @@ import React from 'react';
 import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star } from 'lucide-react';
 import { warrantyService } from '../services/warrantyService';
 import { useToast } from '../hooks/useToast';
+import { useStore } from '../store/useStore';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import type { WarrantyClaim, ClaimState, WarrantyKPIs, ClaimFilters } from '../types/warranty';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
@@ -113,13 +115,27 @@ interface WarrantyModuleProps {
 
 const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, projects = [], onOpenClaim }) => {
     const { showToast } = useToast();
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
 
     const [claims, setClaims]     = React.useState<WarrantyClaim[]>([]);
     const [kpis, setKpis]         = React.useState<WarrantyKPIs | null>(null);
     const [loading, setLoading]   = React.useState(true);
     const [selected, setSelected] = React.useState<WarrantyClaim | null>(null);
     const [showModal, setShowModal] = React.useState(false);
+    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [filterState, setFilterState] = React.useState<ClaimState | ''>('');
+
+    const handleOpenClaim = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateOrgId(orgId);
+        setShowModal(true);
+        onOpenClaim?.();
+    };
 
     const load = React.useCallback(async () => {
         setLoading(true);
@@ -153,11 +169,9 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     </p>
                 </div>
                 <Button
-                    onClick={() => { setShowModal(true); onOpenClaim?.(); }}
+                    onClick={handleOpenClaim}
                     variant="primary"
                     size="lg"
-                    disabled={!activeOrganizationId}
-                    title={!activeOrganizationId ? 'Selecione uma organização específica para abrir um chamado' : undefined}
                     className="rounded-[1.25rem] shadow-xl shadow-blue-900/20"
                 >
                     <Plus className="w-4 h-4" />
@@ -232,14 +246,16 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
             </div>
 
             {/* Modal novo chamado */}
-            {showModal && activeOrganizationId && (
+            {showModal && createOrgId && (
                 <WarrantyClaimModal
-                    organizationId={activeOrganizationId}
+                    organizationId={createOrgId}
                     projects={projects}
                     onClose={() => setShowModal(false)}
                     onSaved={() => { setShowModal(false); load(); }}
                 />
             )}
+
+            {orgPickerModal}
 
             {/* Detalhe do chamado — nunca bloquear a leitura por causa de "Todas as organizações";
                 a organização do próprio chamado já resolve o escopo. */}

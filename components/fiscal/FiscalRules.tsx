@@ -4,6 +4,8 @@ import { listClassificationRules, createClassificationRule, toggleClassification
 import type { ClassificationRule, RuleType } from '../../types/fiscal';
 import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { useOrganizationPicker } from '../ui/useOrganizationPicker';
+import { useStore } from '../../store/useStore';
 
 interface Props {
   organizationId: string | null;
@@ -55,6 +57,11 @@ const COLUMNS: ColumnConfig[] = [
 ];
 
 export function FiscalRules({ organizationId, writeOrganizationId, onToast, chromeSlot }: Props) {
+  const organizations = useStore(state => state.organizations);
+  // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+  // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
+  const effectiveWriteOrgId = writeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+  const { pickOrganization, orgPickerModal } = useOrganizationPicker();
   const [rules, setRules] = useState<ClassificationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -78,14 +85,12 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
       onToast('Informe o valor de correspondência', 'err');
       return;
     }
-    if (!writeOrganizationId) {
-      onToast('Selecione uma organização para criar a regra', 'err');
-      return;
-    }
+    const orgId = effectiveWriteOrgId ?? (await pickOrganization()) ?? undefined;
+    if (!orgId) return;
     setSaving(true);
     try {
       await createClassificationRule({
-        organization_id: writeOrganizationId,
+        organization_id: orgId,
         rule_type: form.rule_type,
         match_value: form.match_value.trim().toLowerCase(),
         category: form.category,
@@ -330,6 +335,8 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
           </div>
         </div>
       )}
+
+      {orgPickerModal}
     </div>
   );
 }

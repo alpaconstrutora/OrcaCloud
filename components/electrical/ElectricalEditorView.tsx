@@ -368,7 +368,19 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
           setHistoryIndex(0);
 
           if (p.fileUrl) {
-            loadImage(p.fileUrl);
+            // Plantas importadas antes da privatização do bucket guardam a URL pública
+            // antiga em fileUrl; essas precisam ser reimportadas (não resolvem mais via signed URL).
+            if (p.fileUrl.startsWith('http')) {
+              loadImage(p.fileUrl);
+            } else {
+              try {
+                const signedUrl = await electricalProjectService.getPlanImageSignedUrl(p.fileUrl);
+                loadImage(signedUrl);
+              } catch (err) {
+                console.error(err);
+                setImageObj(null);
+              }
+            }
           } else {
             setImageObj(null);
           }
@@ -403,11 +415,11 @@ const ElectricalEditorView: React.FC<ElectricalEditorViewProps> = ({ organizatio
         file = await convertPdfToImage(file);
       }
 
-      const url = await electricalProjectService.uploadPlanImage(file, organizationId);
+      const path = await electricalProjectService.uploadPlanImage(file, organizationId);
       const newPlan = await electricalProjectService.createPlan({
         organizationId,
         versionId: version.id,
-        fileUrl: url,
+        fileUrl: path,
         floorName: `Planta ${plans.length + 1}`,
         scaleFactor: 100
       });

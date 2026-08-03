@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Plus, RefreshCw, Search, Target } from 'lucide-react';
+import { AlertTriangle, Loader2, Plus, RefreshCw, Search, Target } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import {
@@ -27,6 +27,7 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'prazo',      label: 'Prazo',       sortable: true },
     { key: 'obrigatorio',label: 'Obrigatório', sortable: true },
     { key: 'reciclagem', label: 'Reciclagem',  sortable: true },
+    { key: 'matriculas', label: 'Matrículas',  sortable: true },
     { key: 'status',     label: 'Status',      sortable: true },
     { key: 'actions',    label: 'Ações',       sortable: false },
 ];
@@ -106,6 +107,20 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
         setProcessando(true);
         try {
             const r = await academyService.runAlerts(7);
+            await carregar();
+
+            // "0 criadas" sem explicação faz o RH clicar de novo achando que
+            // travou. Quando não há nada a criar, dizer o motivo mais provável.
+            if (r.novas === 0 && r.reciclagens === 0) {
+                const temBloqueada = assignments.some(a => a.status === 'ATIVA' && a.sem_conteudo_publicado);
+                notify(
+                    temBloqueada
+                        ? 'Nenhuma matrícula criada — há treinamento sem versão publicada. Publique o conteúdo primeiro.'
+                        : 'Nenhuma matrícula nova: todos os alcançados já estão matriculados.',
+                    temBloqueada ? 'error' : 'success',
+                );
+                return;
+            }
             notify(`${r.novas} matrícula(s) criada(s), ${r.reciclagens} reciclagem(ns), ${r.expiradas} expirada(s).`);
         } catch (e: any) {
             notify('Erro ao processar: ' + (e?.message || ''), 'error');
@@ -141,6 +156,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                 case 'prazo':       return dir * ((a.prazo_dias ?? 0) - (b.prazo_dias ?? 0));
                 case 'obrigatorio': return dir * (Number(a.obrigatorio) - Number(b.obrigatorio));
                 case 'reciclagem':  return dir * (Number(a.reciclagem_automatica) - Number(b.reciclagem_automatica));
+                case 'matriculas':  return dir * ((a.matriculas ?? 0) - (b.matriculas ?? 0));
                 case 'status':      return dir * a.status.localeCompare(b.status);
                 default: return 0;
             }
@@ -150,7 +166,29 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
     const th = 'px-6 py-2 border-r border-gray-100';
     const td = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
 
+    // A atribuição sem conteúdo publicado é criada normalmente e nunca gera
+    // matrícula — o RH atribui, acha que resolveu, e ninguém recebe nada.
+    const bloqueadas = assignments.filter(a => a.status === 'ATIVA' && a.sem_conteudo_publicado);
+
     return (
+        <>
+        {bloqueadas.length > 0 && (
+            <div className="p-4 mb-3 bg-amber-50 border border-amber-200 rounded-[10px] flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                    <p className="text-xs font-semibold text-amber-900">
+                        {bloqueadas.length} atribuição(ões) não vão gerar matrícula
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                        {[...new Set(bloqueadas.map(a => a.course_nome).filter(Boolean))].join(' · ')}
+                        {' '}— o treinamento ainda não tem versão <span className="font-medium">publicada</span>.
+                        Abra o Catálogo, clique em “Montar conteúdo” e publique a versão; até lá o colaborador
+                        não vê nada, mesmo com a atribuição ativa.
+                    </p>
+                </div>
+            </div>
+        )}
+
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-white">
                 <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -271,6 +309,17 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                                             </span>
                                         </td>
                                     )}
+                                    {colunas.visibleColumns.includes('matriculas') && (
+                                        <td className={td}>
+                                            {a.sem_conteudo_publicado ? (
+                                                <span className="text-amber-700">Sem conteúdo publicado</span>
+                                            ) : (
+                                                <span className={a.matriculas ? 'text-gray-700' : 'text-gray-400'}>
+                                                    {a.matriculas ?? 0}
+                                                </span>
+                                            )}
+                                        </td>
+                                    )}
                                     {colunas.visibleColumns.includes('status') && (
                                         <td className={td}>
                                             <span className={a.status === 'ATIVA' ? 'text-emerald-700' : 'text-gray-500'}>
@@ -315,6 +364,7 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                 />
             )}
         </div>
+        </>
     );
 };
 

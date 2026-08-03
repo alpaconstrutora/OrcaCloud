@@ -232,6 +232,12 @@ export interface AcademyAssignment {
     created_by?: string;
     /** Agregado de leitura: quantas matrículas essa atribuição já gerou. */
     matriculas?: number;
+    /**
+     * Treinamento sem versão publicada. A atribuição existe mas NUNCA vai
+     * gerar matrícula — o processamento diário só materializa contra a versão
+     * vigente. É a causa nº 1 de "criei a atribuição e não apareceu nada".
+     */
+    sem_conteudo_publicado?: boolean;
     created_at?: string;
     updated_at?: string;
 }

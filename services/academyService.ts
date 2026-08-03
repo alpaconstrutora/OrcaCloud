@@ -458,6 +458,16 @@ export const academyService = {
 
     // ══ ATRIBUIÇÕES ═════════════════════════════════════════════════════
 
+    /**
+     * Atribuições enriquecidas com o que a tela precisa para não mentir:
+     * quantas matrículas cada uma já gerou e se o treinamento tem conteúdo
+     * publicado.
+     *
+     * O segundo ponto é crítico: `generate_academy_alerts` materializa
+     * atribuição com INNER JOIN na versão PUBLICADA. Treinamento sem versão
+     * publicada faz a atribuição ser ignorada em silêncio, para sempre — o RH
+     * cria, acha que atribuiu, e ninguém recebe nada.
+     */
     async listAssignments(orgId?: string | null): Promise<AcademyAssignment[]> {
         let query = supabase
             .from('academy_assignments')
@@ -467,8 +477,35 @@ export const academyService = {
 
         const { data, error } = await query;
         if (error) throw error;
-        return ((data || []) as any[]).map(a => ({
-            ...a, course_nome: a.course?.nome,
+
+        const linhas = (data || []) as any[];
+        if (!linhas.length) return [];
+
+        const courseIds = [...new Set(linhas.map(a => a.course_id as string))];
+        const assignmentIds = linhas.map(a => a.id as string);
+
+        const [publicadas, matriculas] = await Promise.all([
+            supabase.from('academy_course_versions')
+                .select('course_id')
+                .in('course_id', courseIds)
+                .eq('status', 'PUBLICADA'),
+            supabase.from('academy_enrollments')
+                .select('assignment_id')
+                .in('assignment_id', assignmentIds)
+                .neq('status', 'CANCELADO'),
+        ]);
+
+        const comConteudo = new Set((publicadas.data || []).map(v => v.course_id as string));
+        const porAtribuicao = new Map<string, number>();
+        for (const m of (matriculas.data || []) as any[]) {
+            porAtribuicao.set(m.assignment_id, (porAtribuicao.get(m.assignment_id) ?? 0) + 1);
+        }
+
+        return linhas.map(a => ({
+            ...a,
+            course_nome: a.course?.nome,
+            matriculas: porAtribuicao.get(a.id) ?? 0,
+            sem_conteudo_publicado: !comConteudo.has(a.course_id),
         })) as AcademyAssignment[];
     },
 

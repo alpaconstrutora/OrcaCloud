@@ -197,6 +197,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §20.1 Ritmo de espaçamento do cromo (24px → KPIs, 12px depois)
 - [ ] §21 Rótulo de campo e título de modal
 - [ ] §22 Atualizar estado local em vez de recarregar a tabela inteira (criar/editar/excluir) + preservar scroll ao voltar de edição em página cheia
+- [ ] §23 Migalha de pão — decisão explícita (usa `ui/Breadcrumb.tsx` com 3+ níveis internos, ou "Voltar" com 1 salto, ou nada por §18)
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -1701,6 +1702,79 @@ function fecharModal() {
 > Locações etc.) ainda chamam recarga completa depois de criar/editar/excluir
 > um item — não tratar como "resolvido no app inteiro". Ao tocar em qualquer
 > tabela com esse padrão, aplicar a mesma correção.
+
+---
+
+## 23. MIGALHA DE PÃO (trilha de navegação) — escopo restrito
+
+**Componente único e obrigatório: `components/ui/Breadcrumb.tsx`.** Não escrever
+a trilha à mão — foi assim que o app acumulou quatro variantes diferentes de
+`<span>/</span>` antes desta seção existir (2026-08-03).
+
+```tsx
+import Breadcrumb from './ui/Breadcrumb';
+
+<Breadcrumb
+  items={[
+    { label: 'Estruturas', onClick: () => { setAssembly(null); setElement(null) } },
+    ...(assembly ? [{ label: assembly.nome, onClick: () => setElement(null) }] : []),
+    ...(element ? [{ label: element.nome }] : []),
+  ]}
+/>
+```
+
+### Quando usar (os três critérios, juntos)
+
+1. **A profundidade é interna à tela** — lista → item → sub-item, tudo no mesmo
+   `view` do `AppRouter`. A trilha começa no nível da própria tela.
+2. **Há pelo menos 2 saltos de profundidade** (3 crumbs). Com 1 salto, o padrão
+   é o **botão "Voltar"** (`<ArrowLeft /> Voltar`, ~43 arquivos hoje, referência
+   `empreendimento/EmpreendimentoDetail.tsx:144`) — não a trilha.
+3. **Todo ancestral é clicável e pula direto para aquele nível.** Se os
+   ancestrais são texto morto, a trilha vira legenda: use título + "Voltar".
+
+O componente **renderiza `null` com menos de 2 itens** de propósito — é a trava
+mecânica do critério 2.
+
+### ❌ Quando NÃO usar
+
+- **Caminho de módulo** (`Financeiro / Contas a Receber`, `Corporativo / Gestão
+  de Bens`). É o §18 puro: a sidebar (`activeContextLabel` + item ativo de
+  `Layout.tsx`) já diz onde o usuário está. Foi por isso que a barra de
+  breadcrumb de `SalesManagementModule.tsx:77` foi removida.
+- **Como navegação global.** O app **não tem roteamento por URL** (zero
+  `react-router`/`useNavigate`): a navegação é estado em `AppRouter`. Trilha sem
+  URL não é linkável, não sobrevive a F5 e não alimenta o Voltar do navegador —
+  cada nível precisa de handler manual. Ampliar o escopo desta seção só faz
+  sentido **depois** de existir roteamento por URL; até lá, é decisão explícita,
+  não aplicação de padrão.
+- **Chrome de app mobile** (`TasksMobileApp.tsx:797`) — lá o cabeçalho é
+  botão-voltar + título, vocabulário de app nativo, fora do escopo deste guia.
+
+### Estilo (já embutido no componente — não reescrever)
+
+`text-xs font-medium text-gray-400`, separador `<ChevronRight className="w-3.5
+h-3.5 text-gray-300" />`, ancestral clicável com `hover:text-blue-600`, nível
+atual `text-gray-600 font-semibold` + `aria-current="page"`. `truncate
+max-w-[16rem]` por crumb — nome de obra/unidade estoura a linha sem isso.
+Semântica: `<nav aria-label="Trilha de navegação">`.
+
+> ✅ Azul só no hover. A trilha é orientação, não ação — não compete com o botão
+> primário (§17), que é o único azul sólido da tela.
+> ✅ Quando existe, a trilha fica **acima do `<h1>`** dentro do mesmo bloco de
+> título (§20), não numa barra própria.
+> ℹ️ `text-xs` aqui (e não o `text-sm` do corpo) é deliberado: a trilha é
+> secundária ao título que vem logo abaixo.
+
+### Estado das ocorrências (2026-08-03)
+
+| Arquivo | Veredito |
+|---|---|
+| `StructuralModule.tsx:368` | ✅ migrado — 3 níveis (Estruturas → estrutura → elemento), caso canônico |
+| `OpuraCnoModule.tsx:810` | ✅ migrado — trilha navegável (o crumb raiz limpa a obra selecionada) |
+| `OfficesDashboard.tsx:192` | ✅ N/A — era só um botão "Voltar" com comentário errado; comentário corrigido |
+| `TasksMobileApp.tsx:797` | ✅ N/A — chrome mobile (exceção acima) |
+| `OpuraAssetsModule.tsx:802` | ❌ pendente — `Corporativo / Gestão de Bens` é caminho de módulo estático, sem navegação: a correção é **remover**, não migrar. Não feito aqui porque mexe no cabeçalho em card que o §20 marca como "não migre sem decisão explícita". |
 
 ---
 

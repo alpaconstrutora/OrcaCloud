@@ -189,7 +189,9 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
 
   return (
     <div className="p-6 space-y-6 bg-[#F3F7F9] text-slate-700 min-h-screen pb-24">
-      {/* ── Cabeçalho: breadcrumb + título + período/exportar ────────────── */}
+      {/* ── Cabeçalho: voltar + título + período/exportar ──────────────────
+           Não é migalha de pão (§23): é um único salto de volta ao menu, que o
+           padrão do app resolve com botão "Voltar". ─────────────────────── */}
       <div className="flex flex-col gap-4">
         <Button
           variant="ghost"

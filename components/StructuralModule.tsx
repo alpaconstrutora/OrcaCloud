@@ -15,6 +15,7 @@ import StructuralCutTable from './structural/StructuralCutTable'
 import StructuralQuantitative from './structural/StructuralQuantitative'
 import StructuralDimension from './structural/StructuralDimension'
 import Button from './ui/Button'
+import Breadcrumb from './ui/Breadcrumb'
 import { formatMoney } from './ui/Format'
 
 interface Props {
@@ -365,23 +366,14 @@ const ObraTab: React.FC<{
 
   return (
     <div className="space-y-4">
-      {/* Breadcrumb de estrutura/elemento */}
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-bold text-slate-500">Estruturas</span>
-        {assembly && (
-          <>
-            <ChevronRight className="w-4 h-4 text-slate-300" />
-            <button onClick={() => setElement(null)}
-              className="font-bold text-slate-700 hover:text-blue-600">{assembly.nome}</button>
-          </>
-        )}
-        {element && (
-          <>
-            <ChevronRight className="w-4 h-4 text-slate-300" />
-            <span className="font-bold text-slate-700">{element.nome}</span>
-          </>
-        )}
-      </div>
+      {/* Trilha estrutura → elemento — §23 */}
+      <Breadcrumb
+        items={[
+          { label: 'Estruturas', onClick: () => { setAssembly(null); setElement(null) } },
+          ...(assembly ? [{ label: assembly.nome, onClick: () => setElement(null) }] : []),
+          ...(element ? [{ label: element.nome }] : []),
+        ]}
+      />
 
       {/* Painel de 3 colunas */}
       <div className="grid grid-cols-1 md:grid-cols-[240px_240px_1fr] gap-4">

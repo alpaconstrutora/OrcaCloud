@@ -27,6 +27,7 @@ import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
+import Breadcrumb from './ui/Breadcrumb';
 import { DocumentPicker } from './ui/DocumentPicker';
 import { SeroAreasManager } from './SeroAreasManager';
 import { SeroMemorySimulator } from './SeroMemorySimulator';
@@ -807,11 +808,13 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
       {/* Header com breadcrumbs e seletor de obra */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
-            <span className="hover:text-indigo-600 cursor-pointer" onClick={() => setSelectedProjectId(null)}>Previdência</span>
-            <span>/</span>
-            <span className="text-gray-600 font-bold">{activeProject?.name || 'Obra Selecionada'}</span>
-          </div>
+          {/* Trilha módulo → obra selecionada — §23 */}
+          <Breadcrumb
+            items={[
+              { label: 'Previdência', onClick: () => setSelectedProjectId(null) },
+              { label: activeProject?.name || 'Obra Selecionada' },
+            ]}
+          />
           <h1 className="text-2xl font-black text-gray-900 tracking-tight mt-1.5 flex items-center gap-2">
             ÒPURA CNO & Previdência
             {score && (

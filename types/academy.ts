@@ -121,7 +121,20 @@ export interface AcademyVersionHistoryRow {
     aulas: number;
     matriculas: number;
     concluidas: number;
+    /** Quantas matrículas desta versão já deram ciência da mudança. */
+    ciencias: number;
     criada_em?: string;
+}
+
+/** Uma pessoa alcançada pela versão. `ciencia_em` nulo = ainda não deu ciência. */
+export interface AcademyVersionAckRow {
+    enrollment_id: string;
+    employee_id: string;
+    employee_name?: string;
+    employee_role?: string;
+    status: AcademyEnrollmentStatus;
+    ciencia_em?: string;
+    canal?: 'PORTAL' | 'APP';
 }
 
 /** Prévia do impacto da publicação (bloco de contexto do useConfirm). */

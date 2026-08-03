@@ -25,6 +25,7 @@ import type {
     AcademyCompleteLessonResult, AcademyFinalizeResult, AcademyCertificate,
     AcademyCertificateValidation, AcademyPlayerContent, AcademyPortalEnrollment,
     AcademyManagerRow, AcademyHrKpis, AcademyLessonTipo, AcademyVersionHistoryRow,
+    AcademyVersionAckRow,
 } from '../types/academy';
 
 export const ACADEMY_BUCKET = 'academy-media';
@@ -160,6 +161,18 @@ export const academyService = {
         });
         if (error) throw error;
         return (data || []) as AcademyVersionHistoryRow[];
+    },
+
+    /**
+     * Quem foi alcançado pela versão e quem já deu ciência da mudança.
+     * Pendentes vêm primeiro — é a linha que importa numa fiscalização.
+     */
+    async listVersionAcks(versionId: string): Promise<AcademyVersionAckRow[]> {
+        const { data, error } = await supabase.rpc('fn_academy_version_acks', {
+            p_version_id: versionId,
+        });
+        if (error) throw error;
+        return (data || []) as AcademyVersionAckRow[];
     },
 
     async archiveVersion(versionId: string): Promise<void> {

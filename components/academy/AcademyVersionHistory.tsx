@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { History, Loader2 } from 'lucide-react';
+import { History, Loader2, Users } from 'lucide-react';
+import AcademyVersionAcksSheet from './AcademyVersionAcksSheet';
 import { academyService } from '../../services/academyService';
 import type { AcademyVersionHistoryRow } from '../../types/academy';
 
@@ -34,6 +35,7 @@ interface Props {
 const AcademyVersionHistory: React.FC<Props> = ({ courseId, revalidarEm, notify }) => {
     const [linhas, setLinhas] = useState<AcademyVersionHistoryRow[]>([]);
     const [carregando, setCarregando] = useState(true);
+    const [acksAbertos, setAcksAbertos] = useState<{ id: string; versao: number } | null>(null);
 
     const carregar = useCallback(async () => {
         setCarregando(true);
@@ -146,9 +148,41 @@ const AcademyVersionHistory: React.FC<Props> = ({ courseId, revalidarEm, notify 
                                 </p>
                             </div>
                         </div>
+
+                        {/* Ciência só faz sentido quando houve mensagem de mudança:
+                            sem `notas_versao` o aluno nunca viu aviso nenhum. */}
+                        {v.notas_versao && v.matriculas > 0 && (
+                            <div className="border-t border-gray-100 pt-3 flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-400">Ciência da mudança</p>
+                                    <p className={`text-sm font-normal ${
+                                        v.ciencias >= v.matriculas ? 'text-emerald-700' : 'text-amber-700'
+                                    }`}>
+                                        {v.ciencias} de {v.matriculas} declararam ciência
+                                        {v.ciencias < v.matriculas && ` · ${v.matriculas - v.ciencias} pendente(s)`}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setAcksAbertos({ id: v.id, versao: v.versao })}
+                                    className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all shrink-0"
+                                >
+                                    <Users className="w-4 h-4" /> Ver quem falta
+                                </button>
+                            </div>
+                        )}
                     </div>
                 );
             })}
+
+            {acksAbertos && (
+                <AcademyVersionAcksSheet
+                    open
+                    onClose={() => setAcksAbertos(null)}
+                    versionId={acksAbertos.id}
+                    versao={acksAbertos.versao}
+                    notify={notify}
+                />
+            )}
         </div>
     );
 };

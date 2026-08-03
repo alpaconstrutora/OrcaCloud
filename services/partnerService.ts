@@ -339,14 +339,39 @@ export const partnerService = {
 
   // Documentos compartilhados + pastas + disciplinas, para a aba Documentos do portal
   // montar a árvore Pasta -> Disciplina (modo autenticado: preview de admin / login de
-  // parceiro). Pastas/disciplinas são best-effort: se a RLS bloquear (parceiro não é
-  // membro da org), retornam [] e a sidebar degrada para lista simples.
+  // parceiro).
+  //
+  // As pastas/disciplinas vêm da RPC `partner_get_shared_document_tree` (SECURITY
+  // DEFINER, migration 20270860000000) e NÃO da leitura direta das tabelas: a RLS de
+  // `opura_folders`/`opura_dms_disciplines` só libera SELECT para quem está em
+  // `organization_members`, e um `partner_user` não é membro da org — a leitura direta
+  // voltava vazia e toda pasta compartilhada aparecia achatada em "Sem pasta" para o
+  // fornecedor (enquanto o admin, que é membro, via a árvore certa no preview).
+  //
+  // Fallback: se a RPC ainda não estiver publicada no banco, cai na leitura direta —
+  // que continua funcionando para membros da org (preview interno).
   async listSharedDocumentTree(workspaceId: string): Promise<{
     documents: PartnerSharedDocument[];
     folders: { id: string; name: string; parent_id: string | null; naming_mask: string | null }[];
     disciplines: { code: string; name: string }[];
   }> {
     const documents = await this.listSharedDocuments(workspaceId);
+
+    const { data: treeData, error: treeError } = await supabase.rpc('partner_get_shared_document_tree', {
+      p_workspace_id: workspaceId,
+    });
+
+    if (!treeError && treeData) {
+      return {
+        documents,
+        folders: ((treeData as any).folders || []) as any[],
+        disciplines: ((treeData as any).disciplines || []) as any[],
+      };
+    }
+
+    if (treeError) {
+      console.error('[PARTNER SERVICE] RPC da árvore indisponível, tentando leitura direta:', treeError);
+    }
 
     const orgIds = Array.from(new Set(
       documents.map((sd) => (sd.document as any)?.organization_id).filter(Boolean)

@@ -62,6 +62,8 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
     { key: 'block', label: 'Bloco', sortable: true },
     { key: 'floor', label: 'Pavimento', sortable: true },
     { key: 'private_area', label: 'Área privativa', sortable: true },
+    { key: 'rental_analysis', label: 'Análise', sortable: false },
+    { key: 'rental_value', label: 'Valor aluguel', sortable: false },
     { key: 'price', label: 'Valor', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
@@ -70,13 +72,15 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
 // Larguras padrão do redimensionamento de colunas (§6.1) da tabela de Unidades.
 const PROPERTY_DEFAULT_COL_WIDTHS: Record<string, number> = {
     name: 240, address: 240, occupancy: 140, block: 100, floor: 90,
-    private_area: 120, price: 150, status: 130, actions: 130,
+    private_area: 120, rental_analysis: 150, rental_value: 140, price: 150, status: 130, actions: 130,
 };
 
 // Colunas de dado aplicáveis a cada modo da tabela (edifícios × unidades de um
 // edifício) — usado para somar a largura total (§6.1) e montar o colgroup.
+// rental_analysis/rental_value só existem no modo Unidades (dentro de um
+// edifício) — building-mode não tem "valor de aluguel" próprio da unidade.
 const buildingModeColumnKeys = ['name', 'address', 'price', 'occupancy', 'status'] as const;
-const unitModeColumnKeys = ['name', 'block', 'floor', 'private_area', 'price', 'status'] as const;
+const unitModeColumnKeys = ['name', 'block', 'floor', 'private_area', 'rental_analysis', 'rental_value', 'price', 'status'] as const;
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<RentalsTab>(
@@ -1156,8 +1160,20 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                                 <unitsCols.ResizeHandle colKey="private_area" />
                                                             </SortableHeader>
                                                         )}
+                                                        {unitsTableColumns.visibleColumns.includes('rental_analysis') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-right text-sm font-semibold text-gray-500 relative overflow-hidden whitespace-nowrap">
+                                                                Análise
+                                                                <unitsCols.ResizeHandle colKey="rental_analysis" />
+                                                            </th>
+                                                        )}
+                                                        {unitsTableColumns.visibleColumns.includes('rental_value') && (
+                                                            <th className="px-6 py-2 border-r border-gray-100 text-right text-sm font-semibold text-gray-500 relative overflow-hidden whitespace-nowrap">
+                                                                Valor aluguel
+                                                                <unitsCols.ResizeHandle colKey="rental_value" />
+                                                            </th>
+                                                        )}
                                                         {unitsTableColumns.visibleColumns.includes('price') && (
-                                                            <SortableHeader colKey="price" label="Aluguel base" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
+                                                            <SortableHeader colKey="price" label="Valor base" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
                                                                 <unitsCols.ResizeHandle colKey="price" />
                                                             </SortableHeader>
                                                         )}
@@ -1250,9 +1266,35 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                                     {property.private_area ? `${property.private_area}m²` : '-'}
                                                                 </td>
                                                             )}
-                                                            {unitsTableColumns.visibleColumns.includes('price') && (
+                                                            {unitsTableColumns.visibleColumns.includes('rental_analysis') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                                                    {(() => {
+                                                                        const base = property.price || 0;
+                                                                        const aluguel = rentalValueOf(property);
+                                                                        const diff = aluguel - base;
+                                                                        const ratio = base > 0 ? (aluguel / base) * 100 : null;
+                                                                        const diffColor = diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-600' : 'text-gray-400';
+                                                                        return (
+                                                                            <div className="flex flex-col items-end leading-tight">
+                                                                                <span className={`text-sm font-medium ${diffColor}`}>
+                                                                                    {diff > 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(diff)}
+                                                                                </span>
+                                                                                <span className="text-xs text-gray-400">
+                                                                                    {ratio != null ? `${ratio.toFixed(1)}%` : '—'}
+                                                                                </span>
+                                                                            </div>
+                                                                        );
+                                                                    })()}
+                                                                </td>
+                                                            )}
+                                                            {unitsTableColumns.visibleColumns.includes('rental_value') && (
                                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
                                                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rentalValueOf(property))}
+                                                                </td>
+                                                            )}
+                                                            {unitsTableColumns.visibleColumns.includes('price') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
                                                                 </td>
                                                             )}
                                                         </>

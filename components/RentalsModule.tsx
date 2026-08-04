@@ -90,11 +90,15 @@ const DEAL_COLUMNS: ColumnConfig[] = [
     { key: 'type', label: 'Tipo', sortable: true },
     { key: 'value', label: 'Valor', sortable: true },
     { key: 'date', label: 'Data', sortable: true },
+    { key: 'rental_analysis', label: 'Análise', sortable: false },
+    { key: 'rental_value', label: 'Valor aluguel', sortable: false },
+    { key: 'rental_base', label: 'Valor base', sortable: false },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 110, _propertyName: 220, _clientName: 200, type: 100, value: 140, date: 120, status: 130, actions: 110,
+    id: 110, _propertyName: 220, _clientName: 200, type: 100, value: 140, date: 120,
+    rental_analysis: 150, rental_value: 140, rental_base: 140, status: 130, actions: 110,
 };
 
 // Colunas da aba Corretores (§5.2/§6.1).
@@ -737,6 +741,27 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         const unit = units.find(u => u.property_id === propertyId);
         if (!unit || !(deal.value > 0)) return deal.installment_value;
         return deal.installment_value * (unit.value / deal.value);
+    };
+
+    // Mesmas 3 colunas da aba Unidades (Valor base / Valor aluguel / Análise),
+    // agora na escala do CONTRATO em vez da unidade — aqui a linha já É o
+    // negócio, então usa os campos do próprio `deal` direto, sem passar pelo
+    // lookup por propriedade de getContractedRentalValue (que poderia achar um
+    // OUTRO contrato ativo da mesma unidade se este `deal` estiver cancelado).
+    const getDealInstallmentValue = (deal: PropertyDeal): number =>
+        deal.installment_value != null ? deal.installment_value : deal.value;
+
+    // Soma do valor gerado pela Inteligência de Aluguéis (rentalValueOf) de
+    // cada unidade do contrato — baseline para comparar com a parcela
+    // efetivamente contratada (getDealInstallmentValue).
+    const getDealBaseValue = (deal: PropertyDeal): number => {
+        const propertyIds = deal.units && deal.units.length > 0
+            ? deal.units.map(u => u.property_id)
+            : (deal.property_id ? [deal.property_id] : []);
+        return propertyIds.reduce((sum, id) => {
+            const property = properties.find(p => p.id === id);
+            return sum + (property ? rentalValueOf(property) : 0);
+        }, 0);
     };
 
     const handleBulkUpdate = async (updates: Partial<Property>) => {
@@ -1711,6 +1736,24 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     <dealCols.ResizeHandle colKey="date" />
                                                 </SortableHeader>
                                             )}
+                                            {dealTableColumns.visibleColumns.includes('rental_analysis') && (
+                                                <th className="px-6 py-2 border-r border-gray-100 text-right text-sm font-semibold text-gray-500 relative overflow-hidden whitespace-nowrap">
+                                                    Análise
+                                                    <dealCols.ResizeHandle colKey="rental_analysis" />
+                                                </th>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('rental_value') && (
+                                                <th className="px-6 py-2 border-r border-gray-100 text-right text-sm font-semibold text-gray-500 relative overflow-hidden whitespace-nowrap">
+                                                    Valor aluguel
+                                                    <dealCols.ResizeHandle colKey="rental_value" />
+                                                </th>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('rental_base') && (
+                                                <th className="px-6 py-2 border-r border-gray-100 text-right text-sm font-semibold text-gray-500 relative overflow-hidden whitespace-nowrap">
+                                                    Valor base
+                                                    <dealCols.ResizeHandle colKey="rental_base" />
+                                                </th>
+                                            )}
                                             {dealTableColumns.visibleColumns.includes('status') && (
                                                 <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
                                                     <dealCols.ResizeHandle colKey="status" />
@@ -1762,6 +1805,37 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     {dealTableColumns.visibleColumns.includes('date') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                             {new Date(deal.date).toLocaleDateString('pt-BR')}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('rental_analysis') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                                            {(() => {
+                                                                const base = getDealBaseValue(deal);
+                                                                const contratado = getDealInstallmentValue(deal);
+                                                                const diff = contratado - base;
+                                                                const ratio = base > 0 ? (contratado / base) * 100 : null;
+                                                                const diffColor = diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-600' : 'text-gray-400';
+                                                                return (
+                                                                    <div className="flex flex-col items-end leading-tight">
+                                                                        <span className={`text-sm font-medium ${diffColor}`}>
+                                                                            {diff > 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(diff)}
+                                                                        </span>
+                                                                        <span className="text-xs text-gray-400">
+                                                                            {ratio != null ? `${ratio.toFixed(1)}%` : '—'}
+                                                                        </span>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('rental_value') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getDealInstallmentValue(deal))}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('rental_base') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getDealBaseValue(deal))}
                                                         </td>
                                                     )}
                                                     {dealTableColumns.visibleColumns.includes('status') && (

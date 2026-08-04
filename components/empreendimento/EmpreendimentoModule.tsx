@@ -6,6 +6,7 @@ import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import { empreendimentoService, EmpreendimentoOrphanSummary } from '../../services/empreendimentoService';
+import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import EmpreendimentoForm from './EmpreendimentoForm';
 import EmpreendimentoDetail from './EmpreendimentoDetail';
@@ -37,6 +38,7 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
 const COLUMNS: ColumnConfig[] = [
   { key: 'code', label: 'Código', sortable: true },
   { key: 'name', label: 'Empreendimento', sortable: true },
+  { key: 'tipo', label: 'Tipo', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'vgv', label: 'VGV Total', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
@@ -45,9 +47,20 @@ const COLUMNS: ColumnConfig[] = [
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
   code: 120,
   name: 320,
+  tipo: 160,
   status: 140,
   vgv: 160,
   actions: 90,
+};
+
+// Fallback só usado se o catálogo (Configurações do Sistema → Tipos de Empreendimento)
+// ainda não carregou ou o tipo salvo foi excluído do catálogo — mesmo mapa de EmpreendimentoDetail.tsx.
+const FALLBACK_TIPO_LABELS: Record<string, string> = {
+  VERTICAL: 'Vertical',
+  HORIZONTAL: 'Horizontal',
+  MISTO: 'Misto',
+  COND_LOGISTICO: 'Condomínio Logístico',
+  COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
 export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, onChangeView, onLoadProject }) => {
@@ -65,6 +78,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   // com <col> de largura fixa ao arrastar uma borda.
   const tableTotalWidth = (tableColumns.visibleColumns.includes('code') ? cols.getWidth('code') : 0)
     + (tableColumns.visibleColumns.includes('name') ? cols.getWidth('name') : 0)
+    + (tableColumns.visibleColumns.includes('tipo') ? cols.getWidth('tipo') : 0)
     + (tableColumns.visibleColumns.includes('status') ? cols.getWidth('status') : 0)
     + (tableColumns.visibleColumns.includes('vgv') ? cols.getWidth('vgv') : 0)
     + cols.getWidth('actions');
@@ -90,6 +104,17 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   }, [orgIdParam]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  const [tipoNameMap, setTipoNameMap] = React.useState<Record<string, string>>({});
+  React.useEffect(() => {
+    empreendimentoTypeService.list(orgIdParam)
+      .then(types => setTipoNameMap(Object.fromEntries(types.map(t => [t.slug, t.name]))))
+      .catch(() => setTipoNameMap({}));
+  }, [orgIdParam]);
+  const tipoLabel = React.useCallback(
+    (slug?: string | null) => slug ? (tipoNameMap[slug] || FALLBACK_TIPO_LABELS[slug] || slug) : '—',
+    [tipoNameMap],
+  );
 
   // Aviso proativo de vínculos órfãos (unidade apontando para um imóvel do
   // Comercial que não existe mais) — sem isto, só se descobre abrindo a aba
@@ -153,6 +178,10 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             return tableColumns.sortDirection === 'asc'
               ? a.name.localeCompare(b.name)
               : b.name.localeCompare(a.name);
+          case 'tipo':
+            return tableColumns.sortDirection === 'asc'
+              ? tipoLabel(a.tipo).localeCompare(tipoLabel(b.tipo))
+              : tipoLabel(b.tipo).localeCompare(tipoLabel(a.tipo));
           case 'status':
             return tableColumns.sortDirection === 'asc'
               ? STATUS_LABELS[a.status].localeCompare(STATUS_LABELS[b.status])
@@ -168,7 +197,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
       // Sem coluna clicada, ordenação default é nome A-Z (§6.4: sem dropdown redundante).
       return a.name.localeCompare(b.name);
     });
-  }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+  }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection, tipoLabel]);
 
   // ── Detalhe ────────────────────────────────────────────────────────────────
   if (selected) {
@@ -327,6 +356,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
               <colgroup>
                 {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                {tableColumns.visibleColumns.includes('tipo') && <col data-col-key="tipo" style={{ width: `${cols.getWidth('tipo')}px` }} />}
                 {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
                 {tableColumns.visibleColumns.includes('vgv') && <col data-col-key="vgv" style={{ width: `${cols.getWidth('vgv')}px` }} />}
                 {/* espaçador sem largura fixa — absorve a sobra quando a tabela é mais
@@ -350,6 +380,14 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                       onSort={tableColumns.handleColumnSort}
                       className="px-6 py-2 border-r border-gray-100 overflow-hidden">
                       <cols.ResizeHandle colKey="name" />
+                    </SortableHeader>
+                  )}
+                  {tableColumns.visibleColumns.includes('tipo') && (
+                    <SortableHeader colKey="tipo" label="Tipo" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                      onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                      <cols.ResizeHandle colKey="tipo" />
                     </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('status') && (
@@ -401,6 +439,11 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                             <p className="text-sm font-normal text-gray-400 truncate">{item.spe_razao_social || '—'}</p>
                           </div>
                         </div>
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('tipo') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap truncate">
+                        {tipoLabel(item.tipo)}
                       </td>
                     )}
                     {tableColumns.visibleColumns.includes('status') && (

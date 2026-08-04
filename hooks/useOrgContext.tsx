@@ -13,12 +13,14 @@ import { Modal, ModalHeader, ModalBody } from '../components/ui/modal';
  *
  *   1. Topo apontando para uma organização  → usa ela e NÃO pergunta nada.
  *   2. Topo em "Todas as organizações"      → aí sim pergunta.
- *   3. Perguntado, o usuário mantém "Todas" → grava GLOBAL (organization_id
- *      NULL), válido para todas — não N cópias.
+ *   3. Perguntado, o usuário mantém "Todas" → replica em cada organização DE
+ *      QUE ELE É MEMBRO (`forEachTargetOrg`). Nunca `organization_id NULL`,
+ *      que vazaria para os outros clientes do SaaS.
  *   4. Operação que exige org específica por natureza (fechamento contábil,
  *      faixa de alçada, chamado de garantia) → modo 'single', sem a opção
  *      "Todas" no modal.
- *   5. Empresa/obra selecionada no topo HERDA a organização dona dela.
+ *   5. EMPRESA selecionada no topo herda a organização dona dela. A OBRA não —
+ *      ver o comentário na cascata abaixo.
  *
  * ── Por que este arquivo existe ───────────────────────────────────────────
  *
@@ -41,7 +43,7 @@ import { Modal, ModalHeader, ModalBody } from '../components/ui/modal';
  * roda no CI e quebra o build se algum desses padrões reaparecer.
  */
 
-export type OrgContextSource = 'organization' | 'company' | 'project' | 'all';
+export type OrgContextSource = 'organization' | 'company' | 'all';
 
 export interface OrgContext {
     /**
@@ -60,15 +62,13 @@ export interface OrgContext {
 }
 
 /**
- * Contexto de organização do topo da página, com a herança de empresa/obra
- * já resolvida. Use em QUALQUER lugar que precise saber "qual organização".
+ * Contexto de organização do topo da página, com a herança de empresa já
+ * resolvida. Use em QUALQUER lugar que precise saber "qual organização".
  */
 export function useOrgContext(): OrgContext {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
     const activeEmpresaId = useStore(state => state.activeEmpresaId);
     const companies = useStore(state => state.companies);
-    const projectId = useStore(state => state.projectId);
-    const allProjects = useStore(state => state.allProjects);
 
     return React.useMemo<OrgContext>(() => {
         // 1) Organização escolhida explicitamente no topo — tem precedência absoluta.
@@ -85,21 +85,21 @@ export function useOrgContext(): OrgContext {
             }
         }
 
-        // 3) Obra ativa: mesma lógica. `organization_id` (coluna nativa) tem
-        //    precedência sobre `settings.organizationId` — obra vinculada a uma
-        //    empresa só tem a organização na coluna, nunca no JSONB.
-        //    Ver services/projectService.ts:14-17.
-        if (projectId) {
-            const project = allProjects.find(p => p.id === projectId);
-            const orgFromProject = project?.organization_id ?? project?.settings?.organizationId;
-            if (orgFromProject) {
-                return { orgId: orgFromProject, isAllOrgs: false, source: 'project' };
-            }
-        }
-
-        // 4) Nada selecionado: "Todas as organizações".
+        // 3) "Todas as organizações".
+        //
+        // ⚠️ A OBRA ativa NÃO entra nesta cascata, de propósito.
+        // `setActiveOrganizationId` zera a empresa (`activeEmpresaId: null`) mas
+        // NÃO zera `projectId` — a obra sobrevive à troca de organização. Se a
+        // organização fosse derivada da obra, clicar em "Todas as organizações"
+        // com uma obra aberta continuaria preso na organização dela: a escolha
+        // explícita do usuário seria ignorada, o oposto da regra de produto.
+        // (Reportado em 2026-08-03: escolher "Todas" em Configurações do Sistema
+        // com a obra "Coronel Lambert 345" aberta não surtia efeito.)
+        //
+        // Com a empresa não há esse risco justamente porque trocar de
+        // organização já a zera.
         return { orgId: null, isAllOrgs: true, source: 'all' };
-    }, [activeOrganizationId, activeEmpresaId, companies, projectId, allProjects]);
+    }, [activeOrganizationId, activeEmpresaId, companies]);
 }
 
 /**

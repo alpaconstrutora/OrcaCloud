@@ -1391,11 +1391,17 @@ const Layout: React.FC<LayoutProps> = ({
                   {/* Do mais específico para o mais amplo. Sem nenhuma seleção e
                       sem org ativa, o contexto REAL é "Todas as organizações" —
                       dizer isso é melhor que o genérico "Contexto atual". */}
+                  {/* A OBRA vem depois da organização, não antes: com uma obra
+                      aberta, escolher "Todas as organizações" mostrava o nome
+                      da obra ("Coronel Lambert 345") e o usuário não via que a
+                      escolha tinha valido — parecia que o clique não funcionou.
+                      A obra continua visível na linha "Obra" do dropdown. */}
                   {activeEmpresa?.nome_fantasia
                     ?? activeEmpresa?.razao_social
-                    ?? (projectId ? projectName : undefined)
                     ?? activeOrg?.name
-                    ?? (organizations.length > 1 ? 'Todas as organizações' : 'Contexto atual')}
+                    ?? (organizations.length > 1 ? 'Todas as organizações' : undefined)
+                    ?? (projectId ? projectName : undefined)
+                    ?? 'Contexto atual'}
                 </span>
                 <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isHeaderEmpresaDropdownOpen ? 'rotate-90' : ''}`} />
               </button>

@@ -16,6 +16,11 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { areaEngineService } from '../../services/areaEngineService';
 import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
+import { organizationService } from '../../services/organizationService';
+import { companyService } from '../../services/companyService';
+import { imovibService } from '../../services/imovibService';
+import { supabase } from '../../lib/supabase';
+import { useStore } from '../../store/useStore';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -59,12 +64,17 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
 type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
+  const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (CLAUDE.md regras #2/#3)
   const [tab, setTab] = React.useState<Tab>('visao');
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
   const [pendingCuradoria, setPendingCuradoria] = React.useState(0);
   const [tipoNameMap, setTipoNameMap] = React.useState<Record<string, string>>({});
+  const [orgName, setOrgName] = React.useState<string | undefined>(undefined);
+  const [companyLabel, setCompanyLabel] = React.useState<string | undefined>(undefined);
+  const [imovibStudyName, setImovibStudyName] = React.useState<string | undefined>(undefined);
+  const [plantaStudyName, setPlantaStudyName] = React.useState<string | undefined>(undefined);
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -86,6 +96,51 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       .then(types => setTipoNameMap(Object.fromEntries(types.map(t => [t.slug, t.name]))))
       .catch(() => setTipoNameMap({}));
   }, [organizationId]);
+
+  // "Todas as organizações" não bloqueia a leitura — a org sai da própria entidade
+  // aberta, não do topo (CLAUDE.md regra #5).
+  const effectiveOrgId = e.organization_id || organizationId || undefined;
+
+  React.useEffect(() => {
+    organizationService.listOrganizations()
+      .then(orgs => setOrgName(orgs.find(o => o.id === e.organization_id)?.name))
+      .catch(() => setOrgName(undefined));
+  }, [e.organization_id]);
+
+  React.useEffect(() => {
+    if (!e.company_id || !effectiveOrgId) { setCompanyLabel(undefined); return; }
+    companyService.list(effectiveOrgId)
+      .then(cs => {
+        const c = cs.find(c => c.id === e.company_id);
+        if (!c) { setCompanyLabel(undefined); return; }
+        const regimeLabel = c.regime_tributario === 'lucro_real' ? 'Lucro Real'
+          : c.regime_tributario === 'lucro_presumido' ? 'Lucro Presumido'
+          : c.regime_tributario === 'simples' ? 'Simples'
+          : c.regime_tributario === 'mei' ? 'MEI'
+          : c.regime_tributario;
+        setCompanyLabel(`${c.nome_fantasia || c.razao_social}${regimeLabel ? ` · ${regimeLabel}` : ''}`);
+      })
+      .catch(() => setCompanyLabel(undefined));
+  }, [e.company_id, effectiveOrgId]);
+
+  React.useEffect(() => {
+    if (!e.imovib_study_id || !effectiveOrgId) { setImovibStudyName(undefined); return; }
+    imovibService.getStudies(effectiveOrgId)
+      .then(studies => setImovibStudyName(studies.find(s => s.id === e.imovib_study_id)?.name))
+      .catch(() => setImovibStudyName(undefined));
+  }, [e.imovib_study_id, effectiveOrgId]);
+
+  React.useEffect(() => {
+    if (!e.planta_ai_study_id) { setPlantaStudyName(undefined); return; }
+    supabase
+      .from('plant_studies')
+      .select('id, name')
+      .eq('id', e.planta_ai_study_id)
+      .maybeSingle()
+      .then(({ data }) => setPlantaStudyName((data as any)?.name));
+  }, [e.planta_ai_study_id]);
+
+  const obraVinculada = e.project_id ? projects.find(p => p.id === e.project_id) : undefined;
 
   const tipoLabel = e.tipo ? (tipoNameMap[e.tipo] || FALLBACK_TIPO_LABELS[e.tipo] || e.tipo) : undefined;
 
@@ -202,24 +257,26 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         </div>
       </div>
 
-      {/* Tabs — anatomia canônica §19.1: trilho bg-gray-50, aba ativa bg-white text-blue-600 shadow-sm, flex-wrap */}
-      <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            <t.icon className="w-3.5 h-3.5" /> {t.label}
-            {t.badge != null && t.badge > 0 && (
-              <span className="ml-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold">
-                {t.badge}
-              </span>
-            )}
-          </button>
-        ))}
+      {/* Tabs — anatomia canônica §19.1: card branco externo + trilho bg-gray-50, aba ativa bg-white text-blue-600 shadow-sm, flex-wrap */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <t.icon className="w-3.5 h-3.5" /> {t.label}
+              {t.badge != null && t.badge > 0 && (
+                <span className="ml-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                  {t.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Conteúdo */}
@@ -228,6 +285,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
             <h3 className="text-xs font-semibold text-gray-500 mb-4">Dados Gerais</h3>
             <dl className="space-y-3 text-sm">
+              <Row label="Organização" value={orgName} />
+              <Row label="Empresa" value={companyLabel} />
               <Row label="Tipo" value={tipoLabel} />
               <Row label="Matrícula" value={e.matricula} />
               <Row label="Nº do Processo" value={e.numero_processo} />
@@ -271,6 +330,20 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               <Row label="Fundos" value={e.terreno_fundos != null ? `${e.terreno_fundos} m` : undefined} />
               <Row label="Profundidade" value={e.terreno_profundidade != null ? `${e.terreno_profundidade} m` : undefined} />
             </dl>
+          </div>
+
+          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+            <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-gray-400" /> Vínculos
+            </h3>
+            <dl className="space-y-3 text-sm">
+              <Row label="Estudo de Viabilidade" value={e.imovib_study_id ? (imovibStudyName || 'Estudo não encontrado') : undefined} />
+              <Row label="Estudo de Arquitetura" value={e.planta_ai_study_id ? (plantaStudyName || 'Estudo não encontrado') : undefined} />
+              <Row label="Obra Vinculada" value={e.project_id ? (obraVinculada?.name || 'Obra não encontrada') : undefined} />
+            </dl>
+            <p className="text-[11px] text-gray-400 font-medium mt-4">
+              Gerencie estes vínculos (e os demais: orçamento, planejamento, contratos) na aba Vinculações.
+            </p>
           </div>
 
           <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm lg:col-span-2">

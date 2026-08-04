@@ -658,6 +658,22 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return step ? { label: step.label, color: step.color } : { label: status || '', color: 'text-gray-600' };
     };
 
+    // Valor efetivamente CONTRATADO desta unidade — vem do contrato de locação
+    // ativo (não cancelado), não do cadastro do imóvel. Uma unidade tem no
+    // máximo um contrato ativo (regra de unicidade do commercialService), então
+    // o primeiro achado já é o certo. `deal.units[].value` é o valor por
+    // unidade quando o contrato reúne várias (deal.value é a SOMA); contratos
+    // legados de 1 unidade só têm property_id/value direto.
+    const getContractedRentalValue = (propertyId: string): number | null => {
+        const deal = deals.find(d => d.type === 'RENTAL' && d.status !== 'CANCELLED' &&
+            (d.units && d.units.length > 0
+                ? d.units.some(u => u.property_id === propertyId)
+                : d.property_id === propertyId));
+        if (!deal) return null;
+        const unit = deal.units?.find(u => u.property_id === propertyId);
+        return unit ? unit.value : deal.value;
+    };
+
     const handleBulkUpdate = async (updates: Partial<Property>) => {
         if (selectedProperties.length === 0) return;
 
@@ -1269,10 +1285,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                             {unitsTableColumns.visibleColumns.includes('rental_analysis') && (
                                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                                                     {(() => {
-                                                                        const base = property.price || 0;
-                                                                        const aluguel = rentalValueOf(property);
-                                                                        const diff = aluguel - base;
-                                                                        const ratio = base > 0 ? (aluguel / base) * 100 : null;
+                                                                        const base = rentalValueOf(property);
+                                                                        const contratado = getContractedRentalValue(property.id);
+                                                                        if (contratado == null) {
+                                                                            return <span className="text-sm text-gray-400">—</span>;
+                                                                        }
+                                                                        const diff = contratado - base;
+                                                                        const ratio = base > 0 ? (contratado / base) * 100 : null;
                                                                         const diffColor = diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-600' : 'text-gray-400';
                                                                         return (
                                                                             <div className="flex flex-col items-end leading-tight">
@@ -1289,12 +1308,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                             )}
                                                             {unitsTableColumns.visibleColumns.includes('rental_value') && (
                                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rentalValueOf(property))}
+                                                                    {(() => {
+                                                                        const contratado = getContractedRentalValue(property.id);
+                                                                        return contratado != null
+                                                                            ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(contratado)
+                                                                            : <span className="text-gray-400 font-normal">Sem contrato</span>;
+                                                                    })()}
                                                                 </td>
                                                             )}
                                                             {unitsTableColumns.visibleColumns.includes('price') && (
                                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rentalValueOf(property))}
                                                                 </td>
                                                             )}
                                                         </>

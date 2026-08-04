@@ -82,6 +82,36 @@ const PROPERTY_DEFAULT_COL_WIDTHS: Record<string, number> = {
 const buildingModeColumnKeys = ['name', 'address', 'price', 'occupancy', 'status'] as const;
 const unitModeColumnKeys = ['name', 'block', 'floor', 'private_area', 'rental_analysis', 'rental_value', 'price', 'status'] as const;
 
+// Colunas da aba Contratos (§5.2/§6.1).
+const DEAL_COLUMNS: ColumnConfig[] = [
+    { key: 'id', label: 'ID', sortable: true },
+    { key: '_propertyName', label: 'Imóvel', sortable: true },
+    { key: '_clientName', label: 'Cliente', sortable: true },
+    { key: 'type', label: 'Tipo', sortable: true },
+    { key: 'value', label: 'Valor', sortable: true },
+    { key: 'date', label: 'Data', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
+    id: 110, _propertyName: 220, _clientName: 200, type: 100, value: 140, date: 120, status: 130, actions: 110,
+};
+
+// Colunas da aba Corretores (§5.2/§6.1).
+const BROKER_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Corretor', sortable: true },
+    { key: 'email', label: 'E-mail', sortable: true },
+    { key: 'phone', label: 'Telefone', sortable: true },
+    { key: 'agency_name', label: 'Imobiliária', sortable: true },
+    { key: 'commission_rate', label: 'Comissão', sortable: true },
+    { key: 'creci', label: 'CRECI', sortable: true },
+    { key: 'is_active', label: 'Status', sortable: false },
+    { key: 'access', label: 'Acesso ao Portal', sortable: false },
+];
+const BROKER_DEFAULT_COL_WIDTHS: Record<string, number> = {
+    name: 200, email: 220, phone: 140, agency_name: 180, commission_rate: 110, creci: 110, is_active: 100, access: 140,
+};
+
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<RentalsTab>(
         (localStorage.getItem('rentals_active_tab') as RentalsTab) || 'inventory'
@@ -125,14 +155,27 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         .filter(key => unitsTableColumns.visibleColumns.includes(key))
         .reduce((sum, key) => sum + unitsCols.getWidth(key), 0)
         + unitsCols.getWidth('actions');
-    const [dealSortConfig, setDealSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
-    const handleDealSort = (key: string) => {
-        setDealSortConfig(prev => prev?.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
-    };
-    const [brokerSortConfig, setBrokerSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
-    const handleBrokerSort = (key: string) => {
-        setBrokerSortConfig(prev => prev?.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
-    };
+    // Colunas + ordenação + redimensionamento da aba Contratos (§5.2/§6.1).
+    const dealTableColumns = useTableColumns(DEAL_COLUMNS, 'rentalsDealsColumns');
+    const dealCols = useResizableColumns(DEAL_DEFAULT_COL_WIDTHS, 'rentalsDealsColWidths');
+    const dealSortConfig = dealTableColumns.sortColumn
+        ? { key: dealTableColumns.sortColumn, direction: dealTableColumns.sortDirection }
+        : null;
+    const handleDealSort = dealTableColumns.handleColumnSort;
+    const dealsTableTotalWidth = DEAL_COLUMNS
+        .filter(c => dealTableColumns.visibleColumns.includes(c.key))
+        .reduce((sum, c) => sum + dealCols.getWidth(c.key), 0);
+
+    // Colunas + ordenação + redimensionamento da aba Corretores (§5.2/§6.1).
+    const brokerTableColumns = useTableColumns(BROKER_COLUMNS, 'rentalsBrokersColumns');
+    const brokerCols = useResizableColumns(BROKER_DEFAULT_COL_WIDTHS, 'rentalsBrokersColWidths');
+    const brokerSortConfig = brokerTableColumns.sortColumn
+        ? { key: brokerTableColumns.sortColumn, direction: brokerTableColumns.sortDirection }
+        : null;
+    const handleBrokerSort = brokerTableColumns.handleColumnSort;
+    const brokersTableTotalWidth = BROKER_COLUMNS
+        .filter(c => brokerTableColumns.visibleColumns.includes(c.key))
+        .reduce((sum, c) => sum + brokerCols.getWidth(c.key), 0);
 
     // Modals Control
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -1489,19 +1532,47 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             {
                 (selectedBuildingId && activeTab === 'deals') && (
                     <div className="space-y-6">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                                <Tag className="w-5 h-5 text-blue-600" />
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">Registro de contratos</h3>
-                            </div>
-                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
-                                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
-                            </div>
+                        <div className="flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-blue-600" />
+                            <h3 className="text-lg font-bold text-gray-900 tracking-tight">Registro de contratos</h3>
                         </div>
 
-                        {viewMode === 'grid' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {/* Toolbar acoplada à tabela — §5.2: toolbar e conteúdo (grade OU
+                            lista) dividem um único card (border/rounded/shadow só no
+                            container pai); a costura visível é o border-b da toolbar. */}
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="flex items-center justify-end p-4 border-b border-gray-100 bg-white">
+                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                    {viewMode === 'list' && (
+                                        <>
+                                            <ColumnConfigButton
+                                                columns={DEAL_COLUMNS.filter(c => c.key !== 'actions')}
+                                                visibleColumns={dealTableColumns.visibleColumns}
+                                                showColumnConfig={dealTableColumns.showColumnConfig}
+                                                onToggleShow={() => dealTableColumns.setShowColumnConfig(!dealTableColumns.showColumnConfig)}
+                                                onToggleColumn={dealTableColumns.toggleColumn}
+                                                onReset={dealTableColumns.resetColumns}
+                                            />
+                                            {/* Ajustar largura ao conteúdo (§6.1.2) — sob comando explícito, nunca automático. */}
+                                            <button
+                                                onClick={() => dealCols.autoFit()}
+                                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                                title="Ajustar largura das colunas ao conteúdo"
+                                            >
+                                                <MoveHorizontal className="w-4 h-4" />
+                                            </button>
+                                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                        </>
+                                    )}
+                                    <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
+                                    <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
+                                </div>
+                            </div>
+
+                            {/* Conteúdo — sem bg/border/rounded próprios: já está dentro do
+                                card acoplado toolbar+conteúdo (ver abertura acima). */}
+                            {viewMode === 'grid' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                                 {sortedDeals.map(deal => {
                                     const property = properties.find(p => p.id === deal.property_id);
                                     return (
@@ -1573,21 +1644,65 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     <p className="text-xs text-gray-400 text-center mt-1 px-4">Inicie o registro de um novo contrato de aluguel.</p>
                                 </button>
                             </div>
-                        ) : (
-                            <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
+                            ) : (
+                            <>
                                 <div className="overflow-auto max-h-[70vh]">
-                                <table className="w-full text-left border-collapse">
+                                <table ref={dealCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: dealsTableTotalWidth }}>
+                                    <colgroup>
+                                        {DEAL_COLUMNS.filter(c => c.key !== 'actions').map(c => (
+                                            dealTableColumns.visibleColumns.includes(c.key)
+                                                ? <col key={c.key} data-col-key={c.key} style={{ width: `${dealCols.getWidth(c.key)}px` }} />
+                                                : null
+                                        ))}
+                                        {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                            borda de "Ações" não andar a cada redimensionamento. */}
+                                        <col />
+                                        <col data-col-key="actions" style={{ width: `${dealCols.getWidth('actions')}px` }} />
+                                    </colgroup>
                                     {/* thead em sentence case (§6.2) — escala compacta; ordenável (§6.3) */}
                                     <thead>
                                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            <SortableHeader colKey="id" label="ID" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            <SortableHeader colKey="_propertyName" label="Imóvel" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            <SortableHeader colKey="_clientName" label="Cliente" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            <SortableHeader colKey="type" label="Tipo" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            <SortableHeader colKey="value" label="Valor" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            <SortableHeader colKey="date" label="Data" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                            {dealTableColumns.visibleColumns.includes('id') && (
+                                                <SortableHeader colKey="id" label="ID" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <dealCols.ResizeHandle colKey="id" />
+                                                </SortableHeader>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('_propertyName') && (
+                                                <SortableHeader colKey="_propertyName" label="Imóvel" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <dealCols.ResizeHandle colKey="_propertyName" />
+                                                </SortableHeader>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('_clientName') && (
+                                                <SortableHeader colKey="_clientName" label="Cliente" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <dealCols.ResizeHandle colKey="_clientName" />
+                                                </SortableHeader>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('type') && (
+                                                <SortableHeader colKey="type" label="Tipo" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <dealCols.ResizeHandle colKey="type" />
+                                                </SortableHeader>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('value') && (
+                                                <SortableHeader colKey="value" label="Valor" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <dealCols.ResizeHandle colKey="value" />
+                                                </SortableHeader>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('date') && (
+                                                <SortableHeader colKey="date" label="Data" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <dealCols.ResizeHandle colKey="date" />
+                                                </SortableHeader>
+                                            )}
+                                            {dealTableColumns.visibleColumns.includes('status') && (
+                                                <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <dealCols.ResizeHandle colKey="status" />
+                                                </SortableHeader>
+                                            )}
+                                            {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                            <th aria-hidden="true" className="border-r border-gray-100" />
+                                            <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                Ações
+                                                <dealCols.ResizeHandle colKey="actions" />
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
@@ -1596,33 +1711,49 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             const client = clients.find(c => c.id === deal.client_id);
                                             return (
                                                 <tr key={deal.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
-                                                        #{deal.id.substring(0, 8).toUpperCase()}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors"
-                                                        title={deal._unitNames || undefined}>
-                                                        {deal._propertyName || property?.name || '---'}
-                                                        {deal._unitCount > 1 && (
-                                                            <span className="ml-1.5 text-xs text-gray-400">+{deal._unitCount - 1}</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                        {client?.name || 'Não vinculado'}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                        {deal.type === 'SALE' ? 'Venda' : 'Locação'}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                        {new Date(deal.date).toLocaleDateString('pt-BR')}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                            {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
-                                                        </span>
-                                                    </td>
+                                                    {dealTableColumns.visibleColumns.includes('id') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600 truncate">
+                                                            #{deal.id.substring(0, 8).toUpperCase()}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('_propertyName') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors truncate"
+                                                            title={deal._unitNames || undefined}>
+                                                            {deal._propertyName || property?.name || '---'}
+                                                            {deal._unitCount > 1 && (
+                                                                <span className="ml-1.5 text-xs text-gray-400">+{deal._unitCount - 1}</span>
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('_clientName') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">
+                                                            {client?.name || 'Não vinculado'}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('type') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                            {deal.type === 'SALE' ? 'Venda' : 'Locação'}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('value') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 truncate">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('date') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                            {new Date(deal.date).toLocaleDateString('pt-BR')}
+                                                        </td>
+                                                    )}
+                                                    {dealTableColumns.visibleColumns.includes('status') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <span className={`text-sm font-normal ${getDealStatusDisplay(deal.status).color}`}>
+                                                                {getDealStatusDisplay(deal.status).label}
+                                                            </span>
+                                                        </td>
+                                                    )}
+                                                    {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                             <ActionIconButton kind="edit" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} />
@@ -1645,8 +1776,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
                                     Registrar Novo Contrato
                                 </button>
-                            </div>
-                        )}
+                            </>
+                            )}
+                        </div>
                     </div>
                 )
             }
@@ -1701,63 +1833,143 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         <button onClick={loadData} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95" title="Atualizar">
                             <RefreshCw className="w-4 h-4" />
                         </button>
+
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={BROKER_COLUMNS}
+                                visibleColumns={brokerTableColumns.visibleColumns}
+                                showColumnConfig={brokerTableColumns.showColumnConfig}
+                                onToggleShow={() => brokerTableColumns.setShowColumnConfig(!brokerTableColumns.showColumnConfig)}
+                                onToggleColumn={brokerTableColumns.toggleColumn}
+                                onReset={brokerTableColumns.resetColumns}
+                            />
+                            {/* Ajustar largura ao conteúdo (§6.1.2) — sob comando explícito, nunca automático. */}
+                            <button
+                                onClick={() => brokerCols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
 
                     {sortedBrokers.length > 0 ? (
-                            <table className="w-full text-left border-collapse">
+                            <div className="overflow-auto max-h-[70vh]">
+                            <table ref={brokerCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: brokersTableTotalWidth }}>
+                                <colgroup>
+                                    {BROKER_COLUMNS.map(c => (
+                                        brokerTableColumns.visibleColumns.includes(c.key)
+                                            ? <col key={c.key} data-col-key={c.key} style={{ width: `${brokerCols.getWidth(c.key)}px` }} />
+                                            : null
+                                    ))}
+                                </colgroup>
                                 <thead>
-                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <SortableHeader colKey="name" label="Corretor" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                        <SortableHeader colKey="email" label="E-mail" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                        <SortableHeader colKey="phone" label="Telefone" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                        <SortableHeader colKey="agency_name" label="Imobiliária" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                        <SortableHeader colKey="commission_rate" label="Comissão" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right" />
-                                        <SortableHeader colKey="creci" label="CRECI" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-table-header font-semibold text-gray-500">Status</th>
-                                        <th className="px-6 py-2 text-table-header font-semibold text-gray-500">Acesso ao Portal</th>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        {brokerTableColumns.visibleColumns.includes('name') && (
+                                            <SortableHeader colKey="name" label="Corretor" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                <brokerCols.ResizeHandle colKey="name" />
+                                            </SortableHeader>
+                                        )}
+                                        {brokerTableColumns.visibleColumns.includes('email') && (
+                                            <SortableHeader colKey="email" label="E-mail" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                <brokerCols.ResizeHandle colKey="email" />
+                                            </SortableHeader>
+                                        )}
+                                        {brokerTableColumns.visibleColumns.includes('phone') && (
+                                            <SortableHeader colKey="phone" label="Telefone" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                <brokerCols.ResizeHandle colKey="phone" />
+                                            </SortableHeader>
+                                        )}
+                                        {brokerTableColumns.visibleColumns.includes('agency_name') && (
+                                            <SortableHeader colKey="agency_name" label="Imobiliária" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                <brokerCols.ResizeHandle colKey="agency_name" />
+                                            </SortableHeader>
+                                        )}
+                                        {brokerTableColumns.visibleColumns.includes('commission_rate') && (
+                                            <SortableHeader colKey="commission_rate" label="Comissão" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
+                                                <brokerCols.ResizeHandle colKey="commission_rate" />
+                                            </SortableHeader>
+                                        )}
+                                        {brokerTableColumns.visibleColumns.includes('creci') && (
+                                            <SortableHeader colKey="creci" label="CRECI" uppercase={false} sortColumn={brokerSortConfig?.key ?? null} sortDirection={brokerSortConfig?.direction ?? 'asc'} onSort={handleBrokerSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                <brokerCols.ResizeHandle colKey="creci" />
+                                            </SortableHeader>
+                                        )}
+                                        {brokerTableColumns.visibleColumns.includes('is_active') && (
+                                            <th className="px-6 py-2 border-r border-gray-100 relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                Status
+                                                <brokerCols.ResizeHandle colKey="is_active" />
+                                            </th>
+                                        )}
+                                        {brokerTableColumns.visibleColumns.includes('access') && (
+                                            <th className="px-6 py-2 relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                Acesso ao Portal
+                                                <brokerCols.ResizeHandle colKey="access" />
+                                            </th>
+                                        )}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {sortedBrokers.map(broker => (
                                         <tr key={broker.id} className="hover:bg-blue-50/50 transition-colors">
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">
-                                                {broker.name}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {broker.email}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {broker.phone || '---'}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
-                                                {broker.agency_name || 'Autônomo'}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
-                                                {broker.commission_rate}%
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {broker.creci || '---'}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <span className={`text-sm font-normal ${broker.is_active ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                    {broker.is_active ? 'Ativo' : 'Inativo'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-2.5">
-                                                <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="sr-only peer"
-                                                        checked={!!brokerAccess[broker.id]}
-                                                        onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
-                                                    />
-                                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                                </label>
-                                            </td>
+                                            {brokerTableColumns.visibleColumns.includes('name') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 truncate">
+                                                    {broker.name}
+                                                </td>
+                                            )}
+                                            {brokerTableColumns.visibleColumns.includes('email') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">
+                                                    {broker.email}
+                                                </td>
+                                            )}
+                                            {brokerTableColumns.visibleColumns.includes('phone') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">
+                                                    {broker.phone || '---'}
+                                                </td>
+                                            )}
+                                            {brokerTableColumns.visibleColumns.includes('agency_name') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600 truncate">
+                                                    {broker.agency_name || 'Autônomo'}
+                                                </td>
+                                            )}
+                                            {brokerTableColumns.visibleColumns.includes('commission_rate') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right truncate">
+                                                    {broker.commission_rate}%
+                                                </td>
+                                            )}
+                                            {brokerTableColumns.visibleColumns.includes('creci') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">
+                                                    {broker.creci || '---'}
+                                                </td>
+                                            )}
+                                            {brokerTableColumns.visibleColumns.includes('is_active') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <span className={`text-sm font-normal ${broker.is_active ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                        {broker.is_active ? 'Ativo' : 'Inativo'}
+                                                    </span>
+                                                </td>
+                                            )}
+                                            {brokerTableColumns.visibleColumns.includes('access') && (
+                                                <td className="px-6 py-2.5">
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="sr-only peer"
+                                                            checked={!!brokerAccess[broker.id]}
+                                                            onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
+                                                        />
+                                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                    </label>
+                                                </td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                     ) : (
                         <div className="text-center py-12">
                             <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />

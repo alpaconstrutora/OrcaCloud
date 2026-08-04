@@ -4,7 +4,7 @@ import { ClientCategory } from '../types';
 import { Users, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -63,7 +63,7 @@ const ClientCategoriesSettings: React.FC = () => {
         // Replicação parcial não é erro: uma organização que já tinha a categoria
         // falha no UNIQUE e as outras seguem — o aviso diz exatamente o que houve.
         showToast(
-            failed.length ? `Criada em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+            failed.length ? `Criada em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`
                           : ok > 1 ? `Categoria criada em ${ok} organizações` : 'Categoria criada com sucesso',
             'success',
         );

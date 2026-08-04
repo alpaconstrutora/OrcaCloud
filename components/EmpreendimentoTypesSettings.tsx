@@ -10,7 +10,7 @@ import {
 import { Building2, Plus, Check, X, Search, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -72,7 +72,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
             showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
         }
-        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`
             : ok > 1 ? `Criado em ${ok} organizações` : 'Tipo de empreendimento criado com sucesso', 'success');
         cancelEdit();
         loadTypes();

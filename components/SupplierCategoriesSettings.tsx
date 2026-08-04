@@ -4,7 +4,7 @@ import { SupplierCategory } from '../types';
 import { Tag, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -62,7 +62,7 @@ const SupplierCategoriesSettings: React.FC = () => {
             showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
         }
-        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`
             : ok > 1 ? `Criado em ${ok} organizações` : 'Categoria criada com sucesso', 'success');
         setEditValue('');
         setIsAdding(false);

@@ -181,6 +181,25 @@ export async function forEachTargetOrg<T>(
 }
 
 /**
+ * Resumo honesto de uma replicação parcial, para o toast.
+ *
+ * Não assuma que toda falha é duplicata: em 2026-08-04 a mensagem dizia
+ * sempre "as demais já tinham" e escondia `42501` (RLS) — o usuário achava
+ * que o item já existia quando na verdade não tinha permissão de gravar ali.
+ */
+export function partialFailureNote(failed: { error: unknown }[]): string {
+    if (failed.length === 0) return '';
+    const msgs = failed.map(f => errorMessage(f.error, '').toLowerCase());
+    const semPermissao = msgs.filter(m => m.includes('row-level security') || m.includes('42501')).length;
+    const duplicadas = msgs.filter(m => m.includes('unique') || m.includes('duplicate')).length;
+
+    if (semPermissao === failed.length) return 'as demais você não tem permissão de gravar';
+    if (duplicadas === failed.length) return 'as demais já tinham';
+    if (semPermissao > 0) return `${duplicadas} já tinham, ${semPermissao} sem permissão`;
+    return `${failed.length} falharam: ${errorMessage(failed[0].error, 'erro desconhecido')}`;
+}
+
+/**
  * Resolve a organização de destino de uma CRIAÇÃO, obedecendo ao topo.
  *
  * Auto-contido (não exige Provider no root, igual ao antigo useOrganizationPicker):
@@ -200,7 +219,30 @@ export async function forEachTargetOrg<T>(
  */
 export function useOrgWriteTarget() {
     const { orgId } = useOrgContext();
-    const organizations = useStore(state => state.organizations);
+    const allOrganizations = useStore(state => state.organizations);
+    const currentEmail = useStore(state => state.currentProfile.email);
+
+    /**
+     * Organizações em que o usuário PODE GRAVAR — não as que ele enxerga.
+     *
+     * A RLS de `organizations` é mais permissiva que a das tabelas de dados:
+     * o seletor do topo lista organizações das quais o usuário não é membro
+     * (confirmado em 2026-08-04: 4 no seletor, membro de 1). Replicar "em
+     * todas" usando a lista inteira faria 3 de 4 gravações falharem com
+     * `42501 new row violates row-level security policy`, e o aviso de
+     * replicação parcial ("as demais já tinham") mentiria sobre a causa.
+     */
+    const organizations = React.useMemo(() => {
+        const email = currentEmail?.toLowerCase();
+        if (!email) return allOrganizations;
+        const writable = allOrganizations.filter(o =>
+            (o.members ?? []).some(m => m.email?.toLowerCase() === email),
+        );
+        // Sem informação de membro (lista ainda carregando, ou `members` não
+        // veio) não dá para afirmar que não pode gravar — melhor deixar o banco
+        // decidir do que esconder organização legítima.
+        return writable.length > 0 ? writable : allOrganizations;
+    }, [allOrganizations, currentEmail]);
     const [pending, setPending] = React.useState<{
         mode: WriteTargetMode;
         resolve: (t: WriteTarget | null) => void;

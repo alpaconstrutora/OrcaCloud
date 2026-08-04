@@ -4,7 +4,7 @@ import { ContractTypeRecord } from '../types';
 import { FileText, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ContractTypeCategory } from '../constants/contractTypes';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -65,7 +65,7 @@ const ContractTypesSettings: React.FC = () => {
             showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
         }
-        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`
             : ok > 1 ? `Criado em ${ok} organizações` : 'Tipo de contrato criado com sucesso', 'success');
         cancelEdit();
         loadTypes();
@@ -106,7 +106,7 @@ const ContractTypesSettings: React.FC = () => {
         }
         // Replicação parcial não é erro: organização que já tinha o item falha
         // no UNIQUE e as demais seguem — o aviso diz exatamente o que houve.
-        showToast(failed.length ? `Aplicado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+        showToast(failed.length ? `Aplicado em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`
             : ok > 1 ? `Aplicado em ${ok} organizações` : 'Tipo de contrato duplicado com sucesso', 'success');
         loadTypes();
     };
@@ -126,7 +126,7 @@ const ContractTypesSettings: React.FC = () => {
         }
         // Replicação parcial não é erro: organização que já tinha o item falha
         // no UNIQUE e as demais seguem — o aviso diz exatamente o que houve.
-        showToast(failed.length ? `Aplicado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+        showToast(failed.length ? `Aplicado em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`
             : ok > 1 ? `Aplicado em ${ok} organizações` : 'Tipos padrão importados com sucesso', 'success');
         loadTypes();
     };

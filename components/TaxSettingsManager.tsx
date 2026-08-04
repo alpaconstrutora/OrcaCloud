@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Landmark, Plus, Check, X, Search, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -61,7 +61,7 @@ const TaxSettingsManager: React.FC = () => {
             cancelEdit(); invalidate();
             // Replicação parcial não é erro: a organização que já tinha o tributo
             // falha no UNIQUE e as demais seguem.
-            showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+            showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (${partialFailureNote(failed)}).`
                 : ok > 1 ? `Tributo criado em ${ok} organizações` : 'Tributo criado com sucesso', 'success');
         },
         onError: (e: any) => showToast(e.message || 'Erro ao criar.', 'error'),

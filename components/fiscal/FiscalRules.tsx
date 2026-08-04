@@ -4,7 +4,7 @@ import { listClassificationRules, createClassificationRule, toggleClassification
 import type { ClassificationRule, RuleType } from '../../types/fiscal';
 import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
-import { useOrgWriteTarget } from '../../hooks/useOrgContext';
+import { useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 
 interface Props {
   organizationId: string | null;
@@ -80,28 +80,28 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
       onToast('Informe o valor de correspondência', 'err');
       return;
     }
-    const target = await resolveWriteOrg('single');
-    if (!target || target.kind !== 'org') return;
-    const orgId = target.orgId;
+    const target = await resolveWriteOrg('all-allowed');
+    if (!target) return;
     setSaving(true);
-    try {
-      await createClassificationRule({
+    const { ok, failed } = await forEachTargetOrg(target, orgId =>
+      createClassificationRule({
         organization_id: orgId,
         rule_type: form.rule_type,
         match_value: form.match_value.trim().toLowerCase(),
         category: form.category,
         priority: form.priority,
         is_active: true,
-      });
-      onToast('Regra criada com sucesso', 'ok');
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-      loadRules();
-    } catch (err: any) {
-      onToast(err.message ?? 'Erro ao criar regra', 'err');
-    } finally {
-      setSaving(false);
+      }));
+    setSaving(false);
+    if (ok === 0) {
+      const e = failed[0]?.error;
+      onToast(e instanceof Error ? e.message : 'Erro ao criar regra', 'err');
+      return;
     }
+    onToast(ok > 1 ? `Regra criada em ${ok} organizações` : 'Regra criada com sucesso', 'ok');
+    setShowForm(false);
+    setForm(EMPTY_FORM);
+    loadRules();
   };
 
   const handleToggle = async (rule: ClassificationRule) => {

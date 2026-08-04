@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Landmark, Plus, Check, X, Search, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -35,7 +35,7 @@ const TaxSettingsManager: React.FC = () => {
     const tableColumns = useTableColumns(COLUMNS, 'taxSettingsColumns');
 
     const [isAdding, setIsAdding] = React.useState(false);
-    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
+    const [createTarget, setCreateTarget] = React.useState<WriteTarget | null>(null);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [form, setForm] = React.useState<TaxSettingInput>(emptyForm);
 
@@ -48,9 +48,23 @@ const TaxSettingsManager: React.FC = () => {
     const invalidate = () => qc.invalidateQueries({ queryKey: ['tax-settings', activeOrganizationId] });
 
     const createMut = useMutation({
-        mutationFn: ({ orgId, input }: { orgId: string; input: TaxSettingInput }) => taxSettingsService.create(orgId, input),
-        onSuccess: () => { cancelEdit(); invalidate(); showToast('Tributo criado com sucesso', 'success'); },
-        onError: (e: any) => showToast(e.message?.includes('unique') ? 'Já existe um tributo com esse nome.' : (e.message || 'Erro ao criar.'), 'error'),
+        mutationFn: ({ target, input }: { target: WriteTarget; input: TaxSettingInput }) =>
+            forEachTargetOrg(target, orgId => taxSettingsService.create(orgId, input)),
+        onSuccess: ({ ok, failed }) => {
+            if (ok === 0) {
+                const e = failed[0]?.error;
+                showToast(e instanceof Error && e.message.includes('unique')
+                    ? 'Já existe um tributo com esse nome.'
+                    : (e instanceof Error ? e.message : 'Erro ao criar.'), 'error');
+                return;
+            }
+            cancelEdit(); invalidate();
+            // Replicação parcial não é erro: a organização que já tinha o tributo
+            // falha no UNIQUE e as demais seguem.
+            showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+                : ok > 1 ? `Tributo criado em ${ok} organizações` : 'Tributo criado com sucesso', 'success');
+        },
+        onError: (e: any) => showToast(e.message || 'Erro ao criar.', 'error'),
     });
 
     const updateMut = useMutation({
@@ -66,26 +80,30 @@ const TaxSettingsManager: React.FC = () => {
     });
 
     const seedMut = useMutation({
-        mutationFn: (orgId: string) => taxSettingsService.seedDefaults(orgId),
-        onSuccess: (count) => {
+        mutationFn: (target: WriteTarget) =>
+            forEachTargetOrg(target, orgId => taxSettingsService.seedDefaults(orgId)),
+        onSuccess: ({ ok, failed }) => {
             invalidate();
-            showToast(count > 0 ? `${count} tributo(s) padrão criado(s).` : 'Os 5 tributos padrão já estão cadastrados.', 'success');
+            if (ok === 0) {
+                const e = failed[0]?.error;
+                showToast(e instanceof Error ? e.message : 'Erro ao criar tributos padrão.', 'error');
+                return;
+            }
+            showToast(ok > 1 ? `Tributos padrão criados em ${ok} organizações` : 'Tributos padrão criados.', 'success');
         },
         onError: (e: any) => showToast(e.message || 'Erro ao criar tributos padrão.', 'error'),
     });
 
     const handleSeedDefaults = async () => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
-        seedMut.mutate(orgId);
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        seedMut.mutate(target);
     };
 
     const startAdd = async () => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
-        setCreateOrgId(orgId);
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        setCreateTarget(target);
         setIsAdding(true); setEditingId(null); setForm(emptyForm);
     };
     const startEdit = (item: TaxSetting) => {
@@ -93,13 +111,13 @@ const TaxSettingsManager: React.FC = () => {
         setIsAdding(false);
         setForm({ nome: item.nome, aliquota: item.aliquota, base_calculo: item.base_calculo, regra_retencao: item.regra_retencao, ativo: item.ativo, aplica_venda_ativo: item.aplica_venda_ativo, aplica_locacao: item.aplica_locacao });
     };
-    const cancelEdit = () => { setIsAdding(false); setCreateOrgId(undefined); setEditingId(null); setForm(emptyForm); };
+    const cancelEdit = () => { setIsAdding(false); setCreateTarget(null); setEditingId(null); setForm(emptyForm); };
 
     const handleSave = () => {
         if (!form.nome.trim()) return;
         const input: TaxSettingInput = { ...form, nome: form.nome.trim() };
         if (editingId) updateMut.mutate({ id: editingId, input });
-        else if (createOrgId) createMut.mutate({ orgId: createOrgId, input });
+        else if (createTarget) createMut.mutate({ target: createTarget, input });
     };
 
     const handleDelete = async (item: TaxSetting) => {

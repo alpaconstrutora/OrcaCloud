@@ -9,7 +9,7 @@ import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import CostCenterV2ImportModal from './CostCenterV2ImportModal';
-import { useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { costCenterService } from '../services/costCenterService';
 import { exportService } from '../services/exportService';
 import { CostCenterV2 } from '../types/financial';
@@ -47,8 +47,8 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const [sheetOpen, setSheetOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<CostCenterV2 | null>(null);
     const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
-    const [createOrgId, setCreateOrgId] = useState<string | undefined>(undefined);
-    const [importOrgId, setImportOrgId] = useState<string | undefined>(undefined);
+    const [createTarget, setCreateTarget] = useState<WriteTarget | null>(null);
+    const [importTarget, setImportTarget] = useState<WriteTarget | null>(null);
     const [saving, setSaving] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -142,10 +142,9 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const toggleExpandAll = () => setExpandedIds(allExpanded ? {} : Object.fromEntries(parentIds.map(id => [id, true])));
 
     const openCreate = async (parentId?: string) => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
-        setCreateOrgId(orgId);
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        setCreateTarget(target);
         setEditingItem(null);
         setFormData({ parent_id: parentId || '', name: '', description: '' });
         setSheetOpen(true);
@@ -161,14 +160,14 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
         setSheetOpen(false);
         setEditingItem(null);
         setFormData(EMPTY_FORM);
-        setCreateOrgId(undefined);
+        setCreateTarget(null);
     };
 
     const editingHasChildren = editingItem ? (childrenByParent.get(editingItem.id)?.length ?? 0) > 0 : false;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name.trim() || (!editingItem && !createOrgId)) return;
+        if (!formData.name.trim() || (!editingItem && !createTarget)) return;
         setSaving(true);
         try {
             if (editingItem) {
@@ -178,12 +177,15 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                     parent_id: editingHasChildren ? editingItem.parent_id : (formData.parent_id || null),
                 });
             } else {
-                await costCenterService.create({
-                    organization_id: createOrgId!,
-                    parent_id: formData.parent_id || null,
-                    name: formData.name.trim(),
-                    description: formData.description.trim() || undefined,
-                });
+                // Em "Todas as organizações" o centro de custo é criado em cada uma.
+                const { ok, failed } = await forEachTargetOrg(createTarget!, orgId =>
+                    costCenterService.create({
+                        organization_id: orgId,
+                        parent_id: formData.parent_id || null,
+                        name: formData.name.trim(),
+                        description: formData.description.trim() || undefined,
+                    }));
+                if (ok === 0) throw failed[0]?.error ?? new Error('Falha ao criar');
             }
             closeSheet();
             await load();
@@ -278,10 +280,9 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                         </button>
                         <button
                             onClick={async () => {
-                                const target = await resolveWriteOrg('single');
-                                if (!target || target.kind !== 'org') return;
-                                const orgId = target.orgId;
-                                setImportOrgId(orgId);
+                                const target = await resolveWriteOrg('all-allowed');
+                                if (!target) return;
+                                setImportTarget(target);
                                 setShowImportModal(true);
                             }}
                             title="Importar"
@@ -486,10 +487,10 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                 </form>
             </Sheet>
 
-            {showImportModal && importOrgId && (
+            {showImportModal && importTarget && (
                 <CostCenterV2ImportModal
-                    organizationId={importOrgId}
-                    onClose={() => { setShowImportModal(false); setImportOrgId(undefined); }}
+                    target={importTarget}
+                    onClose={() => { setShowImportModal(false); setImportTarget(null); }}
                     onSuccess={load}
                 />
             )}

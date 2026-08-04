@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { X, Upload, CheckCircle2, XCircle, FileSpreadsheet, ArrowRight, RotateCcw } from 'lucide-react';
 import Button from './ui/Button';
 import { costCenterService } from '../services/costCenterService';
+import { forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 
 interface ParsedRow {
     index: number;
@@ -15,7 +16,8 @@ interface ParsedRow {
 }
 
 interface Props {
-    organizationId: string;
+    /** Destino: uma organização, ou todas as do usuário (replica a importação). */
+    target: WriteTarget;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -24,7 +26,7 @@ interface Props {
 // rótulo text-xs font-semibold text-slate-500) — arquivo novo, não herda o
 // estilo antigo uppercase/tracking-widest do CostCenterImportModal.tsx (Plano
 // de Contas legado).
-const CostCenterV2ImportModal: React.FC<Props> = ({ organizationId, onClose, onSuccess }) => {
+const CostCenterV2ImportModal: React.FC<Props> = ({ target, onClose, onSuccess }) => {
     const fileRef = useRef<HTMLInputElement>(null);
     const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
     const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -81,12 +83,21 @@ const CostCenterV2ImportModal: React.FC<Props> = ({ organizationId, onClose, onS
 
         setImporting(true);
         try {
-            const res = await costCenterService.importRows(
-                organizationId,
-                toImport.map(r => ({ group: r.group || undefined, name: r.name, description: r.description || undefined })),
-            );
+            const payload = toImport.map(r => ({ group: r.group || undefined, name: r.name, description: r.description || undefined }));
+            // Em "Todas as organizações" a mesma planilha é importada em cada uma;
+            // o resultado exibido é a soma (criados e erros de todas).
+            const results: { created: number; errors: number }[] = [];
+            const { ok, failed } = await forEachTargetOrg(target, async orgId => {
+                const r = await costCenterService.importRows(orgId, payload);
+                results.push(r);
+                return r;
+            });
+            if (ok === 0) throw failed[0]?.error ?? new Error('Falha ao importar');
             const errorCount = rows.filter(r => r.status === 'error').length;
-            setResult({ created: res.created, errors: res.errors + errorCount });
+            setResult({
+                created: results.reduce((a, r) => a + r.created, 0),
+                errors: results.reduce((a, r) => a + r.errors, 0) + errorCount,
+            });
             setStep('done');
         } catch (err) {
             console.error(err);

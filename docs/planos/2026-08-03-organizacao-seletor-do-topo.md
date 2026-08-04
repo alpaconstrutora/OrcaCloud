@@ -78,34 +78,39 @@ Contrato no código: `hooks/useOrgContext.tsx`. Trava: `__tests__/orgContextGuar
 
 Catraca: `organizations[0]` 18→1 · guards 7→0 · `enabled` 2→0 · sentinela `''` 72→72.
 
-### FASE A — pendente: o pedido original ainda não está cumprido
+### FASE A — 8 de 8 aplicados · 2 de 3 critérios verificados (2026-08-04)
 
-5 telas de catálogo continuam em `'single'` — o modal obriga a escolher uma organização.
-Reportado pelo usuário em 08-04 (Tipos de Empreendimento).
+As 5 telas de catálogo que faltavam passaram a oferecer "Todas as organizações".
 
-Modelo a seguir: `components/PaymentTypesSettings.tsx` (já convertido).
-
-| # | Arquivo | Handler | Pronto quando |
+| # | Arquivo | Handler | Feito |
 |---|---|---|---|
-| A1 | `EmpreendimentoTypesSettings.tsx` | `startAdd` + `handleAdd` | modal em "Todas" mostra a opção; criar replica nas 4 orgs |
-| A2 | `EmpreendimentoTypesSettings.tsx` | `handleDuplicate` | duplicar replica |
-| A3 | `TaxSettingsManager.tsx` | `startAdd` + `handleSave` | idem |
-| A4 | `TaxSettingsManager.tsx` | `handleSeedDefaults` | idem |
-| A5 | `ContractIndexManager.tsx` | `handleAdd` | idem (mesmo INCC para todas — ganho maior aqui) |
-| A6 | `fiscal/FiscalRules.tsx` | `handleCreate` | idem |
-| A7 | `CostCenterModule.tsx` | `openCreate` | idem |
-| A8 | `CostCenterModule.tsx` | botão Importar | idem |
+| A1 | `EmpreendimentoTypesSettings.tsx` | `startAdd` + `handleAdd` | [x] |
+| A2 | `EmpreendimentoTypesSettings.tsx` | `handleDuplicate` | [x] |
+| A3 | `TaxSettingsManager.tsx` | `startAdd` + `handleSave` (`createMut`) | [x] |
+| A4 | `TaxSettingsManager.tsx` | `handleSeedDefaults` (`seedMut`) | [x] |
+| A5 | `ContractIndexManager.tsx` | `handleAdd` | [x] |
+| A6 | `fiscal/FiscalRules.tsx` | `handleCreate` | [x] |
+| A7 | `CostCenterModule.tsx` | `openCreate` + `handleSubmit` | [x] |
+| A8 | `CostCenterModule.tsx` + `CostCenterV2ImportModal.tsx` | Importar planilha | [x] |
 
-⚠️ `EmpreendimentoTypesSettings.tsx` está **modificado e não commitado** (A1/A2 aplicados);
-decidir entre manter ou `git checkout --`.
+Notas de implementação:
+- `TaxSettingsManager` usa react-query: as mutations `createMut`/`seedMut` passaram a
+  receber `WriteTarget` em vez de `orgId`, e agregam o resultado no `onSuccess`.
+- `CostCenterV2ImportModal` passou a receber `target: WriteTarget`; a mesma planilha é
+  importada em cada organização e o resultado exibido é a soma (criados/erros).
 
-Ficam em `'single'` de propósito: `AreaEngineModule`, `ContasReceberManager`,
-`FinancialIntelligence`, `InventoryModule`, `OpuraGovernanceModule`, `ProcessosModule`,
-`ServiceContractsModule`, `TributosAPagarManager`, `WarrantyModule`,
-`academy/AcademyCatalogTab`, `investor/OpportunitiesTab`, `services/ServicesPipeline`.
+**Critérios de pronto:**
+- [x] `grep -rln "resolveWriteOrg('single')" components/` → **exatamente os 12** arquivos
+      que devem seguir `'single'` (nenhuma tela de catálogo sobrou)
+- [x] `npm run ci` verde — 768 testes, typecheck e build
+- [ ] **Print do modal com a opção "Todas as organizações"** — não verificado
 
-**Fase A pronta quando:** `grep -rn "resolveWriteOrg('single')" components/` devolver
-exatamente esses 12 arquivos · `npm run ci` verde · print do modal com a opção.
+⚠️ **Por que o print não foi feito:** Playwright não está instalado
+(`node_modules/.bin` não tem o binário) e não tenho credenciais de login. O que consegui
+verificar foi menos que isso: subi o dev server e confirmei que os 6 módulos alterados
+transpilam e são servidos (HTTP 200). **Isso não prova que a tela funciona** — prova que
+compila. A validação de comportamento depende do usuário abrir Configurações do Sistema ›
+Tipos de Empreendimento com o topo em "Todas as organizações".
 
 ### FASE B — pendente: validação no navegador
 

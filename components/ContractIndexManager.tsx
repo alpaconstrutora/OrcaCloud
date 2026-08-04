@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { TrendingUp, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
-import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 const COLUMNS: ColumnConfig[] = [
@@ -67,19 +67,23 @@ const ContractIndexManager: React.FC = () => {
     const handleAdd = async () => {
         const v = parseFloat(newValue.replace(',', '.'));
         if (isNaN(v) || v <= 0 || !newMonth) return;
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
+        // O valor do índice (INCC, IPCA…) é o mesmo para todas as organizações,
+        // então replicar em "Todas" é o caso de uso mais comum aqui.
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
         setSaving(true);
-        try {
-            const [y, m] = newMonth.split('-').map(Number);
-            await contractIndexService.upsert(orgId, selectedIndex, new Date(y, m - 1, 1), v);
-            setNewValue('');
-            notify('Valor salvo.', 'success');
-            loadValues();
-        } catch (e) {
+        const [y, m] = newMonth.split('-').map(Number);
+        const { ok, failed } = await forEachTargetOrg(target, orgId =>
+            contractIndexService.upsert(orgId, selectedIndex, new Date(y, m - 1, 1), v));
+        setSaving(false);
+        if (ok === 0) {
+            const e = failed[0]?.error;
             notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
-        } finally { setSaving(false); }
+            return;
+        }
+        setNewValue('');
+        notify(ok > 1 ? `Valor salvo em ${ok} organizações.` : 'Valor salvo.', 'success');
+        loadValues();
     };
 
     const handleRemove = async (id: string) => {

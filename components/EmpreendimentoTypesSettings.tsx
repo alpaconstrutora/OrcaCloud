@@ -10,7 +10,7 @@ import {
 import { Building2, Plus, Check, X, Search, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -37,7 +37,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     const [loading, setLoading] = React.useState(false);
 
     const [isAdding, setIsAdding] = React.useState(false);
-    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
+    const [createTarget, setCreateTarget] = React.useState<WriteTarget | null>(null);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editName, setEditName] = React.useState('');
     const [editCategory, setEditCategory] = React.useState<EmpreendimentoMotorCategory>('vertical');
@@ -64,15 +64,18 @@ const EmpreendimentoTypesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editName.trim()) return;
-        if (!createOrgId) { showToast('Selecione uma organização para criar um tipo de empreendimento.', 'error'); return; }
-        try {
-            await empreendimentoTypeService.create({ name: editName.trim(), motor_category: editCategory, color: editColor, description: null, organization_id: createOrgId });
-            showToast('Tipo de empreendimento criado com sucesso', 'success');
-            cancelEdit();
-            loadTypes();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        if (!createTarget) { showToast('Selecione uma organização para criar um tipo de empreendimento.', 'error'); return; }
+        const nome = editName.trim();
+        const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
+            empreendimentoTypeService.create({ name: nome, motor_category: editCategory, color: editColor, description: null, organization_id: orgId }));
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao criar', 'error');
+            return;
         }
+        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+            : ok > 1 ? `Criado em ${ok} organizações` : 'Tipo de empreendimento criado com sucesso', 'success');
+        cancelEdit();
+        loadTypes();
     };
 
     const handleUpdate = async (id: string) => {
@@ -99,16 +102,16 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (type: EmpreendimentoTypeRecord) => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const targetOrgId = target.orgId;
-        try {
-            await empreendimentoTypeService.duplicate(type, targetOrgId);
-            showToast('Tipo de empreendimento duplicado com sucesso', 'success');
-            loadTypes();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        const { ok, failed } = await forEachTargetOrg(target, orgId =>
+            empreendimentoTypeService.duplicate(type, orgId));
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao duplicar', 'error');
+            return;
         }
+        showToast(ok > 1 ? `Duplicado em ${ok} organizações` : 'Tipo de empreendimento duplicado com sucesso', 'success');
+        loadTypes();
     };
 
     const startEdit = (type: EmpreendimentoTypeRecord) => {
@@ -120,10 +123,9 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     };
 
     const startAdd = async () => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const targetOrgId = target.orgId;
-        setCreateOrgId(targetOrgId);
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        setCreateTarget(target);
         setIsAdding(true);
         setEditingId(null);
         setEditName('');
@@ -133,7 +135,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
 
     const cancelEdit = () => {
         setIsAdding(false);
-        setCreateOrgId(undefined);
+        setCreateTarget(null);
         setEditingId(null);
         setEditName('');
         setEditCategory('vertical');

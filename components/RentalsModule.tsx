@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { supabase } from '../lib/supabase';
@@ -902,8 +902,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6 pb-20">
-            {/* Header — §20 (flat, sem hero). "Relatórios"/"Novo edifício" saíram daqui
-                — moveram para a toolbar de botões (§4), abaixo das abas. */}
+            {/* Header — §20 (flat, sem hero). */}
             <div className="flex items-center gap-3">
                 {selectedBuildingId && (
                     <button
@@ -938,11 +937,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             </div>
             )}
 
-            {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1:
-                card branco externo (mesmo peso visual da toolbar de botões abaixo)
+            {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1: card branco externo
                 envolvendo o trilho cinza interno onde ficam os botões das abas.
                 Antes só existia o trilho, sem o card — abas ficavam "soltas" na
-                página, sem o mesmo contorno da toolbar de botões logo abaixo. */}
+                página. "Inteligência de aluguéis" mora à direita, fora do trilho
+                (não é uma aba). */}
             {selectedBuildingId && (
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                     <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
@@ -994,45 +993,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             Tabela de aluguéis
                         </button>
                     </div>
-                </div>
-            )}
-
-            {/* Toolbar de botões — ui_ux_guia_unificado.md §5.3. Esta tela não tem controles de
-                escopo reais (não é conta/competência/período) — "Relatórios" fica à
-                esquerda como ação secundária, a ação primária (criar) à direita.
-                Oculta na aba Corretores: "Novo imóvel/edifício" e "Relatórios" não
-                são ações desta aba — o cadastro de corretor é centralizado em
-                Fornecedores (aviso já na própria aba), sem ação primária própria aqui.
-                Oculta também na visão mestre "Gestão de Locações" (sem edifício
-                selecionado) — só aparece dentro de "Gestão de Unidades". */}
-            {activeTab !== 'brokers' && selectedBuildingId && (
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
-                    <Maximize2 className="w-4 h-4" />
-                    Relatórios
-                </button>
-                <div className="flex items-center gap-2">
-                    {selectedBuildingId && (
-                        <button
-                            onClick={() => setIsPricingModalOpen(true)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-600 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
-                        >
-                            <BrainCircuit className="w-4 h-4" />
-                            Inteligência de aluguéis
-                        </button>
-                    )}
+                    {/* "Inteligência de aluguéis" migrou da toolbar de botões (removida —
+                        só tinha ela e o "Relatórios", que não tinha onClick nenhum, e
+                        "Novo imóvel", removido a pedido do usuário) para cá. */}
                     <button
-                        onClick={() => {
-                            setEditingProperty(undefined);
-                            setIsPropertyModalOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                        onClick={() => setIsPricingModalOpen(true)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-600 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                     >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Novo {selectedBuildingId ? 'imóvel' : 'edifício'}
+                        <BrainCircuit className="w-4 h-4" />
+                        Inteligência de aluguéis
                     </button>
                 </div>
-            </div>
             )}
 
             {/* Content */}

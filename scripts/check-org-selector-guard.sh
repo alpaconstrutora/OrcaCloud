@@ -1,77 +1,41 @@
 #!/usr/bin/env bash
-# Trava mecânica: "Todas as organizações" (activeOrganizationId/organizationId
-# nulo ou vazio) NUNCA pode fazer uma tela de LEITURA (lista, detalhe, aba)
-# ficar em branco silenciosamente.
+# Trava: o seletor de organização do TOPO da página é a autoridade sobre qual
+# organização o sistema usa — e "Todas as organizações" nunca esconde leitura.
 #
-# Contexto (ver [[feedback_todas_organizacoes_nao_esconder]] na memória do
-# projeto): esse é o bug mais repetido do projeto. Padrão típico do bug:
+# ── Este script agora é só um atalho ──────────────────────────────────────
 #
-#   const load = useCallback(async () => {
-#       if (!activeOrganizationId) return;   // <-- nunca chama o service
-#       ...
-#   }, [activeOrganizationId]);
+# A verificação de verdade virou um TESTE:
 #
-# Isso já foi corrigido "várias vezes" pontualmente (Settings > Categorias,
-# SalesModule, QualityModule, investor/OpportunitiesTab, FinancialIntelligence,
-# ProcessosModule, OpuraGovernanceModule/companyService, ProlaboreReconciliationPanel,
-# WarrantyModule, InventoryModule, brokerService...) e sempre volta em tela nova,
-# porque quem escreve o componente novo não tem como adivinhar que precisa
-# tratar esse caso. A correção agora é: nunca aceitar de novo silenciosamente.
+#     __tests__/orgContextGuard.test.ts
 #
-# Regra de decisão (auditoria de 2026-07-18):
-#   1. Ler/abrir (lista, detalhe, aba)  → NUNCA bloquear. Ou o service aceita
-#      organizationId opcional/null (deixa a RLS filtrar), ou a entidade aberta
-#      já carrega a org (derive dela: `organizationId || entity.organization_id`).
-#   2. Criar do zero (sem entidade-pai) → legítimo exigir org, mas com
-#      `disabled` + `title` explicando, nunca botão morto ou tela em branco.
-#   3. Operação inerentemente por-empresa (fechamento de período, rateio
-#      contábil, organograma) → pode exigir org, mas com MENSAGEM EXPLÍCITA
-#      pedindo para selecionar uma organização — nunca silêncio.
+# Motivo da mudança (2026-08-03): este script existia desde 2026-07-18 e o bug
+# voltou assim mesmo, porque ele dependia de alguém lembrar de executá-lo — o
+# CI (.github/workflows/ci.yml) roda `tsc`, `vitest` e `build`, e nunca rodou
+# os `scripts/check-*.sh`. Como teste, a trava roda sozinha em todo push e PR
+# para `main`, e código novo com o padrão errado quebra o build antes do merge.
 #
-# Este script não consegue distinguir automaticamente os 3 casos (isso exige
-# julgamento). Ele serve para LISTAR candidatos: toda ocorrência do padrão
-# "if (!organizationId) return" / "if (!activeOrganizationId) return" dentro
-# de uma função de carregamento precisa ser revisada manualmente contra a
-# regra acima antes de ser considerada correta.
+# O teste cobre mais do que este script cobria:
+#   1. `organizations[0]` usado como organização (grava/lê na org errada)
+#   2. `activeOrganizationId || ''` (terceira sentinela; quebra o `??`)
+#   3. `if (!organizationId) return` em carregamento (tela em branco)
+#   4. `enabled: !!organizationId` em react-query (idem)
+#
+# Contrato da regra de produto: hooks/useOrgContext.tsx
+#   `useOrgContext()`     → ler (null = "Todas", nunca bloqueia)
+#   `useOrgWriteTarget()` → criar (só pergunta se o topo estiver em "Todas")
 #
 # Uso:
-#   scripts/check-org-selector-guard.sh                  # varre o repo inteiro
-#   scripts/check-org-selector-guard.sh components/X.tsx # só os arquivos passados
+#   scripts/check-org-selector-guard.sh
 #
-# Exit 1 se achar alguma ocorrência (não é "erro" automático — é "revisar").
+# Exit 0 = conforme. Exit ≠ 0 = violação; a saída do vitest diz o arquivo, a
+# linha e como corrigir.
 
-set -u
+set -eu
 
-FORBIDDEN="if[[:space:]]*\([[:space:]]*!(active)?[Oo]rganizationId[[:space:]]*\)[[:space:]]*(\{[[:space:]]*)?return"
+cd "$(dirname "$0")/.."
 
-if [ "$#" -gt 0 ]; then
-  files="$*"
-else
-  files=$(git ls-files '*.ts' '*.tsx' 2>/dev/null | grep -v '^scripts/check-org-selector-guard\.sh$')
-fi
+echo "→ npx vitest run __tests__/orgContextGuard.test.ts"
+echo "  (contrato em hooks/useOrgContext.tsx · CLAUDE.md REGRA #5)"
+echo ""
 
-hits_total=0
-
-for file in $files; do
-  [ -f "$file" ] || continue
-
-  hits=$(grep -nE "$FORBIDDEN" "$file" 2>/dev/null)
-  if [ -n "$hits" ]; then
-    echo "⚠️  $file — guard de organização pode estar escondendo uma leitura:"
-    echo "$hits" | sed 's/^/     /'
-    hits_total=$((hits_total + 1))
-  fi
-done
-
-if [ "$hits_total" -gt 0 ]; then
-  echo ""
-  echo "⚠️  $hits_total arquivo(s) com o padrão 'if (!organizationId) return'."
-  echo "    Revise cada um contra a regra de decisão no topo deste script."
-  echo "    Se for leitura (lista/detalhe/aba) sendo bloqueada → CORRIGIR."
-  echo "    Se for criação/ação ou operação por-empresa já com mensagem"
-  echo "    explícita → ok, não mexer."
-  exit 1
-fi
-
-echo "✅ Nenhum guard de organização bloqueando leitura encontrado."
-exit 0
+exec npx vitest run __tests__/orgContextGuard.test.ts

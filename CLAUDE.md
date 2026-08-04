@@ -206,67 +206,90 @@ qualquer nova interação, ler `UI_PATTERNS.md`. Painel lateral é o padrão par
 
 ---
 
-## REGRA OBRIGATÓRIA #5 — "Todas as organizações" nunca esconde uma leitura
+## REGRA OBRIGATÓRIA #5 — O seletor de organização do topo é a autoridade
 
-**Gatilho:** qualquer componente que carregue dados usando
-`activeOrganizationId`/`organizationId` (lista, detalhe, aba, dashboard).
+**Gatilho:** qualquer código que precise saber "de qual organização" — ler,
+listar, filtrar, criar, gravar.
 
-Quando o seletor de organização está em **"Todas as organizações"**,
-`activeOrganizationId` chega `null` (`store/useStore.ts`). O bug mais repetido
-do projeto é escrever:
+### A regra de produto (definida pelo usuário em 2026-08-03)
+
+1. **O seletor do topo manda.** Apontando para uma organização, o sistema usa
+   ela e **não pergunta nada, nunca** — nem modal, nem seletor extra na tela.
+2. Só quando o topo está em **"Todas as organizações"** o sistema pergunta.
+3. Perguntado, se o usuário **mantiver "Todas"**, isso significa gravar um
+   registro **global** (`organization_id = NULL`), válido para todas — **não**
+   N cópias.
+4. **Exceção:** operação que exige organização específica por natureza
+   (fechamento contábil, faixa de alçada, chamado de garantia) → modo
+   `'single'`, sem a opção "Todas" no modal.
+5. **Empresa/obra selecionada no topo herda** a organização dona dela. O
+   rótulo do topo mostra o nível mais específico (empresa → obra → org), então
+   com uma empresa escolhida o usuário TEM contexto: não se pergunta.
+
+### Como escrever (caminho único)
+
+**`hooks/useOrgContext.tsx` é a fonte única da verdade.** Ele lê do store —
+nunca de prop, porque prop é o que se deforma no caminho.
 
 ```ts
-const load = useCallback(async () => {
-    if (!activeOrganizationId) return;   // nunca chama o service
-    ...
-}, [activeOrganizationId]);
+// LER: null = "Todas". NUNCA bloqueie o carregamento por causa disso.
+const { orgId } = useOrgContext();
+const dados = await service.list(orgId);   // service só aplica .eq() se houver org
+
+// CRIAR:
+const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+const target = await resolveWriteOrg('global-allowed');  // ou 'single'
+if (!target) return;                                     // cancelou
+await service.create(targetToOrgId(target), dados);      // null = global
+// …e renderize {orgTargetModal} no JSX.
 ```
 
-Isso já foi "corrigido" pontualmente dezenas de vezes (Settings > Categorias,
-SalesModule, QualityModule, investor/OpportunitiesTab, FinancialIntelligence,
-ProcessosModule, OpuraGovernanceModule, ProlaboreReconciliationPanel,
-WarrantyModule, InventoryModule, brokerService...) e sempre volta em tela
-nova, porque quem escreve o componente novo não tem como adivinhar que
-precisa tratar esse caso.
+Do lado do service: `organizationId?: string | null` e
+`if (organizationId) q = q.eq('organization_id', organizationId)` — a RLS
+recorta o resto. Modelo: `services/inventoryService.ts:112-119`.
 
-### Regra de decisão
+**Quatro padrões proibidos** (o teste abaixo quebra o build):
 
-1. **Ler/abrir** (lista, detalhe, aba) → **NUNCA bloquear**. Ou o service
-   aceita `organizationId?: string | null` e só aplica `.eq(...)` quando
-   presente (deixando a RLS filtrar pelas organizações do usuário), ou a
-   entidade já aberta na tela carrega a própria org — derive dela:
-   `const effectiveOrgId = organizationId || entity.organization_id;`
-2. **Criar do zero** (sem entidade-pai de onde tirar a org) → legítimo exigir
-   org, mas com **botão `disabled` + `title` explicando**, nunca botão morto
-   ou ação que silenciosamente não faz nada.
-3. **Operação inerentemente por-empresa** (fechamento de período contábil,
-   rateio de depreciação, organograma, faixas de alçada) → pode exigir uma
-   org específica, mas com **mensagem explícita** pedindo para selecionar uma
-   organização — nunca uma tela em branco ou, pior, um estado padrão
-   enganoso (ex: "pronto para fechar" quando na verdade não há dado nenhum
-   carregado).
+| Padrão | Por que é bug |
+|---|---|
+| `organizations[0]` como org | pega a PRIMEIRA da lista, não a selecionada — grava na org errada, calado |
+| `activeOrganizationId \|\| ''` | terceira sentinela; `??` não pega `''` → botão morto |
+| `if (!organizationId) return` em carregamento | tela em branco em "Todas" |
+| `enabled: !!organizationId` | idem |
 
-**Verificação** (lista candidatos para revisão manual — não é pass/fail
-automático, porque distinguir leitura de criação exige julgamento):
+### Verificação
 
 ```bash
-bash scripts/check-org-selector-guard.sh          # repo inteiro
-bash scripts/check-org-selector-guard.sh <arquivo>
+npx vitest run __tests__/orgContextGuard.test.ts   # ou scripts/check-org-selector-guard.sh
 ```
+
+**Roda sozinho no CI** (`.github/workflows/ci.yml`) a cada push e PR para
+`main`. É uma **catraca**: o `BASELINE` no teste é a dívida herdada de
+2026-08-03 e só pode diminuir. Arquivo fora do baseline com violação = código
+novo = build quebrado. **Não adicione entrada ao BASELINE para "fazer
+passar"** — se o seu arquivo não está lá, ele nasceu depois da regra.
 
 ### Por que isso existe
 
-2026-07-18: usuário reportou 3 tabelas de "Configurações do Sistema" (Tipos de
-Clientes, Categorias de Fornecedores, Tipos de Contrato) aparecendo vazias.
-Causa raiz: os 3 componentes tinham `if (!activeOrganizationId) return` no
-carregamento — com "Todas as organizações" selecionado, a lista nunca era
-buscada. Ao investigar o padrão, uma varredura no repo achou o mesmo bug (ou
-variações dele) em mais de 15 arquivos adicionais — companyService,
-reportScheduleService, financial_approval_config, processTemplates, DivergencesPanel,
-ProlaboreReconciliationPanel, WarrantyModule (clique morto no detalhe de um
-chamado), botões de ação sem `disabled`/`title` em InventoryModule. Todos
-corrigidos na mesma sessão seguindo a regra de decisão acima; script de
-verificação criado para tornar a auditoria mecânica daqui em diante.
+2026-07-18: 3 tabelas de "Configurações do Sistema" apareciam vazias por
+`if (!activeOrganizationId) return`. Corrigido em ~15 arquivos, e criado um
+shell script de verificação.
+
+2026-08-03: **voltou de novo** — um modal pedindo organização apareceu com o
+topo já mostrando um contexto. A investigação mostrou que o problema nunca foi
+falta de cuidado tela a tela; eram 5 defeitos estruturais:
+
+- **três sentinelas** para "Todas" (`null`, `undefined`, `''` — 72 passagens
+  de `|| ''`), e `??` não dispara para string vazia;
+- **o topo é hierárquico mas só a org era propagada**: com empresa
+  selecionada, `activeOrganizationId` seguia `null` e o sistema perguntava,
+  ignorando `Company.org_id` — foi essa a causa do modal indevido;
+- **18 fallbacks `organizations[0]`**, incluindo `App.tsx` (criar obra nascia
+  na primeira organização da lista) e formulários de pedido que ofereciam
+  conta bancária de outra empresa;
+- ~80 guards escondendo leitura;
+- **o script de verificação nunca rodava no CI** — dependia de alguém lembrar.
+  Essa é a razão real de o bug ter voltado, e por isso a trava virou teste.
 
 ---
 

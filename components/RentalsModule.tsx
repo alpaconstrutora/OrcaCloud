@@ -131,6 +131,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [loading, setLoading] = useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('rentalsModuleFilters:search', '');
+    const [dealSearchTerm, setDealSearchTerm] = usePersistedState('rentalsModuleFilters:dealSearch', '');
     const [brokerSearchTerm, setBrokerSearchTerm] = usePersistedState('rentalsModuleFilters:brokerSearch', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list' | 'tower'>('rentalsModuleFilters:viewMode', 'list');
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
@@ -598,9 +599,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 _clientName: clients.find(c => c.id === d.client_id)?.name || '',
             };
         });
-        if (!dealSortConfig) return withLookup;
+        const term = dealSearchTerm.toLowerCase();
+        const filtered = term
+            ? withLookup.filter(d =>
+                d._propertyName.toLowerCase().includes(term) ||
+                d._clientName.toLowerCase().includes(term) ||
+                d.id.toLowerCase().includes(term)
+            )
+            : withLookup;
+        if (!dealSortConfig) return filtered;
         const { key, direction } = dealSortConfig;
-        return [...withLookup].sort((a: any, b: any) => {
+        return [...filtered].sort((a: any, b: any) => {
             let aValue = a[key];
             let bValue = b[key];
             if (aValue === null || aValue === undefined) aValue = direction === 'asc' ? Infinity : -Infinity;
@@ -609,7 +618,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             if (aValue > bValue) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [deals, properties, clients, dealSortConfig, selectedBuildingId]);
+    }, [deals, properties, clients, dealSortConfig, selectedBuildingId, dealSearchTerm]);
 
     // Corretores ordenáveis (§6.3) — busca própria (§5.2): o searchTerm global
     // pertence à aba Unidades e não tem input visível aqui, então a aba
@@ -1541,7 +1550,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             lista) dividem um único card (border/rounded/shadow só no
                             container pai); a costura visível é o border-b da toolbar. */}
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="flex items-center justify-end p-4 border-b border-gray-100 bg-white">
+                            <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                                <div className="flex-1 relative w-full">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar contrato por imóvel, cliente ou ID..."
+                                        value={dealSearchTerm}
+                                        onChange={(e) => setDealSearchTerm(e.target.value)}
+                                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    />
+                                </div>
                                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                     {viewMode === 'list' && (
                                         <>

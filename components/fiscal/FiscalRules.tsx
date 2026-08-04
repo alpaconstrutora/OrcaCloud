@@ -4,7 +4,7 @@ import { listClassificationRules, createClassificationRule, toggleClassification
 import type { ClassificationRule, RuleType } from '../../types/fiscal';
 import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
-import { useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
+import { useOrgWriteTarget, forEachTargetOrg, errorMessage } from '../../hooks/useOrgContext';
 
 interface Props {
   organizationId: string | null;
@@ -95,7 +95,7 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
     setSaving(false);
     if (ok === 0) {
       const e = failed[0]?.error;
-      onToast(e instanceof Error ? e.message : 'Erro ao criar regra', 'err');
+      onToast(errorMessage(e, 'Erro ao criar regra'), 'err');
       return;
     }
     onToast(ok > 1 ? `Regra criada em ${ok} organizações` : 'Regra criada com sucesso', 'ok');

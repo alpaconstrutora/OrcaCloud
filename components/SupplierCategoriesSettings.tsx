@@ -4,7 +4,7 @@ import { SupplierCategory } from '../types';
 import { Tag, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -59,7 +59,7 @@ const SupplierCategoriesSettings: React.FC = () => {
         const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
             supplierCategoryService.createCategory({ name: nome, organization_id: orgId }));
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao criar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
         }
         showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
@@ -99,7 +99,7 @@ const SupplierCategoriesSettings: React.FC = () => {
         const { ok, failed } = await forEachTargetOrg(target, orgId =>
             supplierCategoryService.createCategory({ name: `${category.name} (Cópia)`, organization_id: orgId }));
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao duplicar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao duplicar'), 'error');
             return;
         }
         showToast(ok > 1 ? `Duplicada em ${ok} organizações` : 'Categoria duplicada com sucesso', 'success');
@@ -116,7 +116,7 @@ const SupplierCategoriesSettings: React.FC = () => {
                 DEFAULT_SUPPLIER_CATEGORIES.map(name => ({ name, organization_id: orgId }))));
         setLoading(false);
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao importar categorias padrão', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao importar categorias padrão'), 'error');
             return;
         }
         showToast(ok > 1 ? `Padrões importados em ${ok} organizações` : 'Categorias padrão importadas com sucesso', 'success');

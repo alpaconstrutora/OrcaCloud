@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { TrendingUp, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 const COLUMNS: ColumnConfig[] = [
@@ -78,7 +78,7 @@ const ContractIndexManager: React.FC = () => {
         setSaving(false);
         if (ok === 0) {
             const e = failed[0]?.error;
-            notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
+            notify(`Erro: ${errorMessage(e, 'Tente novamente.')}`, 'error');
             return;
         }
         setNewValue('');

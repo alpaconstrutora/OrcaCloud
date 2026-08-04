@@ -4,7 +4,7 @@ import { ClientCategory } from '../types';
 import { Users, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -57,7 +57,7 @@ const ClientCategoriesSettings: React.FC = () => {
         const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
             clientCategoryService.create(orgId, nome));
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao criar categoria', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao criar categoria'), 'error');
             return;
         }
         // Replicação parcial não é erro: uma organização que já tinha a categoria
@@ -102,7 +102,7 @@ const ClientCategoriesSettings: React.FC = () => {
         const { ok, failed } = await forEachTargetOrg(target, orgId =>
             clientCategoryService.create(orgId, `${cat.name} (Cópia)`));
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao duplicar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao duplicar'), 'error');
             return;
         }
         showToast(ok > 1 ? `Duplicada em ${ok} organizações` : 'Categoria duplicada com sucesso', 'success');
@@ -118,7 +118,7 @@ const ClientCategoriesSettings: React.FC = () => {
             clientCategoryService.importDefaults(orgId));
         setLoading(false);
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao importar categorias padrão', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao importar categorias padrão'), 'error');
             return;
         }
         showToast(ok > 1 ? `Padrões importados em ${ok} organizações` : 'Categorias padrão importadas com sucesso', 'success');

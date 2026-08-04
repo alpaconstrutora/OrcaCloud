@@ -137,6 +137,30 @@ export function targetOrgIds(target: WriteTarget): string[] {
 }
 
 /**
+ * Mensagem legível de um erro, seja qual for o formato.
+ *
+ * ⚠️ NÃO use `e instanceof Error` para isso. Erro do Supabase é um objeto
+ * `{ message, code, details, hint }` que NÃO é instância de `Error` — o
+ * `instanceof` dá falso e a causa real (ex.: "new row violates row-level
+ * security policy") é substituída por um texto genérico.
+ *
+ * Foi exatamente esse o bug reportado em 2026-08-04: a tela mostrava só
+ * "Erro ao criar", escondendo o motivo, e o diagnóstico ficou impossível.
+ */
+export function errorMessage(e: unknown, fallback: string): string {
+    if (e instanceof Error) return e.message;
+    if (e && typeof e === 'object') {
+        const o = e as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+        const msg = typeof o.message === 'string' && o.message ? o.message : null;
+        const extra = typeof o.details === 'string' && o.details ? ` (${o.details})` : '';
+        const code = typeof o.code === 'string' && o.code ? ` [${o.code}]` : '';
+        if (msg) return `${msg}${extra}${code}`;
+    }
+    if (typeof e === 'string' && e) return e;
+    return fallback;
+}
+
+/**
  * Roda a criação uma vez por organização de destino, tolerando falhas
  * individuais — numa replicação para 4 organizações, se 1 já tiver um item de
  * mesmo nome (UNIQUE), as outras 3 não podem ser perdidas junto.

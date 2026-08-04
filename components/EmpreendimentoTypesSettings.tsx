@@ -10,7 +10,7 @@ import {
 import { Building2, Plus, Check, X, Search, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -69,7 +69,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
             empreendimentoTypeService.create({ name: nome, motor_category: editCategory, color: editColor, description: null, organization_id: orgId }));
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao criar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
         }
         showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
@@ -107,7 +107,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         const { ok, failed } = await forEachTargetOrg(target, orgId =>
             empreendimentoTypeService.duplicate(type, orgId));
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao duplicar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao duplicar'), 'error');
             return;
         }
         showToast(ok > 1 ? `Duplicado em ${ok} organizações` : 'Tipo de empreendimento duplicado com sucesso', 'success');

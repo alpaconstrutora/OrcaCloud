@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Landmark, Plus, Check, X, Search, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,9 +53,9 @@ const TaxSettingsManager: React.FC = () => {
         onSuccess: ({ ok, failed }) => {
             if (ok === 0) {
                 const e = failed[0]?.error;
-                showToast(e instanceof Error && e.message.includes('unique')
+                showToast(errorMessage(e, '').includes('unique')
                     ? 'Já existe um tributo com esse nome.'
-                    : (e instanceof Error ? e.message : 'Erro ao criar.'), 'error');
+                    : (errorMessage(e, 'Erro ao criar.')), 'error');
                 return;
             }
             cancelEdit(); invalidate();
@@ -86,7 +86,7 @@ const TaxSettingsManager: React.FC = () => {
             invalidate();
             if (ok === 0) {
                 const e = failed[0]?.error;
-                showToast(e instanceof Error ? e.message : 'Erro ao criar tributos padrão.', 'error');
+                showToast(errorMessage(e, 'Erro ao criar tributos padrão.'), 'error');
                 return;
             }
             showToast(ok > 1 ? `Tributos padrão criados em ${ok} organizações` : 'Tributos padrão criados.', 'success');

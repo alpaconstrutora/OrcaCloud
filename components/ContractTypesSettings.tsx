@@ -4,7 +4,7 @@ import { ContractTypeRecord } from '../types';
 import { FileText, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ContractTypeCategory } from '../constants/contractTypes';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -62,7 +62,7 @@ const ContractTypesSettings: React.FC = () => {
         const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
             contractTypeService.createType({ name: nome, category: editCategory, organization_id: orgId }));
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao criar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
         }
         showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
@@ -101,7 +101,7 @@ const ContractTypesSettings: React.FC = () => {
             await contractTypeService.createType({ name: `${type.name} (Cópia)`, category: type.category, organization_id: targetOrgId });
         });
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao salvar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao salvar'), 'error');
             return;
         }
         // Replicação parcial não é erro: organização que já tinha o item falha
@@ -121,7 +121,7 @@ const ContractTypesSettings: React.FC = () => {
         });
         setLoading(false);
         if (ok === 0) {
-            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao salvar', 'error');
+            showToast(errorMessage(failed[0]?.error, 'Erro ao salvar'), 'error');
             return;
         }
         // Replicação parcial não é erro: organização que já tinha o item falha

@@ -15,6 +15,10 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SinapiType } from '../../types';
 import type { BudgetEntry, ProjectSettings } from '../../types';
+// BudgetEditor passou a usar useConfirm() (guia de UI §14: nada de window.confirm),
+// e o hook exige o Provider. Sem ele todo render aqui estourava
+// "useConfirm deve ser usado dentro de <ConfirmProvider>".
+import { ConfirmProvider } from '../../components/ui/confirm';
 
 // ─── Mocks de serviços ────────────────────────────────────────────────────────
 
@@ -24,8 +28,22 @@ vi.mock('../../services/sinapiService', () => ({
         getCategories: vi.fn().mockResolvedValue([]),
         search: vi.fn().mockResolvedValue([]),
         getItemsByCodes: vi.fn().mockResolvedValue([]),
+        // Usado pelo SinapiRebaseModal para listar as competências disponíveis.
+        getReferences: vi.fn().mockResolvedValue([]),
         databaseSize: 0,
     },
+    // SinapiRebaseModal (renderizado dentro do BudgetEditor) importa esta função
+    // do mesmo módulo. Sem ela no mock, o render estourava:
+    // 'No "resolveReferenceDate" export is defined on the mock'.
+    // Mantém o contrato do original: sem referências → undefined.
+    resolveReferenceDate: vi.fn((stored?: string | null, references: { referenceDate: string; label?: string }[] = []) => {
+        if (references.length === 0) return undefined;
+        if (stored) {
+            const match = references.find(r => r.referenceDate === stored || r.label === stored);
+            if (match) return match.referenceDate;
+        }
+        return references[0].referenceDate;
+    }),
 }));
 
 vi.mock('../../services/customDatabaseService', () => ({
@@ -116,14 +134,16 @@ const renderEditor = (budget: BudgetEntry[] = [], settingsOverride: Partial<Proj
     const onToggleFavorite = vi.fn();
 
     const utils = render(
-        <BudgetEditor
-            budget={budget}
-            settings={makeSettings(settingsOverride)}
-            favorites={[]}
-            onToggleFavorite={onToggleFavorite}
-            onUpdateBudget={onUpdateBudget}
-            onUpdateSettings={onUpdateSettings}
-        />
+        <ConfirmProvider>
+            <BudgetEditor
+                budget={budget}
+                settings={makeSettings(settingsOverride)}
+                favorites={[]}
+                onToggleFavorite={onToggleFavorite}
+                onUpdateBudget={onUpdateBudget}
+                onUpdateSettings={onUpdateSettings}
+            />
+        </ConfirmProvider>
     );
     return { ...utils, onUpdateBudget, onUpdateSettings };
 };
@@ -312,14 +332,16 @@ describe('Correção 4 — loadAuxiliaryItems: cancelled flag evita setState ap�
         // Simula múltiplas atualizações de quantidade (edições do usuário)
         for (let i = 0; i < 5; i++) {
             rerender(
-                <BudgetEditor
-                    budget={[{ ...makeEntry('e1'), quantity: i + 2 }]}
-                    settings={makeSettings()}
-                    favorites={[]}
-                    onToggleFavorite={vi.fn()}
-                    onUpdateBudget={vi.fn()}
-                    onUpdateSettings={vi.fn()}
-                />
+                <ConfirmProvider>
+                    <BudgetEditor
+                        budget={[{ ...makeEntry('e1'), quantity: i + 2 }]}
+                        settings={makeSettings()}
+                        favorites={[]}
+                        onToggleFavorite={vi.fn()}
+                        onUpdateBudget={vi.fn()}
+                        onUpdateSettings={vi.fn()}
+                    />
+                </ConfirmProvider>
             );
         }
 

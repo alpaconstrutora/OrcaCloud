@@ -438,13 +438,17 @@ export const opuraMarketService = {
     let deduplicatedCount = 0;
 
     for (const l of listings) {
-      // 1. Verificar duplicatas internas no próprio lote importado
+      // 1. Verificar duplicatas internas no próprio lote importado.
+      // `uniqueListingsPayload` guarda o registro JÁ convertido para snake_case
+      // (é o payload do insert), então a área ali é `area_private` — ler
+      // `ul.areaPrivate` devolvia undefined, a área virava 0 e a comparação
+      // nunca batia: duplicado dentro do mesmo lote entrava no banco.
       const existsInPayload = uniqueListingsPayload.some(ul =>
         isDuplicate(
           l.latitude, l.longitude,
           ul.latitude, ul.longitude,
           l.bedrooms, ul.bedrooms,
-          l.areaPrivate, ul.areaPrivate
+          l.areaPrivate, ul.area_private
         )
       );
 
@@ -453,14 +457,16 @@ export const opuraMarketService = {
         continue;
       }
 
+      // Ordem dos argumentos: (…, area1, area2) — area1 é a do anúncio sendo
+      // avaliado (`l`) e area2 a do existente (`el`), como nas outras chamadas.
       const existsInDb = existingListings.some(el =>
         isDuplicate(
           l.latitude, l.longitude,
           el.latitude ? Number(el.latitude) : null,
           el.longitude ? Number(el.longitude) : null,
           l.bedrooms, el.bedrooms,
-          el.area_private ? Number(el.area_private) : 0,
-          l.areaPrivate
+          l.areaPrivate,
+          el.area_private ? Number(el.area_private) : 0
         )
       );
 

@@ -723,6 +723,25 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return step ? { label: step.label, color: step.color } : { label: status || '', color: 'text-gray-600' };
     };
 
+    // Status da UNIDADE no mesmo vocabulário da aba Contratos.
+    //
+    // As duas abas descreviam o mesmo estado com palavras diferentes: a unidade
+    // de um contrato em Assinatura aparecia como "Reservado" aqui e "Assinatura"
+    // lá — o dado sempre esteve correto (RESERVED é o reflexo certo de
+    // ASSINATURA), mas o usuário lia como dessincronia porque as palavras não
+    // batiam. Agora a unidade mostra o ESTÁGIO do contrato que a ocupa;
+    // "Disponível" só quando não há contrato ativo nenhum.
+    const getUnitStatusDisplay = (property: Property) => {
+        const deal = deals.find(d => d.status !== 'CANCELLED' &&
+            (d.units && d.units.length > 0
+                ? d.units.some(u => u.property_id === property.id)
+                : d.property_id === property.id));
+        if (deal) return getDealStatusDisplay(deal.status);
+        // Sem contrato ativo: cai no estado do cadastro. Vendido/Permutado não
+        // vêm de contrato de locação, então continuam com o rótulo próprio.
+        return { label: getStatusLabel(property.status), color: getStatusColor(property.status) };
+    };
+
     // Valor efetivamente CONTRATADO desta unidade — a PARCELA mensal, não o
     // total do contrato (mesma armadilha de project_locacao_valor_parcela_vs_total:
     // `deal.value`/`unit.value` são a soma/participação no TOTAL; quem carrega o
@@ -852,12 +871,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         onEdit: () => void,
         onDelete: () => void,
         onRegisterDeal: () => void,
-        getStatusColor: (s: PropertyStatus) => string,
-        getStatusLabel: (s: PropertyStatus) => string,
+        /** Resolve rótulo+cor no vocabulário do contrato (ver getUnitStatusDisplay). */
+        getStatusDisplay: (p: Property) => { label: string; color: string },
         selected?: boolean,
         onSelect?: (shiftKey: boolean) => void,
         compact?: boolean
-    }> = ({ property, onEdit, onDelete, onRegisterDeal, getStatusColor, getStatusLabel, selected, onSelect, compact }) => (
+    }> = ({ property, onEdit, onDelete, onRegisterDeal, getStatusDisplay, selected, onSelect, compact }) => (
         <div 
             onClick={() => {
                 if (property.type === 'BUILDING' && !selectedBuildingId) {
@@ -877,8 +896,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="absolute top-6 right-6 z-10 flex flex-col gap-2 scale-90 origin-top-right">
-                    <span className={`text-sm font-normal drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${getStatusColor(property.status)}`}>
-                        {getStatusLabel(property.status)}
+                    <span className={`text-sm font-normal drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${getStatusDisplay(property).color}`}>
+                        {getStatusDisplay(property).label}
                     </span>
                     <div className="flex gap-2">
                         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-2 bg-white/90 backdrop-blur-md rounded-xl text-gray-600 hover:text-blue-600 shadow-lg transition-all"><Edit className="w-4 h-4" /></button>
@@ -1176,8 +1195,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 });
                                                 setIsDealModalOpen(true);
                                             }}
-                                            getStatusColor={getStatusColor}
-                                            getStatusLabel={getStatusLabel}
+                                            getStatusDisplay={getUnitStatusDisplay}
                                         />
                                     ))}
                                 </div>
@@ -1396,8 +1414,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
                                                     {unitsTableColumns.visibleColumns.includes('status') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                            <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>
-                                                                {getStatusLabel(property.status)}
+                                                            <span className={`text-sm font-normal ${getUnitStatusDisplay(property).color}`}>
+                                                                {getUnitStatusDisplay(property).label}
                                                             </span>
                                                         </td>
                                                     )}

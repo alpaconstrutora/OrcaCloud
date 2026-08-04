@@ -1,4 +1,5 @@
 import React from 'react';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import {
     AlertTriangle,
     ArrowLeftRight,
@@ -102,6 +103,7 @@ function formatDateShort(value?: string | null): string {
 }
 
 export default function AreaEngineModule({ organizationId }: AreaEngineModuleProps) {
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const confirm = useConfirm();
     // §3 — busca persistida (sobrevive a navegação/reload)
     const [projectSearchTerm, setProjectSearchTerm] = usePersistedState<string>('areaEngine:projectSearch', '');
@@ -474,7 +476,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     }
     async function createAreaProject(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!organizationId) return;
+        // Em "Todas as organizações" pergunta em qual criar, em vez de o botão
+        // silenciosamente não fazer nada. Ver hooks/useOrgContext.tsx.
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const createOrgId = target.orgId;
 
         const name = newProjectName.trim();
         const versionLabel = newVersionLabel.trim() || 'Versao inicial';
@@ -488,7 +494,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         setFeedback(null);
         try {
             const project = await areaEngineService.createProject({
-                organization_id: organizationId,
+                organization_id: createOrgId,
                 name,
                 normative_reference: 'ABNT NBR 12721:2006',
                 normative_valid_from: '2007-01-21',
@@ -502,7 +508,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 version_label: versionLabel,
             });
 
-            const rows = await areaEngineService.listProjects(organizationId);
+            const rows = await areaEngineService.listProjects(organizationId ?? null);
             setProjects(rows);
             setSelectedProjectId(project.id);
             setVersions([version]);
@@ -551,7 +557,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         setImportReport(null);
         try {
             const report = await areaEngineService.importFromEmpreendimento(selectedEmpreendimentoId, organizationId);
-            const rows = await areaEngineService.listProjects(organizationId);
+            const rows = await areaEngineService.listProjects(organizationId ?? null);
             setProjects(rows);
             setSelectedProjectId(report.projectId);
             const versionRows = await areaEngineService.listVersions(report.projectId);
@@ -1998,6 +2004,8 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             </main>
             </>
             )}
+
+            {orgTargetModal}
         </div>
     );
 }

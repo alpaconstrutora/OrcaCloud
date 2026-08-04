@@ -112,26 +112,34 @@ const RULES: Rule[] = [
                 'Regime de reconhecimento é por-empresa; em "Todas" assume CAIXA em vez de esconder a lista.',
             'services/receivableService.ts':
                 'Só o KPI de inadimplência (RPC consolida por org). A LISTA de recebíveis carrega normalmente com null.',
+            'components/FinancialClosePanel.tsx':
+                'Fechamento contábil é por-empresa (REGRA #5, caso 4) e a tela já diz isso explicitamente: "com Todas as organizações não há um período único para travar/destravar".',
+            'components/ProcurementModule.tsx':
+                'Consolidação compara obras DENTRO da mesma empresa e a tela já explica: "com Todas as organizações não há como cruzar os insumos". Só a consolidação é bloqueada; a lista de pedidos carrega normal.',
+            'components/BoletoLoteModal.tsx':
+                'O modal tem seletor de organização próprio; o guard só impede processar o lote antes de o usuário escolher — não esconde leitura.',
         },
-        baseline: {
-            'components/AreaEngineModule.tsx': 1,
-            'components/BoletoLoteModal.tsx': 1,
-            'components/FinancialClosePanel.tsx': 1,
-            'components/OpuraGovernanceModule.tsx': 1,
-            'components/ProcurementModule.tsx': 1,
-            'components/ServiceContractsModule.tsx': 1,
-        },
+        // 2026-08-03: AreaEngineModule, OpuraGovernanceModule e
+        // ServiceContractsModule eram CRIAÇÃO travada (botão mudo em "Todas") e
+        // passaram a usar resolveWriteOrg.
+        baseline: {},
     },
     {
         id: 'react-query desabilitado por falta de organização',
         why: 'Mesmo efeito do guard: em "Todas as organizações" a query nunca roda e a tela fica vazia.',
         fix: 'Remova o `enabled`. O service deve aceitar organizationId null.',
         pattern: /enabled:\s*!!\s*(?:active)?[Oo]rganizationId\b/,
-        allow: {},
-        baseline: {
-            'components/broker/BrokerHealthPanel.tsx': 1,
-            'components/broker/BrokerIntegrations.tsx': 1,
+        allow: {
+            // Falso positivo: no Portal do Corretor `organizationId` nunca chega
+            // vazio — `BrokerPortal.tsx` passa `initialOrgId || selectedOrgId ||
+            // 'demo'`. O que o `enabled` realmente controla é o modo demo, não o
+            // seletor de organização do topo (que nem existe nesse portal).
+            'components/broker/BrokerHealthPanel.tsx':
+                'Portal do corretor: organizationId nunca é vazio (cai em "demo"); o enabled controla o modo demo.',
+            'components/broker/BrokerIntegrations.tsx':
+                'Portal do corretor: organizationId nunca é vazio (cai em "demo"); o enabled controla o modo demo.',
         },
+        baseline: {},
     },
 ];
 

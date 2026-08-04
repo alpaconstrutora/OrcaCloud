@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { orgGovernanceService } from '../services/orgGovernanceService';
 import { companyService } from '../services/companyService';
 import { laborService, Employee } from '../services/laborService';
@@ -63,6 +64,7 @@ export default function OpuraGovernanceModule({
 }: OpuraGovernanceModuleProps) {
   const confirm = useConfirm();
   const { organizations, setActiveOrganizationId } = useStore();
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -103,20 +105,24 @@ export default function OpuraGovernanceModule({
   }, [activeOrganizationId]);
 
   const handleCreateDefaultCompany = async () => {
-    if (!activeOrganizationId) return;
+    // Criar empresa exige uma organização: em "Todas as organizações" pergunta
+    // em qual, em vez de o botão não fazer nada. Ver hooks/useOrgContext.tsx.
+    const target = await resolveWriteOrg('single');
+    if (!target || target.kind !== 'org') return;
+    const createOrgId = target.orgId;
     setLoading(true);
     try {
       // Busca o nome da organização para usar como razão social
       const { data: orgData } = await supabase
         .from('organizations')
         .select('name')
-        .eq('id', activeOrganizationId)
+        .eq('id', createOrgId)
         .single();
 
       const orgName = orgData?.name || 'Empresa Principal';
 
       const data = await companyService.create({
-        org_id: activeOrganizationId,
+        org_id: createOrgId,
         razao_social: orgName,
         nome_fantasia: orgName,
         tipo: 'construtora',
@@ -135,8 +141,8 @@ export default function OpuraGovernanceModule({
         }
       } as CompanyInsert);
 
-      // Recarrega as empresas
-      const newCompanies = await companyService.list(activeOrganizationId);
+      // Recarrega as empresas da organização onde a nova foi criada
+      const newCompanies = await companyService.list(createOrgId);
 
       setCompanies(newCompanies || []);
       if (data) {
@@ -1159,6 +1165,7 @@ export default function OpuraGovernanceModule({
         </div>
       )}
 
+      {orgTargetModal}
     </div>
   );
 }

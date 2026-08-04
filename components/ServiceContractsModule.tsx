@@ -5,6 +5,7 @@ import { ContractModal } from './ContractModal';
 import { Contract, BudgetEntry } from '../types';
 import { contractService } from '../services/contractService';
 import { useServicesToast } from './services/useServicestoast';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import ServicesToast from './services/ServicesToast';
 
 interface Props {
@@ -17,6 +18,8 @@ const ServiceContractsModule: React.FC<Props> = ({
     organizationId,
     budget = [],
 }) => {
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const [createOrgId, setCreateOrgId] = useState<string | undefined>(undefined);
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [editingContract, setEditingContract] = useState<Contract | null>(null);
@@ -25,7 +28,8 @@ const ServiceContractsModule: React.FC<Props> = ({
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
 
     const handleSubmit = async (data: Partial<Contract>) => {
-        const effectiveOrgId = organizationId || editingContract?.organization_id;
+        // Editar: org do próprio contrato. Criar: a resolvida em onCreateNew.
+        const effectiveOrgId = editingContract?.organization_id || createOrgId || organizationId;
         const payload = { ...data, direction: 'OUTGOING' as const, domain: 'SERVICOS' as const, organization_id: effectiveOrgId };
         let saved: Contract;
         if (editingContract?.id) {
@@ -61,8 +65,13 @@ const ServiceContractsModule: React.FC<Props> = ({
                     title="Contratos de Serviço"
                     subtitle="Contratos emitidos para clientes — aditivos e medições."
                     version={version}
-                    onCreateNew={() => {
-                        if (!organizationId) return;
+                    onCreateNew={async () => {
+                        // Contrato é registro operacional: exige uma organização.
+                        // Em "Todas as organizações" pergunta em qual, em vez de o
+                        // botão não fazer nada. Ver hooks/useOrgContext.tsx.
+                        const target = await resolveWriteOrg('single');
+                        if (!target || target.kind !== 'org') return;
+                        setCreateOrgId(target.orgId);
                         setEditingContract({
                             contract_type: 'Prestação de Serviços',
                             nature: 'Serviço',
@@ -82,19 +91,22 @@ const ServiceContractsModule: React.FC<Props> = ({
                 />
             )}
 
-            {(organizationId || editingContract?.organization_id) && (
+            {/* Editar: a organização sai do próprio contrato. Criar: a resolvida
+                em onCreateNew. Assim funciona igual em "Todas as organizações". */}
+            {(editingContract?.organization_id || createOrgId || organizationId) && (
                 <ContractModal
                     isOpen={isModalOpen}
-                    onClose={() => { setIsModalOpen(false); setEditingContract(null); }}
+                    onClose={() => { setIsModalOpen(false); setEditingContract(null); setCreateOrgId(undefined); }}
                     onSubmit={handleSubmit}
                     projectId={editingContract?.project_id ?? ''}
-                    organizationId={organizationId || editingContract?.organization_id}
+                    organizationId={editingContract?.organization_id || createOrgId || organizationId}
                     initialData={editingContract ?? undefined}
                     direction="OUTGOING"
                     onToast={showToast}
                 />
             )}
             <ServicesToast toasts={toasts} onDismiss={dismissToast} />
+            {orgTargetModal}
         </>
     );
 };

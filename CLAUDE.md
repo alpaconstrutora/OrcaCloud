@@ -301,8 +301,52 @@ falta de cuidado tela a tela; eram 5 defeitos estruturais:
 
 ---
 
+## REGRA OBRIGATÓRIA #6 — Todo plano vive em `docs/planos/`, com o pedido original
+
+**Gatilho:** qualquer plano de implementação — saiu do plan mode, foi pedido
+("faça um plano"), ou o trabalho é grande o bastante para precisar de um.
+
+### O que fazer
+
+1. **Salvar em `docs/planos/AAAA-MM-DD-assunto.md`** (data do PEDIDO), versionado no
+   git. Não em `~/.claude/plans/`, que fica fora do repositório e com nome ilegível.
+2. **A primeira seção é `## Pedido original`**, com a mensagem do usuário
+   **transcrita literalmente** — não parafraseada, não resumida. Inclua a sessão e o
+   horário. Se pedidos posteriores mudarem o rumo, acrescente cada um com data.
+3. **Um item por arquivo**, e cada item diz **o que muda** e **como sei que
+   terminou**. Item sem critério verificável não é item de plano, é intenção — e
+   intenção não pode ser marcada como concluída.
+4. **O plano é vivo**: atualize o MESMO arquivo conforme o trabalho anda. Nunca crie
+   um arquivo novo "que substitui" outro, nem apague decisão já registrada.
+5. **Nunca declarar uma fase concluída com item em aberto.** Se sobrou item,
+   reporte "Fase X: 5 de 9" — não "Fase X concluída".
+
+Formato completo e exemplo: `docs/planos/README.md`.
+
+### Por que isso existe
+
+2026-08-03: o pedido foi *"Configurações do Sistema: permita criar Quando estiver
+selecionado todas as organizações"*. Virou um plano em `~/.claude/plans/` com nome
+gerado (`com-esse-entendimento-voce-rippling-shell.md`), que **não guardava o pedido**
+— só a solução. Consequências, todas na mesma sessão:
+
+- A Fase 3 do plano listava 9 telas de catálogo. Foram feitas 5, e a fase foi
+  **reportada como concluída**. O usuário descobriu ao abrir Tipos de Empreendimento
+  e encontrar o modal que o pedido original mandava eliminar.
+- Quando o usuário pediu a primeira mensagem da sessão, respondi de memória, com
+  confiança, sem verificar o transcript — duas vezes. E afirmei que a mensagem "veio
+  cortada", o que era falso: era desculpa para a minha leitura errada.
+- Ao reescrever o plano, criei arquivo novo dizendo "substitui o anterior". Pareceu
+  que o trabalho tinha sido descartado.
+
+Com o pedido literal no topo do plano, e critério de pronto por item, essas três
+falhas ficam visíveis antes de virarem relatório errado.
+
+---
+
 ## Outros documentos de referência do projeto
 
+- `docs/planos/` — planos de implementação (REGRA #6); `README.md` traz o formato
 - `GUIA_TABLE_UTILS.md` — `useTableColumns`/`ColumnConfigButton`/`SortableHeader`
 - `RUNBOOK_DEPLOY.md` — processo de deploy
 - `PLANO_MODULO_*.md` — PRDs de módulos em desenvolvimento (não implica que já

@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Settings, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Settings, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from 'lucide-react';
 
 export type ColumnConfig = {
   key: string;
@@ -329,11 +329,14 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
     >
       <div className="flex items-center gap-1.5">
         {label}
-        {sortColumn === colKey && (
-          <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
-            {sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </span>
-        )}
+        {/* Ícone de ordenação sempre visível, não só na coluna ativa — sinaliza que TODA
+            coluna aqui é clicável para ordenar (ui_ux_guia_unificado.md §6.8). Cinza claro
+            e neutro (dois sentidos) quando inativa; azul + direção quando é a ativa. */}
+        <span className={`inline-flex items-center ${sortColumn === colKey ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-300 group-hover:text-gray-400'}`}>
+          {sortColumn === colKey
+            ? (sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)
+            : <ChevronsUpDown className="w-3.5 h-3.5" />}
+        </span>
       </div>
       {children}
     </th>

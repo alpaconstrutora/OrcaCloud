@@ -874,6 +874,20 @@ Referência: `BankReconciliation.tsx`, aba Extrato.
 - Shift+clique (§10.1) recorta sobre a **lista inteira filtrada**, não sobre a
   página — passar o índice global (`pageStart + i`), não o índice da página.
 
+### 6.8 Ícone de ordenação sempre visível, não só na coluna ativa
+
+Toda coluna `sortable` mostra um ícone de ordenação no cabeçalho **o tempo
+todo** — não só depois de clicada. Coluna inativa: `ChevronsUpDown`
+(neutro, indica os dois sentidos) em `text-gray-300`, clareando para
+`text-gray-400` no hover. Coluna ativa: `ChevronUp`/`ChevronDown` (direção
+real) em `text-blue-600`, como já era.
+
+Automático: é comportamento do próprio `SortableHeader` (`ui/TableUtils.tsx`),
+não algo que cada tela precisa montar — quem já usa o componente ganhou o
+ícone sem alterar nada. Existe porque, sem ele, nada no cabeçalho indica que
+uma coluna que ainda não foi clicada é clicável — o cursor `pointer` sozinho
+não é uma affordance visível o bastante.
+
 ---
 
 ## 7. TABELA — `<tbody>` e TDs

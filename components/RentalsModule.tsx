@@ -658,20 +658,33 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return step ? { label: step.label, color: step.color } : { label: status || '', color: 'text-gray-600' };
     };
 
-    // Valor efetivamente CONTRATADO desta unidade — vem do contrato de locação
-    // ativo (não cancelado), não do cadastro do imóvel. Uma unidade tem no
-    // máximo um contrato ativo (regra de unicidade do commercialService), então
-    // o primeiro achado já é o certo. `deal.units[].value` é o valor por
-    // unidade quando o contrato reúne várias (deal.value é a SOMA); contratos
-    // legados de 1 unidade só têm property_id/value direto.
+    // Valor efetivamente CONTRATADO desta unidade — a PARCELA mensal, não o
+    // total do contrato (mesma armadilha de project_locacao_valor_parcela_vs_total:
+    // `deal.value`/`unit.value` são a soma/participação no TOTAL; quem carrega o
+    // valor mensal é `installment_value`). Uma unidade tem no máximo um
+    // contrato ativo (regra de unicidade do commercialService), então o
+    // primeiro achado já é o certo.
     const getContractedRentalValue = (propertyId: string): number | null => {
         const deal = deals.find(d => d.type === 'RENTAL' && d.status !== 'CANCELLED' &&
             (d.units && d.units.length > 0
                 ? d.units.some(u => u.property_id === propertyId)
                 : d.property_id === propertyId));
         if (!deal) return null;
-        const unit = deal.units?.find(u => u.property_id === propertyId);
-        return unit ? unit.value : deal.value;
+        // Contrato legado sem installment_value gravado: cai no value bruto da
+        // unidade (ou do negócio, se não houver lista de unidades).
+        if (deal.installment_value == null) {
+            const unit = deal.units?.find(u => u.property_id === propertyId);
+            return unit ? unit.value : deal.value;
+        }
+        // installment_value é do CONTRATO inteiro. Com várias unidades, rateia
+        // pela participação de cada uma no total (mesma proporção de unit.value
+        // dentro da soma deal.value) — sem isso, cada unidade mostraria a
+        // parcela cheia do contrato, multiplicando o valor.
+        const units = deal.units && deal.units.length > 1 ? deal.units : null;
+        if (!units) return deal.installment_value;
+        const unit = units.find(u => u.property_id === propertyId);
+        if (!unit || !(deal.value > 0)) return deal.installment_value;
+        return deal.installment_value * (unit.value / deal.value);
     };
 
     const handleBulkUpdate = async (updates: Partial<Property>) => {

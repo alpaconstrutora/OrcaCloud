@@ -67,7 +67,10 @@ export const useProjectOperations = ({
         ...(projectModalMode === 'edit' ? projectSettings : INITIAL_PROJECT_SETTINGS),
         ...data,
         cubRate: estimatedCubRate,
-        organizationId: data.organizationId || organizations[0]?.id,
+        // Organização escolhida no formulário; senão a do seletor do topo. NUNCA
+        // `organizations[0]` — gravava na primeira organização da lista em vez da
+        // selecionada. Ver hooks/useOrgContext.tsx.
+        organizationId: data.organizationId || activeOrganizationId || undefined,
         ...(data.code ? { code: data.code } : {})
       } as ProjectSettings;
 

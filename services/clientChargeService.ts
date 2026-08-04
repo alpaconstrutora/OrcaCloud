@@ -130,7 +130,8 @@ export const clientChargeService = {
     },
 
     /** Mapa transaction_id → cobrança mais recente (para badge na grid de AR). */
-    async byTransaction(organizationId: string): Promise<Record<string, ClientCharge>> {
+    /** `organizationId` null = "Todas as organizações" (`list` já trata: sem `.eq`). */
+    async byTransaction(organizationId: string | null): Promise<Record<string, ClientCharge>> {
         const rows = await this.list(organizationId, { limit: 500 });
         const map: Record<string, ClientCharge> = {};
         for (const c of rows) {

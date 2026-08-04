@@ -358,6 +358,7 @@ import { useToast } from './hooks/useToast';
 import { usePersistenceSync } from './hooks/usePersistenceSync';
 import { useAuthSync } from './hooks/useAuthSync';
 import { useProjectOperations } from './hooks/useProjectOperations';
+import { useOrgContext } from './hooks/useOrgContext';
 import AppRouter from './components/AppRouter';
 import { ErrorBoundary } from './components/ErrorBoundary';
 const PublicMarketplaceView = React.lazy(() => import('./components/public/PublicMarketplaceView'));
@@ -400,6 +401,10 @@ const App: React.FC = () => {
     fetchCompanies,
     projectsLoading,
   } = useStore();
+
+  // Organização do seletor do topo, já com a herança de empresa/obra resolvida.
+  // É a autoridade sobre qual organização o sistema usa — ver hooks/useOrgContext.tsx.
+  const { orgId: contextOrgId } = useOrgContext();
 
   // Local state for UI flow
   const [isResettingPassword, setIsResettingPassword] = React.useState(false);
@@ -509,7 +514,7 @@ const App: React.FC = () => {
     handleDeleteOrganization,
     handleContractSubmit
   } = useProjectOperations({
-    organizations, projects: projects as { id: string; name: string; settings?: ProjectSettings }[], projectSettings, projectModalMode, projectId, budget, activeOrganizationId, activeView, session,
+    organizations, projects: projects as { id: string; name: string; settings?: ProjectSettings }[], projectSettings, projectModalMode, projectId, budget, activeOrganizationId: contextOrgId, activeView, session,
     fetchProjects, fetchOrganizations, setProjectSettings, setBudget, setProjectId,
     setIsProjectModalOpen, setProjectModalInitialClassification, showToast, setActiveView,
     editingOrganizationId, setIsCreatingOrganization, setEditingOrganizationId,
@@ -832,7 +837,10 @@ const App: React.FC = () => {
           initialData={projectModalMode === 'edit' ? projectSettings as any : undefined}
           mode={projectModalMode as any}
           initialClassification={projectModalInitialClassification}
-          organizationId={organizations[0]?.id}
+          // A organização vem do seletor do topo (com herança de empresa/obra), NUNCA
+          // de `organizations[0]` — esse fallback fazia a obra nascer na primeira
+          // organização da lista em vez da selecionada, sem avisar ninguém.
+          organizationId={contextOrgId ?? undefined}
           organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
         />
       </React.Suspense>

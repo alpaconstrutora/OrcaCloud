@@ -9,6 +9,7 @@ import { clientChargeService } from '../services/clientChargeService';
 import { asaasConfigService } from '../services/asaasConfigService';
 import { clientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization, CostCenter } from '../types';
@@ -663,14 +664,29 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
 
-    const effectiveOrgId = organizationId || organizations?.[0]?.id || '';
+    // LEITURA: a organização vem do seletor do topo. `null` = "Todas as
+    // organizações" — os services não aplicam `.eq('organization_id',…)` e a RLS
+    // recorta. NUNCA `organizations[0]` (lia a org errada) nem guard que
+    // bloqueia o carregamento (deixava a tela em branco).
+    const { orgId: contextOrgId } = useOrgContext();
+    const effectiveOrgId = organizationId || contextOrgId || null;
+
+    // ESCRITA: novo lançamento é registro operacional → exige uma organização.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const [novoOrgId, setNovoOrgId] = useState<string | null>(null);
+
+    const handleNovoLancamento = async () => {
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        setNovoOrgId(target.orgId);
+        setShowNovo(true);
+    };
 
     useEffect(() => {
-        if (!effectiveOrgId) return;
         let ativo = true;
         Promise.all([
-            financialRegistryService.listCostCenters(effectiveOrgId),
-            financialRegistryService.listPlanoContas(effectiveOrgId),
+            financialRegistryService.listCostCenters(effectiveOrgId ?? undefined),
+            financialRegistryService.listPlanoContas(effectiveOrgId ?? undefined),
         ])
             .then(([cc, pc]) => {
                 if (!ativo) return;
@@ -685,7 +701,6 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
 
     const load = useCallback(async () => {
-        if (!effectiveOrgId) return;
         setLoading(true);
         setError(null);
         try {
@@ -1046,7 +1061,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
 
                         {/* Novo — CTA compacto §17 (verde = accent semântico "recebível" do módulo) */}
                         <button
-                            onClick={() => setShowNovo(true)}
+                            onClick={handleNovoLancamento}
                             className="h-9 flex items-center gap-1.5 px-3.5 bg-green-600 hover:bg-green-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0"
                         >
                             <Plus className="w-[15px] h-[15px]" /> Novo
@@ -1347,16 +1362,18 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             )}
 
             {/* Modals */}
-            {showNovo && (
+            {showNovo && novoOrgId && (
                 <NovoLancamentoModal
-                    organizationId={effectiveOrgId}
+                    organizationId={novoOrgId}
                     onSave={() => { setShowNovo(false); load(); }}
-                    onClose={() => setShowNovo(false)}
+                    onClose={() => { setShowNovo(false); setNovoOrgId(null); }}
                 />
             )}
+            {/* Editar/emitir: a organização sai do próprio registro aberto, então
+                funciona igual em "Todas as organizações". */}
             {editando && (
                 <NovoLancamentoModal
-                    organizationId={effectiveOrgId}
+                    organizationId={editando.organization_id || effectiveOrgId || ''}
                     receivable={editando}
                     onSave={() => { setEditando(null); load(); }}
                     onClose={() => setEditando(null)}
@@ -1364,7 +1381,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             )}
             {emitindo && (
                 <EmitirCobrancaModal
-                    organizationId={effectiveOrgId}
+                    organizationId={emitindo.organization_id || effectiveOrgId || ''}
                     receivable={emitindo}
                     existing={charges[emitindo.id]}
                     onDone={load}
@@ -1381,6 +1398,8 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                     {notification.message}
                 </div>
             )}
+
+            {orgTargetModal}
         </div>
     );
 }

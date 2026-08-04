@@ -4,7 +4,7 @@ import { BrokerProfile } from '../types';
 import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
 import BrokerModal from './BrokerModal';
-import { useStore } from '../store/useStore';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
@@ -58,8 +58,10 @@ interface BrokerListProps {
 }
 
 const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker }) => {
-    const { activeOrganizationId, organizations } = useStore();
-    const orgId = organizationId || activeOrganizationId || organizations[0]?.id || undefined;
+    // A organização vem da prop (contexto da tela) ou do seletor do topo. NUNCA
+    // `organizations[0]` — ver hooks/useOrgContext.tsx.
+    const { orgId: contextOrgId } = useOrgContext();
+    const orgId = organizationId || contextOrgId || undefined;
 
     const [brokers, setBrokers] = React.useState<BrokerProfile[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);

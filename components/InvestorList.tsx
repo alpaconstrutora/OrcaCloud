@@ -4,7 +4,7 @@ import { investorPortalTokenService, InvestorPortalToken } from '../services/inv
 import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, TrendingUp, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, AlertCircle, Users, MoveHorizontal } from 'lucide-react';
 import InvestorModal from './InvestorModal';
-import { useStore } from '../store/useStore';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
@@ -56,8 +56,10 @@ interface InvestorListProps {
 }
 
 const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organizationId, onSelectInvestor }) => {
-    const { activeOrganizationId, organizations } = useStore();
-    const orgId = organizationId || activeOrganizationId || organizations[0]?.id || undefined;
+    // A organização vem da prop (contexto da tela) ou do seletor do topo. NUNCA
+    // `organizations[0]` — ver hooks/useOrgContext.tsx.
+    const { orgId: contextOrgId } = useOrgContext();
+    const orgId = organizationId || contextOrgId || undefined;
     const [investors, setInvestors] = React.useState<Investor[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);

@@ -11,12 +11,14 @@ export interface ReceivableFilters {
 
 export const receivableService = {
 
-    async list(organizationId: string, filters?: ReceivableFilters): Promise<Receivable[]> {
+    /** `organizationId` null = "Todas as organizações": sem filtro, a RLS recorta. */
+    async list(organizationId: string | null, filters?: ReceivableFilters): Promise<Receivable[]> {
         let q = supabase
             .from('vw_receivables')
             .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,effective_status,party_id,party_name,party_type,project_id,project_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
-            .eq('organization_id', organizationId)
             .order('due_date', { ascending: true, nullsFirst: false });
+
+        if (organizationId) q = q.eq('organization_id', organizationId);
 
         if (filters?.dueFrom)    q = q.gte('due_date', filters.dueFrom);
         if (filters?.dueTo)      q = q.lte('due_date', filters.dueTo);
@@ -156,7 +158,14 @@ export const receivableService = {
         }
     },
 
-    async getInadimplencia(organizationId: string): Promise<InadimplenciaFaixa[]> {
+    /**
+     * Faixas de inadimplência. A RPC `fn_inadimplencia` consolida POR organização,
+     * então em "Todas as organizações" (null) não há um número único a devolver —
+     * retorna vazio e a tela omite só este KPI. A LISTA de recebíveis continua
+     * carregando normalmente (`list` aceita null).
+     */
+    async getInadimplencia(organizationId: string | null): Promise<InadimplenciaFaixa[]> {
+        if (!organizationId) return [];
         const { data, error } = await supabase.rpc('fn_inadimplencia', {
             p_organization_id: organizationId,
         });

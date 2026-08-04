@@ -753,6 +753,21 @@ export const commercialService = {
                     ? taxPayableService.removeForDeal(result.id, cancelOrgId)
                     : Promise.resolve(),
             ]);
+        } else if (result.status === 'IN_NEGOTIATION') {
+            // Negociação recuou de um estágio ativo (ex: Aprovação → Proposta,
+            // transição permitida) de volta para Proposta. IN_NEGOTIATION não
+            // está em ACTIVE_STATUSES nem é CANCELLED, então sem este branch a
+            // unidade ficava travada em RESERVED para sempre — Contratos
+            // mostrava "Proposta" e Unidades continuava mostrando "Reservado".
+            // Sem os efeitos de distrato (sem data de cancelamento, sem
+            // estorno de parcela/tributo): a negociação não foi cancelada, só
+            // recuou de estágio.
+            if (units.length > 0) {
+                await supabase.from('commercial_properties')
+                    .update({ status: 'AVAILABLE', client_id: null })
+                    .in('id', units.map(u => u.property_id));
+                console.log(`[COMMERCIAL SERVICE] ${units.length} unidade(s) revertida(s) para AVAILABLE (negociação voltou para Proposta)`);
+            }
         }
 
         return result;

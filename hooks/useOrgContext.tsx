@@ -102,25 +102,58 @@ export function useOrgContext(): OrgContext {
     }, [activeOrganizationId, activeEmpresaId, companies, projectId, allProjects]);
 }
 
-/** Destino de uma escrita: uma organização específica, ou global (todas). */
+/**
+ * Destino de uma escrita: uma organização específica, ou todas as organizações
+ * DO USUÁRIO (as que ele é membro) — nunca "global".
+ *
+ * ⚠️ Por que não existe `{ kind: 'global' }` (organization_id NULL):
+ * o sistema é multi-tenant e a policy de leitura de registro global é
+ * `organization_id IS NULL OR is_org_member(...)`. Um registro NULL apareceria
+ * para TODOS os clientes do SaaS, não só para as organizações de quem criou —
+ * vazamento cross-tenant de escrita. `organization_id NULL` fica reservado aos
+ * seeds do próprio sistema (ex.: as 38 categorias financeiras padrão).
+ * "Todas as organizações" no modal significa, e só pode significar, todas as
+ * organizações DO USUÁRIO.
+ */
 export type WriteTarget =
     | { kind: 'org'; orgId: string }
-    | { kind: 'global' };
+    | { kind: 'all'; orgIds: string[] };
 
 /**
- * `global-allowed` — catálogo/configuração. O modal oferece "Todas as
- *   organizações", que resolve `{ kind: 'global' }` → grave `organization_id`
- *   NULL. Só use onde a tabela aceita NULL e a policy cobre o ramo global.
+ * `all-allowed` — catálogo/configuração (tipo de contrato, categoria, tributo,
+ *   índice de reajuste…). O modal oferece "Todas as organizações", que resolve
+ *   `{ kind: 'all', orgIds }` → replique a criação em cada uma (use
+ *   `forEachTargetOrg`).
  *
  * `single` — registro operacional (chamado, lead, movimento de estoque…) ou
  *   operação inerentemente por-empresa (fechamento contábil, faixa de alçada).
  *   O modal NÃO oferece "Todas".
  */
-export type WriteTargetMode = 'global-allowed' | 'single';
+export type WriteTargetMode = 'all-allowed' | 'single';
 
-/** Converte o destino para o valor de `organization_id` a gravar. */
-export function targetToOrgId(target: WriteTarget): string | null {
-    return target.kind === 'global' ? null : target.orgId;
+/** Organizações de destino, seja o alvo uma só ou todas as do usuário. */
+export function targetOrgIds(target: WriteTarget): string[] {
+    return target.kind === 'all' ? target.orgIds : [target.orgId];
+}
+
+/**
+ * Roda a criação uma vez por organização de destino, tolerando falhas
+ * individuais — numa replicação para 4 organizações, se 1 já tiver um item de
+ * mesmo nome (UNIQUE), as outras 3 não podem ser perdidas junto.
+ *
+ *   const { ok, failed } = await forEachTargetOrg(target, orgId =>
+ *       service.create(orgId, nome));
+ *   showToast(ok > 1 ? `Criado em ${ok} organizações.` : 'Criado.');
+ */
+export async function forEachTargetOrg<T>(
+    target: WriteTarget,
+    fn: (orgId: string) => Promise<T>,
+): Promise<{ ok: number; failed: { orgId: string; error: unknown }[] }> {
+    const results = await Promise.allSettled(targetOrgIds(target).map(fn));
+    const failed = results.flatMap((r, i) =>
+        r.status === 'rejected' ? [{ orgId: targetOrgIds(target)[i], error: r.reason }] : [],
+    );
+    return { ok: results.length - failed.length, failed };
 }
 
 /**
@@ -179,7 +212,7 @@ export function useOrgWriteTarget() {
             <ModalHeader
                 title="Selecionar organização"
                 description={
-                    pending?.mode === 'global-allowed'
+                    pending?.mode === 'all-allowed'
                         ? 'O seletor do topo está em "Todas as organizações". Escolha onde cadastrar, ou mantenha em todas.'
                         : 'O seletor do topo está em "Todas as organizações". Escolha onde cadastrar.'
                 }
@@ -191,17 +224,17 @@ export function useOrgWriteTarget() {
                 onClose={() => settle(null)}
             />
             <ModalBody className="space-y-2">
-                {pending?.mode === 'global-allowed' && (
+                {pending?.mode === 'all-allowed' && (
                     <>
                         <button
-                            onClick={() => settle({ kind: 'global' })}
+                            onClick={() => settle({ kind: 'all', orgIds: organizations.map(o => o.id) })}
                             className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all text-left group active:scale-[0.99]"
                         >
                             <Layers className="w-4 h-4 shrink-0 text-gray-400" />
                             <span className="min-w-0 flex-1">
                                 <span className="block text-sm font-semibold text-gray-800">Todas as organizações</span>
                                 <span className="block text-xs font-normal text-gray-500 mt-0.5">
-                                    Cadastra uma vez e vale para todas. Cada organização pode duplicar para editar a sua versão.
+                                    Cadastra em cada uma das suas {organizations.length} organizações. Depois cada uma pode editar a sua.
                                 </span>
                             </span>
                             <Check className="w-4 h-4 shrink-0 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />

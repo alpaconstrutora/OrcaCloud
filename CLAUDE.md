@@ -216,9 +216,16 @@ listar, filtrar, criar, gravar.
 1. **O seletor do topo manda.** Apontando para uma organização, o sistema usa
    ela e **não pergunta nada, nunca** — nem modal, nem seletor extra na tela.
 2. Só quando o topo está em **"Todas as organizações"** o sistema pergunta.
-3. Perguntado, se o usuário **mantiver "Todas"**, isso significa gravar um
-   registro **global** (`organization_id = NULL`), válido para todas — **não**
-   N cópias.
+3. Perguntado, se o usuário **mantiver "Todas"**, o item é replicado em **cada
+   organização de que ele é membro** (`forEachTargetOrg`).
+
+   ⚠️ **"Todas" nunca é `organization_id = NULL`.** O sistema é multi-tenant
+   (`is_org_member` sobre `organization_members`) e a policy de leitura de
+   registro global é `organization_id IS NULL OR is_org_member(...)` — um NULL
+   apareceria para **todos os clientes do SaaS**, não só para as organizações
+   de quem criou. `NULL` fica reservado aos seeds do sistema (ex.: as 38
+   categorias financeiras padrão). Replicação parcial não é erro: a
+   organização que já tem o item falha no UNIQUE e as demais seguem.
 4. **Exceção:** operação que exige organização específica por natureza
    (fechamento contábil, faixa de alçada, chamado de garantia) → modo
    `'single'`, sem a opção "Todas" no modal.
@@ -238,9 +245,10 @@ const dados = await service.list(orgId);   // service só aplica .eq() se houver
 
 // CRIAR:
 const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
-const target = await resolveWriteOrg('global-allowed');  // ou 'single'
-if (!target) return;                                     // cancelou
-await service.create(targetToOrgId(target), dados);      // null = global
+const target = await resolveWriteOrg('all-allowed');   // catálogo; ou 'single'
+if (!target) return;                                   // cancelou
+const { ok, failed } = await forEachTargetOrg(target, orgId =>
+    service.create(orgId, dados));                     // 1 org, ou todas as do usuário
 // …e renderize {orgTargetModal} no JSX.
 ```
 

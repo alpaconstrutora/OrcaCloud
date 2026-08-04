@@ -4,7 +4,7 @@ import { PaymentType } from '../types';
 import { CreditCard, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { defaultsAsRows, sortPaymentTypes } from '../constants/paymentTypes';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -28,7 +28,7 @@ const PaymentTypesSettings: React.FC = () => {
     const [loading, setLoading] = React.useState(false);
 
     const [isAdding, setIsAdding] = React.useState(false);
-    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
+    const [createTarget, setCreateTarget] = React.useState<WriteTarget | null>(null);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editValue, setEditValue] = React.useState('');
 
@@ -53,16 +53,19 @@ const PaymentTypesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editValue.trim()) return;
-        if (!createOrgId) { showToast('Selecione uma organização para criar um tipo.', 'error'); return; }
-        try {
-            await paymentTypeService.createType({ name: editValue.trim(), organization_id: createOrgId });
-            showToast('Tipo de pagamento criado com sucesso', 'success');
-            setEditValue('');
-            setIsAdding(false);
-            loadTypes();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        if (!createTarget) { showToast('Selecione uma organização para criar um tipo.', 'error'); return; }
+        const nome = editValue.trim();
+        const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
+            paymentTypeService.createType({ name: nome, organization_id: orgId }));
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao criar', 'error');
+            return;
         }
+        showToast(failed.length ? `Criado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+            : ok > 1 ? `Criado em ${ok} organizações` : 'Tipo de pagamento criado com sucesso', 'success');
+        setEditValue('');
+        setIsAdding(false);
+        loadTypes();
     };
 
     const handleUpdate = async (id: string) => {
@@ -90,33 +93,40 @@ const PaymentTypesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (type: PaymentType) => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const targetOrgId = target.orgId;
-        try {
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        const { ok, failed } = await forEachTargetOrg(target, async (targetOrgId) => {
             await paymentTypeService.createType({ name: `${type.name} (Cópia)`, organization_id: targetOrgId });
-            showToast('Tipo de pagamento duplicado com sucesso', 'success');
-            loadTypes();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        });
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao salvar', 'error');
+            return;
         }
+        // Replicação parcial não é erro: organização que já tinha o item falha
+        // no UNIQUE e as demais seguem — o aviso diz exatamente o que houve.
+        showToast(failed.length ? `Aplicado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+            : ok > 1 ? `Aplicado em ${ok} organizações` : 'Tipo de pagamento duplicado com sucesso', 'success');
+        loadTypes();
     };
 
     const handleImportDefaults = async () => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const targetOrgId = target.orgId;
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
         if (!await confirm({ title: 'Importar Tipos Padrão', message: 'Deseja importar os tipos de pagamento padrão do sistema para poder editá-los?' })) return;
         setLoading(true);
-        try {
+        const { ok, failed } = await forEachTargetOrg(target, async (targetOrgId) => {
             await paymentTypeService.createTypes(defaultsAsRows(targetOrgId));
-            showToast('Tipos padrão importados com sucesso', 'success');
-            loadTypes();
-        } catch (error: any) {
-            showToast(error.message || 'Erro ao importar tipos padrão', 'error');
-        } finally {
-            setLoading(false);
+        });
+        setLoading(false);
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao salvar', 'error');
+            return;
         }
+        // Replicação parcial não é erro: organização que já tinha o item falha
+        // no UNIQUE e as demais seguem — o aviso diz exatamente o que houve.
+        showToast(failed.length ? `Aplicado em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+            : ok > 1 ? `Aplicado em ${ok} organizações` : 'Tipos padrão importados com sucesso', 'success');
+        loadTypes();
     };
 
     const startEdit = (t: PaymentType) => {
@@ -126,10 +136,9 @@ const PaymentTypesSettings: React.FC = () => {
     };
 
     const startAdd = async () => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const targetOrgId = target.orgId;
-        setCreateOrgId(targetOrgId);
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        setCreateTarget(target);
         setIsAdding(true);
         setEditingId(null);
         setEditValue('');
@@ -137,6 +146,7 @@ const PaymentTypesSettings: React.FC = () => {
 
     const cancelEdit = () => {
         setIsAdding(false);
+        setCreateTarget(null);
         setEditingId(null);
         setEditValue('');
     };

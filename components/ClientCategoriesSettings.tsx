@@ -4,7 +4,7 @@ import { ClientCategory } from '../types';
 import { Users, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -27,7 +27,7 @@ const ClientCategoriesSettings: React.FC = () => {
 
     // Form states
     const [isAdding, setIsAdding] = React.useState(false);
-    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
+    const [createTarget, setCreateTarget] = React.useState<WriteTarget | null>(null);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editValue, setEditValue] = React.useState('');
 
@@ -52,16 +52,24 @@ const ClientCategoriesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editValue.trim()) return;
-        if (!createOrgId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
-        try {
-            await clientCategoryService.create(createOrgId, editValue.trim());
-            showToast('Categoria criada com sucesso', 'success');
-            setEditValue('');
-            setIsAdding(false);
-            loadCategories();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        if (!createTarget) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
+        const nome = editValue.trim();
+        const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
+            clientCategoryService.create(orgId, nome));
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao criar categoria', 'error');
+            return;
         }
+        // Replicação parcial não é erro: uma organização que já tinha a categoria
+        // falha no UNIQUE e as outras seguem — o aviso diz exatamente o que houve.
+        showToast(
+            failed.length ? `Criada em ${ok} de ${ok + failed.length} organizações (as demais já tinham).`
+                          : ok > 1 ? `Categoria criada em ${ok} organizações` : 'Categoria criada com sucesso',
+            'success',
+        );
+        setEditValue('');
+        setIsAdding(false);
+        loadCategories();
     };
 
     const handleUpdate = async (id: string) => {
@@ -89,33 +97,32 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (cat: ClientCategory) => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
-        try {
-            await clientCategoryService.create(orgId, `${cat.name} (Cópia)`);
-            showToast('Categoria duplicada com sucesso', 'success');
-            loadCategories();
-        } catch (error: any) {
-            showToast(error.message, 'error');
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        const { ok, failed } = await forEachTargetOrg(target, orgId =>
+            clientCategoryService.create(orgId, `${cat.name} (Cópia)`));
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao duplicar', 'error');
+            return;
         }
+        showToast(ok > 1 ? `Duplicada em ${ok} organizações` : 'Categoria duplicada com sucesso', 'success');
+        loadCategories();
     };
 
     const handleImportDefaults = async () => {
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
         if (!await confirm({ title: 'Importar Categorias Padrão', message: 'Deseja importar as categorias padrão do sistema para poder editá-las?' })) return;
         setLoading(true);
-        try {
-            await clientCategoryService.importDefaults(orgId);
-            showToast('Categorias padrão importadas com sucesso', 'success');
-            loadCategories();
-        } catch (error: any) {
-            showToast(error.message || 'Erro ao importar categorias padrão', 'error');
-        } finally {
-            setLoading(false);
+        const { ok, failed } = await forEachTargetOrg(target, orgId =>
+            clientCategoryService.importDefaults(orgId));
+        setLoading(false);
+        if (ok === 0) {
+            showToast(failed[0]?.error instanceof Error ? failed[0].error.message : 'Erro ao importar categorias padrão', 'error');
+            return;
         }
+        showToast(ok > 1 ? `Padrões importados em ${ok} organizações` : 'Categorias padrão importadas com sucesso', 'success');
+        loadCategories();
     };
 
     const startEdit = (cat: ClientCategory) => {
@@ -125,12 +132,12 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     const startAdd = async () => {
-        // Resolve o alvo ANTES de abrir o form: com org efetiva usa ela; em "Todas"
-        // com várias orgs, abre o seletor. Cancelar não abre o form.
-        const target = await resolveWriteOrg('single');
-        if (!target || target.kind !== 'org') return;
-        const orgId = target.orgId;
-        setCreateOrgId(orgId);
+        // Resolve o alvo ANTES de abrir o form: seletor do topo com organização
+        // usa ela direto; em "Todas" com várias, pergunta (e aceita "todas as
+        // minhas", que replica). Cancelar não abre o form.
+        const target = await resolveWriteOrg('all-allowed');
+        if (!target) return;
+        setCreateTarget(target);
         setIsAdding(true);
         setEditingId(null);
         setEditValue('');
@@ -138,6 +145,7 @@ const ClientCategoriesSettings: React.FC = () => {
 
     const cancelEdit = () => {
         setIsAdding(false);
+        setCreateTarget(null);
         setEditingId(null);
         setEditValue('');
     };

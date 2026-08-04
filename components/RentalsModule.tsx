@@ -1647,9 +1647,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             </div>
 
                                             <div className="mb-6">
-                                                <span className="text-xs font-medium text-purple-600 mb-1 inline-block">
-                                                    Locação ativa
-                                                </span>
                                                 <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors"
                                                     title={deal._unitNames || undefined}>
                                                     {deal._propertyName || property?.name || 'Imóvel em referência'}

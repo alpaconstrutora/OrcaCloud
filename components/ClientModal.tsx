@@ -1,4 +1,5 @@
 import React from 'react';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { User, Mail, Phone, FileText, MapPin, Building2 } from 'lucide-react';
 import { Client } from '../types';
 import CityStateSelect from './CityStateSelect';
@@ -18,7 +19,8 @@ interface ClientModalProps {
 }
 
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    // Organização do seletor do topo, já com a herança de empresa/obra.
+    const { orgId: activeOrganizationId } = useOrgContext();
     const organizations = useStore(state => state.organizations);
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [states, setStates] = React.useState<MasterState[]>([]);

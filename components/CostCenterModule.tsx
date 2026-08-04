@@ -9,8 +9,7 @@ import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import CostCenterV2ImportModal from './CostCenterV2ImportModal';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
-import { useStore } from '../store/useStore';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { costCenterService } from '../services/costCenterService';
 import { exportService } from '../services/exportService';
 import { CostCenterV2 } from '../types/financial';
@@ -38,11 +37,7 @@ interface FormState {
 const EMPTY_FORM: FormState = { parent_id: '', name: '', description: '' };
 
 const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) => {
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
     const [items, setItems] = useState<CostCenterV2[]>([]);
     const [loading, setLoading] = useState(false);
@@ -147,8 +142,9 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const toggleExpandAll = () => setExpandedIds(allExpanded ? {} : Object.fromEntries(parentIds.map(id => [id, true])));
 
     const openCreate = async (parentId?: string) => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateOrgId(orgId);
         setEditingItem(null);
         setFormData({ parent_id: parentId || '', name: '', description: '' });
@@ -282,8 +278,9 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                         </button>
                         <button
                             onClick={async () => {
-                                const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-                                if (!orgId) return;
+                                const target = await resolveWriteOrg('single');
+                                if (!target || target.kind !== 'org') return;
+                                const orgId = target.orgId;
                                 setImportOrgId(orgId);
                                 setShowImportModal(true);
                             }}
@@ -497,7 +494,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                 />
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

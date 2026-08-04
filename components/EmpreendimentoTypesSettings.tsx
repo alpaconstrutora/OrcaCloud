@@ -1,5 +1,4 @@
 import React from 'react';
-import { useStore } from '../store/useStore';
 import {
     empreendimentoTypeService,
     EmpreendimentoTypeRecord,
@@ -11,7 +10,7 @@ import {
 import { Building2, Plus, Check, X, Search, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -27,15 +26,12 @@ const TYPE_COLUMNS: ColumnConfig[] = [
 const colorTextClass = (colorKey: string) => colorClasses(colorKey).match(/text-\S+/)?.[0] ?? 'text-gray-600';
 
 const EmpreendimentoTypesSettings: React.FC = () => {
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
-    const organizations = useStore(state => state.organizations);
+    // Organização do seletor do topo, já com a herança de empresa/obra.
+    const { orgId: activeOrganizationId } = useOrgContext();
     const orgId = activeOrganizationId ?? undefined;
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
     const [types, setTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -103,8 +99,9 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (type: EmpreendimentoTypeRecord) => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         try {
             await empreendimentoTypeService.duplicate(type, targetOrgId);
             showToast('Tipo de empreendimento duplicado com sucesso', 'success');
@@ -123,8 +120,9 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     };
 
     const startAdd = async () => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         setCreateOrgId(targetOrgId);
         setIsAdding(true);
         setEditingId(null);
@@ -352,7 +350,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                 </div>
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

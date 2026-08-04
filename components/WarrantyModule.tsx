@@ -2,8 +2,7 @@ import React from 'react';
 import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star } from 'lucide-react';
 import { warrantyService } from '../services/warrantyService';
 import { useToast } from '../hooks/useToast';
-import { useStore } from '../store/useStore';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import type { WarrantyClaim, ClaimState, WarrantyKPIs, ClaimFilters } from '../types/warranty';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
@@ -115,11 +114,7 @@ interface WarrantyModuleProps {
 
 const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, projects = [], onOpenClaim }) => {
     const { showToast } = useToast();
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
     const [claims, setClaims]     = React.useState<WarrantyClaim[]>([]);
     const [kpis, setKpis]         = React.useState<WarrantyKPIs | null>(null);
@@ -130,8 +125,9 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
     const [filterState, setFilterState] = React.useState<ClaimState | ''>('');
 
     const handleOpenClaim = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateOrgId(orgId);
         setShowModal(true);
         onOpenClaim?.();
@@ -255,7 +251,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                 />
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
 
             {/* Detalhe do chamado — nunca bloquear a leitura por causa de "Todas as organizações";
                 a organização do próprio chamado já resolve o escopo. */}

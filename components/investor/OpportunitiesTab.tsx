@@ -12,8 +12,7 @@ import OpportunityForm from './OpportunityForm';
 import OpportunityDetail from './OpportunityDetail';
 import InterestsPanel from './InterestsPanel';
 import Button from '../ui/Button';
-import { useOrganizationPicker } from '../ui/useOrganizationPicker';
-import { useStore } from '../../store/useStore';
+import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 
 interface Props {
     opportunities: InvestorOpportunity[];
@@ -45,13 +44,9 @@ const OpportunitiesTab: React.FC<Props> = ({
     const [editing, setEditing] = React.useState<InvestorOpportunity | null | 'new'>(null);
     const [saving, setSaving] = React.useState(false);
     const [adminTab, setAdminTab] = React.useState<AdminTab>('opportunities');
-    const organizations = useStore(state => state.organizations);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
 
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido (handleNew).
-    const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
 
     // Em "Todas as organizações" não há org selecionada: editar usa a org da própria
     // oportunidade; criar do zero resolve via effectiveOrganizationId/handleNew.
@@ -59,8 +54,9 @@ const OpportunitiesTab: React.FC<Props> = ({
         organizationId || (editing && editing !== 'new' ? editing.organization_id : createOrgId);
 
     const handleNew = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateOrgId(orgId);
         setEditing('new');
     };
@@ -546,7 +542,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                 />
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

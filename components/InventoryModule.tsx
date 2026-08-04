@@ -29,7 +29,7 @@ import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import type {
@@ -355,23 +355,22 @@ const COLUMNS_MOVIMENTOS: ColumnConfig[] = [
 // ─── Módulo principal ──────────────────────────────────────────────────────────
 export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const { projects, organizations } = useStore();
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [createWarehouseOrgId, setCreateWarehouseOrgId] = React.useState<string | undefined>(undefined);
     const [createRequestOrgId, setCreateRequestOrgId] = React.useState<string | undefined>(undefined);
 
     const handleNewWarehouse = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateWarehouseOrgId(orgId);
         setWarehouseModal(true);
     };
 
     const handleNewRequest = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateRequestOrgId(orgId);
         setShowRequestModal(true);
     };
@@ -1112,7 +1111,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 />
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
             {transferModal && (
                 <TransferModal
                     warehouses={warehouses.filter(w => w.isActive)}

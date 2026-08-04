@@ -2,9 +2,8 @@ import React, { useMemo } from 'react';
 import { Landmark, Plus, Check, X, Search, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
-import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { STALE } from '../lib/queryClient';
@@ -25,15 +24,12 @@ const emptyForm: TaxSettingInput = { nome: '', aliquota: null, base_calculo: '',
 const inputCls = 'w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all';
 
 const TaxSettingsManager: React.FC = () => {
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    // Organização do seletor do topo, já com a herança de empresa/obra.
+    const { orgId: activeOrganizationId } = useOrgContext();
     const qc = useQueryClient();
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('taxSettings:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'taxSettingsColumns');
@@ -79,14 +75,16 @@ const TaxSettingsManager: React.FC = () => {
     });
 
     const handleSeedDefaults = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         seedMut.mutate(orgId);
     };
 
     const startAdd = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateOrgId(orgId);
         setIsAdding(true); setEditingId(null); setForm(emptyForm);
     };
@@ -352,7 +350,7 @@ const TaxSettingsManager: React.FC = () => {
                 </div>
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

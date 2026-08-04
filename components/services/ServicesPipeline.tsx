@@ -13,8 +13,7 @@ import ServicesOpportunityModal from './ServicesOpportunityModal';
 import ServicesPipelineConfigModal from './ServicesPipelineConfigModal';
 import { KpiCard } from '../ui/KpiCard';
 import { usePersistedState } from '../ui/TableUtils';
-import { useOrganizationPicker } from '../ui/useOrganizationPicker';
-import { useStore } from '../../store/useStore';
+import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 
 interface KPIs {
   activeLeads: number;
@@ -256,11 +255,7 @@ const PipelineColumn: React.FC<{
 
 // ── Pipeline principal ────────────────────────────────────────────────────────
 const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
-  const organizations = useStore(state => state.organizations);
-  // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-  // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-  const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-  const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
   const [createLeadOrgId, setCreateLeadOrgId] = useState<string | undefined>(undefined);
 
   const [opportunities, setOpportunities] = useState<ServiceOpportunity[]>([]);
@@ -390,8 +385,9 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
           </button>
           <button
             onClick={async () => {
-              const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-              if (!orgId) return;
+              const target = await resolveWriteOrg('single');
+              if (!target || target.kind !== 'org') return;
+              const orgId = target.orgId;
               setCreateLeadOrgId(orgId);
               setIsModalOpen(true);
             }}
@@ -511,7 +507,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
         />
       )}
 
-      {orgPickerModal}
+      {orgTargetModal}
 
       {showConfig && organizationId && (
         <ServicesPipelineConfigModal

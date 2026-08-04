@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Layers, Plus, Search, Shield } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import { useOrganizationPicker } from '../ui/useOrganizationPicker';
-import { useStore } from '../../store/useStore';
+import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
@@ -47,19 +46,16 @@ const AcademyCatalogTab: React.FC<Props> = ({
     orgId, courses, carregando, podeEditar, onCoursesChange, onMontarConteudo, notify,
 }) => {
     const confirm = useConfirm();
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrgId = orgId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [sheetOrgId, setSheetOrgId] = useState<string | null | undefined>(orgId);
     const [search, setSearch] = usePersistedState('academyCatalog:search', '');
     const colunas = useTableColumns(COLUMNS, 'academyCatalogColumns');
     const [sheet, setSheet] = useState<{ course: TrainingCourse | null } | null>(null);
 
     const handleNewCourse = async () => {
-        const orgIdResolved = effectiveOrgId ?? (await pickOrganization()) ?? undefined;
-        if (!orgIdResolved) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgIdResolved = target.orgId;
         setSheetOrgId(orgIdResolved);
         setSheet({ course: null });
     };
@@ -338,7 +334,7 @@ const AcademyCatalogTab: React.FC<Props> = ({
                 />
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

@@ -1,11 +1,10 @@
 import React from 'react';
-import { useStore } from '../store/useStore';
 import { paymentTypeService } from '../services/paymentTypeService';
 import { PaymentType } from '../types';
 import { CreditCard, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { defaultsAsRows, sortPaymentTypes } from '../constants/paymentTypes';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -18,15 +17,12 @@ const TYPE_COLUMNS: ColumnConfig[] = [
 ];
 
 const PaymentTypesSettings: React.FC = () => {
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
-    const organizations = useStore(state => state.organizations);
+    // Organização do seletor do topo, já com a herança de empresa/obra.
+    const { orgId: activeOrganizationId } = useOrgContext();
     const orgId = activeOrganizationId ?? undefined;
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação/importação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
     const [types, setTypes] = React.useState<PaymentType[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -94,8 +90,9 @@ const PaymentTypesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (type: PaymentType) => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         try {
             await paymentTypeService.createType({ name: `${type.name} (Cópia)`, organization_id: targetOrgId });
             showToast('Tipo de pagamento duplicado com sucesso', 'success');
@@ -106,8 +103,9 @@ const PaymentTypesSettings: React.FC = () => {
     };
 
     const handleImportDefaults = async () => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         if (!await confirm({ title: 'Importar Tipos Padrão', message: 'Deseja importar os tipos de pagamento padrão do sistema para poder editá-los?' })) return;
         setLoading(true);
         try {
@@ -128,8 +126,9 @@ const PaymentTypesSettings: React.FC = () => {
     };
 
     const startAdd = async () => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         setCreateOrgId(targetOrgId);
         setIsAdding(true);
         setEditingId(null);
@@ -325,7 +324,7 @@ const PaymentTypesSettings: React.FC = () => {
                 </div>
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

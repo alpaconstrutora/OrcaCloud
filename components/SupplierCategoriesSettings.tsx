@@ -1,11 +1,10 @@
 import React from 'react';
-import { useStore } from '../store/useStore';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { SupplierCategory } from '../types';
 import { Tag, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -18,15 +17,12 @@ const CATEGORY_COLUMNS: ColumnConfig[] = [
 ];
 
 const SupplierCategoriesSettings: React.FC = () => {
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
-    const organizations = useStore(state => state.organizations);
+    // Organização do seletor do topo, já com a herança de empresa/obra.
+    const { orgId: activeOrganizationId } = useOrgContext();
     const orgId = activeOrganizationId ?? undefined;
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação/importação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
     const [categories, setCategories] = React.useState<SupplierCategory[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -98,8 +94,9 @@ const SupplierCategoriesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (category: SupplierCategory) => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         try {
             await supplierCategoryService.createCategory({
                 name: `${category.name} (Cópia)`,
@@ -113,8 +110,9 @@ const SupplierCategoriesSettings: React.FC = () => {
     };
 
     const handleImportDefaults = async () => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         if (!await confirm({ title: 'Importar Categorias Padrão', message: 'Deseja importar as categorias padrão do sistema para poder editá-las?' })) return;
         setLoading(true);
         try {
@@ -139,8 +137,9 @@ const SupplierCategoriesSettings: React.FC = () => {
     };
 
     const startAdd = async () => {
-        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!targetOrgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const targetOrgId = target.orgId;
         setCreateOrgId(targetOrgId);
         setIsAdding(true);
         setEditingId(null);
@@ -337,7 +336,7 @@ const SupplierCategoriesSettings: React.FC = () => {
                 </div>
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

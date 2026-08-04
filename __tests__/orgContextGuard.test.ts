@@ -72,27 +72,13 @@ const RULES: Rule[] = [
             'components/EmitDocumentModal.tsx':
                 'Busca a org por id primeiro; o índice 0 incide sobre uma lista já filtrada por membro.',
         },
-        // Todos são o mesmo padrão herdado: `organizations.length === 1 ? organizations[0].id : undefined`,
-        // que `useOrgContext` já resolve internamente. Migrar para o hook zera esta regra.
+        // 2026-08-03: 17 das 18 entradas pagas ao migrar as telas de criação para
+        // `useOrgWriteTarget` (o hook resolve o caso de uma só organização
+        // internamente) e ao remover `components/ui/useOrganizationPicker.tsx`.
         baseline: {
-            'components/academy/AcademyCatalogTab.tsx': 1,
-            'components/ClientCategoriesSettings.tsx': 1,
+            // Cliente global (organization_id null) + topo em "Todas": a tela
+            // precisa saber se existe uma organização óbvia para o vínculo.
             'components/ClientList.tsx': 1,
-            'components/ContractIndexManager.tsx': 1,
-            'components/ContractTypesSettings.tsx': 1,
-            'components/CostCenterModule.tsx': 1,
-            'components/EmpreendimentoTypesSettings.tsx': 1,
-            'components/FinancialIntelligence.tsx': 1,
-            'components/fiscal/FiscalRules.tsx': 1,
-            'components/InventoryModule.tsx': 1,
-            'components/investor/OpportunitiesTab.tsx': 1,
-            'components/PaymentTypesSettings.tsx': 1,
-            'components/ProcessosModule.tsx': 1,
-            'components/services/ServicesPipeline.tsx': 1,
-            'components/SupplierCategoriesSettings.tsx': 1,
-            'components/TaxSettingsManager.tsx': 1,
-            'components/ui/useOrganizationPicker.tsx': 1,
-            'components/WarrantyModule.tsx': 1,
         },
     },
     {

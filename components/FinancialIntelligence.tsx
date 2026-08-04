@@ -18,8 +18,7 @@ import type { ReportSchedule, ReportFrequency, ReportType } from '../services/re
 import { KpiCard } from './ui/KpiCard';
 import { usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
-import { useStore } from '../store/useStore';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -407,11 +406,7 @@ interface Props {
 
 export default function FinancialIntelligence({ organizationId, onNavigate }: Props) {
     const confirm = useConfirm();
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = organizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [createScheduleOrgId, setCreateScheduleOrgId] = useState<string | undefined>(undefined);
     const [tab, setTab]               = usePersistedState<Tab>('financialIntelligence:tab', 'alertas');
     const [alerts, setAlerts]         = useState<FinancialAlert[]>([]);
@@ -435,8 +430,9 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
     const scheduleFormOrganizationId = editTarget?.organization_id ?? createScheduleOrgId;
 
     const handleNewSchedule = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateScheduleOrgId(orgId);
         setShowForm(true);
         setEditTarget(null);
@@ -894,7 +890,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                 )}
             </div>
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 }

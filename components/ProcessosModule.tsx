@@ -18,8 +18,7 @@ import { Sheet } from './ui/sheet';
 import { useConfirm } from './ui/confirm';
 import { formatDateBR as fmtDate } from './ui/Format';
 import { DocumentPicker } from './ui/DocumentPicker';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
-import { useStore } from '../store/useStore';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 
 // ─── rótulos ────────────────────────────────────────────────
 
@@ -638,11 +637,7 @@ interface Props {
 }
 
 export default function ProcessosModule({ organizationId = '', userId = '', userEmail = '' }: Props) {
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = organizationId || (organizations.length === 1 ? organizations[0].id : undefined);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [modalOrgId, setModalOrgId] = useState<string | undefined>(undefined);
 
     const [tab, setTab] = useState<Tab>('pendente');
@@ -653,15 +648,17 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
     const [refreshKey, setRefreshKey] = useState(0);
 
     const handleStartProcess = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setModalOrgId(orgId);
         setShowStart(true);
     };
 
     const handleNewTemplate = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setModalOrgId(orgId);
         setShowNewTemplate(true);
     };
@@ -729,7 +726,7 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                 />
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
             <InstanceDetail
                 open={!!openInstanceId} onClose={() => setOpenInstanceId(null)} instanceId={openInstanceId}
                 organizationId={organizationId} userId={userId} userEmail={userEmail}

@@ -2,8 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { TrendingUp, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
-import { useStore } from '../store/useStore';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 const COLUMNS: ColumnConfig[] = [
@@ -23,12 +22,9 @@ const fmtDate = (d: string) => {
 const fmtVal = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 const ContractIndexManager: React.FC = () => {
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-    // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    // Organização do seletor do topo, já com a herança de empresa/obra.
+    const { orgId: activeOrganizationId } = useOrgContext();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [selectedIndex, setSelectedIndex] = useState<IndexName>('INCC-M');
     const [values, setValues] = useState<ContractIndexValue[]>([]);
     const [loading, setLoading] = useState(false);
@@ -71,8 +67,9 @@ const ContractIndexManager: React.FC = () => {
     const handleAdd = async () => {
         const v = parseFloat(newValue.replace(',', '.'));
         if (isNaN(v) || v <= 0 || !newMonth) return;
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setSaving(true);
         try {
             const [y, m] = newMonth.split('-').map(Number);
@@ -232,7 +229,7 @@ const ContractIndexManager: React.FC = () => {
                 )}
             </div>
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

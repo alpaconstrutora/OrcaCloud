@@ -1,11 +1,10 @@
 import React from 'react';
-import { useStore } from '../store/useStore';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { ClientCategory } from '../types';
 import { Users, Plus, Check, X, Search, AlertCircle, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { useOrganizationPicker } from './ui/useOrganizationPicker';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -17,16 +16,11 @@ const CATEGORY_COLUMNS: ColumnConfig[] = [
 ];
 
 const ClientCategoriesSettings: React.FC = () => {
-    const activeOrganizationId = useStore(state => state.activeOrganizationId);
-    const organizations = useStore(state => state.organizations);
-    // Em "Todas as organizações" (activeOrganizationId null): se o usuário só tem
-    // UMA organização, ela é o alvo óbvio de criação/importação — não faz sentido
-    // exigir que ele troque o seletor global só para cadastrar. Com várias, aí sim
-    // é ambíguo e o alvo precisa ser escolhido. Ver feedback_todas_organizacoes_nao_esconder.
-    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
+    // Organização do seletor do topo, já com a herança de empresa/obra.
+    const { orgId: activeOrganizationId } = useOrgContext();
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
-    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -95,8 +89,9 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (cat: ClientCategory) => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         try {
             await clientCategoryService.create(orgId, `${cat.name} (Cópia)`);
             showToast('Categoria duplicada com sucesso', 'success');
@@ -107,8 +102,9 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     const handleImportDefaults = async () => {
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         if (!await confirm({ title: 'Importar Categorias Padrão', message: 'Deseja importar as categorias padrão do sistema para poder editá-las?' })) return;
         setLoading(true);
         try {
@@ -131,8 +127,9 @@ const ClientCategoriesSettings: React.FC = () => {
     const startAdd = async () => {
         // Resolve o alvo ANTES de abrir o form: com org efetiva usa ela; em "Todas"
         // com várias orgs, abre o seletor. Cancelar não abre o form.
-        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
-        if (!orgId) return;
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgId = target.orgId;
         setCreateOrgId(orgId);
         setIsAdding(true);
         setEditingId(null);
@@ -329,7 +326,7 @@ const ClientCategoriesSettings: React.FC = () => {
                 </div>
             )}
 
-            {orgPickerModal}
+            {orgTargetModal}
         </div>
     );
 };

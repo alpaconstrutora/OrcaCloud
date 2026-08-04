@@ -4,8 +4,7 @@ import { listClassificationRules, createClassificationRule, toggleClassification
 import type { ClassificationRule, RuleType } from '../../types/fiscal';
 import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
-import { useOrganizationPicker } from '../ui/useOrganizationPicker';
-import { useStore } from '../../store/useStore';
+import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 
 interface Props {
   organizationId: string | null;
@@ -57,11 +56,7 @@ const COLUMNS: ColumnConfig[] = [
 ];
 
 export function FiscalRules({ organizationId, writeOrganizationId, onToast, chromeSlot }: Props) {
-  const organizations = useStore(state => state.organizations);
-  // Em "Todas as organizações": com UMA só organização, ela é o alvo de
-  // criação; com várias, o alvo é ambíguo e precisa ser escolhido.
-  const effectiveWriteOrgId = writeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
-  const { pickOrganization, orgPickerModal } = useOrganizationPicker();
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
   const [rules, setRules] = useState<ClassificationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -85,8 +80,9 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
       onToast('Informe o valor de correspondência', 'err');
       return;
     }
-    const orgId = effectiveWriteOrgId ?? (await pickOrganization()) ?? undefined;
-    if (!orgId) return;
+    const target = await resolveWriteOrg('single');
+    if (!target || target.kind !== 'org') return;
+    const orgId = target.orgId;
     setSaving(true);
     try {
       await createClassificationRule({
@@ -336,7 +332,7 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
         </div>
       )}
 
-      {orgPickerModal}
+      {orgTargetModal}
     </div>
   );
 }

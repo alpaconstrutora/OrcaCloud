@@ -52,8 +52,8 @@ const rentalValueOf = (p: Partial<Property>): number =>
 
 // Colunas da tabela de Unidades (§2/§5.2) — a mesma tabela troca de contexto
 // (edifícios × unidades de um edifício, ver `selectedBuildingId`), então esta
-// lista cobre as colunas dos dois modos; cada `<th>`/`<td>` já checa qual
-// modo está ativo antes de aplicar `visibleColumns`.
+// lista cobre as colunas dos dois modos; cada célula de cabeçalho/dado já
+// checa qual modo está ativo antes de aplicar `visibleColumns`.
 const PROPERTY_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Imóvel', sortable: true },
     { key: 'address', label: 'Endereço', sortable: true },
@@ -881,7 +881,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             </div>
 
             {/* KPIs — §20/Anatomia (ui_ux_guia_unificado.md): título → KPIs → abas → botões → toolbar acoplada.
-                Ficavam depois da toolbar de abas — ordem errada (§19.1/§20.1). */}
+                Ficavam depois da toolbar de abas — ordem errada (§19.1/§20.1).
+                Só na visão mestre "Gestão de Locações" (sem edifício selecionado) —
+                removidos de "Gestão de Unidades" a pedido do usuário. */}
+            {!currentBuilding && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
                 <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
                 <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
@@ -889,6 +892,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
                 <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
             </div>
+            )}
 
             {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1:
                 card branco externo (mesmo peso visual da toolbar de botões abaixo)

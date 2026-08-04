@@ -9,6 +9,7 @@ import {
 import { detectTokens } from '../services/docxRenderService';
 import { FIELD_GROUPS, TokenMap, TokenMapping } from '../services/docxFieldCatalog';
 import { organizationService } from '../services/organizationService';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { supabase } from '../lib/supabase';
 import Button from './ui/Button';
 
@@ -77,6 +78,7 @@ const MappingSelect: React.FC<{
 };
 
 const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
+    const { orgId: contextOrgId } = useOrgContext();
     const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [draft, setDraft] = useState<Draft | null>(null);
@@ -90,6 +92,11 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
 
     useEffect(() => {
         if (organizationId) { setOrgId(organizationId); return; }
+        // Seletor do topo tem precedência sobre qualquer descoberta automática.
+        if (contextOrgId) { setOrgId(contextOrgId); return; }
+        // Em "Todas as organizações": cai na organização da qual o usuário é
+        // membro. Sem `?? orgs[0]` — escolher a primeira da lista gravava o
+        // modelo numa organização alheia. Ver hooks/useOrgContext.tsx.
         (async () => {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
@@ -98,11 +105,10 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                 const mine = email
                     ? orgs.find(o => (o.members ?? []).some(m => m.email?.toLowerCase() === email))
                     : undefined;
-                const chosen = mine ?? orgs[0];
-                if (chosen) setOrgId(chosen.id);
+                if (mine) setOrgId(mine.id);
             } catch { /* mantém vazio; save mostrará erro */ }
         })();
-    }, [organizationId]);
+    }, [organizationId, contextOrgId]);
 
     const load = useCallback(() => {
         setLoading(true);

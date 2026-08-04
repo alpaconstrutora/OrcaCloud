@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ProjectSettings, Organization } from '../types';
+import { useOrgContext } from '../hooks/useOrgContext';
 import {
     Printer,
     FileText,
@@ -28,7 +29,15 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
         return [...list].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [settings.diaryEntries]);
 
-    const selectedOrganization = organizations.length > 0 ? organizations[0] : null;
+    // O cabeçalho do relatório (logo + nome) é o da organização DONA da obra —
+    // `settings.organizationId`. Antes usava `organizations[0]`, que estampava a
+    // primeira organização da lista em relatório de obra de outra empresa.
+    // Fallback: seletor do topo. Ver hooks/useOrgContext.tsx.
+    const { orgId: contextOrgId } = useOrgContext();
+    const selectedOrganization = useMemo(
+        () => organizations.find(o => o.id === (settings.organizationId ?? contextOrgId)) ?? null,
+        [organizations, settings.organizationId, contextOrgId],
+    );
 
     const weatherIcons: Record<string, React.ReactNode> = {
         'Ensolarado': <Sun className="w-4 h-4 text-amber-500" />,

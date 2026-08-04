@@ -13,6 +13,7 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import ActionIconButton from './ui/ActionIconButton';
 
 // ─── helpers ────────────────────────────────────────────────
@@ -315,12 +316,25 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     const [bulkLoading, setBulkLoading]   = useState(false);
     const [generating, setGenerating]     = useState(false);
 
-    // A org vem do seletor global do topo. Fechamento fiscal é inerentemente
-    // por-empresa (REGRA #5, caso 3), então em "Todas" cai na primeira org.
-    const effectiveOrgId = organizationId || organizations?.[0]?.id || '';
+    // LEITURA: organização do seletor do topo; `null` = "Todas as organizações"
+    // (os services não aplicam `.eq`, a RLS recorta). NUNCA `organizations[0]`,
+    // que silenciosamente mostrava e gerava tributo da org errada.
+    const { orgId: contextOrgId } = useOrgContext();
+    const effectiveOrgId = organizationId || contextOrgId || null;
+
+    // ESCRITA: tributo é registro operacional e a geração em lote é por-empresa
+    // (REGRA #5, caso 3) → sempre uma organização específica.
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const [novoOrgId, setNovoOrgId] = useState<string | null>(null);
+
+    const handleNovoTributo = async () => {
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        setNovoOrgId(target.orgId);
+        setShowNovo(true);
+    };
 
     useEffect(() => {
-        if (!effectiveOrgId) return;
         let active = true;
         taxPayableService.getRecognitionRegime(effectiveOrgId)
             .then(r => { if (active) setRegime(r); })
@@ -329,7 +343,6 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     }, [effectiveOrgId]);
 
     const load = useCallback(async () => {
-        if (!effectiveOrgId) return;
         setLoading(true);
         setError(null);
         try {
@@ -401,7 +414,11 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     }
 
     async function handleBackfill() {
-        if (!effectiveOrgId) return;
+        // Geração em lote é inerentemente por-empresa: em "Todas as organizações"
+        // pergunta em qual gerar, em vez de não fazer nada (botão morto).
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const backfillOrgId = target.orgId;
         const ok = await confirm({
             title: 'Gerar tributos dos negócios existentes?',
             message: (
@@ -417,7 +434,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         if (!ok) return;
         setGenerating(true);
         try {
-            const n = await taxPayableService.generateAllForOrganization(effectiveOrgId);
+            const n = await taxPayableService.generateAllForOrganization(backfillOrgId);
             await load();
             notify(`${n} negócio${n !== 1 ? 's' : ''} processado${n !== 1 ? 's' : ''}.`);
         } catch (e) {
@@ -648,7 +665,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
 
                     {/* Novo — ação primária §17 */}
                     <button
-                        onClick={() => setShowNovo(true)}
+                        onClick={handleNovoTributo}
                         className="h-9 flex items-center gap-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
                     >
                         <Plus className="w-[15px] h-[15px]" /> Novo
@@ -1015,16 +1032,17 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             )}
 
             {/* Modals */}
-            {showNovo && (
+            {showNovo && novoOrgId && (
                 <NovoLancamentoModal
-                    organizationId={effectiveOrgId}
+                    organizationId={novoOrgId}
                     onSave={() => { setShowNovo(false); load(); }}
-                    onClose={() => setShowNovo(false)}
+                    onClose={() => { setShowNovo(false); setNovoOrgId(null); }}
                 />
             )}
+            {/* Editar: a organização sai do próprio tributo aberto. */}
             {editando && (
                 <NovoLancamentoModal
-                    organizationId={effectiveOrgId}
+                    organizationId={editando.organization_id || effectiveOrgId || ''}
                     tributo={editando}
                     onSave={() => { setEditando(null); load(); }}
                     onClose={() => setEditando(null)}
@@ -1040,6 +1058,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                     {notification.message}
                 </div>
             )}
+
+            {orgTargetModal}
         </div>
     );
 }

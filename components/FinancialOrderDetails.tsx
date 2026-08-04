@@ -17,7 +17,7 @@ import HierarchicalSelect from './HierarchicalSelect';
 import Button from './ui/Button';
 import { PurchaseOrder, PaymentAccount, CostCenter, ChartOfAccount } from '../types';
 import { orderService } from '../services/orderService';
-import { organizationService } from '../services/organizationService';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { supabase } from '../lib/supabase';
 
@@ -28,6 +28,7 @@ interface FinancialOrderDetailsProps {
 }
 
 const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, onClose, onUpdate }) => {
+    const { orgId: contextOrgId } = useOrgContext();
     const [order, setOrder] = useState<PurchaseOrder | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -82,19 +83,19 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                     setChartOfAccounts(orderData.chart_of_accounts || '');
                 }
 
-                // 2. Fetch Organizations & Registries
-                const orgs = await organizationService.listOrganizations();
-                if (orgs && orgs.length > 0) {
-                    const orgId = orgs[0].id; // Simple approach: use first available org
-                    const [accs, centers, accounts_coa] = await Promise.all([
-                        financialRegistryService.listPaymentAccounts(orgId),
-                        financialRegistryService.listCostCenters(orgId),
-                        financialRegistryService.listChartOfAccounts(orgId)
-                    ]);
-                    setAccounts(accs);
-                    setCostCenters(centers);
-                    setCoa(accounts_coa);
-                }
+                // 2. Cadastros financeiros da organização do seletor do topo.
+                // Antes usava `orgs[0]` ("use first available org"), o que
+                // oferecia conta/centro de custo de OUTRA empresa no pedido.
+                // `undefined` = "Todas as organizações": os services não filtram
+                // e a RLS recorta. Ver hooks/useOrgContext.tsx.
+                const [accs, centers, accounts_coa] = await Promise.all([
+                    financialRegistryService.listPaymentAccounts(contextOrgId ?? undefined),
+                    financialRegistryService.listCostCenters(contextOrgId ?? undefined),
+                    financialRegistryService.listChartOfAccounts(contextOrgId ?? undefined)
+                ]);
+                setAccounts(accs);
+                setCostCenters(centers);
+                setCoa(accounts_coa);
 
             } catch (err) {
                 console.error('Error fetching data for financial view:', err);
@@ -104,7 +105,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
         };
 
         fetchInitialData();
-    }, [orderId]);
+    }, [orderId, contextOrgId]);
 
     const handleSave = async () => {
         setSaving(true);

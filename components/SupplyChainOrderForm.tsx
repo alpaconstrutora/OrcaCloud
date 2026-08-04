@@ -9,7 +9,7 @@ import { supplierService, getSupplierDisplayName } from '../services/supplierSer
 import { appSettingsService } from '../services/appSettingsService';
 import { orderService } from '../services/orderService';
 import { sinapiService } from '../services/sinapiService';
-import { organizationService } from '../services/organizationService';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { costCenterService } from '../services/costCenterService';
 import MaterialSelectionModal from './MaterialSelectionModal';
@@ -27,6 +27,7 @@ interface SupplyChainOrderFormProps {
 }
 
 const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId }) => {
+    const { orgId: contextOrgId } = useOrgContext();
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
 
@@ -89,10 +90,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         let cancelled = false;
         (async () => {
             try {
-                const [suppliersList, projectsList, orgs] = await Promise.all([
+                const [suppliersList, projectsList] = await Promise.all([
                     supplierService.listSuppliers(),
                     projectService.listProjects(),
-                    organizationService.listOrganizations()
                 ]);
                 if (cancelled) return;
                 setSuppliers(suppliersList);
@@ -102,18 +102,19 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 const obras = onlyObras(projectsList);
                 setProjects(obras);
 
-                if (orgs && orgs.length > 0) {
-                    const orgId = orgs[0].id;
-                    const [accs, centers, accounts_coa] = await Promise.all([
-                        financialRegistryService.listPaymentAccounts(orgId),
-                        costCenterService.list(orgId),
-                        financialRegistryService.listChartOfAccounts(orgId)
-                    ]);
-                    if (cancelled) return;
-                    setAccounts(accs);
-                    setCostCenters(centers);
-                    setCoa(accounts_coa);
-                }
+                // Cadastros financeiros da organização do seletor do topo. Antes
+                // usava `orgs[0]`, oferecendo conta/centro de custo de OUTRA
+                // empresa no pedido. `undefined` = "Todas as organizações": os
+                // services não filtram e a RLS recorta. Ver hooks/useOrgContext.tsx.
+                const [accs, centers, accounts_coa] = await Promise.all([
+                    financialRegistryService.listPaymentAccounts(contextOrgId ?? undefined),
+                    costCenterService.list(contextOrgId),
+                    financialRegistryService.listChartOfAccounts(contextOrgId ?? undefined)
+                ]);
+                if (cancelled) return;
+                setAccounts(accs);
+                setCostCenters(centers);
+                setCoa(accounts_coa);
             } catch (error) {
                 console.error("Error loading form data:", error);
             } finally {
@@ -121,7 +122,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             }
         })();
         return () => { cancelled = true; };
-    }, []);
+    }, [contextOrgId]);
 
     // Load existing order data when editing
     React.useEffect(() => {

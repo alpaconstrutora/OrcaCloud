@@ -6,6 +6,7 @@ import { projectService } from '../services/projectService';
 import { FileDown, FileText, Printer, ChevronDown, ChevronRight, Share2, Loader2, Building2, Layers, Search, ClipboardList, Box, Database } from 'lucide-react';
 import Button from './ui/Button';
 import { formatMoney } from './ui/Format';
+import { useOrgContext } from '../hooks/useOrgContext';
 
 interface ReportViewerProps {
     budget: BudgetEntry[];
@@ -27,9 +28,11 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
     const [selectedNature, setSelectedNature] = React.useState<string>('ALL');
     const [showNatureBreakdown, setShowNatureBreakdown] = React.useState(false);
 
-    // Default to the first organization if available
+    // Esta tela tem seletor próprio de organização, mas o DEFAULT é o seletor do
+    // topo — não a primeira da lista. Ver hooks/useOrgContext.tsx.
+    const { orgId: contextOrgId } = useOrgContext();
     const [selectedOrganizationId, setSelectedOrganizationId] = React.useState<string | 'NONE'>(
-        organizations.length > 0 ? organizations[0].id : 'NONE'
+        contextOrgId ?? 'NONE'
     );
 
     // Fetch projects list
@@ -50,12 +53,12 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
         return () => { cancelled = true; };
     }, []);
 
-    // Update selected org if organizations list changes (e.g. first load)
+    // Acompanha o seletor do topo enquanto o usuário não escolher outra aqui.
     useEffect(() => {
-        if (selectedOrganizationId === 'NONE' && organizations.length > 0) {
-            setSelectedOrganizationId(organizations[0].id);
+        if (selectedOrganizationId === 'NONE' && contextOrgId) {
+            setSelectedOrganizationId(contextOrgId);
         }
-    }, [organizations]);
+    }, [contextOrgId, selectedOrganizationId]);
 
     const selectedOrganization = selectedOrganizationId === 'NONE'
         ? null

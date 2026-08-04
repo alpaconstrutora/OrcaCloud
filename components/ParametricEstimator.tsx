@@ -50,6 +50,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useOrgContext } from '../hooks/useOrgContext';
 
 interface ParametricEstimatorProps {
   settings: ProjectSettings;
@@ -100,8 +101,11 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   const [comparisonData, setComparisonData] = React.useState<{ standard: string; total: number; m2: number } | null>(null);
   const [snapshots, setSnapshots] = React.useState<any[]>([]);
   const [showExportMenu, setShowExportMenu] = React.useState(false);
+  // Organização do seletor do topo (com herança de empresa/obra). NUNCA
+  // `organizations[0]` — ver hooks/useOrgContext.tsx.
   const organizations = useStore(state => state.organizations);
-  const organization = organizations[0];
+  const { orgId: contextOrgId } = useOrgContext();
+  const organization = organizations.find(o => o.id === contextOrgId);
 
   const [financialData, setFinancialData] = React.useState<{
     totalValue: number;

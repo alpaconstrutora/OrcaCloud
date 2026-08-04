@@ -158,16 +158,19 @@ function describeWithClient(description: string | undefined, clientName: string 
  * Cliente: deal.client_id → clients.name (usado na coluna Descrição).
  * Lançamento manual e negócio sem unidade vinculada ficam sem empreendimento.
  */
-async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: string): Promise<TaxPayable[]> {
+async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: string | null): Promise<TaxPayable[]> {
     const dealIds = [...new Set(rows.map(r => dealIdFromReference(r.reference_id)).filter((v): v is string => !!v))];
     if (dealIds.length === 0) return rows;
 
     try {
-        const { data: deals } = await supabase
+        // Sem organização ("Todas"): não filtra por org — os ids já vieram das
+        // linhas que a RLS liberou, então o `in(...)` sozinho já é o recorte.
+        let dealsQuery = supabase
             .from('commercial_deals')
             .select('id, property_id, client_id')
-            .eq('organization_id', organizationId)
             .in('id', dealIds);
+        if (organizationId) dealsQuery = dealsQuery.eq('organization_id', organizationId);
+        const { data: deals } = await dealsQuery;
 
         const propertyByDeal = new Map<string, string>();
         const clientIdByDeal = new Map<string, string>();
@@ -250,12 +253,14 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
 
 export const taxPayableService = {
 
-    async list(organizationId: string, filters?: TaxPayableFilters): Promise<TaxPayable[]> {
+    /** `organizationId` null = "Todas as organizações": sem filtro, a RLS recorta. */
+    async list(organizationId: string | null, filters?: TaxPayableFilters): Promise<TaxPayable[]> {
         let q = supabase
             .from('vw_commercial_tax_payables')
             .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,project_id,project_name,created_at,updated_at')
-            .eq('organization_id', organizationId)
             .order('due_date', { ascending: true, nullsFirst: false });
+
+        if (organizationId) q = q.eq('organization_id', organizationId);
 
         if (filters?.dueFrom) q = q.gte('due_date', filters.dueFrom);
         if (filters?.dueTo)   q = q.lte('due_date', filters.dueTo);
@@ -458,7 +463,8 @@ export const taxPayableService = {
      * Regime de reconhecimento de tributos da organização (settings). Default CAIXA
      * (comportamento histórico) quando não configurado.
      */
-    async getRecognitionRegime(organizationId: string): Promise<TaxRecognitionRegime> {
+    /** Em "Todas as organizações" (null) não há regime único — assume CAIXA (padrão). */
+    async getRecognitionRegime(organizationId: string | null): Promise<TaxRecognitionRegime> {
         if (!organizationId) return 'CAIXA';
         const { data } = await supabase
             .from('organizations')

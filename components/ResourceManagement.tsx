@@ -5,6 +5,7 @@ import {
     ChevronDown, ChevronRight
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { useOrgContext } from '../hooks/useOrgContext';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -1242,17 +1243,18 @@ const ResourceImportModal: React.FC<{
     projectResources: ProjectResources;
     initialTab: string;
 }> = ({ isOpen, onClose, organizations, onConfirm, projectResources, initialTab }) => {
-    const [selectedOrgId, setSelectedOrgId] = useState<string>(organizations[0]?.id || '');
+    // Seletor próprio, mas o DEFAULT é o do topo — não a primeira da lista.
+    // Ver hooks/useOrgContext.tsx.
+    const { orgId: contextOrgId } = useOrgContext();
+    const [selectedOrgId, setSelectedOrgId] = useState<string>(contextOrgId ?? '');
     const [search, setSearch] = useState('');
     const [selRoles, setSelRoles] = useState<Set<string>>(new Set());
     const [selWorkers, setSelWorkers] = useState<Set<string>>(new Set());
     const [selTeams, setSelTeams] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        if (!selectedOrgId && organizations.length > 0) {
-            setSelectedOrgId(organizations[0].id);
-        }
-    }, [organizations, selectedOrgId]);
+        if (!selectedOrgId && contextOrgId) setSelectedOrgId(contextOrgId);
+    }, [contextOrgId, selectedOrgId]);
 
     if (!isOpen) return null;
     const selectedOrg = organizations.find(o => o.id === selectedOrgId);

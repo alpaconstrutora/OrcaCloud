@@ -36,6 +36,7 @@ import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
 import { contractRenewalService } from '../services/contractRenewalService';
+import { getStepByStatus, DealWorkflowStatus } from '../lib/dealWorkflow';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -641,6 +642,16 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             case PropertyStatus.EXCHANGED: return 'Permutado';
             default: return status;
         }
+    };
+
+    // Mesmo vocabulário/cores do StatusStepper do DealModal (lib/dealWorkflow.ts) —
+    // antes a aba Contratos colapsava Proposta/Aprovação/Reserva/Contrato/Assinatura
+    // num genérico "Pendente", dessincronizado do status (mais granular) que a
+    // Unidade já exibe a partir do mesmo negócio.
+    const getDealStatusDisplay = (status?: string) => {
+        if (status === 'CANCELLED') return { label: 'Cancelado', color: 'text-red-600' };
+        const step = getStepByStatus((status || 'IN_NEGOTIATION') as DealWorkflowStatus);
+        return step ? { label: step.label, color: step.color } : { label: status || '', color: 'text-gray-600' };
     };
 
     const handleBulkUpdate = async (updates: Partial<Property>) => {
@@ -1450,10 +1461,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 <ActionIconButton kind="delete" onClick={() => handleDeleteDeal(deal.id)} />
                                             </div>
                                             <div className="flex items-center gap-2 mb-4">
-                                                <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                    {deal.status === 'COMPLETED' ? 'Concluído' :
-                                                        deal.status === 'PENDING' ? 'Pendente' :
-                                                            deal.status === 'CANCELLED' ? 'Cancelado' : 'Pendente'}
+                                                <span className={`text-sm font-normal ${getDealStatusDisplay(deal.status).color}`}>
+                                                    {getDealStatusDisplay(deal.status).label}
                                                 </span>
                                                 <div className="flex flex-col items-end ml-auto">
                                                     <span className="text-xs font-medium text-blue-600">#{deal.id.substring(0, 8).toUpperCase()}</span>

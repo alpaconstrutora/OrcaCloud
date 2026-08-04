@@ -165,7 +165,6 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab, projectId, setProjectId } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
   const [isHeaderEmpresaDropdownOpen, setIsHeaderEmpresaDropdownOpen] = React.useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
   const [isMyAccountOpen, setIsMyAccountOpen] = React.useState(false);
@@ -590,7 +589,6 @@ const Layout: React.FC<LayoutProps> = ({
         setIsMobileMenuOpen(false);
         setIsProfileMenuOpen(false);
         setIsHeaderEmpresaDropdownOpen(false);
-        setIsEmpresaDropdownOpen(false);
       } else if (!isTyping && event.key.toLowerCase() === 'n') {
         const quick = commandItems.find(item => item.id === 'action-new-record');
         if (quick) runCommand(quick);
@@ -853,61 +851,6 @@ const Layout: React.FC<LayoutProps> = ({
               </NavDropdown>
 
               <NavGroup label="Operacional" />
-
-              {/* Seletor de empresa ativa */}
-              {companies.length > 1 && (
-                <div className="relative mb-1">
-                  <button
-                    onClick={() => setIsEmpresaDropdownOpen(o => !o)}
-                    className={`flex items-center w-full py-2 text-sm font-medium transition-colors duration-150 rounded-lg group
-                      ${isCollapsed ? 'justify-center px-0' : 'justify-between px-3'}
-                      ${t.itemText} ${t.itemHover}`}
-                    title={isCollapsed ? (activeEmpresa?.razao_social ?? 'Empresa') : undefined}
-                  >
-                    <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-                      <span
-                        className={`w-3 h-3 rounded-full flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`}
-                        style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }}
-                      />
-                      {!isCollapsed && (
-                        <span className="truncate">
-                          {activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? 'Empresa'}
-                        </span>
-                      )}
-                    </div>
-                    {!isCollapsed && (
-                      <ChevronRight className={`w-3 h-3 transition-transform ${isEmpresaDropdownOpen ? 'rotate-90' : ''} ${t.itemIcon}`} />
-                    )}
-                  </button>
-
-                  {isEmpresaDropdownOpen && !isCollapsed && (
-                    <div className={`absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border shadow-xl overflow-hidden ${t.shell} ${t.dropdownBorder}`}>
-                      {companies.map(c => (
-                        <button
-                          key={c.id}
-                          onClick={() => { setActiveEmpresaId(c.id); setIsEmpresaDropdownOpen(false); }}
-                          className={`flex items-center gap-2 w-full px-3 py-2.5 text-xs text-left transition-colors
-                            ${c.id === activeEmpresaId ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}
-                        >
-                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: c.cor_sistema }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="truncate font-semibold">
-                              {c.nome_fantasia ?? c.razao_social}
-                            </div>
-                            <div className={`text-xs truncate ${t.userEmail}`}>
-                              {c.cnpj ?? c.tipo}
-                            </div>
-                          </div>
-                          {c.is_headquarters && (
-                            <span className={`text-[9px] font-bold uppercase ${t.groupLabel}`}>sede</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
               <NavDropdown
                 label="Minha Organização"

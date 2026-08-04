@@ -103,14 +103,33 @@ Notas de implementação:
 - [x] `grep -rln "resolveWriteOrg('single')" components/` → **exatamente os 12** arquivos
       que devem seguir `'single'` (nenhuma tela de catálogo sobrou)
 - [x] `npm run ci` verde — 768 testes, typecheck e build
-- [ ] **Print do modal com a opção "Todas as organizações"** — não verificado
+- [x] **Verificado na tela pelo usuário em 2026-08-04**: criar Tipo de Empreendimento com o topo em "Todas as organizações" funciona
 
-⚠️ **Por que o print não foi feito:** Playwright não está instalado
-(`node_modules/.bin` não tem o binário) e não tenho credenciais de login. O que consegui
-verificar foi menos que isso: subi o dev server e confirmei que os 6 módulos alterados
-transpilam e são servidos (HTTP 200). **Isso não prova que a tela funciona** — prova que
-compila. A validação de comportamento depende do usuário abrir Configurações do Sistema ›
-Tipos de Empreendimento com o topo em "Todas as organizações".
+### O 403 que apareceu no teste (2026-08-04) — não era da refatoração
+
+Depois da Fase A, criar ainda falhava com
+`42501 new row violates row-level security policy for table "empreendimento_types"`.
+Diagnóstico, em ordem:
+
+1. A tela mostrava só **"Erro ao criar"** — texto que eu mesmo escrevera como
+   fallback. Causa: `e instanceof Error` não vale para erro do Supabase, que é
+   `{ message, code, details }`. Corrigido com `errorMessage()` (`e743d80`),
+   e só então a mensagem real do banco apareceu.
+2. **19 tabelas** resolvem o vínculo por `user_id = auth.uid()` em vez de
+   `is_org_member()` (e-mail). As 4 linhas do usuário em `organization_members`
+   tinham `user_id` NULL → membro legítimo tratado como não-membro.
+3. Perdi uma rodada consultando pelo e-mail **errado**: a conta do app é
+   `altair.rosa@alpaconstrutora.com.br`, não a conta usada aqui. Descobrir com
+   qual conta o app é usado (`auth.users` por `last_sign_in_at`) tem de vir antes
+   de qualquer conclusão sobre permissão.
+4. Resolvido preenchendo `user_id` (UPDATE — sem DDL, sem o deadlock 40P01 que
+   `DROP/CREATE POLICY` provoca em tabela quente).
+
+Migrations no repositório, **não aplicadas**:
+- `20270865000000` — padroniza as policies de `empreendimento_types` em
+  `is_org_member()`, com dual-check uid+email.
+- `20270866000000` — triggers que impedem `user_id` de nascer NULL (nas duas
+  ordens: membro-antes-da-conta e conta-antes-do-membro) + backfill.
 
 ### FASE B — pendente: validação no navegador
 

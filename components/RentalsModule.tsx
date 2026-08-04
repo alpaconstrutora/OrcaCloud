@@ -36,7 +36,7 @@ import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
 import { contractRenewalService } from '../services/contractRenewalService';
-import { getStepByStatus, DealWorkflowStatus } from '../lib/dealWorkflow';
+import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus } from '../lib/dealWorkflow';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -616,6 +616,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return [...filtered].sort((a: any, b: any) => {
             let aValue = a[key];
             let bValue = b[key];
+            // "status" cru (IN_NEGOTIATION/PENDING/RESERVA/...) não tem ordem
+            // alfabética que bata com a progressão mostrada em tela
+            // (getDealStatusDisplay) — dessincroniza ordenação × rótulo exibido.
+            // Ordena pelo índice do workflow (lib/dealWorkflow.ts); CANCELLED
+            // não é um step da esteira, então fica sempre por último.
+            if (key === 'status') {
+                aValue = aValue === 'CANCELLED' ? WORKFLOW_STEPS.length : getStepIndex(aValue as DealWorkflowStatus);
+                bValue = bValue === 'CANCELLED' ? WORKFLOW_STEPS.length : getStepIndex(bValue as DealWorkflowStatus);
+            }
             if (aValue === null || aValue === undefined) aValue = direction === 'asc' ? Infinity : -Infinity;
             if (bValue === null || bValue === undefined) bValue = direction === 'asc' ? Infinity : -Infinity;
             if (aValue < bValue) return direction === 'asc' ? -1 : 1;

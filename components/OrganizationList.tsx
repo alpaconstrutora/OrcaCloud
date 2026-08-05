@@ -556,14 +556,25 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             onUpdateAll={(updates) => (onSave ?? onEdit)({ ...currentOrg, ...updates })}
                         />
                     ) : (
-                        // Toolbar acoplada à tabela (§5.2 do guia): moldura/sombra só no card
-                        // pai, a única linha visível entre os blocos é o border-b da toolbar.
-                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 bg-white space-y-3">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div>
-                                        <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
-                                        <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
+                        <div className="space-y-3">
+                            {/* Título da tela (§20) — bloco solto, fora do card acoplado. */}
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
+                                <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
+                            </div>
+                            {/* Toolbar acoplada à tabela (§5.2 do guia): moldura/sombra só no card
+                                pai, a única linha visível entre os blocos é o border-b da toolbar. */}
+                            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                                <div className="p-4 border-b border-gray-100 bg-white flex items-center gap-3">
+                                    <div className="flex-1 relative w-full max-w-md">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar por nome, e-mail ou organização..."
+                                            value={allUsersSearch}
+                                            onChange={(e) => setAllUsersSearch(e.target.value)}
+                                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        />
                                     </div>
                                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                         <ColumnConfigButton
@@ -584,18 +595,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         </button>
                                     </div>
                                 </div>
-                                <div className="relative w-full max-w-md">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar por nome, e-mail ou organização..."
-                                        value={allUsersSearch}
-                                        onChange={(e) => setAllUsersSearch(e.target.value)}
-                                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                    />
-                                </div>
-                            </div>
-                            <div className="overflow-x-auto">
+                                <div className="overflow-x-auto">
                                 <table ref={allUsersCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: allUsersTableTotalWidth }}>
                                     <colgroup>
                                         {allUsersColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${allUsersCols.getWidth('name')}px` }} />}
@@ -688,6 +688,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
                             </div>
                         </div>
                     )

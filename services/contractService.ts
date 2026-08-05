@@ -71,16 +71,28 @@ function isReceivableContract(contract: { domain?: string | null; direction?: st
  * Suprimentos/Serviços NÃO passam por aqui: são Contas a Pagar, com fluxo de
  * aprovação próprio, e mexer neles não foi pedido.
  *
- * Assinado = `signature_status = 'SIGNED'` OU `status = 'Ativo'` (contratos
- * antigos e os que são ativados à mão, sem passar por assinatura eletrônica).
+ * Assinado = `signature_status = 'SIGNED'` OU um `status` que já esteja EM ou
+ * APÓS a assinatura (lista abaixo).
+ *
+ * ⚠️ A lista precisa cobrir TUDO que `createFromDeal` grava, senão o portão
+ * fica invertido. Ele mapeia o estágio do negócio assim:
+ *   deal COMPLETED        → 'Concluído'
+ *   signature SIGNED      → 'Assinado'
+ *   qualquer outro caso   → 'Ativo'   ← o MENOS avançado
+ * Até 04/08/2026 só `'ativo'` passava: o negócio ainda em andamento faturava,
+ * e o negócio FECHADO ('Concluído') era o único bloqueado — exatamente o
+ * contrário da intenção. Caso real: CL-2026-005 e CV-2026-002, travados em
+ * "contrato ainda não está assinado" com a negociação toda concluída.
  */
+const STATUS_CONTRATO_FATURAVEL = ['ativo', 'assinado', 'concluído', 'concluido'];
+
 function podeFaturarContratoComercial(contract: {
     domain?: string | null; status?: string | null; signature_status?: string | null;
 }): boolean {
     const comercial = contract.domain === 'LOCACAO' || contract.domain === 'VENDAS';
     if (!comercial) return true;
     return contract.signature_status === 'SIGNED'
-        || (contract.status || '').toLowerCase() === 'ativo';
+        || STATUS_CONTRATO_FATURAVEL.includes((contract.status || '').toLowerCase());
 }
 
 /**

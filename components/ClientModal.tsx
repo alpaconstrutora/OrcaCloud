@@ -43,6 +43,13 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         marital_regime: '',
         spouse_name: '',
         spouse_document: '',
+        legal_rep_name: '',
+        legal_rep_document: '',
+        legal_rep_rg: '',
+        legal_rep_rg_uf: '',
+        legal_rep_rg_issuing_agency: '',
+        legal_rep_nationality: 'Brasileira',
+        legal_rep_role: '',
         type: 'PF',
         address: '',
         address_number: '',
@@ -79,6 +86,13 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 marital_regime: '',
                 spouse_name: '',
                 spouse_document: '',
+                legal_rep_name: '',
+                legal_rep_document: '',
+                legal_rep_rg: '',
+                legal_rep_rg_uf: '',
+                legal_rep_rg_issuing_agency: '',
+                legal_rep_nationality: 'Brasileira',
+                legal_rep_role: '',
                 type: 'PF',
                 address: '',
                 address_number: '',
@@ -273,6 +287,105 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                     value={formData.rg_issuing_agency ?? ''}
                                     onChange={(e) => update({ rg_issuing_agency: e.target.value })}
                                 />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Representante legal (PJ) — quem assina pela empresa. Sem isso a
+                        cláusula de qualificação do cliente PJ na minuta não diz quem a
+                        representa ("neste ato representada por..."). Mesmos nomes de campo
+                        da qualificação civil PF abaixo, prefixados legal_rep_ — vocabulário
+                        único, sem cônjuge/estado civil (não se aplica a quem assina PELA
+                        empresa). Migration 20270867000000. */}
+                    {formData.type === 'PJ' && (
+                        <div className="space-y-4 pt-2 border-t border-gray-100">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                                <User className="w-4 h-4 text-blue-600" />
+                                Representante Legal
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Representante</label>
+                                    <input
+                                        type="text"
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.legal_rep_name ?? ''}
+                                        onChange={(e) => update({ legal_rep_name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Cargo / Qualificação</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Sócio-administrador, Procurador..."
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.legal_rep_role ?? ''}
+                                        onChange={(e) => update({ legal_rep_role: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
+                                    <div className="relative">
+                                        <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="000.000.000-00"
+                                            className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={formData.legal_rep_document ?? ''}
+                                            onChange={(e) => update({ legal_rep_document: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nacionalidade</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Brasileira"
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.legal_rep_nationality ?? ''}
+                                        onChange={(e) => update({ legal_rep_nationality: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">RG</label>
+                                    <div className="relative">
+                                        <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="00.000.000-0"
+                                            className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={formData.legal_rep_rg ?? ''}
+                                            onChange={(e) => update({ legal_rep_rg: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">UF do RG</label>
+                                    <select
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                        value={formData.legal_rep_rg_uf ?? ''}
+                                        onChange={(e) => update({ legal_rep_rg_uf: e.target.value })}
+                                    >
+                                        <option value="">—</option>
+                                        {states.map(s => (
+                                            <option key={s.id} value={s.code}>{s.code}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Órgão Expedidor</label>
+                                    <input
+                                        type="text"
+                                        placeholder="SSP"
+                                        className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.legal_rep_rg_issuing_agency ?? ''}
+                                        onChange={(e) => update({ legal_rep_rg_issuing_agency: e.target.value })}
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}

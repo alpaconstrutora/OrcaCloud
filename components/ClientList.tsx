@@ -2,6 +2,7 @@ import React from 'react';
 import { clientService } from '../services/clientService';
 import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
 import { clientCategoryService } from '../services/clientCategoryService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag, MoveHorizontal } from 'lucide-react';
 import { Client, ClientCategory } from '../types';
@@ -35,7 +36,7 @@ const CLIENT_COLUMNS: ColumnConfig[] = [
     { key: 'organization', label: 'Organização', sortable: true },
     { key: 'contact', label: 'Contato', sortable: false },
     { key: 'document', label: 'Documento', sortable: true },
-    { key: 'projects', label: 'Obra Vinculada', sortable: false },
+    { key: 'projects', label: 'Empreendimento Vinculado', sortable: false },
 ];
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
@@ -93,6 +94,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const { activeOrganizationId, organizations } = useStore();
     const [clients, setClients] = React.useState<Client[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
+    // Obra (projects.id) → empreendimento a que ela pertence. A coluna da tabela
+    // fala em "Empreendimento Vinculado" (não "Obra"), então o vínculo por
+    // settings.clientId (que mora na obra) precisa ser resolvido até o
+    // empreendimento-pai antes de exibir (Empreendimento → Obra na hierarquia
+    // de domínio; empreendimentoService.mapObrasToEmpreendimentos já resolve
+    // pelos dois sentidos do módulo: obra principal e obra por torre).
+    const [obraToEmpreendimento, setObraToEmpreendimento] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     // F2: filtros sobrevivem a navegação/reload.
@@ -131,12 +139,19 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [clientsData, { data: projectsData }] = await Promise.all([
+            const [clientsData, { data: projectsData }, obraEmpMap] = await Promise.all([
                 clientService.listClients(organizationId),
-                supabase.from('projects').select('id, name, settings').eq('settings->>classification', 'OBRA')
+                supabase.from('projects').select('id, name, settings').eq('settings->>classification', 'OBRA'),
+                // Resolver Empreendimento é só um dado a mais na coluna — se a
+                // consulta falhar, a listagem de clientes não pode cair junto.
+                empreendimentoService.mapObrasToEmpreendimentos(organizationId).catch(err => {
+                    console.error('Erro ao mapear obras para empreendimentos:', err);
+                    return {};
+                })
             ]);
             setClients(clientsData);
             setProjects(projectsData ?? []);
+            setObraToEmpreendimento(obraEmpMap);
         } catch (error) {
             console.error("Erro ao listar dados:", error);
         } finally {
@@ -348,6 +363,25 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const getClientProjects = React.useCallback(
         (clientId: string) => projects.filter(p => p.settings?.clientId === clientId && isObra(p)),
         [projects]
+    );
+
+    // Empreendimento(s) vinculado(s) ao cliente: resolve cada obra vinculada (via
+    // settings.clientId) até o empreendimento-pai e deduplica — duas obras/torres
+    // do mesmo empreendimento não podem aparecer como dois vínculos distintos.
+    const getClientEmpreendimentos = React.useCallback(
+        (clientId: string) => {
+            const seen = new Set<string>();
+            const result: { id: string; name: string }[] = [];
+            for (const p of getClientProjects(clientId)) {
+                const emp = obraToEmpreendimento[p.id];
+                if (emp && !seen.has(emp.id)) {
+                    seen.add(emp.id);
+                    result.push({ id: emp.id, name: emp.name });
+                }
+            }
+            return result;
+        },
+        [getClientProjects, obraToEmpreendimento]
     );
 
     const handleAccessPortal = async (client: Client) => {
@@ -584,8 +618,8 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('projects') && (
-                                        // Obra Vinculada = lista de 0..N obras — sem valor único pra ordenar (§6.3).
-                                        <SortableHeader colKey="projects" label="Obra Vinculada" sortable={false} uppercase={false}
+                                        // Empreendimento Vinculado = lista de 0..N empreendimentos — sem valor único pra ordenar (§6.3).
+                                        <SortableHeader colKey="projects" label="Empreendimento Vinculado" sortable={false} uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort}
                                             className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
@@ -602,7 +636,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filteredClients.map(client => {
-                                    const clientProjects = getClientProjects(client.id);
+                                    const clientEmpreendimentos = getClientEmpreendimentos(client.id);
                                     return (
                                         <tr key={client.id} className="hover:bg-blue-50/50 transition-colors group">
                                             {tableColumns.visibleColumns.includes('code') && (
@@ -655,14 +689,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             )}
                                             {tableColumns.visibleColumns.includes('projects') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {clientProjects.length === 0 ? (
+                                                    {clientEmpreendimentos.length === 0 ? (
                                                         <span className="text-sm font-normal text-gray-400">-</span>
                                                     ) : (
                                                         <div className="flex flex-col gap-1">
-                                                            {clientProjects.map(p => (
-                                                                <div key={p.id} className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                                                            {clientEmpreendimentos.map(e => (
+                                                                <div key={e.id} className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
                                                                     <Building2 className="w-3.5 h-3.5 shrink-0" />
-                                                                    <span className="truncate max-w-[200px]" title={p.name}>{p.name}</span>
+                                                                    <span className="truncate max-w-[200px]" title={e.name}>{e.name}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -767,27 +801,24 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             <span className="text-gray-900 font-medium">{client.document || '-'}</span>
                                         </div>
 
-                                        {/* Linked Projects for Grid View */}
+                                        {/* Empreendimento(s) vinculado(s) — Grid View */}
                                         {(() => {
-                                            const clientProjects = projects.filter(p =>
-                                                p.settings?.clientId === client.id &&
-                                                isObra(p)
-                                            );
+                                            const clientEmpreendimentos = getClientEmpreendimentos(client.id);
 
-                                            if (clientProjects.length > 0) {
+                                            if (clientEmpreendimentos.length > 0) {
                                                 return (
                                                     <div className="pt-3 mt-3 border-t border-gray-100">
-                                                        <span className="text-xs font-semibold text-slate-500 block mb-2">Obra Vinculada</span>
+                                                        <span className="text-xs font-semibold text-slate-500 block mb-2">Empreendimento Vinculado</span>
                                                         <div className="space-y-1">
-                                                            {clientProjects.slice(0, 2).map(p => (
-                                                                <div key={p.id} className="flex items-center gap-1.5 text-xs text-gray-700 bg-blue-50/50 p-1.5 rounded-[6px] border border-blue-100/50">
+                                                            {clientEmpreendimentos.slice(0, 2).map(e => (
+                                                                <div key={e.id} className="flex items-center gap-1.5 text-xs text-gray-700 bg-blue-50/50 p-1.5 rounded-[6px] border border-blue-100/50">
                                                                     <Building2 className="w-3 h-3 text-blue-500" />
-                                                                    <span className="font-medium truncate">{p.name}</span>
+                                                                    <span className="font-medium truncate">{e.name}</span>
                                                                 </div>
                                                             ))}
-                                                            {clientProjects.length > 2 && (
+                                                            {clientEmpreendimentos.length > 2 && (
                                                                 <span className="text-xs text-gray-400 pl-1">
-                                                                    + {clientProjects.length - 2} outras obras
+                                                                    + {clientEmpreendimentos.length - 2} outros empreendimentos
                                                                 </span>
                                                             )}
                                                         </div>

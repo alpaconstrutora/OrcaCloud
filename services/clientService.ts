@@ -61,7 +61,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
@@ -69,7 +69,23 @@ export const clientService = {
 
         let { data, error } = await query.order('name', { ascending: true });
 
-        // Fallback 1: qualificação civil (migration 20270842000000) ainda não
+        // Fallback 1a: representante legal PJ (migration 20270867000000) ainda não
+        // aplicada. Mesmo motivo do fallback de qualificação civil abaixo — colunas
+        // que só servem à minuta não podem derrubar a listagem.
+        if (error && error.code === '42703') {
+            console.warn('[CLIENT SERVICE] Colunas de representante legal ausentes — aplique a migration 20270867000000. Listando sem elas.');
+            let retryQuery = supabase
+                .from('clients')
+                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+            if (organizationId) {
+                retryQuery = retryQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+            }
+            const retry = await retryQuery.order('name', { ascending: true });
+            data = retry.data as any;
+            error = retry.error;
+        }
+
+        // Fallback 1b: qualificação civil (migration 20270842000000) ainda não
         // aplicada. Sem isto, subir o código antes da migration derrubaria a
         // tela de Clientes inteira — as colunas novas só servem à minuta, não
         // podem custar a listagem.

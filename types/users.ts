@@ -29,6 +29,16 @@ export interface Client {
     marital_regime?: string;
     spouse_name?: string;
     spouse_document?: string;
+    /** Representante legal (pessoa física) do cliente PJ — usado na cláusula
+     *  "neste ato representada por..." da qualificação das partes do contrato.
+     *  Só faz sentido com type === 'PJ'. Migration 20270867000000. */
+    legal_rep_name?: string;
+    legal_rep_document?: string;
+    legal_rep_rg?: string;
+    legal_rep_rg_uf?: string;
+    legal_rep_rg_issuing_agency?: string;
+    legal_rep_nationality?: string;
+    legal_rep_role?: string;
     type: 'PF' | 'PJ';
     address?: string;
     address_number?: string;

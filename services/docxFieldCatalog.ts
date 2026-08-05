@@ -267,6 +267,28 @@ const rgFull = (c?: Client | null): string => {
     return orgao ? `${c.rg} ${orgao}` : c.rg;
 };
 
+/** RG do representante legal (cliente PJ), mesmo formato de rgFull(). */
+const legalRepRgFull = (c?: Client | null): string => {
+    if (!c?.legal_rep_rg) return '';
+    const orgao = join([c.legal_rep_rg_issuing_agency, c.legal_rep_rg_uf], '/');
+    return orgao ? `${c.legal_rep_rg} ${orgao}` : c.legal_rep_rg;
+};
+
+/** Cláusula "neste ato representada por..." do cliente PJ — mesmo padrão de
+ *  landlordQualification() (locador). Vazia se o representante não foi cadastrado
+ *  (migration 20270867000000), então minutas antigas continuam saindo iguais. */
+const legalRepQualification = (c?: Client | null): string => {
+    if (!c?.legal_rep_name) return '';
+    const rg = legalRepRgFull(c);
+    return join([
+        `neste ato representada por ${c.legal_rep_name}`,
+        c.legal_rep_nationality ? c.legal_rep_nationality.toLowerCase() : '',
+        rg ? `portador(a) do RG nº ${rg}` : '',
+        c.legal_rep_document ? `inscrito(a) no CPF sob o nº ${c.legal_rep_document}` : '',
+        c.legal_rep_role ? `na qualidade de ${c.legal_rep_role.toLowerCase()}` : '',
+    ]);
+};
+
 /** Qualificação da parte pessoa física/jurídica, como parágrafo pronto da minuta. */
 const clientQualification = (c?: Client | null): string => {
     if (!c?.name) return '';
@@ -279,6 +301,7 @@ const clientQualification = (c?: Client | null): string => {
             `${c.name}, pessoa jurídica de direito privado`,
             c.document ? `inscrita no CNPJ sob o nº ${c.document}` : '',
             endereco ? `com sede em ${endereco}` : '',
+            legalRepQualification(c),
         ]);
     }
     const estadoCivil = c.marital_regime && c.marital_status
@@ -466,6 +489,14 @@ export const FIELD_GROUPS: FieldGroup[] = [
             { field: 'rg_full',         label: 'RG completo (nº + órgão/UF)', get: c => rgFull(c.client) },
             { field: 'qualificacao',    label: 'Qualificação completa (parágrafo)', get: c => clientQualification(c.client) },
             { field: 'spouse_qualificacao', label: 'Qualificação do cônjuge', get: c => spouseQualification(c.client) },
+            // Representante legal do cliente PJ (migration 20270867000000) — sem estes
+            // campos a qualificação de um cliente PJ nasce sem quem assina por ele.
+            { field: 'legal_rep_name',       label: 'Representante — Nome',       get: c => c.client?.legal_rep_name ?? '' },
+            { field: 'legal_rep_document',   label: 'Representante — CPF',        get: c => c.client?.legal_rep_document ?? '' },
+            { field: 'legal_rep_rg_full',    label: 'Representante — RG completo', get: c => legalRepRgFull(c.client) },
+            { field: 'legal_rep_nationality', label: 'Representante — Nacionalidade', get: c => c.client?.legal_rep_nationality ?? '' },
+            { field: 'legal_rep_role',       label: 'Representante — Cargo/Qualificação', get: c => c.client?.legal_rep_role ?? '' },
+            { field: 'legal_rep_qualificacao', label: 'Representante — Cláusula (parágrafo)', get: c => legalRepQualification(c.client) },
         ],
     },
     {

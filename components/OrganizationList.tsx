@@ -18,9 +18,11 @@ const ALL_USERS_FALLBACK_COLUMNS: ColumnConfig[] = [
     { key: 'role', label: 'Função', sortable: true },
 ];
 
-// Larguras default do redimensionamento (§6.1 do guia) da tabela fallback.
+// Larguras default do redimensionamento (§6.1 do guia) da tabela fallback —
+// já próximas do container real, para não nascer truncando nem com faixa
+// vazia grande antes do usuário mexer (mesmo raciocínio de SupplierList.tsx).
 const ALL_USERS_COL_WIDTHS: Record<string, number> = {
-    name: 220, email: 240, organization: 200, role: 140, actions: 220,
+    name: 260, email: 300, organization: 240, role: 160, actions: 240,
 };
 
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
@@ -232,12 +234,19 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     // Tabela fallback "Todos os Usuários" (só aparece sem organização selecionada).
     const allUsersColumns = useTableColumns(ALL_USERS_FALLBACK_COLUMNS, 'organizationListAllUsersColumns');
     const allUsersCols = useResizableColumns(ALL_USERS_COL_WIDTHS, 'organizationListAllUsersColWidths');
+    const [allUsersSearch, setAllUsersSearch] = usePersistedState<string>('organizationListAllUsersSearch', '');
     // NUNCA w-full/100% com table-layout:fixed — ver ui_ux_guia_unificado.md §6.1.
     const allUsersTableTotalWidth = ['name', 'email', 'organization', 'role']
         .reduce((sum, key) => sum + (allUsersColumns.visibleColumns.includes(key) ? allUsersCols.getWidth(key) : 0), 0)
         + allUsersCols.getWidth('actions');
     const allUsersFlat = React.useMemo(() => {
-        const flat = organizations.flatMap(org => (org.members || []).map(member => ({ org, member })));
+        const flatAll = organizations.flatMap(org => (org.members || []).map(member => ({ org, member })));
+        const term = allUsersSearch.trim().toLowerCase();
+        const flat = !term ? flatAll : flatAll.filter(({ org, member }) =>
+            member.name.toLowerCase().includes(term) ||
+            member.email.toLowerCase().includes(term) ||
+            org.name.toLowerCase().includes(term)
+        );
         const dir = allUsersColumns.sortDirection === 'asc' ? 1 : -1;
         const col = allUsersColumns.sortColumn;
         if (col === 'name') return [...flat].sort((a, b) => a.member.name.localeCompare(b.member.name) * dir);
@@ -245,7 +254,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         if (col === 'organization') return [...flat].sort((a, b) => a.org.name.localeCompare(b.org.name) * dir);
         if (col === 'role') return [...flat].sort((a, b) => a.member.role.localeCompare(b.member.role) * dir);
         return flat;
-    }, [organizations, allUsersColumns.sortColumn, allUsersColumns.sortDirection]);
+    }, [organizations, allUsersSearch, allUsersColumns.sortColumn, allUsersColumns.sortDirection]);
 
     return (
         <div className="space-y-8">
@@ -550,28 +559,40 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         // Toolbar acoplada à tabela (§5.2 do guia): moldura/sombra só no card
                         // pai, a única linha visível entre os blocos é o border-b da toolbar.
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-between gap-3">
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
-                                    <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
+                            <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
+                                        <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
+                                    </div>
+                                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                        <ColumnConfigButton
+                                            columns={ALL_USERS_FALLBACK_COLUMNS}
+                                            visibleColumns={allUsersColumns.visibleColumns}
+                                            showColumnConfig={allUsersColumns.showColumnConfig}
+                                            onToggleShow={() => allUsersColumns.setShowColumnConfig(!allUsersColumns.showColumnConfig)}
+                                            onToggleColumn={allUsersColumns.toggleColumn}
+                                            onReset={allUsersColumns.resetColumns}
+                                        />
+                                        {/* Ajustar largura ao conteúdo — sob comando explícito, nunca automático (§6.1.2). */}
+                                        <button
+                                            onClick={() => allUsersCols.autoFit()}
+                                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                            title="Ajustar largura das colunas ao conteúdo"
+                                        >
+                                            <MoveHorizontal className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                                    <ColumnConfigButton
-                                        columns={ALL_USERS_FALLBACK_COLUMNS}
-                                        visibleColumns={allUsersColumns.visibleColumns}
-                                        showColumnConfig={allUsersColumns.showColumnConfig}
-                                        onToggleShow={() => allUsersColumns.setShowColumnConfig(!allUsersColumns.showColumnConfig)}
-                                        onToggleColumn={allUsersColumns.toggleColumn}
-                                        onReset={allUsersColumns.resetColumns}
+                                <div className="relative w-full max-w-md">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por nome, e-mail ou organização..."
+                                        value={allUsersSearch}
+                                        onChange={(e) => setAllUsersSearch(e.target.value)}
+                                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                     />
-                                    {/* Ajustar largura ao conteúdo — sob comando explícito, nunca automático (§6.1.2). */}
-                                    <button
-                                        onClick={() => allUsersCols.autoFit()}
-                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
-                                        title="Ajustar largura das colunas ao conteúdo"
-                                    >
-                                        <MoveHorizontal className="w-4 h-4" />
-                                    </button>
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
@@ -625,18 +646,18 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         ) : allUsersFlat.map(({ org, member }) => (
                                             <tr key={`${org.id}-${member.email}`} className="hover:bg-blue-50/50 transition-colors">
                                                 {allUsersColumns.visibleColumns.includes('name') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 truncate">{member.name}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">{member.name}</td>
                                                 )}
                                                 {allUsersColumns.visibleColumns.includes('email') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">{member.email}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">{member.email}</td>
                                                 )}
                                                 {allUsersColumns.visibleColumns.includes('organization') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-blue-600 truncate">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600 truncate">
                                                         {org.name}
                                                     </td>
                                                 )}
                                                 {allUsersColumns.visibleColumns.includes('role') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                         {member.role}
                                                     </td>
                                                 )}

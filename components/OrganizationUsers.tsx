@@ -19,10 +19,11 @@ const MEMBER_COLUMNS: ColumnConfig[] = [
     { key: 'joinedAt', label: 'Entrou em', sortable: true },
 ];
 
-// Larguras default do redimensionamento (§6.1 do guia) — chutes iniciais,
-// ajustáveis por arraste ou pelo botão de auto-ajuste (§6.1.2).
+// Larguras default do redimensionamento (§6.1 do guia) — já próximas do
+// container real (padrão de SupplierList.tsx), para não nascer truncando
+// nome/email nem deixando faixa vazia grande antes do usuário mexer.
 const MEMBER_COL_WIDTHS: Record<string, number> = {
-    code: 100, name: 220, email: 230, role: 200, joinedAt: 130, actions: 190,
+    code: 110, name: 260, email: 300, role: 240, joinedAt: 150, actions: 220,
 };
 
 interface OrganizationUsersProps {
@@ -388,6 +389,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const isAdmin = memberSelf?.role === 'admin' || isDeveloper || isDevEmail;
 
     const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
+    const [memberSearch, setMemberSearch] = usePersistedState<string>('organizationUsersMembersSearch', '');
     const memberColumns = useTableColumns(MEMBER_COLUMNS, 'organizationUsersMembersColumns');
     const cols = useResizableColumns(MEMBER_COL_WIDTHS, 'organizationUsersMembersColWidths');
     // NUNCA w-full/100% com table-layout:fixed — ver ui_ux_guia_unificado.md §6.1
@@ -396,21 +398,27 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         .reduce((sum, key) => sum + (memberColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
     const sortedMembers = React.useMemo(() => {
+        const term = memberSearch.trim().toLowerCase();
+        const filtered = !term ? members : members.filter(m =>
+            m.name.toLowerCase().includes(term) ||
+            m.email.toLowerCase().includes(term) ||
+            (m.code || '').toLowerCase().includes(term)
+        );
         const dir = memberColumns.sortDirection === 'asc' ? 1 : -1;
         if (memberColumns.sortColumn === 'code') {
-            return [...members].sort((a, b) => (a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true }) * dir);
+            return [...filtered].sort((a, b) => (a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true }) * dir);
         }
         if (memberColumns.sortColumn === 'name') {
-            return [...members].sort((a, b) => a.name.localeCompare(b.name) * dir);
+            return [...filtered].sort((a, b) => a.name.localeCompare(b.name) * dir);
         }
         if (memberColumns.sortColumn === 'email') {
-            return [...members].sort((a, b) => a.email.localeCompare(b.email) * dir);
+            return [...filtered].sort((a, b) => a.email.localeCompare(b.email) * dir);
         }
         if (memberColumns.sortColumn === 'joinedAt') {
-            return [...members].sort((a, b) => (new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()) * dir);
+            return [...filtered].sort((a, b) => (new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()) * dir);
         }
-        return members;
-    }, [members, memberColumns.sortColumn, memberColumns.sortDirection]);
+        return filtered;
+    }, [members, memberSearch, memberColumns.sortColumn, memberColumns.sortDirection]);
     const confirm = useConfirm();
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -978,7 +986,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 // único card — moldura/sombra só no pai, a única linha visível entre os
                 // dois é o border-b da toolbar interna.
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                    <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, e-mail ou código..."
+                                value={memberSearch}
+                                onChange={(e) => setMemberSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={MEMBER_COLUMNS}
@@ -1058,12 +1076,12 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         <React.Fragment key={member.id}>
                                             <tr className="hover:bg-blue-50/50 transition-colors">
                                                 {memberColumns.visibleColumns.includes('code') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
                                                         {member.code || '-'}
                                                     </td>
                                                 )}
                                                 {memberColumns.visibleColumns.includes('name') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
                                                                 {member.name.charAt(0).toUpperCase()}
@@ -1073,7 +1091,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     </td>
                                                 )}
                                                 {memberColumns.visibleColumns.includes('email') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         <div className="flex items-center gap-1.5 text-sm text-gray-600 font-normal">
                                                             <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                                                             <span className="truncate">{member.email}</span>
@@ -1081,7 +1099,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     </td>
                                                 )}
                                                 {memberColumns.visibleColumns.includes('role') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         <div className="flex flex-col gap-1">
                                                             {/* Select editável inline — MESMA tipografia do TD comum (§7.1),
                                                                 nunca pílula/caixa-alta/peso pesado só porque parece um chip
@@ -1104,7 +1122,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     </td>
                                                 )}
                                                 {memberColumns.visibleColumns.includes('joinedAt') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                         {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
                                                     </td>
                                                 )}
@@ -1263,7 +1281,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
                                 {MODULES_BY_PRODUCT[activeProductTab].map(modItem => (
                                     <tr key={modItem.key} className="hover:bg-gray-50/40 transition-colors">
-                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <div className="text-sm font-normal text-gray-700">{modItem.label}</div>
                                             <div className="text-xs text-gray-400 font-medium">{modItem.description}</div>
                                         </td>

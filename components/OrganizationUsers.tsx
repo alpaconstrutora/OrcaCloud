@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole, ProductContext, ModuleVisibilityConfig, ProductModuleMap } from '../types';
-import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette, AlertCircle, Search, ArrowLeft } from 'lucide-react';
+import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette, AlertCircle, Search, ArrowLeft, MoveHorizontal } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
-import { ColumnConfig, useTableColumns, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
@@ -18,6 +18,12 @@ const MEMBER_COLUMNS: ColumnConfig[] = [
     { key: 'role', label: 'Função / Cargo', sortable: false },
     { key: 'joinedAt', label: 'Entrou em', sortable: true },
 ];
+
+// Larguras default do redimensionamento (§6.1 do guia) — chutes iniciais,
+// ajustáveis por arraste ou pelo botão de auto-ajuste (§6.1.2).
+const MEMBER_COL_WIDTHS: Record<string, number> = {
+    code: 100, name: 220, email: 230, role: 200, joinedAt: 130, actions: 190,
+};
 
 interface OrganizationUsersProps {
     organizationId?: string;
@@ -383,6 +389,12 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
     const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
     const memberColumns = useTableColumns(MEMBER_COLUMNS, 'organizationUsersMembersColumns');
+    const cols = useResizableColumns(MEMBER_COL_WIDTHS, 'organizationUsersMembersColWidths');
+    // NUNCA w-full/100% com table-layout:fixed — ver ui_ux_guia_unificado.md §6.1
+    // (a largura precisa ser a soma exata das colunas visíveis).
+    const memberTableTotalWidth = ['code', 'name', 'email', 'role', 'joinedAt']
+        .reduce((sum, key) => sum + (memberColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
     const sortedMembers = React.useMemo(() => {
         const dir = memberColumns.sortDirection === 'asc' ? 1 : -1;
         if (memberColumns.sortColumn === 'code') {
@@ -962,103 +974,175 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             </div>
 
             {activeSubTab === 'members' ? (
-                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                                <SortableHeader label="Membro" colKey="name" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                <SortableHeader label="Email" colKey="email" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                {/* Função/Cargo composta (papel + nome do cargo customizado) — sem valor único pra ordenar (§6.3). */}
-                                <SortableHeader label="Função / Cargo" colKey="role" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100" />
-                                <SortableHeader label="Entrou em" colKey="joinedAt" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                            {sortedMembers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">
-                                        Nenhum membro encontrado.
-                                    </td>
+                // Toolbar acoplada à tabela (§5.2 do guia): toolbar e tabela dividem um
+                // único card — moldura/sombra só no pai, a única linha visível entre os
+                // dois é o border-b da toolbar interna.
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-end">
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={MEMBER_COLUMNS}
+                                visibleColumns={memberColumns.visibleColumns}
+                                showColumnConfig={memberColumns.showColumnConfig}
+                                onToggleShow={() => memberColumns.setShowColumnConfig(!memberColumns.showColumnConfig)}
+                                onToggleColumn={memberColumns.toggleColumn}
+                                onReset={memberColumns.resetColumns}
+                            />
+                            {/* Ajustar largura ao conteúdo — sob comando explícito, nunca automático (§6.1.2). */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: memberTableTotalWidth }}>
+                            <colgroup>
+                                {memberColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
+                                {memberColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                                {memberColumns.visibleColumns.includes('email') && <col data-col-key="email" style={{ width: `${cols.getWidth('email')}px` }} />}
+                                {memberColumns.visibleColumns.includes('role') && <col data-col-key="role" style={{ width: `${cols.getWidth('role')}px` }} />}
+                                {memberColumns.visibleColumns.includes('joinedAt') && <col data-col-key="joinedAt" style={{ width: `${cols.getWidth('joinedAt')}px` }} />}
+                                {/* espaçador — absorve a folga ANTES de "Ações", senão a borda dela anda a cada resize (§6.1.1) */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {memberColumns.visibleColumns.includes('code') && (
+                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="code" />
+                                        </SortableHeader>
+                                    )}
+                                    {memberColumns.visibleColumns.includes('name') && (
+                                        <SortableHeader label="Membro" colKey="name" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
+                                    )}
+                                    {memberColumns.visibleColumns.includes('email') && (
+                                        <SortableHeader label="Email" colKey="email" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="email" />
+                                        </SortableHeader>
+                                    )}
+                                    {/* Função/Cargo composta (papel + nome do cargo customizado) — sem valor único pra ordenar (§6.3). */}
+                                    {memberColumns.visibleColumns.includes('role') && (
+                                        <SortableHeader label="Função / Cargo" colKey="role" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="role" />
+                                        </SortableHeader>
+                                    )}
+                                    {memberColumns.visibleColumns.includes('joinedAt') && (
+                                        <SortableHeader label="Entrou em" colKey="joinedAt" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="joinedAt" />
+                                        </SortableHeader>
+                                    )}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem (§6.1.1) */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
-                            ) : (
-                                sortedMembers.map((member) => (
-                                    <React.Fragment key={member.id}>
-                                        <tr className="hover:bg-blue-50/50 transition-colors">
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {member.code || '-'}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
-                                                        {member.name.charAt(0).toUpperCase()}
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {sortedMembers.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={memberColumns.visibleColumns.length + 2} className="px-6 py-8 text-center text-sm text-gray-400">
+                                            Nenhum membro encontrado.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    sortedMembers.map((member) => (
+                                        <React.Fragment key={member.id}>
+                                            <tr className="hover:bg-blue-50/50 transition-colors">
+                                                {memberColumns.visibleColumns.includes('code') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                        {member.code || '-'}
+                                                    </td>
+                                                )}
+                                                {memberColumns.visibleColumns.includes('name') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
+                                                                {member.name.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <p className="text-sm font-normal text-gray-700 truncate">{member.name}</p>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {memberColumns.visibleColumns.includes('email') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                                        <div className="flex items-center gap-1.5 text-sm text-gray-600 font-normal">
+                                                            <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                            <span className="truncate">{member.email}</span>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {memberColumns.visibleColumns.includes('role') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                                        <div className="flex flex-col gap-1">
+                                                            {/* Select editável inline — MESMA tipografia do TD comum (§7.1),
+                                                                nunca pílula/caixa-alta/peso pesado só porque parece um chip
+                                                                (era exatamente esse erro que já vazou em BankReconciliation.tsx). */}
+                                                            <select
+                                                                value={member.role}
+                                                                onChange={(e) => handleMemberRoleChange(member.id, e.target.value as OrganizationRole)}
+                                                                className="w-fit text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 outline-none cursor-pointer appearance-none transition-all"
+                                                            >
+                                                                <option value="admin">Admin</option>
+                                                                <option value="member">Membro</option>
+                                                                <option value="viewer">Visitante</option>
+                                                            </select>
+                                                            {member.customRoleId && (
+                                                                <span className="text-xs font-medium text-gray-400">
+                                                                    Cargo: {customRoles.find(r => r.id === member.customRoleId)?.name || 'Customizado'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {memberColumns.visibleColumns.includes('joinedAt') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                        {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
+                                                    </td>
+                                                )}
+                                                {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                                <td className="px-6 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenEditMember(member)}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setEditingMemberId(member.id)}
+                                                            className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                                                            title="Permissões"
+                                                        >
+                                                            <Shield className="w-4 h-4" />
+                                                        </button>
+                                                        <InlineDisclosureMenu
+                                                            menuItems={[
+                                                                { icon: <Send className="w-[18px] h-[18px]" />, label: 'Reenviar convite', onClick: () => handleResendInvite(member) },
+                                                            ]}
+                                                            showDelete
+                                                            onDelete={() => handleRemoveMember(member.id)}
+                                                        />
                                                     </div>
-                                                    <p className="text-sm font-normal text-gray-700">{member.name}</p>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-1.5 text-sm text-gray-600 font-normal">
-                                                    <Mail className="w-3.5 h-3.5 text-gray-400" />
-                                                    {member.email}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex flex-col gap-1">
-                                                    {/* Select editável inline — MESMA tipografia do TD comum (§7.1),
-                                                        nunca pílula/caixa-alta/peso pesado só porque parece um chip
-                                                        (era exatamente esse erro que já vazou em BankReconciliation.tsx). */}
-                                                    <select
-                                                        value={member.role}
-                                                        onChange={(e) => handleMemberRoleChange(member.id, e.target.value as OrganizationRole)}
-                                                        className="w-fit text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 outline-none cursor-pointer appearance-none transition-all"
-                                                    >
-                                                        <option value="admin">Admin</option>
-                                                        <option value="member">Membro</option>
-                                                        <option value="viewer">Visitante</option>
-                                                    </select>
-                                                    {member.customRoleId && (
-                                                        <span className="text-xs font-medium text-gray-400">
-                                                            Cargo: {customRoles.find(r => r.id === member.customRoleId)?.name || 'Customizado'}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
-                                            </td>
-                                            <td className="px-6 py-2.5 text-right">
-                                                <div className="flex items-center justify-end gap-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenEditMember(member)}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                                                    >
-                                                        Editar
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setEditingMemberId(member.id)}
-                                                        className="p-1.5 rounded-lg transition-colors text-gray-400 hover:text-blue-600 hover:bg-blue-50"
-                                                        title="Permissões"
-                                                    >
-                                                        <Shield className="w-4 h-4" />
-                                                    </button>
-                                                    <InlineDisclosureMenu
-                                                        menuItems={[
-                                                            { icon: <Send className="w-[18px] h-[18px]" />, label: 'Reenviar convite', onClick: () => handleResendInvite(member) },
-                                                        ]}
-                                                        showDelete
-                                                        onDelete={() => handleRemoveMember(member.id)}
-                                                    />
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </React.Fragment>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                                </td>
+                                            </tr>
+                                        </React.Fragment>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             ) : activeSubTab === 'roles' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

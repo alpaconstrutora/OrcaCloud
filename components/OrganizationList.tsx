@@ -3,9 +3,9 @@ import {
     Building2, Mail, Plus, Search,
     Trash2, Edit2, LayoutDashboard, Table2,
     Activity, Users, UserPlus,
-    TrendingUp, HandCoins, Filter, Truck, Settings, Send
+    TrendingUp, HandCoins, Filter, Truck, Settings, Send, MoveHorizontal
 } from 'lucide-react';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 
@@ -17,6 +17,11 @@ const ALL_USERS_FALLBACK_COLUMNS: ColumnConfig[] = [
     { key: 'organization', label: 'Organização', sortable: true },
     { key: 'role', label: 'Função', sortable: true },
 ];
+
+// Larguras default do redimensionamento (§6.1 do guia) da tabela fallback.
+const ALL_USERS_COL_WIDTHS: Record<string, number> = {
+    name: 220, email: 240, organization: 200, role: 140, actions: 220,
+};
 
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
@@ -226,6 +231,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
     // Tabela fallback "Todos os Usuários" (só aparece sem organização selecionada).
     const allUsersColumns = useTableColumns(ALL_USERS_FALLBACK_COLUMNS, 'organizationListAllUsersColumns');
+    const allUsersCols = useResizableColumns(ALL_USERS_COL_WIDTHS, 'organizationListAllUsersColWidths');
+    // NUNCA w-full/100% com table-layout:fixed — ver ui_ux_guia_unificado.md §6.1.
+    const allUsersTableTotalWidth = ['name', 'email', 'organization', 'role']
+        .reduce((sum, key) => sum + (allUsersColumns.visibleColumns.includes(key) ? allUsersCols.getWidth(key) : 0), 0)
+        + allUsersCols.getWidth('actions');
     const allUsersFlat = React.useMemo(() => {
         const flat = organizations.flatMap(org => (org.members || []).map(member => ({ org, member })));
         const dir = allUsersColumns.sortDirection === 'asc' ? 1 : -1;
@@ -537,33 +547,101 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             onUpdateAll={(updates) => (onSave ?? onEdit)({ ...currentOrg, ...updates })}
                         />
                     ) : (
-                        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                                <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
-                                <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
+                        // Toolbar acoplada à tabela (§5.2 do guia): moldura/sombra só no card
+                        // pai, a única linha visível entre os blocos é o border-b da toolbar.
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-4 border-b border-gray-100 bg-white flex items-center justify-between gap-3">
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
+                                    <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
+                                </div>
+                                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                    <ColumnConfigButton
+                                        columns={ALL_USERS_FALLBACK_COLUMNS}
+                                        visibleColumns={allUsersColumns.visibleColumns}
+                                        showColumnConfig={allUsersColumns.showColumnConfig}
+                                        onToggleShow={() => allUsersColumns.setShowColumnConfig(!allUsersColumns.showColumnConfig)}
+                                        onToggleColumn={allUsersColumns.toggleColumn}
+                                        onReset={allUsersColumns.resetColumns}
+                                    />
+                                    {/* Ajustar largura ao conteúdo — sob comando explícito, nunca automático (§6.1.2). */}
+                                    <button
+                                        onClick={() => allUsersCols.autoFit()}
+                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                        title="Ajustar largura das colunas ao conteúdo"
+                                    >
+                                        <MoveHorizontal className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
+                                <table ref={allUsersCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: allUsersTableTotalWidth }}>
+                                    <colgroup>
+                                        {allUsersColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${allUsersCols.getWidth('name')}px` }} />}
+                                        {allUsersColumns.visibleColumns.includes('email') && <col data-col-key="email" style={{ width: `${allUsersCols.getWidth('email')}px` }} />}
+                                        {allUsersColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${allUsersCols.getWidth('organization')}px` }} />}
+                                        {allUsersColumns.visibleColumns.includes('role') && <col data-col-key="role" style={{ width: `${allUsersCols.getWidth('role')}px` }} />}
+                                        {/* espaçador — absorve a folga ANTES de "Ações" (§6.1.1) */}
+                                        <col />
+                                        <col data-col-key="actions" style={{ width: `${allUsersCols.getWidth('actions')}px` }} />
+                                    </colgroup>
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            <SortableHeader label="Usuário" colKey="name" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            <SortableHeader label="E-mail" colKey="email" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            <SortableHeader label="Função" colKey="role" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                            {allUsersColumns.visibleColumns.includes('name') && (
+                                                <SortableHeader label="Usuário" colKey="name" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <allUsersCols.ResizeHandle colKey="name" />
+                                                </SortableHeader>
+                                            )}
+                                            {allUsersColumns.visibleColumns.includes('email') && (
+                                                <SortableHeader label="E-mail" colKey="email" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <allUsersCols.ResizeHandle colKey="email" />
+                                                </SortableHeader>
+                                            )}
+                                            {allUsersColumns.visibleColumns.includes('organization') && (
+                                                <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <allUsersCols.ResizeHandle colKey="organization" />
+                                                </SortableHeader>
+                                            )}
+                                            {allUsersColumns.visibleColumns.includes('role') && (
+                                                <SortableHeader label="Função" colKey="role" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <allUsersCols.ResizeHandle colKey="role" />
+                                                </SortableHeader>
+                                            )}
+                                            {/* espaçador — casa com o <col /> sem largura, na mesma ordem (§6.1.1) */}
+                                            <th aria-hidden="true" className="border-r border-gray-100" />
+                                            <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                                Ações
+                                                <allUsersCols.ResizeHandle colKey="actions" />
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {allUsersFlat.map(({ org, member }) => (
+                                        {allUsersFlat.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={allUsersColumns.visibleColumns.length + 2} className="px-6 py-8 text-center text-sm text-gray-400">
+                                                    Nenhum usuário encontrado.
+                                                </td>
+                                            </tr>
+                                        ) : allUsersFlat.map(({ org, member }) => (
                                             <tr key={`${org.id}-${member.email}`} className="hover:bg-blue-50/50 transition-colors">
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">{member.name}</td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{member.email}</td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
-                                                    {org.name}
-                                                </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                    {member.role}
-                                                </td>
+                                                {allUsersColumns.visibleColumns.includes('name') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 truncate">{member.name}</td>
+                                                )}
+                                                {allUsersColumns.visibleColumns.includes('email') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">{member.email}</td>
+                                                )}
+                                                {allUsersColumns.visibleColumns.includes('organization') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-blue-600 truncate">
+                                                        {org.name}
+                                                    </td>
+                                                )}
+                                                {allUsersColumns.visibleColumns.includes('role') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                        {member.role}
+                                                    </td>
+                                                )}
+                                                {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                                <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-3">
                                                         <button

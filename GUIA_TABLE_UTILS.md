@@ -143,7 +143,67 @@ Já implementado com essas funcionalidades. Use como referência!
 4. **Customizar Operação Sort**: Sobrescreva a lógica no `.sort()`
 5. **Persistir Preferências**: Salve `visibleColumns` + `sortColumn` no localStorage ou banco
 
+## 🖱️ Reordenar colunas por arraste (estilo ClickUp)
+
+Padrão do sistema (pedido em 2026-08-04): o usuário pode clicar e segurar o
+cabeçalho de uma coluna e soltar sobre outra para trocar de posição. O
+mecanismo já existe em `useTableColumns`/`SortableHeader` — cada tela precisa
+de duas mudanças:
+
+1. **Renderizar `<col>`/`<th>`/`<td>` mapeando `orderedVisibleColumns`**, em vez
+   de uma sequência fixa de `visibleColumns.includes(key) && (...)` no JSX.
+   Isso é o que faz a ordem arrastada realmente aparecer na tela — sem isso, o
+   header fica arrastável mas a posição visual não muda.
+
+   ```tsx
+   const tableColumns = useTableColumns(COLUMNS, 'minhaTelaColunas');
+
+   // colgroup
+   {tableColumns.orderedVisibleColumns.map(key => (
+     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+   ))}
+
+   // thead
+   {tableColumns.orderedVisibleColumns.map(key => {
+     const def = COLUMN_HEADERS[key]; // label/sortable/className por coluna
+     return (
+       <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable}
+         sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+         onSort={tableColumns.handleColumnSort}
+         onMoveColumn={tableColumns.moveColumn}
+         className={def.className}>
+         <cols.ResizeHandle colKey={key} />
+       </SortableHeader>
+     );
+   })}
+
+   // tbody
+   {tableColumns.orderedVisibleColumns.map(key => (
+     <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+       {renderCell(key, item)} {/* função pura por coluna, extraída do bloco antigo */}
+     </td>
+   ))}
+   ```
+
+2. **Passar `onMoveColumn={tableColumns.moveColumn}` ao `SortableHeader`** — é o
+   que liga o `draggable`/`onDrop` do header ao estado de ordem. Sem essa prop,
+   o header continua exatamente como antes (aditivo, não quebra tela nenhuma
+   que ainda não migrou).
+
+A ordem persiste junto com visibilidade/sort no mesmo `storageKey` de
+`useTableColumns` (localStorage) e é restaurada por "Restaurar Padrão"
+(`ColumnConfigButton`/`resetColumns`).
+
+**Piloto implementado em `ClientList.tsx`** (2026-08-04) — referência completa
+de como extrair a função `renderCell` por coluna e o mapa `COLUMN_HEADERS`.
+Rollout nas demais ~81 telas que usam `useTableColumns` é trabalho futuro,
+tela por tela, sempre com o passo 1 acima (a maioria ainda renderiza colunas em
+sequência fixa, não por `orderedVisibleColumns`).
+
+Teste automatizado do mecanismo (sem UI): `__tests__/components/TableUtilsColumnDrag.test.tsx`.
+
 ## 🔗 Arquivos
 
 - **Utilitários**: `components/ui/TableUtils.tsx`
 - **Exemplo**: `components/ProjectList.tsx` (linhas 1-100 do hook)
+- **Exemplo de drag-and-drop de colunas**: `components/ClientList.tsx`

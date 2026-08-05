@@ -2,6 +2,17 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Settings, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from 'lucide-react';
 
+// Imagem 1x1 transparente usada como "ghost" do drag-and-drop de colunas (ver
+// SortableHeader) — substitui o snapshot padrão do navegador, que é o que
+// causa o atraso visível do elemento arrastado seguindo o mouse. Criada uma
+// única vez (não a cada drag) e só no browser (SSR/teste sem `window.Image`
+// cai no fallback undefined, e setDragImage não é chamado nesse caso).
+const DRAG_GHOST_IMG = typeof window !== 'undefined' ? (() => {
+  const img = new window.Image(1, 1);
+  img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7';
+  return img;
+})() : (undefined as unknown as HTMLImageElement);
+
 export type ColumnConfig = {
   key: string;
   label: string;
@@ -15,6 +26,9 @@ interface PersistedTableState {
   /** Todas as chaves de coluna que este usuário já "conheceu" (visíveis ou ocultas),
    *  usado só para detectar colunas novas introduzidas depois do último salvamento. */
   knownColumns: string[];
+  /** Ordem de TODAS as colunas (não só as visíveis) — estilo ClickUp: arrastar o
+   *  cabeçalho troca a posição. Coluna nova (fora daqui) é adicionada no fim. */
+  columnOrder: string[];
 }
 
 /**
@@ -30,7 +44,7 @@ interface PersistedTableState {
  * são adicionadas.
  */
 function loadPersistedTableState(storageKey: string, defaultVisibleColumns: string[]): PersistedTableState {
-  const fallback: PersistedTableState = { visibleColumns: defaultVisibleColumns, sortColumn: null, sortDirection: 'asc', knownColumns: defaultVisibleColumns };
+  const fallback: PersistedTableState = { visibleColumns: defaultVisibleColumns, sortColumn: null, sortDirection: 'asc', knownColumns: defaultVisibleColumns, columnOrder: defaultVisibleColumns };
   if (typeof window === 'undefined') return fallback;
   try {
     const stored = localStorage.getItem(storageKey);
@@ -41,6 +55,7 @@ function loadPersistedTableState(storageKey: string, defaultVisibleColumns: stri
     let sortColumn: string | null;
     let sortDirection: 'asc' | 'desc';
     let knownColumns: string[];
+    let columnOrder: string[];
 
     if (Array.isArray(parsed)) {
       // Formato legado: só as colunas visíveis.
@@ -48,6 +63,7 @@ function loadPersistedTableState(storageKey: string, defaultVisibleColumns: stri
       sortColumn = null;
       sortDirection = 'asc';
       knownColumns = parsed;
+      columnOrder = parsed;
     } else {
       storedVisible = parsed.visibleColumns ?? defaultVisibleColumns;
       sortColumn = parsed.sortColumn ?? null;
@@ -55,14 +71,21 @@ function loadPersistedTableState(storageKey: string, defaultVisibleColumns: stri
       // Sem knownColumns salvo (preferência de antes dessa mudança): assume que
       // o que estava visível é tudo que o usuário conhecia até então.
       knownColumns = parsed.knownColumns ?? storedVisible;
+      // Sem columnOrder salvo (preferência de antes do drag-and-drop existir):
+      // usa a ordem default da tela.
+      columnOrder = parsed.columnOrder ?? defaultVisibleColumns;
     }
 
     const newColumns = defaultVisibleColumns.filter(k => !knownColumns.includes(k));
+    // Colunas que a tela define hoje mas que não estão na ordem salva (coluna nova
+    // introduzida depois do último salvamento) entram no fim, na ordem default.
+    const missingFromOrder = defaultVisibleColumns.filter(k => !columnOrder.includes(k));
     return {
       visibleColumns: newColumns.length ? [...storedVisible, ...newColumns] : storedVisible,
       sortColumn,
       sortDirection,
       knownColumns: newColumns.length ? [...knownColumns, ...newColumns] : knownColumns,
+      columnOrder: missingFromOrder.length ? [...columnOrder, ...missingFromOrder] : columnOrder,
     };
   } catch (e) {
     console.warn(`Failed to load table preferences from localStorage (${storageKey}):`, e);
@@ -78,16 +101,42 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
   const [sortColumn, setSortColumn] = React.useState<string | null>(initial.sortColumn);
   const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>(initial.sortDirection);
   const [knownColumns, setKnownColumns] = React.useState<string[]>(initial.knownColumns);
+  const [columnOrder, setColumnOrder] = React.useState<string[]>(initial.columnOrder);
   const [showColumnConfig, setShowColumnConfig] = React.useState(false);
 
-  // Persistir colunas + ordenação + conhecidas juntas (F2: a ordenação sobrevive a navegação/reload).
+  // Persistir colunas + ordenação + conhecidas + ordem juntas (F2: sobrevive a navegação/reload).
   React.useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ visibleColumns, sortColumn, sortDirection, knownColumns }));
+      localStorage.setItem(storageKey, JSON.stringify({ visibleColumns, sortColumn, sortDirection, knownColumns, columnOrder }));
     } catch (e) {
       console.warn(`Failed to save table preferences to localStorage (${storageKey}):`, e);
     }
-  }, [visibleColumns, sortColumn, sortDirection, knownColumns, storageKey]);
+  }, [visibleColumns, sortColumn, sortDirection, knownColumns, columnOrder, storageKey]);
+
+  // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — é isso
+  // que a tela deve mapear para renderizar <col>/<th>/<td>, em vez da sequência
+  // fixa do JSX. Chave visível mas ausente de columnOrder (não deveria acontecer
+  // após o merge de loadPersistedTableState, mas é defesa barata) vai pro fim.
+  const orderedVisibleColumns = React.useMemo(() => {
+    const inOrder = columnOrder.filter(k => visibleColumns.includes(k));
+    const missing = visibleColumns.filter(k => !columnOrder.includes(k));
+    return missing.length ? [...inOrder, ...missing] : inOrder;
+  }, [columnOrder, visibleColumns]);
+
+  // Estilo ClickUp: arrastar o cabeçalho de `dragKey` e soltar sobre `dropKey`
+  // troca a posição das duas colunas na ordem geral (não só entre visíveis).
+  const moveColumn = React.useCallback((dragKey: string, dropKey: string) => {
+    if (dragKey === dropKey) return;
+    setColumnOrder(prev => {
+      const from = prev.indexOf(dragKey);
+      const to = prev.indexOf(dropKey);
+      if (from === -1 || to === -1) return prev;
+      const next = [...prev];
+      next.splice(from, 1);
+      next.splice(to, 0, dragKey);
+      return next;
+    });
+  }, []);
 
   const handleColumnSort = (colKey: string) => {
     if (sortColumn === colKey) {
@@ -111,6 +160,7 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
     setSortColumn(null);
     setSortDirection('asc');
     setKnownColumns(defaultVisibleColumns);
+    setColumnOrder(defaultVisibleColumns);
     setShowColumnConfig(false);
   };
 
@@ -129,6 +179,12 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
     setVisibleColumns,
     setSortColumn,
     setSortDirection,
+    // Drag-and-drop de colunas (estilo ClickUp) — aditivo, telas que não usarem
+    // não mudam em nada.
+    columnOrder,
+    orderedVisibleColumns,
+    moveColumn,
+    setColumnOrder,
   };
 };
 
@@ -296,6 +352,10 @@ interface SortableHeaderProps {
   children?: React.ReactNode;
   /** Default true (padrão histórico). false = sentence case, sem tracking-wider — ver ui_ux_guia_unificado.md §6.2. */
   uppercase?: boolean;
+  /** Estilo ClickUp: presente = header vira arrastável, trocando de posição com a
+   *  coluna onde for solto (via `moveColumn` de useTableColumns). Aditivo — quem
+   *  não passar não ganha (nem perde) nada. */
+  onMoveColumn?: (dragKey: string, dropKey: string) => void;
 }
 
 export const SortableHeader: React.FC<SortableHeaderProps> = ({
@@ -308,14 +368,55 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   className = 'px-6 py-4',
   children,
   uppercase = true,
+  onMoveColumn,
 }) => {
   const caseClasses = uppercase
     ? 'text-gray-400 uppercase tracking-wider'
     : 'text-gray-500';
+  const [dragOver, setDragOver] = React.useState(false);
+  const [dragging, setDragging] = React.useState(false);
+
+  const dragProps = onMoveColumn ? {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', colKey);
+      // Esconde a "foto" fantasma padrão do navegador (setDragImage com imagem
+      // 1x1 transparente) — é ela que causa o atraso visível seguindo o mouse,
+      // porque o navegador redesenha um snapshot do <th> a cada frame. Sem
+      // ghost, o cursor já mostra o ícone de "mover" e o indicador de destino
+      // (borda azul, abaixo) já sinaliza onde vai soltar — mesma solução usada
+      // por listas estilo Trello.
+      // try/catch: ambiente de teste (jsdom) e navegadores antigos podem não
+      // implementar setDragImage — degrada para o ghost padrão, não quebra o drag.
+      try { e.dataTransfer.setDragImage(DRAG_GHOST_IMG, 0, 0); } catch { /* ignore */ }
+      setDragging(true);
+    },
+    onDragEnd: () => setDragging(false),
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!dragOver) setDragOver(true);
+    },
+    onDragLeave: () => setDragOver(false),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const dragKey = e.dataTransfer.getData('text/plain');
+      if (dragKey) onMoveColumn(dragKey, colKey);
+    },
+  } : {};
+  // Feedback visual só do lado onde o mouse está (dragOver), estilo ClickUp — uma
+  // borda azul indica "solte aqui", à esquerda da coluna sobrevoada. `dragging`
+  // esmaece a própria coluna de origem enquanto arrasta — sem isso, escondido o
+  // ghost nativo (ver setDragImage acima), não sobraria nenhum indício visual
+  // de qual coluna está sendo movida.
+  const dragOverClasses = dragOver ? 'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-blue-500' : '';
+  const draggingClasses = dragging ? 'opacity-40' : '';
 
   if (!sortable) {
     return (
-      <th className={`${className} relative text-table-header font-semibold ${caseClasses}`}>
+      <th className={`${className} relative text-table-header font-semibold ${caseClasses} ${onMoveColumn ? `cursor-grab ${dragOverClasses} ${draggingClasses}` : ''}`} {...dragProps}>
         {label}
         {children}
       </th>
@@ -325,7 +426,8 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   return (
     <th
       onClick={() => onSort?.(colKey)}
-      className={`${className} relative text-table-header font-semibold ${caseClasses} cursor-pointer hover:text-gray-600 transition-colors select-none group`}
+      className={`${className} relative text-table-header font-semibold ${caseClasses} cursor-pointer hover:text-gray-600 transition-colors select-none group ${dragOverClasses} ${draggingClasses}`}
+      {...dragProps}
     >
       <div className="flex items-center gap-1.5">
         {label}

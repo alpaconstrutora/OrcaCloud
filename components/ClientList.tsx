@@ -44,6 +44,20 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     code: 90, name: 220, category: 130, organization: 180, contact: 200, document: 150, projects: 200, actions: 190,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'contact' e 'projects' não têm valor único pra
+// ordenar (§6.3).
+const CLIENT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    name: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    category: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    contact: { label: 'Contato', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    document: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    projects: { label: 'Empreendimento Vinculado', sortable: false, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
+
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/categoria já existentes, não os substitui.
 // As opções do campo "category" são montadas em runtime a partir das categorias
@@ -78,6 +92,63 @@ const CategoryLabel: React.FC<{ category?: string }> = ({ category }) => (
         {category || 'Não definido'}
     </span>
 );
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderClientCell(key: string, client: Client, clientEmpreendimentos: { id: string; name: string }[]): React.ReactNode {
+    switch (key) {
+        case 'code':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{client.code || '-'}</span>;
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                        <User className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-normal text-gray-900">{client.name}</span>
+                </div>
+            );
+        case 'category':
+            return <CategoryLabel category={client.category} />;
+        case 'organization':
+            return <span className="text-sm font-normal text-gray-700">{client.organization_name || '-'}</span>;
+        case 'contact':
+            return (
+                <div className="space-y-1">
+                    {client.email && (
+                        <div className="flex items-center text-sm font-normal text-gray-600">
+                            <Mail className="w-3.5 h-3.5 mr-1.5 text-blue-500 shrink-0" />
+                            {client.email}
+                        </div>
+                    )}
+                    {client.phone && (
+                        <div className="flex items-center text-sm font-normal text-gray-600">
+                            <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
+                            {client.phone}
+                        </div>
+                    )}
+                </div>
+            );
+        case 'document':
+            return <span className="text-sm font-normal text-gray-600">{client.document || '-'}</span>;
+        case 'projects':
+            return clientEmpreendimentos.length === 0 ? (
+                <span className="text-sm font-normal text-gray-400">-</span>
+            ) : (
+                <div className="flex flex-col gap-1">
+                    {clientEmpreendimentos.map(e => (
+                        <div key={e.id} className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                            <Building2 className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate max-w-[200px]" title={e.name}>{e.name}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        default:
+            return null;
+    }
+}
 
 function getAdvancedFilterValue(c: Client, key: string): unknown {
     switch (key) {
@@ -546,13 +617,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
-                                {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
-                                {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
-                                {tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
-                                {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
-                                {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
-                                {tableColumns.visibleColumns.includes('projects') && <col data-col-key="projects" style={{ width: `${cols.getWidth('projects')}px` }} />}
+                                {tableColumns.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* coluna "espaçadora" sem largura fixa — absorve o espaço sobrando quando
                                     a tabela é mais estreita que o container (ver §6.1 do guia de UI).
                                     Fica ANTES de "Ações" de propósito: com ela depois, todo o espaço
@@ -565,58 +632,23 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                             </colgroup>
                             {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força
                                 uppercase internamente por padrão; classes de estilo movidas pro <tr>, igual ao
-                                snippet oficial do guia. */}
+                                snippet oficial do guia. Ordem vem de orderedVisibleColumns — arrastar um header
+                                (onMoveColumn) reordena e persiste, estilo ClickUp. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader colKey="code" label="Código" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="code" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader colKey="name" label="Cliente" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader colKey="category" label="Tipo" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="category" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader colKey="organization" label="Organização" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="organization" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('contact') && (
-                                        // Contato = e-mail + telefone combinados — sem valor único óbvio pra ordenar (§6.3).
-                                        <SortableHeader colKey="contact" label="Contato" sortable={false} uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="contact" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader colKey="document" label="Documento" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="document" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = CLIENT_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('projects') && (
                                         // Empreendimento Vinculado = lista de 0..N empreendimentos — sem valor único pra ordenar (§6.3).
                                         <SortableHeader colKey="projects" label="Empreendimento Vinculado" sortable={false} uppercase={false}
@@ -639,70 +671,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                     const clientEmpreendimentos = getClientEmpreendimentos(client.id);
                                     return (
                                         <tr key={client.id} className="hover:bg-blue-50/50 transition-colors group">
-                                            {tableColumns.visibleColumns.includes('code') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                    {client.code || '-'}
+                                            {tableColumns.orderedVisibleColumns.map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderClientCell(key, client, clientEmpreendimentos)}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                                                            <User className="w-4 h-4" />
-                                                        </div>
-                                                        <span className="text-sm font-normal text-gray-900">{client.name}</span>
-                                                    </div>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('category') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <CategoryLabel category={client.category} />
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('organization') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                    {client.organization_name || '-'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('contact') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="space-y-1">
-                                                        {client.email && (
-                                                            <div className="flex items-center text-sm font-normal text-gray-600">
-                                                                <Mail className="w-3.5 h-3.5 mr-1.5 text-blue-500 shrink-0" />
-                                                                {client.email}
-                                                            </div>
-                                                        )}
-                                                        {client.phone && (
-                                                            <div className="flex items-center text-sm font-normal text-gray-600">
-                                                                <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
-                                                                {client.phone}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('document') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                    {client.document || '-'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('projects') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {clientEmpreendimentos.length === 0 ? (
-                                                        <span className="text-sm font-normal text-gray-400">-</span>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-1">
-                                                            {clientEmpreendimentos.map(e => (
-                                                                <div key={e.id} className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
-                                                                    <Building2 className="w-3.5 h-3.5 shrink-0" />
-                                                                    <span className="truncate max-w-[200px]" title={e.name}>{e.name}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            )}
+                                            ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5 text-right">

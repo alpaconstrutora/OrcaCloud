@@ -520,15 +520,12 @@ export const commercialService = {
         const units = dealUnitsOf(deal);
         const primaryUnit = units.find(u => u.is_primary) || units[0];
 
-        // custom_installments é gravado como coluna normal (dbPayload abaixo) E
-        // usado mais adiante para acionar o sync com o cofre financeiro (Contas a
-        // Receber) — este segundo uso só acontece quando o status está em
-        // FINANCIAL_STATUSES (propositalmente: uma Proposta em IN_NEGOTIATION não
-        // pode lançar recebível). Antes a coluna era removida do payload do banco
-        // e só sobrevivia via aquele sync — então o Plano de Pagamento de uma
-        // negociação ainda em Proposta nunca era persistido e sumia ao sair e
-        // voltar. Persistir aqui também garante que o rascunho sobreviva
-        // independente do status.
+        // custom_installments é gravado como coluna normal (dbPayload abaixo) —
+        // NÃO é fonte de parcela real nem aciona nada no financeiro (essa ligação
+        // foi retirada, ver project_deal_installments_serie_unica: parcela existe
+        // ⟺ está em internal_transactions). Hoje serve só como cronograma
+        // estrutural para a proposta exportada (propertyExportService.ts); quem
+        // gera o contrato lê `installment_value`, não este campo.
         const dbPayload: Partial<PropertyDeal> = { ...deal };
         delete dbPayload.units;
 
@@ -703,7 +700,6 @@ export const commercialService = {
                     payment_method: deal.payment_method || result.payment_method,
                     down_payment: deal.down_payment !== undefined ? deal.down_payment : result.down_payment,
                     installments: deal.installments || result.installments,
-                    custom_installments: deal.custom_installments,
                     linked_project_id: deal.linked_project_id || (result as any).linked_project_id
                 };
 

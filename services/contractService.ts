@@ -61,21 +61,39 @@ function isReceivableContract(contract: { domain?: string | null; direction?: st
 }
 
 /**
- * Contrato COMERCIAL (locação/venda) só fatura depois de assinado.
+ * Contrato COMERCIAL (locação/venda) só propaga parcela pra Contas a Receber
+ * AUTOMATICAMENTE (na criação/edição do contrato, sem clique explícito do
+ * usuário) depois de assinado OU emitido.
  *
  * Antes de 02/08/2026 o motor lançava em Contas a Receber assim que o contrato
  * existia — inclusive em ASSINATURA, ou seja, antes de o cliente assinar. Junto
  * com o auto-lançamento da negociação, era isso que enchia o financeiro de
  * cobrança de negócio que ainda não fechou. O usuário mandou eliminar.
  *
+ * Este portão só se aplica à propagação AUTOMÁTICA
+ * (syncParceladoScheduleToFinance/syncRecurringToFinance, disparadas por
+ * criação/edição). O clique explícito em "Gerar parcelas"
+ * (generateRecurringInstallmentsForPeriod) NÃO passa por aqui — ato explícito
+ * do usuário sempre foi permitido (mesma regra de
+ * project_deal_installments_serie_unica: "nada cria cobrança por varredura ou
+ * efeito colateral", clique explícito não é efeito colateral).
+ *
  * Suprimentos/Serviços NÃO passam por aqui: são Contas a Pagar, com fluxo de
  * aprovação próprio, e mexer neles não foi pedido.
  *
- * Assinado = `signature_status = 'SIGNED'` OU um `status` que já esteja EM ou
- * APÓS a assinatura (lista abaixo).
+ * Libera por QUALQUER UM destes (união, não substituição — 2026-08-05):
+ *   1. Documento EMITIDO: alguma versão em `minuta_versions` com `emitted`.
+ *      Critério pedido pelo usuário — "as parcelas só se propagam quando o
+ *      contrato for emitido". É o único critério para contratos NOVOS a
+ *      partir de agora.
+ *   2. `signature_status = 'SIGNED'` OU `status` em/após a assinatura (lista
+ *      abaixo) — critério ANTIGO, mantido só para não regredir contratos já
+ *      em produção sem nenhuma minuta emitida (verificado no banco em
+ *      2026-08-05: CL-2026-001 a 004, status 'Ativo', zero minutas — se o
+ *      critério antigo saísse, esses 4 parariam de faturar imediatamente).
  *
- * ⚠️ A lista precisa cobrir TUDO que `createFromDeal` grava, senão o portão
- * fica invertido. Ele mapeia o estágio do negócio assim:
+ * ⚠️ A lista do critério 2 precisa cobrir TUDO que `createFromDeal` grava,
+ * senão o portão fica invertido. Ele mapeia o estágio do negócio assim:
  *   deal COMPLETED        → 'Concluído'
  *   signature SIGNED      → 'Assinado'
  *   qualquer outro caso   → 'Ativo'   ← o MENOS avançado
@@ -88,10 +106,13 @@ const STATUS_CONTRATO_FATURAVEL = ['ativo', 'assinado', 'concluído', 'concluido
 
 function podeFaturarContratoComercial(contract: {
     domain?: string | null; status?: string | null; signature_status?: string | null;
+    minuta_versions?: { emitted?: boolean }[] | null;
 }): boolean {
     const comercial = contract.domain === 'LOCACAO' || contract.domain === 'VENDAS';
     if (!comercial) return true;
-    return contract.signature_status === 'SIGNED'
+    const emitido = (contract.minuta_versions ?? []).some(v => v.emitted);
+    return emitido
+        || contract.signature_status === 'SIGNED'
         || STATUS_CONTRATO_FATURAVEL.includes((contract.status || '').toLowerCase());
 }
 
@@ -783,14 +804,14 @@ export async function generateRecurringInstallmentsForPeriod(
     const cycle = opts.cycleOverride || contract.billing_cycle;
     if (!contract.is_recurring) throw new Error('Geração por período só se aplica a contrato recorrente.');
     if (!(amount > 0)) throw new Error('Valor da parcela deve ser maior que zero.');
-    // Só fatura contrato comercial depois de assinado — aqui a recusa é
-    // explícita (erro visível), porque este caminho vem de um clique do usuário
-    // em "Gerar parcelas", e falhar em silêncio pareceria que nada aconteceu.
-    if (!podeFaturarContratoComercial(contract)) {
-        throw new Error(
-            `O contrato ${contract.number || ''} ainda não está assinado, então não pode gerar cobrança. `
-            + 'Conclua a assinatura (ou marque o contrato como Ativo) e gere as parcelas depois.');
-    }
+    // Gerar o CRONOGRAMA (o parcelamento em si) é sempre permitido — já exige
+    // um contrato como alvo (chamador sempre passa `target.contract`, não há
+    // mais opção "Negociação" no seletor). O portão de assinatura/emissão
+    // (podeFaturarContratoComercial) só entra na PROPAGAÇÃO pra Contas a
+    // Receber (syncParceladoScheduleToFinance/syncRecurringToFinance) — gerar
+    // parcela sem isso não lança nada no financeiro sozinho. Antes barrava
+    // aqui também, travando até o contrato "Concluído" (o estágio mais
+    // avançado) de gerar parcela. Caso real: CL-2026-005.
 
     // Quem chama pode mandar o Nº de Parcelas explicitamente (campo da aba Forma
     // de Pagamento). Nesse caso ele MANDA sobre a janela: a vigência define só
@@ -1159,7 +1180,7 @@ export const contractService = {
         end_date?: string;
         billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
         reajuste_index?: string;
-        custom_installments?: { value: number }[];
+        installment_value?: number;
     }, domain: 'VENDAS' | 'LOCACAO' = 'VENDAS'): Promise<Contract> => {
         if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
         if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
@@ -1302,11 +1323,16 @@ export const contractService = {
         // vigência no DealModal. Caso real: CL-2026-001, aluguel de R$ 1.000
         // gravado como R$ 36.000.
         //
-        // Fonte da parcela, nesta ordem: plano de parcelas do deal → total ÷ nº
-        // de parcelas → total (deal sem parcelamento, aí o valor já é o mensal).
+        // Fonte da parcela, nesta ordem: Valor Mensal do Contrato (aba Forma de
+        // Pagamento, `installment_value` — o próprio campo que gera as parcelas
+        // em geracaoContrato/DealModal.tsx) → total ÷ nº de parcelas → total
+        // (deal sem parcelamento, aí o valor já é o mensal).
+        // Antes lia `custom_installments[0].value` — espelho legado do plano de
+        // pagamento (nunca fonte real da tela desde 02/08/2026, ver
+        // project_deal_installments_serie_unica); `installment_value` é o campo
+        // que a aba realmente edita e usa para gerar parcela.
         const rentalInstallmentValue = (() => {
-            const first = deal.custom_installments?.[0]?.value;
-            if (first && first > 0) return first;
+            if (deal.installment_value && deal.installment_value > 0) return deal.installment_value;
             if (deal.installments && deal.installments > 1 && deal.value > 0) {
                 return parseFloat((deal.value / deal.installments).toFixed(2));
             }
@@ -1938,7 +1964,7 @@ export const contractService = {
         if (addendum.value_impact !== 0 || addendum.new_end_date) {
             const { data: contract, error: contractErr } = await supabase
                 .from('contracts')
-                .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
+                .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, minuta_versions, created_at')
                 .eq('id', addendum.contract_id)
                 .single();
 

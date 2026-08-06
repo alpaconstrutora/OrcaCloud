@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { supabase } from '../lib/supabase';
@@ -42,7 +42,7 @@ interface RentalsModuleProps {
     organizationId?: string;
 }
 
-type RentalsTab = 'inventory' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables';
+type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables';
 
 // Valor de locação canônico da unidade: rental_price (gravado pela Inteligência
 // de Aluguéis e pela Tabela de aluguéis); fallback para price ("Aluguel base"
@@ -313,7 +313,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // Reset de navegação se o edifício for removido
     useEffect(() => {
         if (!selectedBuildingId) {
-            if (activeTab !== 'inventory') setActiveTab('inventory');
+            if (activeTab !== 'inventory' && activeTab !== 'analysis') setActiveTab('inventory');
             if (sortConfig) unitsTableColumns.setSortColumn(null);
             if (viewMode === 'tower') setViewMode('grid');
         }
@@ -1028,18 +1028,40 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             </div>
 
-            {/* KPIs — §20/Anatomia (ui_ux_guia_unificado.md): título → KPIs → abas → botões → toolbar acoplada.
-                Ficavam depois da toolbar de abas — ordem errada (§19.1/§20.1).
-                Só na visão mestre "Gestão de Locações" (sem edifício selecionado) —
-                removidos de "Gestão de Unidades" a pedido do usuário. */}
+            {/* Toolbar de abas da visão mestre — mesmo padrão §19.1 da toolbar de
+                "Gestão de Unidades" (trilho cinza dentro de card branco). Os KPIs que
+                ficavam soltos aqui (Ativos sob gestão, Receita mensal, Yield mensal,
+                Taxa de ocupação, Valor patrimonial) migraram para dentro da aba "Análise",
+                a pedido do usuário. */}
             {!currentBuilding && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
-                <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
-                <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
-                <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
-            </div>
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        <button
+                            onClick={() => setActiveTab('inventory')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        >
+                            <HomeIcon className="w-3.5 h-3.5" />
+                            Imóveis
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('analysis')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'analysis' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        >
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            Análise
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {!currentBuilding && activeTab === 'analysis' && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                    <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
+                    <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
+                    <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
+                </div>
             )}
 
             {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1: card branco externo
@@ -1112,7 +1134,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             )}
 
             {/* Content */}
-            {(!selectedBuildingId || activeTab === 'inventory') && (
+            {activeTab === 'inventory' && (
                 <div className="space-y-6">
                     {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                         conteúdo dividem um único card (border/rounded/shadow só no container

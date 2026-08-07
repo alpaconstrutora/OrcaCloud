@@ -1,0 +1,52 @@
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Histórico de status da unidade — FASE 1
+-- ═════════════════════════════════════════════════════════════════════════════
+-- ⛔ NÃO EXECUTE ESTE ARQUIVO. Ele é só o marcador da migration no histórico.
+--
+-- A versão executável está QUEBRADA EM 4 PARTES, em:
+--     supabase/migrations/aplicar_20270901000000/
+--
+--   parte1_tabela_status_events.sql
+--   parte2_rls.sql
+--   parte3_trigger.sql
+--   parte4_backfill.sql
+--
+-- Rodar UMA POR VEZ, na ordem, esperando a anterior terminar. Cada parte abre
+-- `SET lock_timeout = '5s'`: em vez de pendurar esperando lock, falha rápido com
+-- "canceling statement due to lock timeout". Se acontecer, é só reexecutar —
+-- todas são idempotentes.
+--
+-- ── Por que quebrado em partes ───────────────────────────────────────────────
+-- O editor SQL executa o script como UMA transação. Os locks das tabelas novas
+-- ficam segurados enquanto a transação ainda espera AccessExclusiveLock numa
+-- tabela quente (`commercial_properties`, `organizations`), e qualquer processo
+-- concorrente — PostgREST recarregando o cache de schema, uma query da
+-- aplicação — fecha o ciclo. É a mesma armadilha já registrada no projeto:
+-- DDL em tabela quente com FK/trigger deadlocka. Garantias F1
+-- (20270836000000) teve de ser quebrada em 5 partes pelo mesmo motivo.
+-- A parte 3 é a mais arriscada: `CREATE TRIGGER` pega AccessExclusiveLock em
+-- `commercial_properties`.
+--
+-- ⚠️ MIGRATIONS NÃO SOBEM NO DEPLOY. O auto-deploy do Vercel publica só o
+-- front-end. Estas partes precisam ser aplicadas à mão no SQL Editor do projeto
+-- Supabase. Enquanto não forem, a aplicação segue funcionando: o serviço de
+-- vacância detecta a ausência da tabela e os KPIs simplesmente não aparecem
+-- (ver services/rentalVacancyService.ts).
+--
+-- ── Resumo do que a migration faz ────────────────────────────────────────────
+-- Cria `commercial_property_status_events`, o log de mudanças de status de
+-- imóvel/unidade, alimentado por trigger em `commercial_properties`.
+--
+-- Existe porque `commercial_properties.status` é um campo que SOBRESCREVE — o
+-- passado não existe, e por isso "há quantos dias esta unidade está vaga" é uma
+-- pergunta sem resposta possível hoje. Com o log, destrava a seção inteira de
+-- tempo de vacância do catálogo de KPIs (dias médios e mediana, vagas
+-- >30/60/90/180 dias, estoque envelhecido, absorção líquida), além de turnover
+-- e tempo de permanência.
+--
+-- O log é somente-leitura pela API (`GRANT SELECT` apenas): quem escreve é a
+-- trigger. Histórico que o usuário pode editar não serve como histórico.
+--
+-- Plano: docs/planos/2026-08-06-kpis-locacao-primitivas.md (Fase 1).
+
+SELECT 1;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3 } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3, Clock } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { supabase } from '../lib/supabase';
@@ -43,6 +43,7 @@ import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus } fro
 // `deal`), sem o lookup por propriedade de getContractedRentalValue, que poderia
 // achar um OUTRO contrato ativo da mesma unidade se este estiver cancelado.
 import { sumPortfolioValue, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
+import { rentalVacancyService, type RentalVacancyMetrics } from '../services/rentalVacancyService';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -128,6 +129,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     );
     // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
     const [renewalsBadge, setRenewalsBadge] = useState(0);
+    // `null` = não medido (log de status ainda não existe no banco), que é
+    // diferente de zero. Ver services/rentalVacancyService.ts.
+    const [vacancy, setVacancy] = useState<RentalVacancyMetrics | null>(null);
     // A aba Renovações é só a FILA. Contrato, vigência, renovações e documentos
     // moram todos em Gerenciar Negociação › Contrato e Assinatura — abrir um
     // detalhe de contrato aqui dentro criaria um segundo caminho para a mesma
@@ -674,6 +678,19 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             .catch(err => console.error('[Commercial] Error loading brokers:', err));
     }, [effectiveOrganizationId]);
 
+    // Vacância (Fase 1). Só busca na aba Análise — o log pode ter muitos eventos
+    // e não faz sentido pagar essa consulta em quem está mexendo no inventário.
+    // `selectedBuildingId` entra na chave porque dentro de um edifício a métrica
+    // é só das unidades dele.
+    useEffect(() => {
+        if (activeTab !== 'analysis') return;
+        let alive = true;
+        rentalVacancyService
+            .getVacancyMetrics(effectiveOrganizationId, selectedBuildingId)
+            .then(data => { if (alive) setVacancy(data); });
+        return () => { alive = false; };
+    }, [activeTab, effectiveOrganizationId, selectedBuildingId]);
+
     const stats = useMemo(() => {
         // Patrimônio: cada imóvel entra UMA vez, por rollup. As unidades mandam
         // quando têm preço; senão vale o preço do próprio edifício — que em
@@ -1072,6 +1089,37 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
                     <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
                 </div>
+            )}
+
+            {/* Vacância (Fase 1) — só aparece quando o log de status existe.
+                `null` significa "não medido" (migration ainda não aplicada), que
+                é diferente de zero; mostrar "0 dias" sem ter medido seria pior
+                que não mostrar nada. */}
+            {!currentBuilding && activeTab === 'analysis' && vacancy && (
+                <>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                        <KpiCard shadow={false} size="sm" label="Unidades vagas" value={vacancy.vacantCount} icon={<HomeIcon className="w-4 h-4" />} color="blue" />
+                        <KpiCard shadow={false} size="sm" label="Vacância média" value={`${vacancy.averageDays} dias`} icon={<Clock className="w-4 h-4" />} color="amber" />
+                        {/* Mediana ao lado da média de propósito: uma unidade parada
+                            há anos distorce a média e esconde a carteira saudável. */}
+                        <KpiCard shadow={false} size="sm" label="Vacância mediana" value={`${vacancy.medianDays} dias`} icon={<Clock className="w-4 h-4" />} color="indigo" />
+                        <KpiCard shadow={false} size="sm" label="Estoque envelhecido" value={vacancy.over90} icon={<AlertCircle className="w-4 h-4" />} color="red" />
+                        <KpiCard shadow={false} size="sm" label="Absorção líquida (30d)" value={vacancy.netAbsorption30d.net} icon={<TrendingUp className="w-4 h-4" />} color="emerald" />
+                    </div>
+
+                    {/* Enquanto houver marco de backfill entre as vagas, os dias são
+                        um PISO — o `changed_at` daquelas linhas é o `updated_at` do
+                        imóvel, não a data real da mudança de status. Some sozinho
+                        conforme as unidades passam por uma mudança real. */}
+                    {vacancy.approximateCount > 0 && (
+                        <p className="text-xs text-gray-400 -mt-1 mb-3">
+                            {vacancy.approximateCount === vacancy.vacantCount
+                                ? 'Tempo de vacância ainda estimado: o histórico começou a ser medido agora.'
+                                : `${vacancy.approximateCount} de ${vacancy.vacantCount} unidades vagas ainda usam a data estimada do início da medição.`}
+                            {' '}O número tende a crescer até a medição real assumir.
+                        </p>
+                    )}
+                </>
             )}
 
             {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1: card branco externo

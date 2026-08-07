@@ -242,7 +242,13 @@ eliminou (proprietário).
       tabela, ocupação cega para edifício locado inteiro). 18 testes verdes, `tsc`
       limpo. Ainda **não commitada**; falta a conferência com dados reais — ver
       "Verificação".
-- [ ] Fase 1 — não iniciada
+- [~] **Fase 1 — código pronto, MIGRATION NÃO APLICADA.** As 4 partes em
+      `supabase/migrations/aplicar_20270901000000/` precisam ser rodadas à mão no
+      SQL Editor (o Vercel publica só o front-end). Até lá, o serviço detecta a
+      ausência da tabela e os KPIs de vacância ficam ocultos — verificado no
+      navegador: a aba renderiza normal, sem erro. 19 testes da matemática de
+      vacância verdes. **Não declarar Fase 1 concluída antes de aplicar as partes
+      e ver os indicadores na tela.**
 - [ ] Fase 2 — não iniciada (F2.1 **desbloqueada**: decisão tomada em 2026-08-06)
 - [ ] Fase 3 — não iniciada
 

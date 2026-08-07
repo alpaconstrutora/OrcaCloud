@@ -42,7 +42,7 @@ import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus } fro
 // getDealInstallmentValue trabalha na escala do CONTRATO (campos do próprio
 // `deal`), sem o lookup por propriedade de getContractedRentalValue, que poderia
 // achar um OUTRO contrato ativo da mesma unidade se este estiver cancelado.
-import { sumOverLeaves, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
+import { sumPortfolioValue, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -675,9 +675,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     }, [effectiveOrganizationId]);
 
     const stats = useMemo(() => {
-        // Patrimônio: cada imóvel entra UMA vez. Antes somava `properties`
-        // inteiro e contava edifício + unidades em dobro (ver sumOverLeaves).
-        const totalValue = sumOverLeaves(properties, p => p.price || 0);
+        // Patrimônio: cada imóvel entra UMA vez, por rollup. As unidades mandam
+        // quando têm preço; senão vale o preço do próprio edifício — que em
+        // locação é o caso comum, porque a unidade carrega `rental_price` e
+        // deixa `price` vazio (ver sumPortfolioValue).
+        const totalValue = sumPortfolioValue(properties, p => p.price || 0);
 
         // Receita mensal é a soma das PARCELAS contratadas. Usava `deal.value`,
         // que no aluguel é o valor mensal SUGERIDO pela Inteligência — o KPI

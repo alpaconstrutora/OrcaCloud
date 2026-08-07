@@ -2,10 +2,10 @@ import { supabase } from '../lib/supabase';
 import { PropertyStatus } from '../types';
 // Mesma conta de carteira usada pela aba Análise (components/RentalsModule.tsx):
 // os dois lugares mostram os mesmos KPIs e já divergiram por terem cópias dela.
-import { sumOverLeaves, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
+import { sumPortfolioValue, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 
 export interface RentalsDashboardMetrics {
-  valorTotalPatrimonio: number; // Soma do preço das FOLHAS (edifício com unidades não soma o próprio)
+  valorTotalPatrimonio: number; // Rollup: edifício vale a soma das unidades quando elas têm preço, senão o próprio
   receitaMensal: number; // Soma das parcelas mensais contratadas dos contratos ativos
   yieldMensal: number; // receitaMensal / valorTotalPatrimonio
   taxaOcupacao: number; // r_un / t_un
@@ -37,9 +37,10 @@ export const rentalsDashboardService = {
       if (propertiesError) throw propertiesError;
 
       const rentalProps = properties?.filter(p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH') || [];
-      // Patrimônio conta cada imóvel UMA vez — antes somava edifício + unidades,
-      // inflava o patrimônio e deprimia o yield (ver sumOverLeaves).
-      const valorTotalPatrimonio = sumOverLeaves(
+      // Patrimônio conta cada imóvel UMA vez, por rollup: as unidades mandam
+      // quando têm preço; senão vale o preço do próprio edifício — que em
+      // locação é o caso comum (ver sumPortfolioValue).
+      const valorTotalPatrimonio = sumPortfolioValue(
         rentalProps,
         p => Number(p.initial_price) || Number(p.price) || 0
       );

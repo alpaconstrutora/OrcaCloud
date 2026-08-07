@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sumOverLeaves, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
+import { sumPortfolioValue, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 
 /**
  * Regressão dos dois defeitos encontrados na auditoria dos KPIs de
@@ -9,7 +9,7 @@ import { sumOverLeaves, leafNodes, getDealInstallmentValue } from '../lib/rental
  *      `installment_value` (valor contratado).
  */
 
-describe('sumOverLeaves — valor patrimonial conta cada imóvel uma vez', () => {
+describe('sumPortfolioValue — valor patrimonial conta cada imóvel uma vez', () => {
     it('não soma o edifício quando as unidades estão cadastradas', () => {
         const properties = [
             { id: 'edificio-1', parent_id: null, price: 1_000_000 },
@@ -18,7 +18,7 @@ describe('sumOverLeaves — valor patrimonial conta cada imóvel uma vez', () =>
         ];
 
         // Antes: 1.000.000 + 400.000 + 600.000 = 2.000.000 (dobro).
-        expect(sumOverLeaves(properties, p => p.price)).toBe(1_000_000);
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(1_000_000);
     });
 
     it('soma o edifício quando ele ainda não tem unidades cadastradas', () => {
@@ -26,7 +26,7 @@ describe('sumOverLeaves — valor patrimonial conta cada imóvel uma vez', () =>
             { id: 'edificio-vazio', parent_id: null, price: 800_000 },
         ];
 
-        expect(sumOverLeaves(properties, p => p.price)).toBe(800_000);
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(800_000);
     });
 
     it('soma imóvel avulso junto com carteira predial, sem duplicar', () => {
@@ -36,7 +36,7 @@ describe('sumOverLeaves — valor patrimonial conta cada imóvel uma vez', () =>
             { id: 'casa-avulsa', parent_id: null, price: 250_000 },
         ];
 
-        expect(sumOverLeaves(properties, p => p.price)).toBe(550_000);
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(550_000);
     });
 
     it('casa o parent_id ignorando caixa, como o resto do módulo', () => {
@@ -46,7 +46,7 @@ describe('sumOverLeaves — valor patrimonial conta cada imóvel uma vez', () =>
         ];
 
         // O edifício é pai mesmo com o id em caixa diferente: não pode somar.
-        expect(sumOverLeaves(properties, p => p.price)).toBe(200_000);
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(200_000);
     });
 
     it('trata preço ausente como zero em vez de virar NaN', () => {
@@ -55,11 +55,65 @@ describe('sumOverLeaves — valor patrimonial conta cada imóvel uma vez', () =>
             { id: 'b', parent_id: null, price: 100 },
         ];
 
-        expect(sumOverLeaves(properties, p => p.price)).toBe(100);
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(100);
     });
 
     it('carteira vazia soma zero', () => {
-        expect(sumOverLeaves([] as { id: string; price: number }[], p => p.price)).toBe(0);
+        expect(sumPortfolioValue([] as { id: string; price: number }[], p => p.price)).toBe(0);
+    });
+
+    // Regressão do caso REAL que zerou o KPI em produção (print de 2026-08-06):
+    // em locação, quem carrega valor patrimonial é o PRÉDIO — a unidade tem
+    // `rental_price` (o aluguel) e deixa `price` vazio. A regra anterior somava
+    // só as folhas e devolvia R$ 0 para a carteira inteira.
+    it('usa o preço do edifício quando as unidades estão sem preço', () => {
+        const properties = [
+            { id: 'ed-1', parent_id: null, price: 2_000_000 },
+            { id: 'u-101', parent_id: 'ed-1', price: 0 },
+            { id: 'u-102', parent_id: 'ed-1', price: 0 },
+        ];
+
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(2_000_000);
+    });
+
+    it('idem com price null/undefined nas unidades', () => {
+        const properties = [
+            { id: 'ed-1', parent_id: null, price: 500_000 },
+            { id: 'u-1', parent_id: 'ed-1', price: null as unknown as number },
+        ];
+
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(500_000);
+    });
+
+    it('unidade precificada continua vencendo o preço do edifício', () => {
+        // Preenchida a unidade, ela passa a mandar — sem voltar a contar em dobro.
+        const properties = [
+            { id: 'ed-1', parent_id: null, price: 2_000_000 },
+            { id: 'u-101', parent_id: 'ed-1', price: 700_000 },
+            { id: 'u-102', parent_id: 'ed-1', price: 0 },
+        ];
+
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(700_000);
+    });
+
+    it('conta a unidade quando a consulta traz só as filhas, sem o pai', () => {
+        // É o caso do serviço com um edifício selecionado (.eq('parent_id', id)):
+        // o pai não vem na lista, e as unidades não podem sumir da conta.
+        const properties = [
+            { id: 'u-101', parent_id: 'ed-fora-da-lista', price: 300_000 },
+            { id: 'u-102', parent_id: 'ed-fora-da-lista', price: 200_000 },
+        ];
+
+        expect(sumPortfolioValue(properties, p => p.price)).toBe(500_000);
+    });
+
+    it('não trava com parent_id circular', () => {
+        const properties = [
+            { id: 'a', parent_id: 'b', price: 10 },
+            { id: 'b', parent_id: 'a', price: 20 },
+        ];
+
+        expect(() => sumPortfolioValue(properties, p => p.price)).not.toThrow();
     });
 });
 

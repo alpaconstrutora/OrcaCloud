@@ -83,8 +83,8 @@ novo — indicador errado destrói a confiança no painel inteiro.
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| `lib/rentalPortfolio.ts` (novo) | Extrai a conta de carteira para módulo puro: `sumOverLeaves` (patrimônio conta cada imóvel uma vez) e `getDealInstallmentValue` (receita é a parcela contratada). Existe porque a fórmula estava duplicada em dois lugares e as duas cópias tinham os mesmos erros. | `npx vitest run __tests__/rentalPortfolio.test.ts` verde |
-| `__tests__/rentalPortfolio.test.ts` (novo) | 10 casos de regressão: edifício+unidades sem contar em dobro, edifício sem unidades ainda soma, `parent_id` casando sem caixa, `installment_value` vencendo `value`, parcela zerada (carência) não caindo no fallback, ausência dos dois campos não virando `NaN` | 10/10 passando |
+| `lib/rentalPortfolio.ts` (novo) | Extrai a conta de carteira para módulo puro: `sumPortfolioValue` (patrimônio conta cada imóvel uma vez) e `getDealInstallmentValue` (receita é a parcela contratada). Existe porque a fórmula estava duplicada em dois lugares e as duas cópias tinham os mesmos erros. | `npx vitest run __tests__/rentalPortfolio.test.ts` verde |
+| `__tests__/rentalPortfolio.test.ts` (novo) | 18 casos de regressão: edifício+unidades sem contar em dobro, edifício sem unidades ainda soma, `parent_id` casando sem caixa, `installment_value` vencendo `value`, parcela zerada (carência) não caindo no fallback, ausência dos dois campos não virando `NaN` | 18/18 passando |
 | `components/RentalsModule.tsx` | `stats`: **Valor patrimonial** parava de somar `properties` inteiro (edifício + unidades = dobro); **Receita mensal** parava de usar `deal.value` (valor SUGERIDO pela Inteligência = preço de tabela) e passa a usar a parcela contratada. Yield deixa de herdar os dois erros. Passa a importar de `lib/rentalPortfolio` | `tsc --noEmit` limpo + `check-ui-standard.sh` sem violação |
 | `services/rentalsDashboardService.ts` | Mesmos dois defeitos no painel Resultados (`valorTotalPatrimonio`, `receitaMensal`, `cumulativeReal` da curva). `select` ganha `parent_id` e `installment_value`. Passa a importar de `lib/rentalPortfolio` | idem — e os dois painéis passam a mostrar o mesmo número para o mesmo KPI |
 | `docs/ui_ux_guia_unificado.md` | §19.1 dizia que aba inativa é `text-gray-400 hover:text-gray-600`, que reprova WCAG AA (~2.5:1). O código certo (`gray-700`, commit `1b098fd`, a pedido do usuário em 04/08) estava sendo acusado de divergência pelo verificador. Guia atualizado, com a exceção preservada para toggles de ÍCONE | verificador estrutural para de apontar §19.1 no arquivo |
@@ -97,9 +97,49 @@ base passou a ser a **folha**, a mesma do patrimônio.
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| `lib/rentalPortfolio.ts` | Extrai `leafNodes()` (antes só existia dentro de `sumOverLeaves`) para servir de base comum a patrimônio **e** ocupação | 3 testes novos: galpão inteiro conta; edifício com unidades não conta (ocupação 1/2, não 1/3); os dois casos misturados |
-| `components/RentalsModule.tsx` | `stats`: denominador da ocupação vira `leafNodes(properties)`. Some o fallback morto `allUnits.length \|\| properties.length` | 13/13 testes verdes |
+| `lib/rentalPortfolio.ts` | Extrai `leafNodes()` (antes só existia dentro do somatório) para servir de base comum a patrimônio **e** ocupação | 3 testes novos: galpão inteiro conta; edifício com unidades não conta (ocupação 1/2, não 1/3); os dois casos misturados |
+| `components/RentalsModule.tsx` | `stats`: denominador da ocupação vira `leafNodes(properties)`. Some o fallback morto `allUnits.length \|\| properties.length` | 18/18 testes verdes |
 | `services/rentalsDashboardService.ts` | `unidadesTotal`/`unidadesDisponiveis`/`unidadesOcupadas` contavam `rentalProps` inteiro — cada edifício entrava como "unidade" ao lado das próprias unidades e inflava o denominador | idem, e a ocupação passa a bater entre as duas telas |
+
+---
+
+### Fase 0.1 — Regressão em produção: o patrimônio zerou
+
+Depois do deploy de `e5cf777`, o print de produção mostrou **Valor patrimonial
+R$ 0** e **Yield 0.00%**, com 4 ativos e R$ 50.900/mês de receita. Regressão
+introduzida por mim.
+
+**Causa:** a regra de "somar só as folhas" partiu da premissa de que o valor mora
+na unidade. **Em locação ele mora no prédio** — a unidade carrega `rental_price`
+(o aluguel) e deixa `price` vazio, porque quem tem valor patrimonial é o edifício.
+A própria coluna "Patrimônio" da lista mostra `property.price` **do edifício**
+(`RentalsModule.tsx:1364`). Antes o KPI acertava por acidente: somava tudo, e como
+as unidades eram zero, sobrava o total dos prédios. Ao excluir os prédios, sobrou
+zero.
+
+**Correção — `sumOverLeaves` vira `sumPortfolioValue` (rollup):** um nó vale a
+soma dos filhos **quando os filhos têm valor**; senão vale o próprio preço. Cobre
+os dois sentidos sem escolher um lado:
+
+| Situação | Resultado |
+|---|---|
+| edifício com unidades precificadas | soma das unidades (não conta em dobro) |
+| **edifício com unidades sem preço** | **preço do próprio edifício** ← era o zero |
+| edifício sem unidades cadastradas | próprio preço |
+| consulta que traz só as filhas (serviço com edifício selecionado) | soma das filhas — pai fora da lista conta como raiz |
+
+`leafNodes` continua servindo à **ocupação**, que não depende de preço.
+
+6 testes novos (18 no total), incluindo o caso real do print e `parent_id`
+circular. Verificado no navegador com o formato do print (4 prédios + 24 unidades
+sem preço, 5 alugadas): patrimônio R$ 8.300.000, yield 0,61%, e ocupação **20,8%
+— idêntica ao print**, o que confirma que o formato inferido dos dados estava
+certo.
+
+**Lição para as próximas fases:** a hierarquia da carteira tem valor em níveis
+diferentes conforme o cadastro. Qualquer agregação nova (OPEX na Fase 2, inclusive)
+tem de decidir explicitamente se soma folha, soma nó ou faz rollup — e o rollup é
+o único que não quebra quando o cadastro está pela metade.
 
 ---
 
@@ -199,7 +239,7 @@ eliminou (proprietário).
 ## Estado
 
 - [x] **Fase 0** — 3 defeitos corrigidos (patrimônio em dobro, receita a preço de
-      tabela, ocupação cega para edifício locado inteiro). 13 testes verdes, `tsc`
+      tabela, ocupação cega para edifício locado inteiro). 18 testes verdes, `tsc`
       limpo. Ainda **não commitada**; falta a conferência com dados reais — ver
       "Verificação".
 - [ ] Fase 1 — não iniciada
@@ -210,7 +250,7 @@ eliminou (proprietário).
 
 **Fase 0 (feita):**
 ```bash
-npx vitest run __tests__/rentalPortfolio.test.ts   # 13/13
+npx vitest run __tests__/rentalPortfolio.test.ts   # 18/18
 npx tsc --noEmit -p .                              # exit 0
 bash scripts/check-ui-standard.sh components/RentalsModule.tsx
 ```

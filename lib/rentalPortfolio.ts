@@ -53,14 +53,60 @@ export const leafNodes = <T extends PortfolioNode>(nodes: T[]): T[] => {
     return nodes.filter(node => isLeafNode(node, parents));
 };
 
+const key = (id: string | null | undefined): string => String(id ?? '').toLowerCase();
+
 /**
- * Soma `valueOf` contando cada imóvel UMA vez (ver `leafNodes`).
+ * Valor da carteira contando cada imóvel UMA vez — por ROLLUP, não por folha.
+ *
+ * Um nó vale **a soma dos filhos quando os filhos têm valor**; caso contrário
+ * vale o próprio preço. É o que resolve os dois lados do problema:
+ *
+ * - edifício com unidades precificadas → somam as unidades, e o edifício fica
+ *   de fora (senão contaria em dobro — era o defeito original);
+ * - **edifício cujas unidades estão sem preço → vale o preço do próprio
+ *   edifício.** Em carteira de locação isso é o caso comum: a unidade carrega
+ *   `rental_price` (o aluguel) e deixa `price` vazio, porque quem tem valor
+ *   patrimonial é o prédio. A coluna "Patrimônio" da lista mostra exatamente
+ *   esse `price` do edifício.
+ * - edifício sem unidade cadastrada, e imóvel avulso → o próprio preço.
+ *
+ * Uma versão anterior somava só as folhas e zerava a carteira inteira no
+ * segundo caso. Nó cujo `parent_id` aponta para fora da lista carregada conta
+ * como raiz — senão sumiria da conta quando a consulta traz só as unidades de
+ * um edifício.
  */
-export const sumOverLeaves = <T extends PortfolioNode>(
+export const sumPortfolioValue = <T extends PortfolioNode>(
     nodes: T[],
     valueOf: (node: T) => number
-): number =>
-    leafNodes(nodes).reduce((acc, node) => acc + (Number(valueOf(node)) || 0), 0);
+): number => {
+    const present = new Set(nodes.map(n => key(n.id)));
+    const childrenOf = new Map<string, T[]>();
+    const roots: T[] = [];
+
+    for (const node of nodes) {
+        const parent = key(node.parent_id);
+        if (parent && present.has(parent) && parent !== key(node.id)) {
+            const siblings = childrenOf.get(parent);
+            if (siblings) siblings.push(node);
+            else childrenOf.set(parent, [node]);
+        } else {
+            roots.push(node);
+        }
+    }
+
+    // `seen` protege contra ciclo em `parent_id` mal formado, que travaria a UI.
+    const seen = new Set<string>();
+    const valueOfNode = (node: T): number => {
+        const id = key(node.id);
+        if (seen.has(id)) return 0;
+        seen.add(id);
+        const children = childrenOf.get(id) ?? [];
+        const fromChildren = children.reduce((acc, child) => acc + valueOfNode(child), 0);
+        return fromChildren > 0 ? fromChildren : (Number(valueOf(node)) || 0);
+    };
+
+    return roots.reduce((acc, root) => acc + valueOfNode(root), 0);
+};
 
 /**
  * Parcela mensal efetivamente CONTRATADA do negócio.

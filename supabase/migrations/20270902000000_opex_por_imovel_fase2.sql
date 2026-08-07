@@ -1,0 +1,56 @@
+-- ═════════════════════════════════════════════════════════════════════════════
+-- OPEX por imóvel — FASE 2
+-- ═════════════════════════════════════════════════════════════════════════════
+-- ⛔ NÃO EXECUTE ESTE ARQUIVO. Ele é só o marcador da migration no histórico.
+--
+-- A versão executável está QUEBRADA EM 4 PARTES, em:
+--     supabase/migrations/aplicar_20270902000000/
+--
+--   parte1_colunas_internal_transactions.sql
+--   parte2_tabela_allocations.sql
+--   parte3_rpc_rateio.sql
+--   parte4_vw_payables_property.sql
+--
+-- Rodar UMA POR VEZ, na ordem, esperando a anterior terminar. Cada parte abre
+-- `SET lock_timeout = '5s'` e é idempotente: se der "canceling statement due to
+-- lock timeout", é só reexecutar.
+--
+-- ── Por que quebrado em partes ───────────────────────────────────────────────
+-- `internal_transactions` é a tabela mais quente do financeiro: 84 usos diretos
+-- nos services, mais `vw_payables`, `vw_receivables`, partida dobrada e a
+-- trigger `trg_strip_system_project_from_internal_tx`. DDL nela numa transação
+-- só deadlocka — mesma armadilha de Garantias F1 e da Fase 1.
+--
+-- ⚠️ MIGRATIONS NÃO SOBEM NO DEPLOY. O Vercel publica só o front-end. Enquanto
+-- estas partes não forem aplicadas à mão, a aplicação segue funcionando: os
+-- serviços detectam a ausência e o NOI simplesmente não aparece
+-- (services/propertyExpenseService.ts, services/rentalNoiService.ts).
+--
+-- ── O que a migration faz ────────────────────────────────────────────────────
+-- Cria a dimensão IMÓVEL na despesa, que não existia. `internal_transactions`
+-- tinha `project_id`, `cost_center_id`, `plano_de_contas_id`, `contract_id`,
+-- `supplier_id` e `category_id` — nenhuma delas é imóvel, então um IPTU de
+-- apartamento não tinha onde pousar.
+--
+-- Sem isso, NOI, margem NOI, cap rate e yield líquido eram impossíveis: dava
+-- para mostrar rental yield BRUTO e nada mais. Ou seja, todo indicador de
+-- "quanto RENDE" ficava fora de alcance, e só sobrava "quanto FATURA".
+--
+-- ── A decisão de produto que o desenho carrega ───────────────────────────────
+-- Decisão do usuário (2026-08-06): "as duas opções, usuário decide". Despesa de
+-- edifício pode ficar nele (DIRECT) ou ser rateada entre as unidades
+-- (PRORATED), por lançamento — condomínio de área comum e seguro predial podem
+-- querer modos diferentes.
+--
+-- Para o NOI não ter DOIS caminhos de leitura (que é onde a divergência nasce),
+-- o rateio é MATERIALIZADO em `property_expense_allocations`: o modo só muda
+-- QUANTAS linhas são geradas, e o NOI sempre lê da mesma tabela.
+--
+-- O invariante `SUM(allocations.amount) = internal_transactions.amount` é
+-- garantido pela RPC `fn_set_property_allocations`, que revalida no servidor e
+-- RECUSA o que não fecha. A divisão em si é feita no cliente
+-- (lib/rentalAllocation.ts), onde é testável — mas o servidor não confia nela.
+--
+-- Plano: docs/planos/2026-08-06-kpis-locacao-primitivas.md (Fase 2).
+
+SELECT 1;

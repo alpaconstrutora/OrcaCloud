@@ -44,6 +44,7 @@ import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus } fro
 // achar um OUTRO contrato ativo da mesma unidade se este estiver cancelado.
 import { sumPortfolioValue, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 import { rentalVacancyService, type RentalVacancyMetrics } from '../services/rentalVacancyService';
+import { rentalNoiService, type RentalNoiMetrics } from '../services/rentalNoiService';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -132,6 +133,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // `null` = não medido (log de status ainda não existe no banco), que é
     // diferente de zero. Ver services/rentalVacancyService.ts.
     const [vacancy, setVacancy] = useState<RentalVacancyMetrics | null>(null);
+    // `null` = apropriação de despesa por imóvel ainda não existe no banco.
+    // Sem ela o "NOI" seria a receita disfarçada de resultado — pior que ocultar.
+    const [noi, setNoi] = useState<RentalNoiMetrics | null>(null);
     // A aba Renovações é só a FILA. Contrato, vigência, renovações e documentos
     // moram todos em Gerenciar Negociação › Contrato e Assinatura — abrir um
     // detalhe de contrato aqui dentro criaria um segundo caminho para a mesma
@@ -691,6 +695,20 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return () => { alive = false; };
     }, [activeTab, effectiveOrganizationId, selectedBuildingId]);
 
+    // NOI (Fase 2). Janela: ano corrente até o mês atual — a despesa é somada no
+    // período, e o cap rate é anualizado a partir dela.
+    useEffect(() => {
+        if (activeTab !== 'analysis') return;
+        let alive = true;
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        rentalNoiService
+            .getNoiMetrics(effectiveOrganizationId, `${year}-01-01`, `${year}-${month}-28`)
+            .then(data => { if (alive) setNoi(data); });
+        return () => { alive = false; };
+    }, [activeTab, effectiveOrganizationId]);
+
     const stats = useMemo(() => {
         // Patrimônio: cada imóvel entra UMA vez, por rollup. As unidades mandam
         // quando têm preço; senão vale o preço do próprio edifício — que em
@@ -1120,6 +1138,21 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         </p>
                     )}
                 </>
+            )}
+
+            {/* Rentabilidade (Fase 2) — o bloco que responde "quanto RENDE", e
+                não "quanto fatura". Só existe com despesa apropriada por imóvel;
+                sem ela o NOI seria a receita com outro nome. */}
+            {!currentBuilding && activeTab === 'analysis' && noi && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                    <KpiCard shadow={false} size="sm" label="Receita no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.revenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Despesa no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.expense)} icon={<Briefcase className="w-4 h-4" />} color="orange" />
+                    <KpiCard shadow={false} size="sm" label="NOI" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.noi)} icon={<TrendingUp className="w-4 h-4" />} color={noi.noi >= 0 ? 'teal' : 'red'} />
+                    {/* Margem e cap rate são `null` quando indefinidos (sem
+                        receita / sem patrimônio) — mostrar "0%" afirmaria algo
+                        que a conta não sustenta. */}
+                    <KpiCard shadow={false} size="sm" label="Margem NOI" value={noi.margin != null ? `${(noi.margin * 100).toFixed(1)}%` : '—'} icon={<BarChart3 className="w-4 h-4" />} color="violet" />
+                </div>
             )}
 
             {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1: card branco externo

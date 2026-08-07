@@ -254,7 +254,22 @@ eliminou (proprietário).
       - **Absorção líquida (30d) = +2**, batendo com as 2 locações feitas no
         teste — o primeiro indicador do sistema que só existe por causa do log.
       19 testes da matemática de vacância verdes.
-- [ ] Fase 2 — não iniciada (F2.1 **desbloqueada**: decisão tomada em 2026-08-06)
+- [~] **Fase 2 — MOTOR pronto, MIGRATION NÃO APLICADA, UI DE LANÇAMENTO PENDENTE.**
+      - Banco: 4 partes em `supabase/migrations/aplicar_20270902000000/`
+        (`property_id` + modo em `internal_transactions`, tabela
+        `property_expense_allocations`, RPC `fn_set_property_allocations` com o
+        invariante, `vw_payables` expondo o imóvel). **Não aplicadas.**
+      - `lib/rentalAllocation.ts` — rateio com o invariante da soma (12 testes,
+        inclusive dízima fechando exato e proteção contra erro de float).
+      - `lib/rentalNoi.ts` — NOI com rollup unidade→edifício, margem e cap rate
+        (12 testes).
+      - `services/propertyExpenseService.ts`, `services/rentalNoiService.ts` —
+        degradam para `null` sem as tabelas; verificado no navegador.
+      - Aba Análise ganha Receita/Despesa/NOI/Margem.
+      - **PENDENTE:** seletor de imóvel + prévia de rateio no formulário de
+        lançamento de despesa, e coluna de imóvel em Contas a Pagar. Sem isso não
+        há como APROPRIAR despesa pela tela — o motor existe, mas ninguém
+        alimenta. É o próximo passo obrigatório da fase.
 - [ ] Fase 3 — não iniciada
 
 ## Verificação

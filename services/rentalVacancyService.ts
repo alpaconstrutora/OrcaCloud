@@ -68,6 +68,19 @@ export const rentalVacancyService = {
             const { data, error } = await query;
 
             if (error) {
+                // 42501 = a RLS barrou. Acontece legitimamente sem sessão
+                // autenticada (o log é `GRANT SELECT` só para `authenticated`).
+                // Não é falha da aplicação, mas TAMBÉM não pode virar silêncio:
+                // se aparecer para um usuário logado, é policy mal configurada —
+                // por isso `warn`, e não `info`.
+                if (error.code === '42501') {
+                    console.warn(
+                        '[RentalVacancy] Sem permissão para ler o log de status. ' +
+                        'Esperado sem sessão autenticada; se você ESTÁ logado, ' +
+                        'revise a policy org_access_prop_status_events (parte 2).'
+                    );
+                    return null;
+                }
                 if (isMissingTable(error)) {
                     console.info(
                         '[RentalVacancy] Tabela de histórico de status ainda não existe — ' +

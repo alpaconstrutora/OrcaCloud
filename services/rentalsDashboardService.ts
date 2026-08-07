@@ -1,9 +1,12 @@
 import { supabase } from '../lib/supabase';
 import { PropertyStatus } from '../types';
+// Mesma conta de carteira usada pela aba Análise (components/RentalsModule.tsx):
+// os dois lugares mostram os mesmos KPIs e já divergiram por terem cópias dela.
+import { sumOverLeaves, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 
 export interface RentalsDashboardMetrics {
-  valorTotalPatrimonio: number; // Valor Total Sugerido de todas as un. de aluguel
-  receitaMensal: number; // VGV Consolidado de contratos ativos
+  valorTotalPatrimonio: number; // Soma do preço das FOLHAS (edifício com unidades não soma o próprio)
+  receitaMensal: number; // Soma das parcelas mensais contratadas dos contratos ativos
   yieldMensal: number; // receitaMensal / valorTotalPatrimonio
   taxaOcupacao: number; // r_un / t_un
   unidadesDisponiveis: number;
@@ -23,7 +26,7 @@ export const rentalsDashboardService = {
       // 1. Fetch properties (purpose RENTAL or BOTH)
       let propertiesQuery = supabase
         .from('commercial_properties')
-        .select('id, initial_price, price, status, purpose, type');
+        .select('id, parent_id, initial_price, price, status, purpose, type');
 
       if (organizationId) propertiesQuery = propertiesQuery.eq('organization_id', organizationId);
       if (projectId) {
@@ -34,13 +37,24 @@ export const rentalsDashboardService = {
       if (propertiesError) throw propertiesError;
 
       const rentalProps = properties?.filter(p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH') || [];
-      const valorTotalPatrimonio = rentalProps.reduce((sum, p) => sum + (Number(p.initial_price) || Number(p.price) || 0), 0);
-      const unidadesTotal = rentalProps.length;
-      const unidadesDisponiveis = rentalProps.filter(p => {
+      // Patrimônio conta cada imóvel UMA vez — antes somava edifício + unidades,
+      // inflava o patrimônio e deprimia o yield (ver sumOverLeaves).
+      const valorTotalPatrimonio = sumOverLeaves(
+        rentalProps,
+        p => Number(p.initial_price) || Number(p.price) || 0
+      );
+      // Unidades locáveis = folhas, mesma base do patrimônio e da aba Análise.
+      // Antes contava `rentalProps` inteiro, então cada edifício entrava como
+      // "unidade" ao lado das suas próprias unidades e inflava o denominador
+      // da ocupação. Edifício locado INTEIRO (sem unidade filha) é folha e
+      // continua contando — decisão do usuário em 2026-08-06.
+      const leaseableUnits = leafNodes(rentalProps);
+      const unidadesTotal = leaseableUnits.length;
+      const unidadesDisponiveis = leaseableUnits.filter(p => {
         const s = String(p.status).toUpperCase();
         return s === 'AVAILABLE' || s === 'DISPONÍVEL' || s === 'DISPONIVEL';
       }).length;
-      const unidadesOcupadas = rentalProps.filter(p => {
+      const unidadesOcupadas = leaseableUnits.filter(p => {
         const s = String(p.status).toUpperCase();
         return s === 'RENTED' || s === 'ALUGADO';
       }).length;
@@ -48,7 +62,7 @@ export const rentalsDashboardService = {
       // 2. Fetch deals (type RENTAL)
       let dealsQuery = supabase
         .from('commercial_deals')
-        .select('id, value, status, type, date, property_id, origin_channel')
+        .select('id, value, installment_value, status, type, date, property_id, origin_channel')
         .eq('type', 'RENTAL');
       if (organizationId) dealsQuery = dealsQuery.eq('organization_id', organizationId);
 
@@ -67,7 +81,7 @@ export const rentalsDashboardService = {
       });
 
       console.log(`[RentalsService] Found ${completedDeals.length} completed/active deals`);
-      const receitaMensal = completedDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+      const receitaMensal = completedDeals.reduce((sum, d) => sum + getDealInstallmentValue(d), 0);
 
       // 3. Rent Curve (S-Curve for Rentals)
       const monthsLabel = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -92,7 +106,7 @@ export const rentalsDashboardService = {
           return dealDate.getFullYear() < yIdx || (dealDate.getFullYear() === yIdx && dealDate.getMonth() <= mIdx);
         });
         
-        const cumulativeReal = monthDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+        const cumulativeReal = monthDeals.reduce((sum, d) => sum + getDealInstallmentValue(d), 0);
         const planejado = (receitaMensal * 1.2 / periodMonths) * (i + 1); // Exemplo de meta 20% acima do atual
 
         const isPastOrCurrent = yIdx < new Date().getFullYear() || (yIdx === new Date().getFullYear() && mIdx <= new Date().getMonth());

@@ -37,6 +37,12 @@ import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
 import { contractRenewalService } from '../services/contractRenewalService';
 import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus } from '../lib/dealWorkflow';
+// Conta de carteira compartilhada com services/rentalsDashboardService.ts — as
+// duas telas mostram os mesmos KPIs e já divergiram por terem cópias da fórmula.
+// getDealInstallmentValue trabalha na escala do CONTRATO (campos do próprio
+// `deal`), sem o lookup por propriedade de getContractedRentalValue, que poderia
+// achar um OUTRO contrato ativo da mesma unidade se este estiver cancelado.
+import { sumOverLeaves, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -669,15 +675,25 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     }, [effectiveOrganizationId]);
 
     const stats = useMemo(() => {
-        const totalValue = properties.reduce((acc, p) => acc + (p.price || 0), 0);
+        // Patrimônio: cada imóvel entra UMA vez. Antes somava `properties`
+        // inteiro e contava edifício + unidades em dobro (ver sumOverLeaves).
+        const totalValue = sumOverLeaves(properties, p => p.price || 0);
+
+        // Receita mensal é a soma das PARCELAS contratadas. Usava `deal.value`,
+        // que no aluguel é o valor mensal SUGERIDO pela Inteligência — o KPI
+        // mostrava preço de tabela no lugar de receita (e contaminava o yield).
         const activeRentals = deals.filter(d => d.type === 'RENTAL' && d.status === 'COMPLETED');
-        const monthlyRevenue = activeRentals.reduce((acc, d) => acc + (d.value || 0), 0);
-        
-        // Unidades totais (excluindo os containers de 'BUILDING')
-        const allUnits = properties.filter(p => p.type !== 'BUILDING');
-        const totalUnitsCount = allUnits.length || properties.length;
-        const rentedCount = allUnits.filter(p => p.status === PropertyStatus.RENTED).length;
-        
+        const monthlyRevenue = activeRentals.reduce((acc, d) => acc + getDealInstallmentValue(d), 0);
+
+        // Unidades locáveis = folhas da carteira, a mesma base do patrimônio.
+        // Antes era `type !== 'BUILDING'`, que descartava o edifício locado
+        // INTEIRO (galpão, loja de rua) — ele não tem unidade filha, então
+        // sumia da conta e a ocupação ficava cega para ele. Edifício COM
+        // unidades continua fora: quem ocupa são as unidades.
+        const leaseableUnits = leafNodes(properties);
+        const totalUnitsCount = leaseableUnits.length;
+        const rentedCount = leaseableUnits.filter(p => p.status === PropertyStatus.RENTED).length;
+
         const occupancyRate = totalUnitsCount > 0 ? ((rentedCount / totalUnitsCount) * 100).toFixed(1) : '0.0';
         const yieldValue = totalValue > 0 ? ((monthlyRevenue / totalValue) * 100).toFixed(2) : '0.00';
 
@@ -770,14 +786,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         if (!unit || !(deal.value > 0)) return deal.installment_value;
         return deal.installment_value * (unit.value / deal.value);
     };
-
-    // Mesmas 3 colunas da aba Unidades (Valor base / Valor aluguel / Análise),
-    // agora na escala do CONTRATO em vez da unidade — aqui a linha já É o
-    // negócio, então usa os campos do próprio `deal` direto, sem passar pelo
-    // lookup por propriedade de getContractedRentalValue (que poderia achar um
-    // OUTRO contrato ativo da mesma unidade se este `deal` estiver cancelado).
-    const getDealInstallmentValue = (deal: PropertyDeal): number =>
-        deal.installment_value != null ? deal.installment_value : deal.value;
 
     // Soma do valor gerado pela Inteligência de Aluguéis (rentalValueOf) de
     // cada unidade do contrato — baseline para comparar com a parcela

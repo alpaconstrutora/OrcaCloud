@@ -223,6 +223,55 @@ opções, usuário decide") está desenhada em F2.1 acima.
 
 ---
 
+### F2.2 — A UI de apropriação (PENDENTE, próxima sessão)
+
+⚠️ **Duas premissas deste plano estavam ERRADAS.** Ficam registradas porque as
+duas custaram trabalho e as duas eram invisíveis lendo só o plano:
+
+1. **"Seletor de imóvel no formulário de lançamento de despesa"** — esse
+   formulário **não existe**. `payableService.create` é código morto (ninguém
+   chama) e Contas a Pagar não tem botão de criar nem tela de detalhe. As contas
+   nascem em **sete caminhos**: conciliação bancária, boleto, NF-e, fluxo P2P,
+   folha, remuneração societária e tributos.
+2. **"Ação em lote, que a tela já suporta"** — a barra de seleção múltipla que
+   existe está na visão **Notas Fiscais**, que lê a tabela `invoices`. A visão
+   **Parcelas**, a única com ids de `internal_transactions`, **não tem seleção**.
+   Pendurar a ação lá passaria id de nota fiscal para a RPC e falharia só no uso
+   real, com "lançamento não encontrado".
+
+**Já pronto e correto:** `components/financeiro/ApropriarImovelSheet.tsx` —
+painel lateral com seletor hierárquico de imóvel, alternância DIRECT × PRORATED,
+prévia de quanto cai em cada unidade e aviso quando o rateio cai para divisão
+igual por falta de área cadastrada. **Aceita uma LISTA de lançamentos**, então
+serve tanto para ação por linha quanto em lote, sem alteração.
+
+`payableService.create` foi estendido com `property_id` e o modo (grava a
+apropriação após o insert). Continua sendo código morto — fica correto se alguém
+criar o formulário um dia.
+
+**Decisão pendente — onde pendurar:**
+
+| | O que é | Custo | Limite |
+|---|---|---|---|
+| **(A)** | Botão de ícone por linha, na visão Parcelas | baixo — nada de infra nova | IPTU de 12 meses = 12 cliques |
+| **(B)** | Seleção múltipla na visão Parcelas + ação em lote | checkbox, seleção por range, barra de lote | é o **teto desta tela** |
+
+B é superconjunto de A e reaproveita a Sheet inteira; A não vira desperdício.
+
+**O que NENHUM dos dois resolve** (e a próxima sessão não deve confundir com
+"fase concluída"): nos dois caminhos, toda despesa exige um passo **manual
+depois** de criada. Como as contas nascem por sete rotas automáticas, o que
+alguém esquecer de apropriar some do NOI **em silêncio** — que é a classe de
+defeito mais cara desta fase inteira. O completo de verdade seria a **origem já
+carregar o imóvel** (regra por fornecedor/categoria, ou o pedido de compra
+herdando do imóvel do contrato), com a UI manual servindo só para correção.
+Isso é F2.3, ainda não planejado.
+
+Falta também **reapropriar**: mudar o imóvel ou o modo de um lançamento já
+apropriado. A RPC já suporta (substitui atomicamente), mas nenhuma tela chama.
+
+---
+
 ## Fase 3 — O painel, depois das primitivas
 
 O catálogo sugere um "dashboard executivo" com 20 KPIs. **20 não é dashboard, é
@@ -266,10 +315,9 @@ eliminou (proprietário).
       - `services/propertyExpenseService.ts`, `services/rentalNoiService.ts` —
         degradam para `null` sem as tabelas; verificado no navegador.
       - Aba Análise ganha Receita/Despesa/NOI/Margem.
-      - **PENDENTE:** seletor de imóvel + prévia de rateio no formulário de
-        lançamento de despesa, e coluna de imóvel em Contas a Pagar. Sem isso não
-        há como APROPRIAR despesa pela tela — o motor existe, mas ninguém
-        alimenta. É o próximo passo obrigatório da fase.
+      - **PENDENTE: a UI de apropriação.** Ver "F2.2" abaixo — o plano original
+        errou sobre onde ela mora, e a correção está registrada lá. Sem ela o
+        motor existe mas ninguém o alimenta.
 - [ ] Fase 3 — não iniciada
 
 ## Verificação

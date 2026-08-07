@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Payable, PayableBusinessStatus } from '../types/financial';
+import { propertyExpenseService } from './propertyExpenseService';
 
 export interface PayableFilters {
     search?: string;
@@ -81,6 +82,10 @@ export const payableService = {
             party_name?: string;
             project_id?: string;
             category?: string;
+            /** Imóvel ao qual a despesa pertence (Fase 2 — OPEX por imóvel). */
+            property_id?: string | null;
+            /** DIRECT = fica no imóvel; PRORATED = rateia entre as unidades filhas. */
+            property_allocation_mode?: 'DIRECT' | 'PRORATED';
         },
     ): Promise<Payable> {
         const { data: row, error } = await supabase
@@ -100,12 +105,40 @@ export const payableService = {
                 party_type:      'SUPPLIER',
                 project_id:      data.project_id ?? null,
                 category:        data.category ?? null,
+                property_id:     data.property_id ?? null,
+                property_allocation_mode: data.property_allocation_mode ?? 'DIRECT',
                 status:          'PENDING',
                 business_status: 'PREVISTO',
             })
             .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,description,category,status,business_status,party_id,party_name,party_type,entity_name,project_id,created_at,updated_at')
             .single();
         if (error) throw error;
+
+        // Materializa a apropriação por imóvel. Depois do insert, e não numa
+        // transação com ele, porque o PostgREST não expõe transação multi-passo:
+        // se esta parte falhar, o lançamento existe sem apropriação — estado
+        // recuperável (reabrir e salvar de novo), ao contrário do inverso, que
+        // seria apropriação órfã de lançamento.
+        if (data.property_id) {
+            try {
+                const mode = data.property_allocation_mode ?? 'DIRECT';
+                const preview = await propertyExpenseService.previewAllocation(
+                    data.property_id, data.amount, mode,
+                );
+                await propertyExpenseService.saveAllocation(
+                    row.id as string, data.amount, mode, preview.allocations,
+                );
+            } catch (allocError) {
+                // Não derruba a criação da conta a pagar: o lançamento é o dado
+                // principal, a apropriação é dimensão analítica. Mas precisa
+                // aparecer, senão o NOI fica com buraco silencioso.
+                console.error(
+                    '[Payable] Conta criada, mas a apropriação por imóvel falhou. ' +
+                    'O NOI não contará esta despesa até ser reaplicada:', allocError,
+                );
+            }
+        }
+
         return { ...row, direction: 'DEBIT', effective_status: 'PREVISTO' } as Payable;
     },
 

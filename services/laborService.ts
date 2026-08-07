@@ -606,6 +606,52 @@ export interface EmployeeDocument {
     updated_at?: string;
 }
 
+// ── HISTÓRICO SALARIAL ─────────────────────────────────────
+
+export type SalaryChangeType =
+    | 'ADMISSAO' | 'MERITO' | 'PROMOCAO' | 'DISSIDIO'
+    | 'ENQUADRAMENTO' | 'REDUCAO' | 'AJUSTE' | 'OUTRO';
+
+/** MANUAL = lançado na aba. AUTO = capturado pelo trigger quando base_salary mudou por fora. */
+export type SalaryChangeSource = 'MANUAL' | 'AUTO';
+
+export interface EmployeeSalaryRecord {
+    id: string;
+    employee_id: string;
+    org_id: string;
+    effective_date: string;
+    previous_salary: number | null;
+    new_salary: number;
+    change_type: SalaryChangeType;
+    org_role_id: string | null;
+    /** Cargo por extenso na época — sobrevive à exclusão do cargo do catálogo. */
+    role_label: string | null;
+    jornada_horas_semana: number | null;
+    contract_type: string | null;
+    /** Caminho no bucket organization-assets (não é URL pública). */
+    file_url: string | null;
+    file_name: string | null;
+    notes: string | null;
+    source: SalaryChangeSource;
+    created_by: string | null;
+    created_at?: string;
+    updated_at?: string;
+    /** Derivado no service: nome do cargo do catálogo, com fallback em role_label. */
+    org_role_name?: string | null;
+}
+
+export interface SalaryChangeInput {
+    employee_id: string;
+    effective_date: string;
+    new_salary: number;
+    change_type: SalaryChangeType;
+    notes?: string | null;
+    org_role_id?: string | null;
+    role_label?: string | null;
+    jornada_horas_semana?: number | null;
+    contract_type?: string | null;
+}
+
 // ── SST DOCS REGULATÓRIOS ──────────────────────────────────
 
 export type SSTDocTipo = 'PCMSO' | 'PGR' | 'NR18_PCMAT' | 'PPRA';
@@ -1205,6 +1251,131 @@ export const laborService = {
         if (filePath) {
             await supabase.storage.from('organization-assets').remove([filePath]);
         }
+    },
+
+    // ── HISTÓRICO SALARIAL ─────────────────────────────────
+    // Trilha de alterações de employees.base_salary. Mão dupla: registrar aqui
+    // atualiza o colaborador (via RPC), e mudar base_salary por fora cai aqui
+    // pelo trigger trg_employees_salary_history.
+    // Migration: aplicar_20270904000000_employee_salary_history.sql
+
+    async listSalaryHistory(employeeId: string): Promise<EmployeeSalaryRecord[]> {
+        const { data, error } = await supabase
+            .from('employee_salary_history')
+            .select(`
+                id, employee_id, org_id, effective_date, previous_salary, new_salary,
+                change_type, org_role_id, role_label, jornada_horas_semana, contract_type,
+                file_url, file_name, notes, source, created_by, created_at, updated_at,
+                org_role:org_roles!org_role_id(id, nome)
+            `)
+            .eq('employee_id', employeeId)
+            .order('effective_date', { ascending: false })
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        type Row = Omit<EmployeeSalaryRecord, 'org_role_name'> & { org_role?: { nome: string } | null };
+        return ((data || []) as unknown as Row[]).map(r => ({
+            ...r,
+            // role_label é o snapshot da época; o join só entra se o cargo ainda existe
+            org_role_name: r.org_role?.nome || r.role_label || null,
+        }));
+    },
+
+    // Faz o upload do anexo (se houver) e grava o registro pela RPC, que é quem
+    // preenche previous_salary e ressincroniza employees dentro da mesma transação.
+    async registerSalaryChange(
+        payload: SalaryChangeInput,
+        file?: File | null
+    ): Promise<EmployeeSalaryRecord> {
+        let filePath: string | null = null;
+
+        if (file) {
+            const validation = validateDocumentFile(file);
+            if (!validation.valid) throw new Error(validation.error);
+
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${payload.employee_id}/${Math.random().toString(36).substring(2)}.${fileExt}`;
+            filePath = `labor-salary-history/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('organization-assets')
+                .upload(filePath, file);
+            if (uploadError) {
+                console.error('[LaborService] Salary attachment upload error:', uploadError);
+                throw uploadError;
+            }
+        }
+
+        const { data, error } = await supabase.rpc('fn_register_salary_change', {
+            p_employee_id: payload.employee_id,
+            p_effective_date: payload.effective_date,
+            p_new_salary: payload.new_salary,
+            p_change_type: payload.change_type,
+            p_notes: payload.notes || null,
+            p_file_url: filePath,
+            p_file_name: file?.name || null,
+            p_org_role_id: payload.org_role_id || null,
+            p_role_label: payload.role_label || null,
+            p_jornada: payload.jornada_horas_semana ?? null,
+            p_contract_type: payload.contract_type || null,
+        });
+
+        if (error) {
+            // Não deixa arquivo órfão no bucket se a gravação falhou
+            if (filePath) await supabase.storage.from('organization-assets').remove([filePath]);
+            throw error;
+        }
+
+        return data as EmployeeSalaryRecord;
+    },
+
+    // Editar um registro pode mudar qual é o vigente (data ou valor), então
+    // sempre ressincroniza employees depois.
+    async updateSalaryRecord(
+        id: string,
+        employeeId: string,
+        updates: Partial<Pick<EmployeeSalaryRecord,
+            'effective_date' | 'new_salary' | 'change_type' | 'org_role_id' |
+            'role_label' | 'jornada_horas_semana' | 'contract_type' | 'notes'>>
+    ): Promise<EmployeeSalaryRecord> {
+        const { data, error } = await supabase
+            .from('employee_salary_history')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+
+        await supabase.rpc('fn_sync_employee_current_salary', { p_employee_id: employeeId });
+        return data as EmployeeSalaryRecord;
+    },
+
+    async deleteSalaryRecord(id: string, employeeId: string, filePath?: string | null): Promise<void> {
+        const { error } = await supabase
+            .from('employee_salary_history')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+
+        if (filePath) {
+            await supabase.storage.from('organization-assets').remove([filePath]);
+        }
+
+        // Apagar o último reajuste tem que devolver o salário anterior ao colaborador
+        await supabase.rpc('fn_sync_employee_current_salary', { p_employee_id: employeeId });
+    },
+
+    // Salário vigente depois de uma sincronização — o form precisa dele para
+    // não regravar o valor antigo ao salvar.
+    async getEmployeeSalarySnapshot(employeeId: string): Promise<{ base_salary: number; hourly_cost: number; daily_cost: number } | null> {
+        const { data, error } = await supabase
+            .from('employees')
+            .select('base_salary, hourly_cost, daily_cost')
+            .eq('id', employeeId)
+            .single();
+        if (error) throw error;
+        return data as { base_salary: number; hourly_cost: number; daily_cost: number };
     },
 
     async getDocumentsAlerts(orgId?: string): Promise<EmployeeDocument[]> {

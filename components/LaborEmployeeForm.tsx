@@ -6,6 +6,7 @@ import { orgGovernanceService } from '../services/orgGovernanceService';
 import { OrgRole } from '../types';
 import { validateCPF } from '../lib/validators';
 import CityStateSelect from './CityStateSelect';
+import LaborEmployeeSalaryHistory from './LaborEmployeeSalaryHistory';
 import { supabase } from '../lib/supabase';
 
 interface OrganizationOption {
@@ -32,6 +33,39 @@ const ADMISSION_CHECKLIST_ITEMS = [
     'RG / CNH', 'CPF', 'Comprovante de residência', 'Carteira de trabalho (CTPS)',
     'Foto 3x4', 'PIS/PASEP', 'Conta bancária', 'Exame admissional', 'ASO (Atestado de Saúde Ocupacional)'
 ];
+
+// Toolbar de abas — anatomia canônica do guia §19.1 (trilho cinza dentro de
+// card branco; aba ativa = bg-white text-blue-600 shadow-sm sobre bg-gray-50).
+// 'salarios' só entra em modo edição: colaborador novo ainda não tem id, e sem
+// id não há histórico para listar nem para gravar.
+const BASE_EMPLOYEE_TABS = [
+    { id: 'geral', label: 'Geral' },
+    { id: 'pessoal', label: 'Pessoal' },
+    { id: 'documentos', label: 'Documentos' },
+    { id: 'endereco', label: 'Endereço' },
+    { id: 'organizacional', label: 'Organizacional' },
+    { id: 'bancario', label: 'Dados Bancários' },
+    { id: 'folha', label: 'Folha de Pagamento' },
+    { id: 'salarios', label: 'Histórico Salarial' },
+    { id: 'checklist', label: 'Checklist' },
+] as const;
+
+type EmployeeTabId = typeof BASE_EMPLOYEE_TABS[number]['id'];
+
+// Subtítulo por aba — §19.1: o cabeçalho acompanha a aba ativa mesmo quando o
+// título ("Editar Colaborador") permanece o mesmo, pois todas as abas editam a
+// mesma entidade, só mudando o grupo de campos.
+const TAB_SUBTITLES: Record<EmployeeTabId, string> = {
+    geral: 'Dados pessoais, vínculo, função e custo de mão de obra.',
+    pessoal: 'Filiação, nascimento, estado civil e demais dados pessoais.',
+    documentos: 'RG, CTPS, título de eleitor e documentação militar.',
+    endereco: 'Endereço residencial e telefone de contato.',
+    organizacional: 'Empresa, matrícula, departamento, CNH e dependentes.',
+    bancario: 'Conta bancária e chave PIX para pagamento.',
+    folha: 'Rubricas recorrentes incluídas automaticamente na folha.',
+    salarios: 'Reajustes, promoções e dissídios com data de vigência, motivo e documento.',
+    checklist: 'Checklist de admissão e observações extras.',
+};
 
 /** Membro da organização que já aceitou o convite (tem usuário em auth.users). */
 interface OrgMemberOption {
@@ -60,7 +94,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
     };
-    const [activeTab, setActiveTab] = useState<'geral' | 'pessoal' | 'documentos' | 'endereco' | 'organizacional' | 'bancario' | 'checklist' | 'folha'>('geral');
+    const [activeTab, setActiveTab] = useState<EmployeeTabId>('geral');
     const [allRubrics, setAllRubrics] = useState<PayrollRubric[]>([]);
     const [recurringRubrics, setRecurringRubrics] = useState<string[]>([]);
     const [loadingRubrics, setLoadingRubrics] = useState(false);
@@ -276,32 +310,9 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
 
 
-    // Toolbar de abas — anatomia canônica do guia §19.1 (trilho cinza dentro de
-    // card branco; aba ativa = bg-white text-blue-600 shadow-sm sobre bg-gray-50)
-    const EMPLOYEE_TABS = [
-        { id: 'geral', label: 'Geral' },
-        { id: 'pessoal', label: 'Pessoal' },
-        { id: 'documentos', label: 'Documentos' },
-        { id: 'endereco', label: 'Endereço' },
-        { id: 'organizacional', label: 'Organizacional' },
-        { id: 'bancario', label: 'Dados Bancários' },
-        { id: 'folha', label: 'Folha de Pagamento' },
-        { id: 'checklist', label: 'Checklist' },
-    ] as const;
-
-    // Subtítulo por aba — §19.1: o cabeçalho acompanha a aba ativa mesmo
-    // quando o título ("Editar Colaborador") permanece o mesmo, pois todas as
-    // abas editam a mesma entidade, só mudando o grupo de campos.
-    const TAB_SUBTITLES: Record<typeof EMPLOYEE_TABS[number]['id'], string> = {
-        geral: 'Dados pessoais, vínculo, função e custo de mão de obra.',
-        pessoal: 'Filiação, nascimento, estado civil e demais dados pessoais.',
-        documentos: 'RG, CTPS, título de eleitor e documentação militar.',
-        endereco: 'Endereço residencial e telefone de contato.',
-        organizacional: 'Empresa, matrícula, departamento, CNH e dependentes.',
-        bancario: 'Conta bancária e chave PIX para pagamento.',
-        folha: 'Rubricas recorrentes incluídas automaticamente na folha.',
-        checklist: 'Checklist de admissão e observações extras.',
-    };
+    const EMPLOYEE_TABS = isEditing
+        ? BASE_EMPLOYEE_TABS
+        : BASE_EMPLOYEE_TABS.filter(tab => tab.id !== 'salarios');
 
     const renderTabs = () => (
         <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
@@ -547,6 +558,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     className={inputCls + " border-indigo-200 bg-indigo-50/30"}
                                     placeholder="2500.00"
                                 />
+                                {isEditing && (
+                                    <p className="text-xs text-slate-400 mt-1.5">
+                                        Alterações aqui geram um registro automático no Histórico Salarial.
+                                    </p>
+                                )}
                             </InputGroup>
                         </div>
                         </div>
@@ -747,6 +763,29 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {activeTab === 'salarios' && isEditing && employee?.id && (
+                        <LaborEmployeeSalaryHistory
+                            employeeId={employee.id}
+                            empresaId={form.empresa_id || employee.empresa_id}
+                            currentSalary={form.base_salary || 0}
+                            defaults={{
+                                org_role_id: form.role_id || null,
+                                role_label: form.role || null,
+                                jornada_horas_semana: form.jornada_horas_semana ?? null,
+                                contract_type: form.contract_type || null,
+                            }}
+                            // A aba grava direto no banco. Sem trazer o snapshot de volta
+                            // pro form state, o "Salvar Alterações" abaixo regravaria o
+                            // salário antigo por cima do reajuste recém-lançado.
+                            onSalaryApplied={snapshot => setForm(prev => ({
+                                ...prev,
+                                base_salary: snapshot.base_salary,
+                                hourly_cost: snapshot.hourly_cost,
+                                daily_cost: snapshot.daily_cost,
+                            }))}
+                        />
                     )}
 
                     {activeTab === 'endereco' && (

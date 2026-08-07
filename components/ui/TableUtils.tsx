@@ -17,6 +17,9 @@ export type ColumnConfig = {
   key: string;
   label: string;
   sortable?: boolean;
+  /** Coluna existe, mas nasce oculta — o usuário liga na engrenagem quando quiser.
+   *  Para tabelas largas, em que só um subconjunto interessa na visão inicial. */
+  defaultHidden?: boolean;
 };
 
 interface PersistedTableState {
@@ -43,8 +46,16 @@ interface PersistedTableState {
  * continuam escondidas — só chaves nunca vistas antes (fora de `knownColumns`)
  * são adicionadas.
  */
-function loadPersistedTableState(storageKey: string, defaultVisibleColumns: string[]): PersistedTableState {
-  const fallback: PersistedTableState = { visibleColumns: defaultVisibleColumns, sortColumn: null, sortDirection: 'asc', knownColumns: defaultVisibleColumns, columnOrder: defaultVisibleColumns };
+function loadPersistedTableState(
+  storageKey: string,
+  defaultVisibleColumns: string[],
+  /** Todas as chaves da tela, incluindo as `defaultHidden`. Sem preferência salva,
+   *  `knownColumns`/`columnOrder` têm que cobrir TODAS as colunas — senão a coluna
+   *  oculta por padrão seria tratada como "coluna nova" no próximo carregamento e
+   *  voltaria visível sozinha. */
+  allColumns: string[] = defaultVisibleColumns,
+): PersistedTableState {
+  const fallback: PersistedTableState = { visibleColumns: defaultVisibleColumns, sortColumn: null, sortDirection: 'asc', knownColumns: allColumns, columnOrder: allColumns };
   if (typeof window === 'undefined') return fallback;
   try {
     const stored = localStorage.getItem(storageKey);
@@ -73,15 +84,17 @@ function loadPersistedTableState(storageKey: string, defaultVisibleColumns: stri
       knownColumns = parsed.knownColumns ?? storedVisible;
       // Sem columnOrder salvo (preferência de antes do drag-and-drop existir):
       // usa a ordem default da tela.
-      columnOrder = parsed.columnOrder ?? defaultVisibleColumns;
+      columnOrder = parsed.columnOrder ?? allColumns;
     }
 
-    const newColumns = defaultVisibleColumns.filter(k => !knownColumns.includes(k));
+    const newColumns = allColumns.filter(k => !knownColumns.includes(k));
+    // Coluna nova entra visível — a menos que a tela a tenha marcado defaultHidden.
+    const newVisibleColumns = newColumns.filter(k => defaultVisibleColumns.includes(k));
     // Colunas que a tela define hoje mas que não estão na ordem salva (coluna nova
     // introduzida depois do último salvamento) entram no fim, na ordem default.
-    const missingFromOrder = defaultVisibleColumns.filter(k => !columnOrder.includes(k));
+    const missingFromOrder = allColumns.filter(k => !columnOrder.includes(k));
     return {
-      visibleColumns: newColumns.length ? [...storedVisible, ...newColumns] : storedVisible,
+      visibleColumns: newVisibleColumns.length ? [...storedVisible, ...newVisibleColumns] : storedVisible,
       sortColumn,
       sortDirection,
       knownColumns: newColumns.length ? [...knownColumns, ...newColumns] : knownColumns,
@@ -94,9 +107,10 @@ function loadPersistedTableState(storageKey: string, defaultVisibleColumns: stri
 }
 
 export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: string = 'tableColumns') => {
-  const defaultVisibleColumns = defaultColumns.map(col => col.key);
+  const allColumns = defaultColumns.map(col => col.key);
+  const defaultVisibleColumns = defaultColumns.filter(col => !col.defaultHidden).map(col => col.key);
 
-  const [initial] = React.useState(() => loadPersistedTableState(storageKey, defaultVisibleColumns));
+  const [initial] = React.useState(() => loadPersistedTableState(storageKey, defaultVisibleColumns, allColumns));
   const [visibleColumns, setVisibleColumns] = React.useState<string[]>(initial.visibleColumns);
   const [sortColumn, setSortColumn] = React.useState<string | null>(initial.sortColumn);
   const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>(initial.sortDirection);
@@ -159,8 +173,10 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
     setVisibleColumns(defaultVisibleColumns);
     setSortColumn(null);
     setSortDirection('asc');
-    setKnownColumns(defaultVisibleColumns);
-    setColumnOrder(defaultVisibleColumns);
+    // known/order cobrem TODAS as colunas, inclusive as defaultHidden — do
+    // contrário elas seriam redescobertas como "novas" e voltariam visíveis.
+    setKnownColumns(allColumns);
+    setColumnOrder(allColumns);
     setShowColumnConfig(false);
   };
 

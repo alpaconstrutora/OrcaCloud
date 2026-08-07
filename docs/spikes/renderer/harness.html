@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Spike B — comparação de renderers</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; }
+  #stage { position: absolute; inset: 0; }
+  svg, canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+/**
+ * Harness do Spike B (PRD §30, DP-03): canvas WebGL × canvas 2D × SVG.
+ *
+ * Mede duas coisas diferentes de propósito:
+ *
+ *  - `frameMs`  — mediana do custo de UM redesenho completo, medido em laço fechado.
+ *                 Não é limitado pelo refresh do monitor, então diferencia renderers
+ *                 que já saturam 60 fps.
+ *  - `rafFps`   — quadros efetivamente entregues num laço de requestAnimationFrame
+ *                 durante uma panorâmica contínua. É o número que o RNF-003 cobra,
+ *                 e é teto-limitado pelo refresh (~60).
+ *
+ * Um renderer só passa se `rafFps` ficar em 45–60 E `frameMs` deixar folga para o
+ * resto do quadro (interação, hit-test, overlay).
+ */
+
+const STAGE = document.getElementById('stage');
+const SIZE = 3000; // mm por sala
+
+/** Mesma grade da bancada do kernel: k×k salas, cada linha dividida em segmentos. */
+function makeWalls(target) {
+  const k = Math.max(2, Math.round((-1 + Math.sqrt(1 + 2 * target)) / 2));
+  const walls = [];
+  for (let i = 0; i <= k; i++) {
+    for (let j = 0; j < k; j++) {
+      walls.push([j * SIZE, i * SIZE, (j + 1) * SIZE, i * SIZE]);
+      walls.push([i * SIZE, j * SIZE, i * SIZE, (j + 1) * SIZE]);
+    }
+  }
+  return { walls, extent: k * SIZE };
+}
+
+function median(xs) {
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SVG: um <line> por parede; pan/zoom por transform num <g> (o "híbrido" do PRD)
+// ─────────────────────────────────────────────────────────────────────────────
+function makeSvg(walls, extent) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${extent} ${extent}`);
+  const g = document.createElementNS(NS, 'g');
+
+  const els = [];
+  for (const [x1, y1, x2, y2] of walls) {
+    const el = document.createElementNS(NS, 'line');
+    el.setAttribute('x1', x1); el.setAttribute('y1', y1);
+    el.setAttribute('x2', x2); el.setAttribute('y2', y2);
+    el.setAttribute('stroke', '#334155');
+    el.setAttribute('stroke-width', '150');
+    g.appendChild(el);
+    els.push(el);
+  }
+  svg.appendChild(g);
+  STAGE.appendChild(svg);
+
+  return {
+    draw(tx, ty, scale) {
+      g.setAttribute('transform', `translate(${tx} ${ty}) scale(${scale})`);
+    },
+    /** Seleção: no SVG cada elemento muda sozinho — é aqui que o DOM cobra. */
+    select(count, on) {
+      for (let i = 0; i < count; i++) {
+        els[i].setAttribute('stroke', on ? '#dc2626' : '#334155');
+      }
+    },
+    hit(x, y) { return document.elementFromPoint(x, y) !== null; },
+    /** Força layout/paint pendentes para que o custo apareça na medição. */
+    settle() { return svg.getBoundingClientRect().width; },
+    dispose() { svg.remove(); },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canvas 2D: redesenho completo por quadro
+// ─────────────────────────────────────────────────────────────────────────────
+function makeCanvas2d(walls, extent) {
+  const canvas = document.createElement('canvas');
+  canvas.width = STAGE.clientWidth;
+  canvas.height = STAGE.clientHeight;
+  STAGE.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const base = canvas.width / extent;
+
+  let selected = 0;
+  let last = [0, 0, 1];
+
+  const paint = (tx, ty, scale) => {
+    last = [tx, ty, scale];
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(base * scale, 0, 0, base * scale, tx, ty);
+    ctx.lineWidth = 150;
+
+    ctx.strokeStyle = '#334155';
+    ctx.beginPath();
+    for (let i = selected; i < walls.length; i++) {
+      const w = walls[i];
+      ctx.moveTo(w[0], w[1]); ctx.lineTo(w[2], w[3]);
+    }
+    ctx.stroke();
+
+    if (selected > 0) {
+      ctx.strokeStyle = '#dc2626';
+      ctx.beginPath();
+      for (let i = 0; i < selected; i++) {
+        const w = walls[i];
+        ctx.moveTo(w[0], w[1]); ctx.lineTo(w[2], w[3]);
+      }
+      ctx.stroke();
+    }
+  };
+
+  return {
+    draw: paint,
+    // Sem DOM não existe elemento para marcar: seleção custa um redesenho.
+    select(count, on) { selected = on ? count : 0; paint(last[0], last[1], last[2]); },
+    // Sem DOM também não há hit-test do navegador: é varredura sobre a geometria.
+    hit(x, y) {
+      const wx = (x - last[0]) / (base * last[2]);
+      const wy = (y - last[1]) / (base * last[2]);
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        if (Math.min(w[0], w[2]) - 75 <= wx && wx <= Math.max(w[0], w[2]) + 75 &&
+            Math.min(w[1], w[3]) - 75 <= wy && wy <= Math.max(w[1], w[3]) + 75) return true;
+      }
+      return false;
+    },
+    settle() { return canvas.width; },
+    dispose() { canvas.remove(); },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WebGL: buffer estático enviado uma vez; pan/zoom por uniform
+// ─────────────────────────────────────────────────────────────────────────────
+function makeWebgl(walls, extent) {
+  const canvas = document.createElement('canvas');
+  canvas.width = STAGE.clientWidth;
+  canvas.height = STAGE.clientHeight;
+  STAGE.appendChild(canvas);
+
+  const gl = canvas.getContext('webgl', { antialias: false });
+  if (!gl) return null;
+
+  const vs = `
+    attribute vec2 pos;
+    uniform vec2 uOffset;
+    uniform float uScale;
+    uniform vec2 uViewport;
+    void main() {
+      vec2 p = pos * uScale + uOffset;
+      vec2 clip = (p / uViewport) * 2.0 - 1.0;
+      gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+    }`;
+  const fs = `
+    precision mediump float;
+    uniform vec3 uColor;
+    void main() { gl_FragColor = vec4(uColor, 1.0); }`;
+
+  const compile = (type, src) => {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    return sh;
+  };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+
+  const data = new Float32Array(walls.length * 4);
+  for (let i = 0; i < walls.length; i++) {
+    data[i * 4] = walls[i][0]; data[i * 4 + 1] = walls[i][1];
+    data[i * 4 + 2] = walls[i][2]; data[i * 4 + 3] = walls[i][3];
+  }
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+
+  const loc = gl.getAttribLocation(prog, 'pos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  const uOffset = gl.getUniformLocation(prog, 'uOffset');
+  const uScale = gl.getUniformLocation(prog, 'uScale');
+  const uViewport = gl.getUniformLocation(prog, 'uViewport');
+  gl.uniform2f(uViewport, canvas.width, canvas.height);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+
+  const base = canvas.width / extent;
+
+  const uColor = gl.getUniformLocation(prog, 'uColor');
+  let selected = 0;
+  let last = [0, 0, 1];
+
+  const paint = (tx, ty, scale) => {
+    last = [tx, ty, scale];
+    gl.clearColor(1, 1, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform2f(uOffset, tx, ty);
+    gl.uniform1f(uScale, base * scale);
+
+    gl.uniform3f(uColor, 0.2, 0.255, 0.333);
+    gl.drawArrays(gl.LINES, selected * 2, (walls.length - selected) * 2);
+
+    if (selected > 0) {
+      gl.uniform3f(uColor, 0.863, 0.149, 0.149);
+      gl.drawArrays(gl.LINES, 0, selected * 2);
+    }
+    gl.finish(); // custo real do desenho, não só o enfileiramento
+  };
+
+  return {
+    draw: paint,
+    // Seleção contígua: duas chamadas de desenho, sem tocar no buffer.
+    select(count, on) { selected = on ? count : 0; paint(last[0], last[1], last[2]); },
+    hit(x, y) {
+      const wx = (x - last[0]) / (base * last[2]);
+      const wy = (y - last[1]) / (base * last[2]);
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        if (Math.min(w[0], w[2]) - 75 <= wx && wx <= Math.max(w[0], w[2]) + 75 &&
+            Math.min(w[1], w[3]) - 75 <= wy && wy <= Math.max(w[1], w[3]) + 75) return true;
+      }
+      return false;
+    },
+    settle() { return canvas.width; },
+    dispose() { canvas.remove(); },
+  };
+}
+
+const FACTORIES = { svg: makeSvg, canvas2d: makeCanvas2d, webgl: makeWebgl };
+
+const round2 = (v) => Math.round(v * 100) / 100;
+
+window.runBench = async function (mode, target) {
+  STAGE.innerHTML = '';
+  const { walls, extent } = makeWalls(target);
+
+  // Build: só é honesto se o layout/paint pendente for forçado antes de parar o
+  // relógio. Sem `settle()` o SVG "constrói" 20 mil elementos em 26 ms, número que
+  // mede o enfileiramento e não o trabalho.
+  const t0 = performance.now();
+  const renderer = FACTORIES[mode](walls, extent);
+  if (!renderer) return { mode, objetos: walls.length, erro: 'contexto indisponível' };
+  renderer.draw(0, 0, 1);
+  renderer.settle();
+  const buildMs = performance.now() - t0;
+
+  // Aquecimento: primeiras chamadas pagam compilação/layout e distorceriam a mediana.
+  for (let i = 0; i < 5; i++) renderer.draw(i, i, 1);
+
+  const panSamples = [];
+  for (let i = 0; i < 40; i++) {
+    const s = performance.now();
+    renderer.draw((i % 20) - 10, (i % 20) - 10, 1 + (i % 5) * 0.01);
+    renderer.settle();
+    panSamples.push(performance.now() - s);
+  }
+
+  // Seleção de 5% dos objetos. É o trabalho que separa os renderers: no SVG cada
+  // elemento é tocado individualmente; no canvas é um redesenho.
+  const selCount = Math.max(1, Math.round(walls.length * 0.05));
+  const selSamples = [];
+  for (let i = 0; i < 12; i++) {
+    const s = performance.now();
+    renderer.select(selCount, i % 2 === 0);
+    renderer.settle();
+    selSamples.push(performance.now() - s);
+  }
+  renderer.select(selCount, false);
+
+  // Hit-test: 200 consultas de ponto, como no arrasto e na seleção por clique.
+  const h0 = performance.now();
+  for (let i = 0; i < 200; i++) renderer.hit(100 + (i % 1400), 80 + ((i * 7) % 800));
+  const hitMs = (performance.now() - h0) / 200;
+
+  const rafFps = await new Promise((resolve) => {
+    let frames = 0;
+    const start = performance.now();
+    function tick(now) {
+      const t = now - start;
+      if (t >= 2000) { resolve(Math.round((frames / t) * 1000)); return; }
+      const k = t / 1000;
+      renderer.draw(Math.sin(k * 2) * 120, Math.cos(k * 2) * 120, 1 + Math.sin(k * 3) * 0.15);
+      frames++;
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+
+  renderer.dispose();
+  return {
+    mode,
+    objetos: walls.length,
+    buildMs: Math.round(buildMs),
+    panMs: round2(median(panSamples)),
+    selMs: round2(median(selSamples)),
+    hitMs: round2(hitMs),
+    rafFps,
+  };
+};
+</script>
+</body>
+</html>

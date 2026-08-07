@@ -135,8 +135,55 @@ volta — `vw_payables` foi corrigida em `20270840000001` e a irmã
       Pagar, Diário e e-Social devem continuar listando. Esta fase não deveria
       mudar nada para usuário logado — se mudou, algum caller está rodando sem
       sessão, e isso é um achado novo.
-- [ ] Fase 2 — `security_invoker` (o cross-tenant continua aberto: usuário
-      logado de outra organização ainda lê tudo destas 24)
+- [x] **Fase 2 — APLICADA e VERIFICADA (2026-08-07).**
+      `aplicar_20270903000003_views_security_invoker.sql`. **7 das 8 bateram
+      EXATAMENTE com a previsão** (1238, 551, 12, 8, 1, 1, 1) — o cross-tenant
+      dessas fechou, e nenhuma view esvaziou nem ficou parcial.
+
+      **A oitava revelou um problema em outra camada.**
+      `vw_hr_retention_cohorts` previa 3 e continuou em 6, ainda com org alheia.
+      Causa: `security_invoker` **funcionou** — a view passou a respeitar a RLS
+      da base — mas a RLS de **`employees` está aberta**: com a conta de teste,
+      a tabela devolve 2 organizações. Não havia o que filtrar.
+      → vira item da dívida da camada `authenticated`
+      ([[project_rls_authenticated_layer_gap]]), não deste plano.
+
+      **Varredura das tabelas base (2026-08-07):** de 15 tabelas principais
+      testadas com conta real — `contracts`, `clients`, `suppliers`,
+      `projects`, `companies`, `deals`, `commercial_properties`, `invoices`,
+      `purchase_orders`, `internal_transactions`, `organization_members`,
+      `work_orders`, `tasks`, `cost_centers_v2` — **só `employees` vaza**. O
+      problema é localizado, não sistêmico.
+
+      **Pendência menor:** `vw_project_cost_comparison` melhorou (expunha 6
+      projetos, agora 5), mas **1 projeto alheio ainda aparece** — o usuário
+      não o enxerga em `projects` sob RLS. Escopo indireto: provável OS na org
+      do usuário apontando para projeto de outra org (inconsistência de dado),
+      ou join que não propaga a RLS de `projects`. Precisa da definição da view
+      para decidir.
+
+Migration original abaixo, mantida como registro do que foi medido antes:
+
+      **O cross-tenant deixou de ser hipótese (2026-08-07).** Com a conta
+      `agente-leitura` (membro de UMA organização), consultando pela API:
+      **8 views expõem organização alheia**, mais 1 de escopo indireto que
+      também vaza. Existem ao menos 3 organizações no banco.
+
+      | View | Hoje | Previsto | Perde |
+      |---|---|---|---|
+      | `vw_fact_financial_tx` | 1300 | 1238 | 62 |
+      | `vw_fpa_cashflow_projection` | 558 | 551 | 7 |
+      | `vw_hr_turnover_trend` | 24 | 12 | 12 |
+      | `vw_fact_deal` | 13 | 8 | 5 |
+      | `vw_hr_retention_cohorts` | 6 | 3 | 3 |
+      | `vw_bi_operational` | 3 | 1 | 2 |
+      | `vw_company_consolidated` | 3 | 1 | 2 |
+      | `vw_bi_commercial` | 2 | 1 | 1 |
+      | `vw_project_cost_comparison` | 12 | ? | expõe 6 projetos, 4 visíveis |
+
+      As outras 6 com dados não mudam (uma organização só), e 9 estão vazias.
+      **Nenhuma zera** — foi essa medição que autorizou aplicar as 24 de uma
+      vez em vez de ir view a view.
 - [ ] Fase 3 — trava no CI
 
 ## Verificação
@@ -159,5 +206,32 @@ ORDER BY anon_le DESC, security_invoker, view_name;
 Fase 1 pronta = nenhuma linha com `anon_le = true` (fora as duas do PostGIS).
 Fase 2 pronta = nenhuma com `security_invoker = off`.
 
-⚠️ E a prova final nunca é essa query, é o `curl` anônimo de fora do SQL Editor
-— o Editor roda como service role e passa por cima de tudo.
+⚠️ E a prova final nunca é essa query, é o `curl` de fora do SQL Editor — o
+Editor roda como service role e passa por cima de RLS, GRANT e
+`security_invoker`. Ele mostraria tudo igual mesmo com tudo corrigido.
+
+**Ferramenta:** `bash scripts/verificar-views-anon.sh '<senha>'` verifica as
+duas fases de uma vez — Fase 1 sem sessão (espera `42501`) e Fase 2 com a
+conta `agente-leitura` (espera zero organização alheia).
+
+⚠️ Ele marca `NAO VERIFICAVEL` — e **não** `ok` — para view sem coluna de
+organização, porque ali não há o que comparar. Hoje é o caso de
+`vw_project_cost_comparison`, que vaza de fato e passaria como aprovada se o
+script fosse otimista. Escopo indireto exige conferência à mão contra a tabela
+pela qual a view escopa.
+
+⚠️ A coluna de organização tem **dois nomes** no schema: `organization_id` e
+`org_id`. Procurar só o primeiro dá falso "sem coluna" em 4 views de RH e
+empresa — erro que este plano cometeu na primeira medição.
+
+### Duas abordagens que NÃO funcionaram (para não repetir)
+
+1. `DO $$ ... RAISE NOTICE ... $$` com `BEGIN/ROLLBACK`: o SQL Editor do
+   Supabase não exibe notice. Resultado: "Success. No rows returned" e a
+   medição inteira perdida.
+2. Função em `pg_temp` + `SELECT`: mesma resposta vazia — o schema temporário
+   aparentemente não sobrevive entre os statements da mesma execução.
+
+A medição que funcionou foi por **HTTP com token de usuário real**, que é o
+mesmo caminho do app — e é o único que exercita RLS, GRANT e
+`security_invoker` de verdade.

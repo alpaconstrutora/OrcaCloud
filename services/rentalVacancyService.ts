@@ -80,7 +80,18 @@ export const rentalVacancyService = {
             }
 
             const events = (data || []) as StatusEvent[];
-            if (events.length === 0) return null;
+            if (events.length === 0) {
+                // Tabela existe e está vazia — sintoma típico de as partes 1 a 3
+                // terem rodado e a 4 (backfill) não. Visualmente é idêntico a
+                // "tabela ausente" (KPIs ocultos), então a mensagem precisa
+                // separar os dois casos, ou o diagnóstico vira adivinhação.
+                console.info(
+                    '[RentalVacancy] Log de status existe, mas está vazio. ' +
+                    'Falta rodar a parte 4 (backfill) de aplicar_20270901000000/, ' +
+                    'ou a organização/edifício filtrado não tem imóveis.'
+                );
+                return null;
+            }
 
             const now = new Date();
             const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);

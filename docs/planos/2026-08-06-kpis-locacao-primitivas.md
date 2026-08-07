@@ -223,7 +223,7 @@ opções, usuário decide") está desenhada em F2.1 acima.
 
 ---
 
-### F2.2 — A UI de apropriação (PENDENTE, próxima sessão)
+### F2.2 — A UI de apropriação ✅ (caminho B)
 
 ⚠️ **Duas premissas deste plano estavam ERRADAS.** Ficam registradas porque as
 duas custaram trabalho e as duas eram invisíveis lendo só o plano:
@@ -249,14 +249,60 @@ serve tanto para ação por linha quanto em lote, sem alteração.
 apropriação após o insert). Continua sendo código morto — fica correto se alguém
 criar o formulário um dia.
 
-**Decisão pendente — onde pendurar:**
+**Decisão de 2026-08-06 — (B), com (A) junto** (o usuário escolheu B; como B é
+superconjunto de A e a Sheet já aceita lista, os dois saíram no mesmo trabalho):
 
 | | O que é | Custo | Limite |
 |---|---|---|---|
 | **(A)** | Botão de ícone por linha, na visão Parcelas | baixo — nada de infra nova | IPTU de 12 meses = 12 cliques |
 | **(B)** | Seleção múltipla na visão Parcelas + ação em lote | checkbox, seleção por range, barra de lote | é o **teto desta tela** |
 
-B é superconjunto de A e reaproveita a Sheet inteira; A não vira desperdício.
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `components/ContasPagarParcelas.tsx` | Coluna de checkbox (40px fixo, fora do redimensionamento), selecionar-todos no thead, Shift+clique para intervalo (§10.1), barra de lote azul no rodapé (§10) e `ActionIconButton` de apropriação por linha. Abre `ApropriarImovelSheet` com 1 ou N lançamentos | `tsc --noEmit` limpo; `check-ui-standard.sh` sem violação; verificado no navegador (ver abaixo) |
+| idem, guarda de organização | A org do lote é derivada dos **próprios lançamentos** (`row.organization_id`), não da prop — que vem `undefined` em "Todas as organizações" (REGRA #5). Seleção que mistura organizações desabilita o botão com o motivo no `title`, em vez de abrir a Sheet com o seletor de imóveis da org errada | Selecionar duas orgs desabilita; voltar para uma reabilita |
+
+**Verificado no navegador** (harness isolado + Playwright, porque a tela real
+exige sessão): 6 parcelas falsas, uma delas CANCELADA e uma de outra
+organização.
+
+- linha CANCELADA não tem checkbox nem botão de apropriar (nada a apropriar —
+  o `expenseByProperty` já ignora `status = CANCELLED`);
+- linha **PAGA tem** os dois — despesa paga é justamente a que precisa cair no OPEX;
+- 2 IPTUs da mesma org → barra mostra "2 selecionadas · R$ 2.400,00", botão
+  habilitado, Sheet abre com "2 lançamentos · R$ 2.400,00";
+- acrescentando a parcela da outra org → botão desabilita com
+  *"A seleção mistura organizações. Filtre por uma organização para apropriar."*;
+- selecionar-todos → "5 selecionadas · R$ 11.750,00" (os 6 títulos menos a
+  cancelada de R$ 999 — soma conferida à mão);
+- console sem erro.
+
+### F2.2.1 — Coluna "Imóvel" ✅ (depois da migration aplicada em 2026-08-06)
+
+Com as 4 partes no remoto, a tela passou a mostrar o que já está apropriado —
+sem isso o único retorno era o toast, e o esquecimento era invisível.
+
+⚠️ **Terceira premissa errada, evitada a tempo.** O caminho óbvio seria ler
+`vw_payables.property_id`, que a parte 4 expõe. Ele nunca é preenchido:
+`fn_set_property_allocations` faz `UPDATE internal_transactions SET
+property_allocation_mode = p_mode` e **só isso** (`parte3_rpc_rateio.sql:85-87`).
+A coluna existe na view por simetria; a verdade da apropriação está em
+`property_expense_allocations`. É o "um caminho só" que a Fase 2 já exigia para
+o NOI — e vale igual para a UI.
+
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `services/propertyExpenseService.ts` | `allocationSummary(transactionIds[])` — resumo em lote das apropriações, com os nomes resolvidos num segundo passo. Devolve `null` (não medido) quando a tabela não existe ou a RLS barra | Verificado nos dois estados no navegador |
+| `components/ContasPagarParcelas.tsx` | Coluna "Imóvel": 1 alocação = nome; N = "Rateado · N imóveis"; nenhuma = "—" com tooltip *"não entra em NOI nenhum"*; serviço indisponível = "n/d", que **não** é a mesma coisa. Entra na busca e na ordenação. Após apropriar, recarrega só o resumo (§22), não a lista | `tsc` limpo, `check-ui-standard.sh` sem violação |
+| idem — `payableService` **não** foi tocado | A coluna não vem da view, então o `select` explícito de `payableService.ts:30` segue como estava | menos superfície de risco |
+
+**Bug pré-existente que esta coluna revelou:** o `useMemo` de `filtered` lia
+`rowsWithNames` mas declarava `rows` como dependência. Nomes resolvidos por
+consulta assíncrona chegavam **depois** das linhas, o memo não recalculava e a
+coluna ficava vazia para sempre. Valia igual para **Centro de Custo** e **Plano
+de Contas** — latente porque aqueles cadastros normalmente chegam antes. A
+coluna "Imóvel" resolve sempre depois, então tornou o defeito determinístico.
+Corrigido trocando a dependência para `rowsWithNames`.
 
 **O que NENHUM dos dois resolve** (e a próxima sessão não deve confundir com
 "fase concluída"): nos dois caminhos, toda despesa exige um passo **manual
@@ -268,7 +314,10 @@ herdando do imóvel do contrato), com a UI manual servindo só para correção.
 Isso é F2.3, ainda não planejado.
 
 Falta também **reapropriar**: mudar o imóvel ou o modo de um lançamento já
-apropriado. A RPC já suporta (substitui atomicamente), mas nenhuma tela chama.
+apropriado. A RPC já substitui atomicamente e a Sheet já chama, então
+reapropriar **funciona** — mas às cegas: ela abre sempre em branco, porque não
+lê `propertyExpenseService.getAllocations` para pré-selecionar o imóvel e o modo
+atuais. O usuário não vê o que está trocando.
 
 ---
 
@@ -303,11 +352,20 @@ eliminou (proprietário).
       - **Absorção líquida (30d) = +2**, batendo com as 2 locações feitas no
         teste — o primeiro indicador do sistema que só existe por causa do log.
       19 testes da matemática de vacância verdes.
-- [~] **Fase 2 — MOTOR pronto, MIGRATION NÃO APLICADA, UI DE LANÇAMENTO PENDENTE.**
+- [~] **Fase 2 — MOTOR e UI prontos; MIGRATION APLICADA e CONFERIDA no remoto
+      (2026-08-06). Falta só o teste de gravação de ponta a ponta.**
       - Banco: 4 partes em `supabase/migrations/aplicar_20270902000000/`
-        (`property_id` + modo em `internal_transactions`, tabela
-        `property_expense_allocations`, RPC `fn_set_property_allocations` com o
-        invariante, `vw_payables` expondo o imóvel). **Não aplicadas.**
+        **aplicadas**, e conferidas **por query no remoto**, não pelo arquivo:
+        `internal_transactions` devolveu `property_allocation_mode: "DIRECT"`
+        em linha real (parte 1); `property_expense_allocations` e `vw_payables`
+        responderam `42501 permission denied` a `anon` — existem e estão
+        fechadas (partes 2 e 4); `fn_set_property_allocations` respondeu
+        `42501 permission denied for function` (parte 3 — existe, `anon` não
+        executa); `information_schema` confirmou `property_id`,
+        `property_allocation_mode` e `property_name` em `vw_payables`.
+      - ⚠️ Sonda inconclusiva a evitar: chamar a RPC com `{}` devolve
+        `PGRST202`, que **parece** "não existe" mas é só o PostgREST procurando
+        uma assinatura sem parâmetros. Sondar sempre com os nomes reais.
       - `lib/rentalAllocation.ts` — rateio com o invariante da soma (12 testes,
         inclusive dízima fechando exato e proteção contra erro de float).
       - `lib/rentalNoi.ts` — NOI com rollup unidade→edifício, margem e cap rate
@@ -315,9 +373,18 @@ eliminou (proprietário).
       - `services/propertyExpenseService.ts`, `services/rentalNoiService.ts` —
         degradam para `null` sem as tabelas; verificado no navegador.
       - Aba Análise ganha Receita/Despesa/NOI/Margem.
-      - **PENDENTE: a UI de apropriação.** Ver "F2.2" abaixo — o plano original
-        errou sobre onde ela mora, e a correção está registrada lá. Sem ela o
-        motor existe mas ninguém o alimenta.
+      - UI de apropriação **feita** (caminho B — ver F2.2): seleção múltipla e
+        ação em lote na visão Parcelas, mais o botão por linha, mais a coluna
+        "Imóvel" (F2.2.1).
+      - **PENDENTE: gravar de verdade uma vez.** Tudo que foi verificado no
+        navegador rodou em harness isolado, com as chamadas do Supabase
+        interceptadas — o que prova a UI, não o invariante da RPC. Falta
+        apropriar um lançamento real na tela e conferir que
+        `SUM(allocations.amount) = internal_transactions.amount`. Só depois
+        disso a Fase 2 pode ser marcada concluída.
+      - **PENDENTE: reapropriar** — trocar imóvel ou modo de um lançamento já
+        apropriado. A RPC substitui atomicamente, mas a Sheet sempre abre em
+        branco: não lê `getAllocations` para pré-selecionar o que já está lá.
 - [ ] Fase 3 — não iniciada
 
 ## Verificação

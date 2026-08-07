@@ -82,6 +82,57 @@ export const propertyExpenseService = {
         return (data as number) ?? 0;
     },
 
+    /**
+     * Resumo da apropriação de VÁRIOS lançamentos de uma vez — é o que a coluna
+     * "Imóvel" de Contas a Pagar mostra.
+     *
+     * ⚠️ Lê de `property_expense_allocations`, **não** de
+     * `internal_transactions.property_id`: a RPC `fn_set_property_allocations`
+     * grava só `property_allocation_mode` na transação, então aquele
+     * `property_id` nasce e permanece NULL. A coluna existe na view por
+     * simetria; a verdade da apropriação está na tabela de allocations (é o
+     * "um caminho só" do plano da Fase 2).
+     *
+     * Devolve `null` quando a migration ainda não foi aplicada — igual ao
+     * resto do serviço, "não medido" é diferente de "não apropriado".
+     */
+    async allocationSummary(
+        transactionIds: string[]
+    ): Promise<Map<string, { propertyIds: string[]; names: string[] }> | null> {
+        if (transactionIds.length === 0) return new Map();
+
+        const { data, error } = await supabase
+            .from('property_expense_allocations')
+            .select('transaction_id, property_id')
+            .in('transaction_id', transactionIds);
+
+        if (error) {
+            if (isMissingObject(error) || error.code === '42501') return null;
+            throw error;
+        }
+
+        const rows = (data || []) as { transaction_id: string; property_id: string }[];
+        if (rows.length === 0) return new Map();
+
+        // Nomes num segundo passo: a view não os traz e o join aninhado do
+        // PostgREST falharia se a FK não estiver exposta no schema cache.
+        const uniqueProps = [...new Set(rows.map(r => r.property_id))];
+        const { data: props } = await supabase
+            .from('commercial_properties')
+            .select('id, name')
+            .in('id', uniqueProps);
+        const nameById = new Map(((props || []) as { id: string; name: string }[]).map(p => [p.id, p.name]));
+
+        const summary = new Map<string, { propertyIds: string[]; names: string[] }>();
+        for (const row of rows) {
+            const entry = summary.get(row.transaction_id) ?? { propertyIds: [], names: [] };
+            entry.propertyIds.push(row.property_id);
+            entry.names.push(nameById.get(row.property_id) ?? '—');
+            summary.set(row.transaction_id, entry);
+        }
+        return summary;
+    },
+
     /** Apropriações já gravadas de um lançamento. */
     async getAllocations(transactionId: string): Promise<Allocation[]> {
         const { data, error } = await supabase

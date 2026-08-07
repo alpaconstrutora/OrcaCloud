@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, X,
+    AlertCircle, Building2, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty } from '../services/payableService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { propertyExpenseService } from '../services/propertyExpenseService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import ActionIconButton from './ui/ActionIconButton';
+import ApropriarImovelSheet from './financeiro/ApropriarImovelSheet';
 
 /**
  * Rótulo de origem por `source_system`. É a coluna que responde "de onde essa
@@ -66,11 +68,14 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     // no client — vw_payables só expõe os UUIDs.
     { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
     { key: 'plano_contas', label: 'Plano de Contas', sortable: true },
+    // Imóvel apropriado (Fase 2 — OPEX). Vazio é informação, não lacuna: é a
+    // despesa que ainda não entrou em NOI nenhum.
+    { key: 'imovel', label: 'Imóvel', sortable: true },
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 130, status: 120,
-    centro_custo: 180, plano_contas: 180, actions: 200,
+    centro_custo: 180, plano_contas: 180, imovel: 190, actions: 200,
 };
 
 const STATUS_FILTROS = ['all', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
@@ -121,6 +126,13 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const [statusFiltro, setStatusFiltro] = usePersistedState<StatusFiltro>('contasPagarParcelas:status', 'all');
     const [origemFiltro, setOrigemFiltro] = usePersistedState<OrigemFiltro>('contasPagarParcelas:origem', 'all');
     const [salvando, setSalvando] = useState<string | null>(null);
+    // Seleção múltipla: existe para apropriar despesa a imóvel em lote (IPTU de
+    // 12 meses num clique só). Esta é a ÚNICA visão de Contas a Pagar com id de
+    // `internal_transactions` — a de Notas Fiscais lê `invoices`, e passar id de
+    // nota para a RPC de rateio falharia só no uso real.
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const [apropriando, setApropriando] = useState<{ organizationId: string; payables: Payable[] } | null>(null);
     // Duas dimensões DIFERENTES (ver migration 20270822000013) — carregadas uma
     // vez para resolver os UUIDs de vw_payables em nome.
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
@@ -144,19 +156,49 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
     const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
 
+    /**
+     * Apropriação por imóvel das linhas carregadas. `null` = migration ainda não
+     * aplicada (ou RLS barrando): a coluna some inteira, em vez de mentir "—"
+     * para tudo e sugerir que nada está apropriado.
+     */
+    const [alocacoes, setAlocacoes] = useState<Map<string, { propertyIds: string[]; names: string[] }> | null>(null);
+    const idsCarregados = useMemo(() => rows.map(r => r.id).join(','), [rows]);
+
+    const recarregarAlocacoes = React.useCallback(() => {
+        const ids = idsCarregados ? idsCarregados.split(',') : [];
+        propertyExpenseService.allocationSummary(ids)
+            .then(setAlocacoes)
+            .catch(err => {
+                console.error('[ContasPagarParcelas] Erro ao carregar apropriação por imóvel:', err);
+                setAlocacoes(null);
+            });
+    }, [idsCarregados]);
+
+    useEffect(() => { recarregarAlocacoes(); }, [recarregarAlocacoes]);
+
+    /** Rótulo do imóvel: 1 alocação = o nome; N = rateio entre unidades. */
+    const imovelLabel = React.useCallback((id: string): string => {
+        const entry = alocacoes?.get(id);
+        if (!entry || entry.propertyIds.length === 0) return '';
+        if (entry.propertyIds.length === 1) return entry.names[0];
+        return `Rateado · ${entry.propertyIds.length} imóveis`;
+    }, [alocacoes]);
+
     /** Injeta os nomes resolvidos — a view só traz os UUIDs. */
     const rowsWithNames = useMemo(() => rows.map(r => ({
         ...r,
         cost_center_name: r.cost_center_id ? (costCenterNameById.get(r.cost_center_id) ?? '') : '',
         plano_de_contas_name: r.plano_de_contas_id ? (planoContasNameById.get(r.plano_de_contas_id) ?? '') : '',
-    })), [rows, costCenterNameById, planoContasNameById]);
+        imovel_label: imovelLabel(r.id),
+    })), [rows, costCenterNameById, planoContasNameById, imovelLabel]);
 
     const tableColumns = useTableColumns(PARCELAS_COLUMNS, 'contasPagarParcelasColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarParcelasColWidths');
-    // Largura = soma exata das colunas visíveis. NUNCA w-full com table-layout:fixed (§6.1).
+    // Largura = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
+    // w-full com table-layout:fixed (§6.1).
     const tableTotalWidth = PARCELAS_COLUMNS
         .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
-        + cols.getWidth('actions');
+        + cols.getWidth('actions') + 40;
 
     const filtered = useMemo(() => {
         let result = rowsWithNames.filter(r => {
@@ -172,7 +214,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     || (r.description ?? '').toLowerCase().includes(termo)
                     || (r.project_name ?? '').toLowerCase().includes(termo)
                     || (r.cost_center_name ?? '').toLowerCase().includes(termo)
-                    || (r.plano_de_contas_name ?? '').toLowerCase().includes(termo);
+                    || (r.plano_de_contas_name ?? '').toLowerCase().includes(termo)
+                    || (r.imovel_label ?? '').toLowerCase().includes(termo);
                 if (!hit) return false;
             }
             return true;
@@ -191,6 +234,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     case 'status':       return r.effective_status;
                     case 'centro_custo': return (r.cost_center_name ?? '').toLowerCase();
                     case 'plano_contas': return (r.plano_de_contas_name ?? '').toLowerCase();
+                    case 'imovel':       return (r.imovel_label ?? '').toLowerCase();
                     default:             return '';
                 }
             };
@@ -202,12 +246,68 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             });
         }
         return result;
-    }, [rows, search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
+        // Depende de `rowsWithNames`, NÃO de `rows`: os nomes resolvidos (centro de
+        // custo, plano de contas, imóvel apropriado) chegam por consulta assíncrona
+        // depois das linhas. Com `rows` na lista, o memo não recalculava quando eles
+        // chegavam e as colunas ficavam em branco para sempre.
+    }, [rowsWithNames, search, statusFiltro, origemFiltro, vencDe, vencAte, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
 
-    // colunas visíveis + espaçador + ações
-    const totalColunas = PARCELAS_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).length + 2;
+    /** Cancelado não tem despesa a apropriar — o NOI já o ignora. Parcela PAGA
+     *  entra: despesa paga é exatamente a que precisa cair no OPEX. */
+    const isSelectable = (row: Payable) => row.effective_status !== 'CANCELADO';
+    const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
+    // Interseção da seleção com o visível: se o filtro mudou, o que sumiu da
+    // tela não pode continuar entrando na ação em lote.
+    const selectedVisible = useMemo(
+        () => selectableVisible.filter(r => selectedIds.has(r.id)),
+        [selectableVisible, selectedIds],
+    );
+    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const selectedTotal = selectedVisible.reduce((s, r) => s + (r.amount ?? 0), 0);
+
+    /**
+     * Org do lote, derivada dos PRÓPRIOS lançamentos — não da prop, que vem
+     * `undefined` em "Todas as organizações" (REGRA #5: derivar da entidade
+     * aberta, nunca bloquear a tela). Seleção que mistura organizações não pode
+     * apropriar: o seletor de imóveis da Sheet é de uma org só.
+     */
+    const orgDoLote = useMemo(() => {
+        const orgs = new Set(selectedVisible.map(r => r.organization_id));
+        return orgs.size === 1 ? [...orgs][0] : null;
+    }, [selectedVisible]);
+
+    function toggleRow(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }
+    // Seleção de intervalo com Shift+clique (ui_ux_guia_unificado.md §10.1)
+    function handleRowCheck(id: string, index: number, shiftKey: boolean) {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = filtered.slice(start, end + 1).filter(isSelectable).map(r => r.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            toggleRow(id);
+            setLastCheckedIndex(index);
+        }
+    }
+    function toggleAllVisible() {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (allVisibleSelected) selectableVisible.forEach(r => next.delete(r.id));
+            else selectableVisible.forEach(r => next.add(r.id));
+            return next;
+        });
+    }
+    const clearSelection = () => { setSelectedIds(new Set()); setLastCheckedIndex(null); };
+
+    // checkbox + colunas visíveis + espaçador + ações
+    const totalColunas = PARCELAS_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).length + 3;
 
     const totalAberto = filtered
         .filter(r => !['PAGO', 'CANCELADO'].includes(r.effective_status))
@@ -249,8 +349,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     }
 
     return (
-        /* Toolbar acoplada à tabela (§5.2) — toolbar e conteúdo dividem um único
-           card; border/rounded/shadow só no container pai. */
+        <>
+        {/* Toolbar acoplada à tabela (§5.2) — toolbar e conteúdo dividem um único
+            card; border/rounded/shadow só no container pai. */}
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-white space-y-3">
                 <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -360,6 +461,10 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
+                                {/* checkbox — largura fixa, fora do redimensionamento. O comentário
+                                    fica ACIMA do <col>: na mesma linha ele vira nó de texto dentro
+                                    do <colgroup> e o React reclama. */}
+                                <col style={{ width: '40px' }} />
                                 {PARCELAS_COLUMNS.map(c => (
                                     tableColumns.visibleColumns.includes(c.key)
                                         ? <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
@@ -374,6 +479,16 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                 força uppercase internamente por padrão. */}
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                            checked={allVisibleSelected}
+                                            disabled={selectableVisible.length === 0}
+                                            onChange={toggleAllVisible}
+                                            title="Selecionar todas as parcelas visíveis"
+                                        />
+                                    </th>
                                     {PARCELAS_COLUMNS.map(c => {
                                         if (!tableColumns.visibleColumns.includes(c.key)) return null;
                                         const align = c.key === 'valor' ? 'text-right' : (c.key === 'vencimento' || c.key === 'status') ? 'text-center' : 'text-left';
@@ -402,11 +517,23 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtered.map(row => {
+                                {filtered.map((row, idx) => {
                                     const vencido = row.effective_status === 'VENCIDO';
                                     const quitado = ['PAGO', 'CANCELADO'].includes(row.effective_status);
+                                    const selecionada = selectedIds.has(row.id);
                                     return (
-                                        <tr key={row.id} className={`hover:bg-blue-50/50 transition-colors ${vencido ? 'bg-red-50/30' : ''}`}>
+                                        <tr key={row.id} className={`hover:bg-blue-50/50 transition-colors ${selecionada ? 'bg-blue-50/60' : vencido ? 'bg-red-50/30' : ''}`}>
+                                            <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
+                                                {isSelectable(row) && (
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        checked={selecionada}
+                                                        title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                        onChange={e => handleRowCheck(row.id, idx, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                    />
+                                                )}
+                                            </td>
                                             {tableColumns.visibleColumns.includes('credor') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
                                                     {payableParty(row)}
@@ -455,6 +582,17 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     {row.plano_de_contas_name || '—'}
                                                 </td>
                                             )}
+                                            {tableColumns.visibleColumns.includes('imovel') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
+                                                    {alocacoes === null ? (
+                                                        <span className="text-gray-400" title="Apropriação por imóvel indisponível nesta sessão — não é o mesmo que 'não apropriado'.">n/d</span>
+                                                    ) : row.imovel_label ? (
+                                                        row.imovel_label
+                                                    ) : (
+                                                        <span className="text-gray-400" title="Ainda não apropriada — esta despesa não entra em NOI nenhum.">—</span>
+                                                    )}
+                                                </td>
+                                            )}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5">
@@ -476,6 +614,16 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                         <span className="flex items-center gap-1 text-sm font-normal text-green-700">
                                                             <Check className="w-4 h-4" /> Quitado
                                                         </span>
+                                                    )}
+                                                    {/* Apropriar a imóvel — a mesma Sheet do lote, com um
+                                                        lançamento só. Cancelada não tem o que apropriar. */}
+                                                    {isSelectable(row) && (
+                                                        <ActionIconButton
+                                                            kind="settings"
+                                                            title="Apropriar a imóvel"
+                                                            icon={<Building2 className="w-4 h-4" />}
+                                                            onClick={() => setApropriando({ organizationId: row.organization_id, payables: [row] })}
+                                                        />
                                                     )}
                                                     {/* Só título manual é excluível aqui: parcela de Pedido ou
                                                         Contrato é espelho da origem (payableService.remove). */}
@@ -510,5 +658,49 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                 )}
             </div>
         </div>
+
+        {/* Barra de ações em lote — fixa no rodapé, paleta azul (§10) */}
+        {selectedVisible.length > 0 && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
+                <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                    {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}
+                    <span className="ml-2 font-normal opacity-75">· {formatMoney(selectedTotal)}</span>
+                </span>
+                <button
+                    onClick={() => orgDoLote && setApropriando({ organizationId: orgDoLote, payables: selectedVisible })}
+                    disabled={!orgDoLote}
+                    title={orgDoLote
+                        ? 'Apropriar as parcelas selecionadas a um imóvel'
+                        : 'A seleção mistura organizações. Filtre por uma organização para apropriar.'}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
+                >
+                    <Building2 className="w-3.5 h-3.5" />
+                    Apropriar a imóvel
+                </button>
+                <button
+                    onClick={clearSelection}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
+                >
+                    <X className="w-3.5 h-3.5" />
+                    Desmarcar
+                </button>
+            </div>
+        )}
+
+        {apropriando && (
+            <ApropriarImovelSheet
+                organizationId={apropriando.organizationId}
+                payables={apropriando.payables.map(p => ({ id: p.id, amount: p.amount, description: p.description }))}
+                onClose={() => setApropriando(null)}
+                onDone={message => {
+                    setApropriando(null);
+                    clearSelection();
+                    // Recarrega só o resumo da apropriação, não a lista inteira (§22).
+                    recarregarAlocacoes();
+                    notify(message);
+                }}
+            />
+        )}
+        </>
     );
 }

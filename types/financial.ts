@@ -749,6 +749,10 @@ export interface Payable {
      *  vw_payables — a view só expõe os UUIDs. */
     cost_center_name?: string;
     plano_de_contas_name?: string;
+    /** Imóvel apropriado, resolvido no client a partir de
+     *  `property_expense_allocations` — NÃO de `vw_payables.property_id`, que
+     *  a RPC de rateio nunca preenche. Ver propertyExpenseService.allocationSummary. */
+    imovel_label?: string;
     created_at?: string;
     updated_at?: string;
 }

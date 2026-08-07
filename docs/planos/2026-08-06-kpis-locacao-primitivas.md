@@ -242,13 +242,18 @@ eliminou (proprietário).
       tabela, ocupação cega para edifício locado inteiro). 18 testes verdes, `tsc`
       limpo. Ainda **não commitada**; falta a conferência com dados reais — ver
       "Verificação".
-- [~] **Fase 1 — código pronto, MIGRATION NÃO APLICADA.** As 4 partes em
-      `supabase/migrations/aplicar_20270901000000/` precisam ser rodadas à mão no
-      SQL Editor (o Vercel publica só o front-end). Até lá, o serviço detecta a
-      ausência da tabela e os KPIs de vacância ficam ocultos — verificado no
-      navegador: a aba renderiza normal, sem erro. 19 testes da matemática de
-      vacância verdes. **Não declarar Fase 1 concluída antes de aplicar as partes
-      e ver os indicadores na tela.**
+- [x] **Fase 1 — CONCLUÍDA e validada em produção (2026-08-06).** As 4 partes
+      foram aplicadas à mão no SQL Editor. Validação de ponta a ponta:
+      - trigger instalada (`trg_log_property_status_change` em `pg_trigger`);
+      - dispara em mudança real, com `from_status` e `changed_by` corretos;
+      - **não** dispara em salvamento sem mudança de status — nenhuma linha com
+        `from_status = to_status`, que é o que valida o `WHEN (OLD.status IS
+        DISTINCT FROM NEW.status)`;
+      - cards renderizaram na aba Análise, o que também prova a RLS (a consulta
+        pelo SQL Editor roda como service role e passa por cima dela);
+      - **Absorção líquida (30d) = +2**, batendo com as 2 locações feitas no
+        teste — o primeiro indicador do sistema que só existe por causa do log.
+      19 testes da matemática de vacância verdes.
 - [ ] Fase 2 — não iniciada (F2.1 **desbloqueada**: decisão tomada em 2026-08-06)
 - [ ] Fase 3 — não iniciada
 

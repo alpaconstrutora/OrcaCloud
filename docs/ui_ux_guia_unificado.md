@@ -1358,7 +1358,7 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
         key={v.id}
         onClick={() => setActiveView(v.id)}
         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-          activeView === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+          activeView === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
         }`}
       >
         {v.label}
@@ -1371,6 +1371,14 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
 > ✅ **Aba ativa = `bg-white text-blue-600 shadow-sm` sobre trilho `bg-gray-50`.**
 > Não é o azul sólido do toggle grid/lista (§5) nem do botão primário (§17) —
 > aba ativa é *estado de navegação*, não ação.
+> ✅ **Aba inativa = `text-gray-700 hover:text-gray-900`.** Este trecho já pediu
+> `text-gray-400 hover:text-gray-600`, e isso reprova WCAG AA: cinza 400 sobre o
+> trilho claro dá ~2.5:1, contra os 4.5:1 mínimos para texto normal. Corrigido a
+> pedido do usuário em 2026-08-04 (`RentalsModule.tsx`, commit `1b098fd`), mas o
+> guia ficou para trás e passou a acusar como divergência justamente o código
+> certo. **`text-gray-400` continua válido para os toggles de ÍCONE** (grade/
+> lista/torre, autofit — §5.1/§5.2): ali não há texto, e o alvo de contraste é
+> outro. A regra vale para rótulo de aba, que é texto.
 > ✅ **`flex-wrap`, nunca `overflow-x-auto`.** Com muitas abas (o Extrato tem
 > 11), rolagem horizontal corta o texto sem indício de que há mais abas.
 > ✅ Abas em `h-7` dentro de um card `p-3` — mais baixas que o `h-9` do resto:

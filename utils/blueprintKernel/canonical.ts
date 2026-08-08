@@ -16,7 +16,8 @@
  *     identidade de conteúdo.
  */
 
-import type { BlueprintModel } from './model';
+import { type BlueprintModel, emptyModel, nextId } from './model';
+import { recomputeSpaces } from './arrangement';
 import { KERNEL_VERSION, DEFAULT_TOLERANCE_MM } from './units';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,40 +143,56 @@ function stableStringify(value: unknown): string {
  * contadores diferentes e mesmo assim são o mesmo desenho.
  */
 export function canonicalPayload(model: BlueprintModel): string {
+  // Níveis em ordem canônica, e o índice de cada um. Igual às paredes: o payload
+  // referencia POSIÇÃO, não identificador.
+  const levels = [...model.levels].sort(
+    (a, b) => a.elevationMm - b.elevationMm || a.name.localeCompare(b.name),
+  );
+  const levelIndex = new Map(levels.map((l, i) => [l.id, i]));
+
+  // Ordem geométrica, não ordem de criação: duas sessões que desenham as mesmas
+  // paredes em ordens diferentes precisam produzir o mesmo payload.
+  const walls = [...model.walls].sort(
+    (x, y) =>
+      (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
+      x.a.x - y.a.x ||
+      x.a.y - y.a.y ||
+      x.b.x - y.b.x ||
+      x.b.y - y.b.y ||
+      x.thicknessMm - y.thicknessMm,
+  );
+  const wallIndex = new Map(walls.map((w, i) => [w.id, i]));
+
   const payload = {
     kernel: KERNEL_VERSION,
     toleranceMm: DEFAULT_TOLERANCE_MM,
-    levels: [...model.levels]
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map((l) => ({
-        id: l.id,
-        name: l.name,
-        elevationMm: l.elevationMm,
-        defaultHeightMm: l.defaultHeightMm,
-      })),
-    // Ordem geométrica, não ordem de criação: duas sessões que desenham as mesmas
-    // paredes em ordens diferentes precisam produzir o mesmo payload.
-    walls: [...model.walls]
+    levels: levels.map((l) => ({
+      name: l.name,
+      elevationMm: l.elevationMm,
+      defaultHeightMm: l.defaultHeightMm,
+    })),
+    walls: walls.map((w) => ({
+      level: levelIndex.get(w.levelId) ?? 0,
+      a: { x: w.a.x, y: w.a.y },
+      b: { x: w.b.x, y: w.b.y },
+      thicknessMm: w.thicknessMm,
+      heightMm: w.heightMm,
+    })),
+    // `wall` é o ÍNDICE da parede hospedeira na lista acima, nunca o `wallId`.
+    //
+    // Guardar o id aqui furava o canônico por dois lados: o payload passava a
+    // conter um identificador volátil (`wal_0001`), e esse id apontava para uma
+    // parede que o próprio payload não identifica — impossível reconstruir o
+    // modelo a partir dele. Duas plantas idênticas desenhadas em ordem diferente
+    // produziam hashes diferentes assim que tivessem uma porta.
+    openings: [...model.openings]
       .sort(
         (x, y) =>
-          x.levelId.localeCompare(y.levelId) ||
-          x.a.x - y.a.x ||
-          x.a.y - y.a.y ||
-          x.b.x - y.b.x ||
-          x.b.y - y.b.y ||
-          x.thicknessMm - y.thicknessMm,
+          (wallIndex.get(x.wallId) ?? 0) - (wallIndex.get(y.wallId) ?? 0) ||
+          x.offsetMm - y.offsetMm,
       )
-      .map((w) => ({
-        levelId: w.levelId,
-        a: { x: w.a.x, y: w.a.y },
-        b: { x: w.b.x, y: w.b.y },
-        thicknessMm: w.thicknessMm,
-        heightMm: w.heightMm,
-      })),
-    openings: [...model.openings]
-      .sort((x, y) => x.wallId.localeCompare(y.wallId) || x.offsetMm - y.offsetMm)
       .map((o) => ({
-        wallId: o.wallId,
+        wall: wallIndex.get(o.wallId) ?? 0,
         kind: o.kind,
         offsetMm: o.offsetMm,
         widthMm: o.widthMm,
@@ -183,16 +200,29 @@ export function canonicalPayload(model: BlueprintModel): string {
         sillMm: o.sillMm,
       })),
     boundaries: [...model.boundaries]
-      .sort((x, y) => x.a.x - y.a.x || x.a.y - y.a.y || x.b.x - y.b.x || x.b.y - y.b.y)
+      .sort(
+        (x, y) =>
+          (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
+          x.a.x - y.a.x ||
+          x.a.y - y.a.y ||
+          x.b.x - y.b.x ||
+          x.b.y - y.b.y,
+      )
       .map((b) => ({
-        levelId: b.levelId,
+        level: levelIndex.get(b.levelId) ?? 0,
         a: { x: b.a.x, y: b.a.y },
         b: { x: b.b.x, y: b.b.y },
       })),
     spaces: [...model.spaces]
-      .sort((x, y) => x.levelId.localeCompare(y.levelId) || x.areaMm2 - y.areaMm2)
+      .sort(
+        (x, y) =>
+          (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
+          x.areaMm2 - y.areaMm2 ||
+          x.ring[0].x - y.ring[0].x ||
+          x.ring[0].y - y.ring[0].y,
+      )
       .map((s) => ({
-        levelId: s.levelId,
+        level: levelIndex.get(s.levelId) ?? 0,
         ring: s.ring.map((p) => ({ x: p.x, y: p.y })),
         holes: s.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))),
         areaMm2: s.areaMm2,
@@ -205,4 +235,104 @@ export function canonicalPayload(model: BlueprintModel): string {
 
 export function snapshotHash(model: BlueprintModel): string {
   return sha256(canonicalPayload(model));
+}
+
+/** Forma tipada do payload canônico. É o contrato de persistência do snapshot. */
+export interface CanonicalPayload {
+  kernel: string;
+  toleranceMm: number;
+  levels: { name: string; elevationMm: number; defaultHeightMm: number }[];
+  walls: {
+    level: number;
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    thicknessMm: number;
+    heightMm: number;
+  }[];
+  openings: {
+    wall: number;
+    kind: 'door' | 'window';
+    offsetMm: number;
+    widthMm: number;
+    heightMm: number;
+    sillMm: number;
+  }[];
+  boundaries: { level: number; a: { x: number; y: number }; b: { x: number; y: number } }[];
+  spaces: {
+    level: number;
+    ring: { x: number; y: number }[];
+    holes: { x: number; y: number }[][];
+    areaMm2: number;
+    perimeterMm: number;
+  }[];
+}
+
+export function parseCanonicalPayload(json: string): CanonicalPayload {
+  return JSON.parse(json) as CanonicalPayload;
+}
+
+/**
+ * Reconstrói um modelo editável a partir do payload canônico.
+ *
+ * É o que fecha o ciclo da persistência: um snapshot é guardado como payload
+ * canônico (imutável, com hash), e voltar a editá-lo exige devolver objetos com
+ * identidade. Os IDs são REATRIBUÍDOS pelo contador determinístico na ordem
+ * canônica — como a ordem é função só da geometria, o modelo reconstruído
+ * re-serializa para exatamente o mesmo payload e o mesmo hash.
+ *
+ * É por isso que o payload pode se dar ao luxo de não guardar ID nenhum.
+ */
+export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintModel {
+  const model = emptyModel();
+
+  const levelIds = payload.levels.map((l) => {
+    const id = nextId(model, 'lvl');
+    model.levels.push({
+      id,
+      name: l.name,
+      elevationMm: l.elevationMm,
+      defaultHeightMm: l.defaultHeightMm,
+    });
+    return id;
+  });
+
+  const wallIds = payload.walls.map((w) => {
+    const id = nextId(model, 'wal');
+    model.walls.push({
+      id,
+      levelId: levelIds[w.level],
+      a: { x: w.a.x, y: w.a.y },
+      b: { x: w.b.x, y: w.b.y },
+      thicknessMm: w.thicknessMm,
+      heightMm: w.heightMm,
+    });
+    return id;
+  });
+
+  for (const o of payload.openings) {
+    model.openings.push({
+      id: nextId(model, 'opn'),
+      wallId: wallIds[o.wall],
+      kind: o.kind,
+      offsetMm: o.offsetMm,
+      widthMm: o.widthMm,
+      heightMm: o.heightMm,
+      sillMm: o.sillMm,
+    });
+  }
+
+  for (const b of payload.boundaries) {
+    model.boundaries.push({
+      id: nextId(model, 'bnd'),
+      levelId: levelIds[b.level],
+      a: { x: b.a.x, y: b.a.y },
+      b: { x: b.b.x, y: b.b.y },
+    });
+  }
+
+  // `spaces` é derivado: recalculado pelo arranjo planar, nunca lido do payload.
+  // O payload guarda os ambientes para consulta e auditoria do snapshot, não para
+  // realimentar o kernel — se voltassem por aqui, uma divergência entre o gravado e
+  // o recalculável passaria despercebida.
+  return recomputeSpaces(model);
 }

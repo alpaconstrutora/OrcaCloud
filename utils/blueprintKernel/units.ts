@@ -15,8 +15,15 @@
  * os predicados de orientação são EXATOS — não aproximados.
  */
 
-/** Identifica a implementação e a política numérica. Entra no hash do snapshot. */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.1.0';
+/**
+ * Identifica a implementação e a política numérica. Entra no hash do snapshot.
+ *
+ * 0.2.0 — o payload canônico passou a referenciar nível e parede por ÍNDICE em vez
+ * de `levelId`/`wallId`. A geometria não mudou; a serialização sim, e por isso todo
+ * hash anterior é incompatível por construção. Snapshot gravado com 0.1.0 continua
+ * legível pelo `kernel_version` que carrega — é para isso que ele existe.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.2.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -17,7 +17,8 @@ export { emptyModel, cloneModel, wallLength, assertModelInvariants } from './mod
 export { buildArrangement, recomputeSpaces, vertexDegrees } from './arrangement';
 export type { ArrangementResult } from './arrangement';
 
-export { canonicalPayload, snapshotHash, sha256 } from './canonical';
+export { canonicalPayload, snapshotHash, sha256, parseCanonicalPayload, modelFromCanonicalPayload } from './canonical';
+export type { CanonicalPayload } from './canonical';
 
 export type { Command, CommandResult, Diff } from './commands';
 export { applyCommand, applyBatch, ModelHistory } from './commands';

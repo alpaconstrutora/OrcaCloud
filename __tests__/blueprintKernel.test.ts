@@ -22,6 +22,8 @@ import {
   buildArrangement,
   canonicalPayload,
   emptyModel,
+  modelFromCanonicalPayload,
+  parseCanonicalPayload,
   intersectSegments,
   point,
   sha256,
@@ -548,6 +550,104 @@ describe('Spike A · geometria oblíqua', () => {
     expect(built.model.spaces).toHaveLength(2);
     const total = built.model.spaces.reduce((sum, s) => sum + s.areaMm2, 0);
     expect(total).toBe(6000 * 4000);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E0 — persistência: o payload canônico é ida E VOLTA
+//
+// Sem estes casos o payload é só um hash. Para o snapshot ser útil ele precisa
+// reconstruir um modelo editável, e o modelo reconstruído precisa re-serializar
+// para exatamente o mesmo payload — senão publicar e reabrir muda a planta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('E0 · round-trip do payload canônico', () => {
+  it('caso 30 — modelo → payload → modelo → payload é idempotente', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      ...room(levelId, 0, 0, 6000, 4000),
+      wall(levelId, 3000, 0, 3000, 4000),
+    ]).model;
+
+    const payload = canonicalPayload(built);
+    const rebuilt = modelFromCanonicalPayload(parseCanonicalPayload(payload));
+
+    expect(canonicalPayload(rebuilt)).toBe(payload);
+    expect(snapshotHash(rebuilt)).toBe(snapshotHash(built));
+    expect(rebuilt.spaces).toHaveLength(built.spaces.length);
+  });
+
+  it('caso 31 — aberturas sobrevivem ao round-trip presas na parede certa', () => {
+    const { model, levelId } = withLevel();
+    const base = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const withOpening = applyCommand(base, {
+      type: 'AddOpening',
+      wallId: base.walls[1].id,
+      kind: 'door',
+      offsetMm: 900,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    }).model;
+
+    const payload = canonicalPayload(withOpening);
+    const rebuilt = modelFromCanonicalPayload(parseCanonicalPayload(payload));
+
+    expect(rebuilt.openings).toHaveLength(1);
+    // A abertura tem que reencontrar a MESMA parede geometricamente, ainda que o id
+    // seja outro depois da reconstrução.
+    const originalHost = withOpening.walls.find((w) => w.id === withOpening.openings[0].wallId)!;
+    const rebuiltHost = rebuilt.walls.find((w) => w.id === rebuilt.openings[0].wallId)!;
+    expect(rebuiltHost.a).toEqual(originalHost.a);
+    expect(rebuiltHost.b).toEqual(originalHost.b);
+    expect(canonicalPayload(rebuilt)).toBe(payload);
+  });
+
+  it('caso 32 — com abertura, a ordem de desenho não muda o hash', () => {
+    // Este é o caso que o payload antigo errava. Ele guardava `wallId` na abertura,
+    // então a mesma planta desenhada em outra ordem gerava outro hash assim que
+    // tivesse uma porta. Os goldens não pegavam porque nenhum deles tem abertura.
+    const { model, levelId } = withLevel();
+    const forward = room(levelId, 0, 0, 4000, 3000);
+    const shuffled = [forward[3], forward[1], forward[0], forward[2]];
+
+    const build = (order: Command[]) => {
+      const built = applyBatch(model, order).model;
+      // Mesma parede geométrica nos dois: a que vai de (0,0) a (4000,0).
+      const host = built.walls.find(
+        (w) => w.a.x === 0 && w.a.y === 0 && w.b.x === 4000 && w.b.y === 0,
+      )!;
+      return applyCommand(built, {
+        type: 'AddOpening',
+        wallId: host.id,
+        kind: 'door',
+        offsetMm: 1500,
+        widthMm: 900,
+        heightMm: 2100,
+        sillMm: 0,
+      }).model;
+    };
+
+    expect(snapshotHash(build(shuffled))).toBe(snapshotHash(build(forward)));
+  });
+
+  it('caso 33 — o payload não carrega identificador volátil nenhum', () => {
+    const { model, levelId } = withLevel();
+    const base = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const built = applyCommand(base, {
+      type: 'AddOpening',
+      wallId: base.walls[0].id,
+      kind: 'window',
+      offsetMm: 500,
+      widthMm: 1200,
+      heightMm: 1200,
+      sillMm: 900,
+    }).model;
+
+    const payload = canonicalPayload(built);
+    for (const prefix of ['wal_', 'lvl_', 'opn_', 'bnd_', 'spc_', 'seq']) {
+      expect(payload).not.toContain(prefix);
+    }
   });
 });
 

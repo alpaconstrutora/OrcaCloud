@@ -146,19 +146,20 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
           escopo desta migração. A classe .fiscal-root só fornece as CSS custom
           properties (--fred, --fgreen etc.) que esses dois componentes consomem. */}
       <style dangerouslySetInnerHTML={{ __html: FISCAL_CSS }} />
-      {/* Scroll box PRÓPRIO (h-full overflow-y-auto), aninhado dentro do <main> do
-          Layout — que já tem seu próprio scroll e seu próprio gutter (p-4 md:p-6,
-          §20.2). `-mx` cancela o gutter LATERAL herdado; o `p-4 md:p-6` do filho
-          reaplica o mesmo valor uma única vez (era `px-7 py-6`, 28px, valor que não
-          existe em nenhuma outra tela, EM CIMA do padding do Layout — Fiscal
-          respirava mais que qualquer outra tela, não menos).
-          ⚠️ Sem `-mt`: h-full mede 100% do conteúdo já descontado o padding
-          vertical de `<main>`; cancelar o topo com margem negativa desloca a
-          caixa para cima sem esticar a altura, sobrando ~24px de vão embaixo
-          (medido com Playwright). O padding vertical duplicado (16–24px no
-          topo) é aceito — invisível numa caixa que rola, ao contrário do
-          lateral, que dobrava a margem visível nos dois lados. */}
-      <div className="fiscal-root h-full overflow-y-auto -mx-4 md:-mx-6" style={{ background: '#f9fafb' }}>
+      {/* Scroll box PRÓPRIO, aninhado dentro do <main> do Layout — que já tem seu
+          próprio scroll e seu próprio gutter (p-4 md:p-6, §20.2). `absolute inset-0`
+          (o `<main>` do Layout já é `relative`) cancela os 4 lados do padding
+          herdado de uma vez; o `p-4 md:p-6` do filho reaplica o mesmo valor uma
+          única vez (era `px-7 py-6`, 28px, valor que não existe em nenhuma outra
+          tela, EM CIMA do padding do Layout — Fiscal respirava mais que qualquer
+          outra tela, não menos).
+          ⚠️ NÃO trocar por `h-full` + margem negativa: `h-full` mede 100% do
+          conteúdo já descontado o padding do pai, então cancelar com `-mt`/`-mx`
+          desloca a caixa sem esticar a altura, sobrando um vão do tamanho da
+          margem na borda oposta (medido com Playwright, 2026-08-08). `inset-0`
+          não tem esse problema — define topo E fundo ao mesmo tempo, a altura
+          sai correta por construção. */}
+      <div className="fiscal-root absolute inset-0 overflow-y-auto" style={{ background: '#f9fafb' }}>
         {/* Container raiz — space-y-6 (§20). O header fixo em card branco que existia
             aqui foi removido: título de tela é bloco flat, não banda/hero (§20). */}
         <div className="p-4 md:p-6 space-y-6">

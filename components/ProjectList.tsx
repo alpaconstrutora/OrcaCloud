@@ -85,6 +85,7 @@ interface ProjectListProps {
 const COLUMNS: ColumnConfig[] = [
     { key: 'code',          label: 'Código',      sortable: true },
     { key: 'name',          label: 'Nome',        sortable: true },
+    { key: 'tipo-obra',     label: 'Tipo de Obra', sortable: true },
     { key: 'organization',  label: 'Organização', sortable: true },
     // Empreendimento (Incorporação) ao qual a obra está vinculada — via
     // empreendimentos.project_id ou empreendimento_towers.project_id.
@@ -106,9 +107,9 @@ const COLUMNS: ColumnConfig[] = [
 // configuráveis via ColumnConfigButton — só existem no contexto Diário), mas
 // precisam de largura própria por serem colunas reais da tabela.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 118, name: 240, organization: 180, empreendimento: 184, linked: 200,
+    code: 118, name: 240, 'tipo-obra': 140, organization: 180, empreendimento: 184, linked: 200,
     'obra-vinculada': 180, 'planejamento-vinculada': 180,
-    client: 160, created: 140, updated: 150, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
+    client: 160, created: 140, updated: 172, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -214,7 +215,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1). As 2 colunas extras do contexto Diário entram
     // condicionalmente — não fazem parte de COLUMNS/visibleColumns.
-    const tableTotalWidth = (['code', 'name', 'organization', 'empreendimento', 'linked', 'client', 'created', 'updated', 'status-budget', 'status-obra', 'lock'] as const)
+    const tableTotalWidth = (['code', 'name', 'tipo-obra', 'organization', 'empreendimento', 'linked', 'client', 'created', 'updated', 'status-budget', 'status-obra', 'lock'] as const)
         .reduce((sum, key) => sum + (visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + (isDiaryContext ? cols.getWidth('obra-vinculada') + cols.getWidth('planejamento-vinculada') : 0)
         + cols.getWidth('actions');
@@ -384,6 +385,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             return sortDirection === 'asc'
                                 ? (valA as string).localeCompare(valB as string)
                                 : (valB as string).localeCompare(valA as string);
+                        case 'tipo-obra': {
+                            const tipoA = a.settings?.tipoObra ? (TIPO_OBRA_LABELS[a.settings.tipoObra as TipoObra] || a.settings.tipoObra) : '';
+                            const tipoB = b.settings?.tipoObra ? (TIPO_OBRA_LABELS[b.settings.tipoObra as TipoObra] || b.settings.tipoObra) : '';
+                            return sortDirection === 'asc' ? tipoA.localeCompare(tipoB) : tipoB.localeCompare(tipoA);
+                        }
                         case 'organization': {
                             const orgA = organizations.find(o => o.id === a.settings?.organizationId)?.name || '';
                             const orgB = organizations.find(o => o.id === b.settings?.organizationId)?.name || '';
@@ -745,6 +751,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <colgroup>
                                 {visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
                                 {visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                                {visibleColumns.includes('tipo-obra') && <col data-col-key="tipo-obra" style={{ width: `${cols.getWidth('tipo-obra')}px` }} />}
                                 {visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
                                 {visibleColumns.includes('empreendimento') && <col data-col-key="empreendimento" style={{ width: `${cols.getWidth('empreendimento')}px` }} />}
                                 {visibleColumns.includes('linked') && <col data-col-key="linked" style={{ width: `${cols.getWidth('linked')}px` }} />}
@@ -789,6 +796,19 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
                                         >
                                             <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
+                                    )}
+                                    {visibleColumns.includes('tipo-obra') && (
+                                        <SortableHeader
+                                            label="Tipo de Obra"
+                                            colKey="tipo-obra"
+                                            uppercase={false}
+                                            sortColumn={sortColumn}
+                                            sortDirection={sortDirection}
+                                            onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="tipo-obra" />
                                         </SortableHeader>
                                     )}
                                     {visibleColumns.includes('organization') && (
@@ -964,19 +984,21 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
                                                         <FolderOpen className="w-4 h-4" />
                                                     </div>
-                                                    <div>
-                                                        <div className="text-sm font-normal text-gray-900">
-                                                            {project.name}
-                                                        </div>
-                                                        {project.settings?.tipoObra && (
-                                                            <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
-                                                                <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                                                                    {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
-                                                                </span>
-                                                            </div>
-                                                        )}
+                                                    <div className="text-sm font-normal text-gray-900">
+                                                        {project.name}
                                                     </div>
                                                 </div>
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('tipo-obra') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {project.settings?.tipoObra ? (
+                                                    <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                        {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-sm text-gray-400 font-normal italic">-</span>
+                                                )}
                                             </td>
                                         )}
                                         {visibleColumns.includes('organization') && (() => {
@@ -1129,14 +1151,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     ) : '-'}
                                                 </div>
                                             ) : (
-                                                <div className="flex flex-col">
-                                                    <div className="flex items-center gap-1 text-sm font-normal text-gray-600">
-                                                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                                                        {new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}
-                                                    </div>
-                                                    <span className="text-xs text-gray-400">
-                                                        {new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
+                                                <div className="flex items-center gap-1.5 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                    <span>{new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}</span>
+                                                    <span className="text-xs text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
                                             )}
                                             </td>

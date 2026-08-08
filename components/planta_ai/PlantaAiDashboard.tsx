@@ -119,7 +119,10 @@ export default function PlantaAiDashboard() {
           {studies.map((study) => (
             <li key={study.id}>
               <div className="px-4 py-4 sm:px-6 hover:bg-gray-50 flex justify-between items-center">
-                <div className="flex flex-col">
+                {/* min-w-0: sem isso o truncate do <p> não tem contra o que truncar —
+                    o wrapper (item flex da linha) recusa encolher abaixo do texto
+                    inteiro e empurra os botões de ação para fora do card. */}
+                <div className="flex flex-col min-w-0">
                   <p className="text-sm font-medium text-indigo-600 truncate">{study.name}</p>
                   <p className="text-xs text-gray-500">{study.city} {study.state ? `- ${study.state}` : ''}</p>
                 </div>

@@ -20,6 +20,20 @@ import {
 
 const MISSING_CODES = new Set(['42P01', '42883', 'PGRST202', 'PGRST205']);
 
+/**
+ * Tamanho do lote para filtros `.in(...)`. Um UUID ocupa ~37 bytes na query
+ * string, então 150 dá ~5,5 KB — bem abaixo do limite prático de URL (~8 KB).
+ * Não aumentar sem medir: o modo de falha é a consulta inteira ser recusada, e
+ * o sintoma na tela é "n/d" em toda linha, que parece indisponibilidade.
+ */
+const ALLOCATION_QUERY_CHUNK = 150;
+
+const chunk = <T,>(arr: T[], size: number): T[][] => {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+};
+
 const isMissingObject = (error: { code?: string; message?: string } | null): boolean => {
     if (!error) return false;
     if (error.code && MISSING_CODES.has(error.code)) return true;
@@ -101,27 +115,43 @@ export const propertyExpenseService = {
     ): Promise<Map<string, { propertyIds: string[]; names: string[] }> | null> {
         if (transactionIds.length === 0) return new Map();
 
-        const { data, error } = await supabase
-            .from('property_expense_allocations')
-            .select('transaction_id, property_id')
-            .in('transaction_id', transactionIds);
+        const rows: { transaction_id: string; property_id: string }[] = [];
 
-        if (error) {
-            if (isMissingObject(error) || error.code === '42501') return null;
-            throw error;
+        // ⚠️ EM LOTES, obrigatoriamente. `.in()` vira query string, e Contas a
+        // Pagar abre com 1000 parcelas: 1000 UUIDs = ~37 KB de URL, que o
+        // servidor recusa. O erro caía no catch da tela e a coluna "Imóvel"
+        // mostrava "n/d" em TODAS as linhas — parecendo serviço indisponível
+        // quando era só a consulta grande demais.
+        for (const lote of chunk(transactionIds, ALLOCATION_QUERY_CHUNK)) {
+            const { data, error } = await supabase
+                .from('property_expense_allocations')
+                .select('transaction_id, property_id')
+                .in('transaction_id', lote);
+
+            if (error) {
+                if (isMissingObject(error) || error.code === '42501') return null;
+                throw error;
+            }
+            rows.push(...((data || []) as { transaction_id: string; property_id: string }[]));
         }
 
-        const rows = (data || []) as { transaction_id: string; property_id: string }[];
         if (rows.length === 0) return new Map();
 
         // Nomes num segundo passo: a view não os traz e o join aninhado do
         // PostgREST falharia se a FK não estiver exposta no schema cache.
+        // Também em lotes: um edifício rateado entre muitas unidades gera uma
+        // lista longa de imóveis pelo mesmo caminho.
         const uniqueProps = [...new Set(rows.map(r => r.property_id))];
-        const { data: props } = await supabase
-            .from('commercial_properties')
-            .select('id, name')
-            .in('id', uniqueProps);
-        const nameById = new Map(((props || []) as { id: string; name: string }[]).map(p => [p.id, p.name]));
+        const nameById = new Map<string, string>();
+        for (const lote of chunk(uniqueProps, ALLOCATION_QUERY_CHUNK)) {
+            const { data: props } = await supabase
+                .from('commercial_properties')
+                .select('id, name')
+                .in('id', lote);
+            for (const p of ((props || []) as { id: string; name: string }[])) {
+                nameById.set(p.id, p.name);
+            }
+        }
 
         const summary = new Map<string, { propertyIds: string[]; names: string[] }>();
         for (const row of rows) {

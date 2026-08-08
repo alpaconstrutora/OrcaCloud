@@ -47,8 +47,8 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 160, category: 130, client_name: 160, empreendimento_name: 180,
-    description: 200, due_date: 140, amount: 130, status: 130, actions: 220,
+    party_name: 160, category: 130, client_name: 160, empreendimento_name: 184,
+    description: 200, due_date: 150, amount: 130, status: 130, actions: 220,
 };
 
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [

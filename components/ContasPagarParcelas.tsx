@@ -74,7 +74,7 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 130, status: 120,
+    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, status: 120,
     centro_custo: 180, plano_contas: 180, imovel: 190, actions: 200,
 };
 

@@ -72,7 +72,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    description: 220, party: 160, category: 140, date: 130, amount: 130, approval: 140, actions: 160,
+    description: 220, party: 160, category: 140, date: 130, amount: 130, approval: 142, actions: 160,
 };
 
 function currentMonthISO(): string {

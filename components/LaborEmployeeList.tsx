@@ -23,7 +23,7 @@ const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 240, document: 150, role: 160, organization: 180, contract: 120, status: 110, salary: 140, cost: 150, actions: 110,
+    name: 240, document: 150, role: 160, organization: 180, contract: 120, status: 112, salary: 152, cost: 150, actions: 138,
 };
 
 interface LaborEmployeeListProps {

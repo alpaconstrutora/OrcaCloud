@@ -53,7 +53,7 @@ const CHARGES_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 180, description: 220, billing_type: 120, due_date: 140, value: 140, status: 140, actions: 180,
+    party_name: 180, description: 220, billing_type: 120, due_date: 150, value: 140, status: 140, actions: 180,
 };
 
 // ─── main ────────────────────────────────────────────────────

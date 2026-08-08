@@ -92,12 +92,12 @@ const BROKERS_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_INVENTORY_COL_WIDTHS: Record<string, number> = {
-    name: 200, address: 220, block: 100, private_area: 110, price: 140, price_per_m2: 130,
-    position_weight: 130, sun_weight: 130, floor: 100, status: 130, actions: 200,
+    name: 200, address: 220, block: 107, private_area: 117, price: 140, price_per_m2: 130,
+    position_weight: 135, sun_weight: 130, floor: 110, status: 130, actions: 200,
 };
 const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
-    code: 100, property: 220, block: 90, private_area: 100, price_base: 130, price_per_m2_base: 130,
-    floor: 90, sale_value: 130, sale_value_per_m2: 130, variance: 120, variance_pct: 100, status: 130, actions: 160,
+    code: 118, property: 220, block: 107, private_area: 117, price_base: 145, price_per_m2_base: 149,
+    floor: 110, sale_value: 134, sale_value_per_m2: 158, variance: 128, variance_pct: 123, status: 130, actions: 160,
 };
 
 const getPositionWeight = (p?: { position_type?: string | null }) =>

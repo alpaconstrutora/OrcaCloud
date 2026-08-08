@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search, CalendarClock, AlertTriangle, CalendarCheck, CalendarX, FileText } from 'lucide-react';
+import { RefreshCw, Search, CalendarClock, AlertTriangle, CalendarCheck, CalendarX, FileText, MoveHorizontal } from 'lucide-react';
 import {
-    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+    ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { useConfirm } from '../ui/confirm';
@@ -20,6 +20,11 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'index', label: 'Índice', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// Larguras padrão do redimensionamento de colunas (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    number: 220, client: 180, status: 160, end_date: 175, days: 170, value: 130, index: 110, actions: 260,
+};
 
 type Faixa = 'all' | 'vencidos' | 'd30' | 'd60' | 'sem_vigencia';
 
@@ -68,6 +73,12 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
     const [searchTerm, setSearchTerm] = usePersistedState('rentalRenewals:search', '');
     const [showClosed, setShowClosed] = usePersistedState<boolean>('rentalRenewals:showClosed', false);
     const tableColumns = useTableColumns(COLUMNS, 'rentalRenewalsColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'rentalRenewalsColWidths');
+    // Largura = soma exata das colunas visíveis (§6.1) — "Ações" não é togglável
+    // (fora da lista do ColumnConfigButton), mas soma-se aqui do mesmo jeito.
+    const tableTotalWidth = COLUMNS
+        .filter(c => c.key === 'actions' || tableColumns.visibleColumns.includes(c.key))
+        .reduce((sum, c) => sum + cols.getWidth(c.key), 0);
 
     const clientName = useCallback(
         (id?: string) => (id ? (clients.find(c => c.id === id)?.name ?? '—') : '—'),
@@ -206,7 +217,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <button onClick={() => toggleFaixa('vencidos')} className="text-left">
                     <KpiCard shadow={false} size="sm" label="Vencidos" value={stats.vencidos} icon={<CalendarX className="w-4 h-4" />} color="red" />
                 </button>
@@ -282,6 +293,14 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Ajustar largura ao conteúdo (§6.1.2) — sob comando explícito, nunca automático. */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -302,47 +321,75 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+                            <colgroup>
+                                {COLUMNS.filter(c => c.key !== 'actions').map(c => (
+                                    tableColumns.visibleColumns.includes(c.key)
+                                        ? <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
+                                        : null
+                                ))}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
+                                    borda de "Ações" não andar a cada redimensionamento. */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.visibleColumns.includes('number') && (
                                         <SortableHeader colKey="number" label="Contrato" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="number" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('client') && (
                                         <SortableHeader colKey="client" label="Locatário" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="client" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
                                         <SortableHeader colKey="status" label="Situação" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="status" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('end_date') && (
                                         <SortableHeader colKey="end_date" label="Fim da vigência" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="end_date" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('days') && (
                                         <SortableHeader colKey="days" label="Prazo" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="days" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('value') && (
                                         <SortableHeader colKey="value" label="Aluguel" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="value" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('index') && (
                                         <SortableHeader colKey="index" label="Índice" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="index" />
+                                        </SortableHeader>
                                     )}
-                                    {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
-                                    )}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -386,8 +433,9 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                                 {r.reajuste_index || '—'}
                                             </td>
                                         )}
-                                        {tableColumns.visibleColumns.includes('actions') && (
-                                            <td className="px-6 py-2.5 text-right">
+                                        {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                        <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {onOpenContract && (
                                                         <button
@@ -449,8 +497,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                                     </>
                                                     )}
                                                 </div>
-                                            </td>
-                                        )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

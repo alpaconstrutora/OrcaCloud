@@ -41,7 +41,7 @@ const CLIENT_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 90, name: 220, category: 130, organization: 180, contact: 200, document: 150, projects: 200, actions: 190,
+    code: 118, name: 220, category: 130, organization: 180, contact: 200, document: 150, projects: 236, actions: 190,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de

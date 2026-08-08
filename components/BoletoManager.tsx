@@ -76,8 +76,8 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    numero: 100, beneficiario: 220, obra: 160, centro_custo: 160, valor: 130,
-    vencimento: 130, status: 130, capturado_em: 150, capturado_por: 160, actions: 70,
+    numero: 118, beneficiario: 220, obra: 160, centro_custo: 179, valor: 130,
+    vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, actions: 70,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os

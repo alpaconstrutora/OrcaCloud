@@ -38,8 +38,8 @@ const SALARY_COLUMNS: ColumnConfig[] = [
 
 // Larguras aproximadas do container real da aba (o card do formulário, ~1100px).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    effective_date: 120, change_type: 140, previous_salary: 150, new_salary: 150,
-    delta_value: 140, delta_pct: 120, role: 180, jornada: 110, contract_type: 120,
+    effective_date: 128, change_type: 140, previous_salary: 172, new_salary: 153,
+    delta_value: 161, delta_pct: 157, role: 180, jornada: 110, contract_type: 120,
     attachment: 110, notes: 240, source: 110, actions: 110,
 };
 

@@ -14,7 +14,7 @@ import { isObra } from '../utils/projectClassification';
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 90, name: 240, contact: 240, document: 160, project: 220, actions: 190,
+    code: 118, name: 240, contact: 240, document: 160, project: 220, actions: 190,
 };
 
 const INVESTOR_COLUMNS: ColumnConfig[] = [

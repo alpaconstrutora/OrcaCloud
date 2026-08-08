@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon, Upload, X } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search, Image as ImageIcon, Upload, X, MoveHorizontal } from 'lucide-react';
 import {
     commercialPriceTableService,
     CommercialPriceTable,
@@ -9,7 +9,7 @@ import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { IndexName } from '../services/contractIndexService';
 import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import Button from './ui/Button';
 
@@ -169,6 +169,13 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'showPrice',       label: 'Exibir Preço',        sortable: true },
 ];
 
+// Larguras padrão do redimensionamento de colunas (§6.1).
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    photo: 80, unit: 170, status: 120, privArea: 163, bedrooms: 148, parking: 111,
+    bathrooms: 137, floor: 140, position: 123, current: 162, price: 199, delta: 90,
+    visibleToBroker: 192, showPrice: 150,
+};
+
 const fmtBRL = formatMoney;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -202,6 +209,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>(`priceTable:${mode}:search`, '');
     const tableColumns = useTableColumns(COLUMNS, `priceTableColumns:${mode}`);
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, `priceTableColWidths:${mode}`);
+    // Largura = soma exata das colunas visíveis + checkbox fixo de seleção (§6.1).
+    const tableTotalWidth = COLUMNS
+        .filter(c => tableColumns.visibleColumns.includes(c.key))
+        .reduce((sum, c) => sum + cols.getWidth(c.key), 0)
+        + 40;
 
     // Reajuste em massa
     const [adjustMode, setAdjustMode] = React.useState<'percent' | 'index'>('percent');
@@ -622,6 +635,14 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Ajustar largura ao conteúdo (§6.1.2) — sob comando explícito, nunca automático. */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
 
@@ -635,7 +656,16 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                     ) : (
                         <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
+                                <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+                                    <colgroup>
+                                        {/* checkbox de seleção — largura fixa, sem data-col-key (não é redimensionável). */}
+                                        <col style={{ width: '40px' }} />
+                                        {COLUMNS.map(c => (
+                                            tableColumns.visibleColumns.includes(c.key)
+                                                ? <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
+                                                : null
+                                        ))}
+                                    </colgroup>
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                             <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -649,85 +679,114 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                 />
                                             </th>
                                             {tableColumns.visibleColumns.includes('photo') && (
-                                                <th className="px-6 py-2 border-r border-gray-100 w-16">Foto</th>
+                                                <th className="px-6 py-2 border-r border-gray-100 relative overflow-hidden">
+                                                    Foto
+                                                    <cols.ResizeHandle colKey="photo" />
+                                                </th>
                                             )}
                                             {tableColumns.visibleColumns.includes('unit') && (
                                                 <SortableHeader colKey="unit" label="Unidade" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100" />
+                                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <cols.ResizeHandle colKey="unit" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('status') && (
                                                 <SortableHeader colKey="status" label="Status" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100" />
+                                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <cols.ResizeHandle colKey="status" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('privArea') && (
                                                 <SortableHeader colKey="privArea" label="Área privativa" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="privArea" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('bedrooms') && (
                                                 <SortableHeader colKey="bedrooms" label="Dormitórios" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="bedrooms" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('parking') && (
                                                 <SortableHeader colKey="parking" label="Vagas" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="parking" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('bathrooms') && (
                                                 <SortableHeader colKey="bathrooms" label="Banheiros" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="bathrooms" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('floor') && (
                                                 <SortableHeader colKey="floor" label="Pavimento" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="floor" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('position') && (
                                                 <SortableHeader colKey="position" label="Posição" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="position" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('current') && (
                                                 <SortableHeader colKey="current" label={cfg.currentLabel} uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
+                                                    <cols.ResizeHandle colKey="current" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('price') && (
                                                 <SortableHeader colKey="price" label={cfg.versionLabel} uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
+                                                    <cols.ResizeHandle colKey="price" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('delta') && (
                                                 <SortableHeader colKey="delta" label="Δ" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
+                                                    <cols.ResizeHandle colKey="delta" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('visibleToBroker') && (
                                                 <SortableHeader colKey="visibleToBroker" label="Visível p/ Corretor" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap" />
+                                                    className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="visibleToBroker" />
+                                                </SortableHeader>
                                             )}
                                             {tableColumns.visibleColumns.includes('showPrice') && (
                                                 <SortableHeader colKey="showPrice" label="Exibir Preço" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 text-center whitespace-nowrap" />
+                                                    className="px-6 py-2 text-center whitespace-nowrap overflow-hidden">
+                                                    <cols.ResizeHandle colKey="showPrice" />
+                                                </SortableHeader>
                                             )}
                                         </tr>
                                     </thead>

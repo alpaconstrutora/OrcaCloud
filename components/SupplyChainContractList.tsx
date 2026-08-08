@@ -20,7 +20,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 110, title: 260, project: 180, supplier: 200, date: 170, status: 130, value: 150, actions: 200,
+    number: 123, title: 260, project: 180, supplier: 230, date: 170, status: 130, value: 150, actions: 200,
 };
 
 const COLUMNS: ColumnConfig[] = [

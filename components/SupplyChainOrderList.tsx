@@ -22,7 +22,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 120, obra: 160, orcamento: 140, supplier: 200, status: 140, date: 140, value: 140, items: 100, actions: 220,
+    number: 123, obra: 160, orcamento: 144, supplier: 200, status: 140, date: 171, value: 141, items: 102, actions: 220,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a

@@ -62,8 +62,8 @@ const COLUMNS: ColumnConfig[] = [
 
 // §6.1 — larguras padrão; ajustáveis por arraste e por `autoFit()`.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 90, name: 240, obra: 210, organization: 170, entries: 110,
-    lastEntry: 150, impediments: 140, status: 150, updated: 130, actions: 200,
+    code: 118, name: 240, obra: 210, organization: 170, entries: 133,
+    lastEntry: 169, impediments: 165, status: 150, updated: 149, actions: 200,
 };
 
 /** Dias sem registro a partir dos quais o diário é considerado desatualizado. */

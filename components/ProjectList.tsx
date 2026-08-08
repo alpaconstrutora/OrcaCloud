@@ -105,9 +105,9 @@ const COLUMNS: ColumnConfig[] = [
 // configuráveis via ColumnConfigButton — só existem no contexto Diário), mas
 // precisam de largura própria por serem colunas reais da tabela.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 90, name: 240, organization: 180, empreendimento: 180, linked: 200,
+    code: 118, name: 240, organization: 180, empreendimento: 184, linked: 200,
     'obra-vinculada': 180, 'planejamento-vinculada': 180,
-    client: 160, updated: 150, 'status-budget': 130, 'status-obra': 130, lock: 120, actions: 200,
+    client: 160, updated: 150, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a

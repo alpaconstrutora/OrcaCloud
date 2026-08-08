@@ -61,7 +61,7 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 200, description: 220, project_name: 160, due_date: 130, amount: 140, status: 150,
+    party_name: 200, description: 220, project_name: 160, due_date: 150, amount: 140, status: 150,
     cost_center_name: 180, plano_de_contas_name: 180, actions: 260,
 };
 

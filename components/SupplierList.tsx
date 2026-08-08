@@ -38,7 +38,7 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 90, name: 260, nickname: 140, type: 130, category: 160, organization: 200, portal: 170, contact: 220, document: 160, actions: 110,
+    code: 118, name: 260, nickname: 140, type: 130, category: 160, organization: 200, portal: 170, contact: 220, document: 160, actions: 110,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a

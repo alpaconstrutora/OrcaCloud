@@ -23,7 +23,7 @@ const MEMBER_COLUMNS: ColumnConfig[] = [
 // container real (padrão de SupplierList.tsx), para não nascer truncando
 // nome/email nem deixando faixa vazia grande antes do usuário mexer.
 const MEMBER_COL_WIDTHS: Record<string, number> = {
-    code: 110, name: 260, email: 300, role: 240, joinedAt: 150, actions: 220,
+    code: 118, name: 260, email: 300, role: 240, joinedAt: 150, actions: 220,
 };
 
 interface OrganizationUsersProps {

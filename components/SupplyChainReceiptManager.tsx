@@ -19,7 +19,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 120, obra: 180, orcamento: 160, supplier: 200, status: 160, date: 150, actions: 180,
+    number: 123, obra: 180, orcamento: 160, supplier: 200, status: 178, date: 150, actions: 180,
 };
 
 interface SupplyChainReceiptManagerProps {

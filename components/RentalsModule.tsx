@@ -136,7 +136,7 @@ const DEAL_COLUMNS: ColumnConfig[] = [
 // excesso gratuito (1560 → 1410) e a folga da coluna de ação.
 const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
     id: 95, _propertyName: 150, _clientName: 200, type: 100, value: 130, date: 115,
-    rental_analysis: 110, rental_value: 130, rental_base: 130, status: 120, actions: 130,
+    rental_analysis: 110, rental_value: 137, rental_base: 130, status: 120, actions: 130,
 };
 
 // Colunas da aba Corretores (§5.2/§6.1).
@@ -151,7 +151,7 @@ const BROKER_COLUMNS: ColumnConfig[] = [
     { key: 'access', label: 'Acesso ao Portal', sortable: false },
 ];
 const BROKER_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 200, email: 220, phone: 140, agency_name: 180, commission_rate: 110, creci: 110, is_active: 100, access: 140,
+    name: 200, email: 220, phone: 140, agency_name: 180, commission_rate: 136, creci: 111, is_active: 100, access: 140,
 };
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {

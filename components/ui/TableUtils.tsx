@@ -448,11 +448,11 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
       <div className="flex items-center gap-1.5">
         {label}
         {/* Ícone de ordenação sempre visível, não só na coluna ativa — sinaliza que TODA
-            coluna aqui é clicável para ordenar (ui_ux_guia_unificado.md §6.8). Cinza médio
-            e neutro (dois sentidos) quando inativa — precisa contrastar com o bg-gray-50
-            do <thead>, por isso não pode ser mais claro que gray-400 — escurecendo no
-            hover; azul + direção quando é a ativa. */}
-        <span className={`inline-flex items-center ${sortColumn === colKey ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`}>
+            coluna aqui é clicável para ordenar (ui_ux_guia_unificado.md §6.8). Cinza
+            escuro e neutro (dois sentidos) quando inativa — gray-400 ainda sumia contra
+            o bg-gray-50 do <thead> (reportado 2026-08-08, 2ª rodada); azul + direção
+            quando é a ativa. */}
+        <span className={`inline-flex items-center ${sortColumn === colKey ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-500 group-hover:text-gray-700'}`}>
           {sortColumn === colKey
             ? (sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)
             : <ChevronsUpDown className="w-3.5 h-3.5" />}

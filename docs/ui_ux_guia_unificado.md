@@ -880,9 +880,10 @@ Referência: `BankReconciliation.tsx`, aba Extrato.
 
 Toda coluna `sortable` mostra um ícone de ordenação no cabeçalho **o tempo
 todo** — não só depois de clicada. Coluna inativa: `ChevronsUpDown`
-(neutro, indica os dois sentidos) em `text-gray-400`, escurecendo para
-`text-gray-600` no hover — `text-gray-300` some contra o `bg-gray-50` do
-`<thead>` (reportado 2026-08-08). Coluna ativa: `ChevronUp`/`ChevronDown`
+(neutro, indica os dois sentidos) em `text-gray-500`, escurecendo para
+`text-gray-700` no hover — `text-gray-300` some contra o `bg-gray-50` do
+`<thead>` (reportado 2026-08-08); `text-gray-400` ainda era pouco perceptível
+(mesmo relato, 2ª rodada). Coluna ativa: `ChevronUp`/`ChevronDown`
 (direção real) em `text-blue-600`, como já era.
 
 Automático: é comportamento do próprio `SortableHeader` (`ui/TableUtils.tsx`),

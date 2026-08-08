@@ -63,6 +63,8 @@ export function rotuloPasso(mm: number): string {
 const SNAP_PX = 12;
 /** Distância máxima, em pixels, para o clique selecionar uma parede. */
 const HIT_PX = 8;
+/** Espessura da linha de contorno da parede, em pixels de tela. */
+const LINHA_PAREDE_PX = 1.2;
 /** Mesmo teto do kernel (MAX_COORD_MM). Ver o comentário em `capturar`. */
 const LIMITE_MM = 1_000_000;
 
@@ -290,16 +292,125 @@ export default function BlueprintCanvas({
       ctx.fill('evenodd');
     }
 
-    // Paredes
-    ctx.lineCap = 'round';
+    // Paredes — desenhadas VAZADAS, na convencao de planta arquitetonica: duas
+    // linhas paralelas com o miolo vazio, e nao um traco cheio.
+    //
+    // Feito em duas passadas em vez de calcular a uniao booleana dos corpos:
+    //
+    //   1. traco GROSSO na espessura da parede -> silhueta cheia. Nas junçoes as
+    //      pinceladas se sobrepoem e a uniao sai de graca, sem geometria nenhuma.
+    //   2. traco BRANCO mais fino por cima -> escava o miolo, deixando so a borda.
+    //
+    // O miolo escavado tambem se une nas junçoes, entao o interior fica continuo
+    // de um comodo para o outro — que e exatamente o que a planta de referencia
+    // mostra, sem linha cruzando dentro do encontro de paredes.
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+
+    // Quantas pontas de parede chegam em cada vertice. Serve para saber se uma
+    // extremidade e LIVRE: ali o miolo precisa parar antes, senao a parede fica
+    // com a ponta aberta, sem nada fechando o contorno.
+    const grauDaPonta = new Map<string, number>();
     for (const w of paredesDoNivel) {
+      for (const extremo of [w.a, w.b]) {
+        const chave = `${extremo.x},${extremo.y}`;
+        grauDaPonta.set(chave, (grauDaPonta.get(chave) ?? 0) + 1);
+      }
+    }
+
+    /**
+     * Uma ponta é livre quando nada a encosta.
+     *
+     * Contar só PONTAS não basta: numa junção em T a divisória termina no MEIO
+     * da parede que a recebe, e aquele ponto não é ponta de ninguém — ela seria
+     * classificada como livre e ganharia um tampo, desenhando uma linha atravessada
+     * dentro da junção. Por isso também se testa a pertinência ao corpo das outras.
+     */
+    const pontaLivre = (p: Point, id: string) => {
+      if ((grauDaPonta.get(`${p.x},${p.y}`) ?? 0) > 1) return false;
+      for (const o of paredesDoNivel) {
+        if (o.id === id) continue;
+        const dx = o.b.x - o.a.x;
+        const dy = o.b.y - o.a.y;
+        const comp2 = dx * dx + dy * dy;
+        if (comp2 === 0) continue;
+        let t = ((p.x - o.a.x) * dx + (p.y - o.a.y) * dy) / comp2;
+        t = Math.max(0, Math.min(1, t));
+        const d = Math.hypot(o.a.x + t * dx - p.x, o.a.y + t * dy - p.y);
+        if (d <= o.thicknessMm / 2) return false;
+      }
+      return true;
+    };
+
+    // Geometria de desenho de cada parede.
+    //
+    // O detalhe que faz o canto funcionar: ESTENDER a pincelada em meia espessura
+    // nas pontas que encontram outra parede. Com corte reto terminando no eixo,
+    // sobra um quadrado vazio de meia espessura no canto externo — era o degrau
+    // que aparecia em cada esquina. Estendendo, as pinceladas das duas paredes
+    // cobrem esse quadrado exatamente, e o canto sai VIVO, não arredondado.
+    //
+    // Na ponta LIVRE não se estende: a parede ficaria meia espessura mais longa
+    // do que é.
+    const traco = paredesDoNivel.map((w) => {
       const a = paraTela(w.a);
       const b = paraTela(w.b);
-      ctx.strokeStyle = w.id === selectedId ? COR_SELECIONADA : COR_PAREDE;
-      ctx.lineWidth = Math.max(1.5, w.thicknessMm * vista.escala);
+      const comp = Math.hypot(b.x - a.x, b.y - a.y);
+      const ux = comp > 0 ? (b.x - a.x) / comp : 0;
+      const uy = comp > 0 ? (b.y - a.y) / comp : 0;
+      const cheia = Math.max(1, w.thicknessMm * vista.escala);
+      const meia = cheia / 2;
+      return {
+        w,
+        a,
+        b,
+        ux,
+        uy,
+        comp,
+        cheia,
+        // Recuo NEGATIVO estende; positivo encurta.
+        extA: pontaLivre(w.a, w.id) ? 0 : meia,
+        extB: pontaLivre(w.b, w.id) ? 0 : meia,
+      };
+    });
+
+    // Passada 1 — silhueta
+    for (const t of traco) {
+      if (t.comp < 0.5) continue;
+      ctx.strokeStyle = t.w.id === selectedId ? COR_SELECIONADA : COR_PAREDE;
+      ctx.lineWidth = t.cheia;
       ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
+      ctx.moveTo(t.a.x - t.ux * t.extA, t.a.y - t.uy * t.extA);
+      ctx.lineTo(t.b.x + t.ux * t.extB, t.b.y + t.uy * t.extB);
+      ctx.stroke();
+    }
+
+    // Passada 2 — escavar o miolo, com a MESMA extensão nas junções para que o
+    // interior de um cômodo continue no outro sem linha atravessando o encontro.
+    ctx.strokeStyle = '#ffffff';
+    for (const t of traco) {
+      const miolo = t.cheia - 2 * LINHA_PAREDE_PX;
+      // Muito longe, a parede vira uma linha e não há miolo para escavar. Deixar
+      // sólida é o certo: contorno de meio pixel viraria sujeira cinza.
+      if (miolo < 1 || t.comp < 0.5) continue;
+
+      // O miolo avança MENOS que a silhueta — exatamente uma espessura de linha.
+      //
+      // Era daqui que vinha o canto aberto: estendendo o branco tanto quanto o
+      // escuro, a escavação de uma parede alcançava a borda EXTERNA da outra e
+      // apagava a linha dela. A silhueta estava certa o tempo todo; o branco é
+      // que comia o contorno do vizinho.
+      //
+      // A mesma conta serve para a ponta livre, onde `ext` é 0 e o resultado fica
+      // negativo — ou seja, recua e deixa borda fechando a extremidade.
+      const recA = t.extA - LINHA_PAREDE_PX;
+      const recB = t.extB - LINHA_PAREDE_PX;
+      if (t.comp + recA + recB <= 0) continue;
+
+      ctx.lineWidth = miolo;
+      ctx.beginPath();
+      ctx.moveTo(t.a.x - t.ux * recA, t.a.y - t.uy * recA);
+      ctx.lineTo(t.b.x + t.ux * recB, t.b.y + t.uy * recB);
       ctx.stroke();
     }
 

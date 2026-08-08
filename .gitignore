@@ -36,3 +36,6 @@ _dev_scripts/
 .antigravity_rules
 
 .vercel
+
+# Saidas geradas pelo harness de render (regeraveis)
+docs/spikes/wall-render/saida-*.png

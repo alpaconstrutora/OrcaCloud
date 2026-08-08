@@ -730,9 +730,15 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     }
   };
 
+  // Mesma correção de SupplierPortalManager.tsx (rota 'partner-workspaces-admin',
+  // sempre dentro do <Layout>): `h-[calc(100vh-4rem)]` transbordava por baixo do
+  // espaço real (836px de caixa contra 640px disponíveis, medido com Playwright,
+  // 2026-08-08) e o `<main className="p-6">` duplicava o gutter do Layout.
+  // `absolute inset-0` usa o `<main>` do Layout (já `relative`) como referência
+  // exata; `p-4 md:p-6` interno vira a única fonte de padding.
   return (
-    <div className="h-[calc(100vh-4rem)] overflow-y-auto bg-white text-gray-800 font-sans">
-      <main className="p-6 flex flex-col gap-6">
+    <div className="absolute inset-0 overflow-y-auto bg-white text-gray-800 font-sans">
+      <main className="p-4 md:p-6 flex flex-col gap-6">
         {selectedWorkspace ? (
           <>
             <button

@@ -242,8 +242,10 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
         </div>
     );
 
+    // Sempre dentro do <Layout> (só usado por SalesManagementModule, nunca em
+    // rota pública) — o gutter §20.2 já vem do <main>. O `p-6` próprio duplicava.
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Corretores</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua equipe de corretores e acesso ao portal. Cadastre em Minha Organização &gt; Fornecedores &gt; Corretor Imobiliário.</p>

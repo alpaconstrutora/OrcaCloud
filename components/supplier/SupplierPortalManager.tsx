@@ -298,9 +298,20 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
     }
   };
 
+  // Sempre dentro do <Layout> (rota 'supplier-area', nunca standalone) — o
+  // <main> dele já é `position: relative` e tem seu próprio gutter/scroll
+  // (§20.2). `absolute inset-0` cancela os 4 lados do padding herdado de uma
+  // vez; era `h-[calc(100vh-4rem)]`, que ignora a altura REAL disponível
+  // dentro do Layout (calcula 100vh menos um header hipotético de 64px, sem
+  // descontar o padding vertical do <main> nem considerar que a sidebar está
+  // ao LADO, não empilhada) — a caixa nascia mais alta que o espaço de
+  // verdade e transbordava por baixo (confirmado com Playwright: 836px de
+  // caixa contra 640px de espaço real, 2026-08-08). O `<main className="p-6">`
+  // interno também duplicava o gutter do Layout; vira `p-4 md:p-6` (o padrão),
+  // já que agora é a ÚNICA fonte de padding.
   return (
-    <div className="h-[calc(100vh-4rem)] overflow-y-auto bg-[#F8FAFC] text-gray-800 font-sans">
-      <main className="p-6 flex flex-col gap-6">
+    <div className="absolute inset-0 overflow-y-auto bg-[#F8FAFC] text-gray-800 font-sans">
+      <main className="p-4 md:p-6 flex flex-col gap-6">
         {selectedSupplier ? (
           <>
             <div className="flex items-center justify-between gap-4">

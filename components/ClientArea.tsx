@@ -3703,8 +3703,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     };
 
     if (isAdmin && !clientProfile) {
+        // Sempre dentro do <Layout> nesta branch (é a lista do staff escolhendo um
+        // cliente — o cliente propriamente dito vê a branch de baixo, que trata
+        // isStandalone). Gutter §20.2 já vem do <main>; era `lg:p-8` (32px, valor
+        // antigo, breakpoint errado — o resto do sistema usa `md:`) duplicando.
         return (
-            <div className="min-h-screen bg-gray-50/30 lg:p-8 p-4">
+            <div className="min-h-screen bg-gray-50/30">
                 <ClientList onSelectClient={onClientSelect} organizationId={organizationId ?? undefined} portalContext />
             </div>
         );

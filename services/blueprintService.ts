@@ -224,8 +224,14 @@ export async function publishSnapshot(input: {
   });
 
   if (error) {
-    // 40001 = serialization_failure, levantado pela RPC quando o ramo andou.
-    if (error.code === '40001' || /revis[ãa]o desatualizada/i.test(error.message)) {
+    // 23001 = restrict_violation, levantado pela RPC quando o ramo andou.
+    //
+    // Não usar 40001 (serialization_failure) aqui, por mais tentador que o nome
+    // seja: o PostgREST trata 40001 como retentável e reexecuta a transação em
+    // laço. Como repetir nunca resolve — a revisão enviada segue velha — o
+    // cliente ficava pendurado até o timeout de 20 s de lib/supabase.ts, e o
+    // usuário via falha de rede em vez de "recarregue o desenho".
+    if (error.code === '23001' || /revis[ãa]o desatualizada/i.test(error.message)) {
       throw new BlueprintRevisionConflict(
         input.baseRevision,
         `O ramo avançou desde a sua leitura (revisão ${input.baseRevision}). ` +

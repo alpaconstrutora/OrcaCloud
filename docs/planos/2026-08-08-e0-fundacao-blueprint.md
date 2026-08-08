@@ -118,13 +118,40 @@ npx vitest run     → 50 arquivos, 885 testes, todos passam
 
 Kernel: 36 casos (32 anteriores + 4 de round-trip). Goldens: 7.
 
-**O que NÃO foi verificado, e é a lacuna honesta desta entrega:** a migration
-**não foi aplicada**. O histórico de `schema_migrations` está furado desde
-`20270208*`, então o arquivo é `aplicar_*` e precisa ir à mão pelo SQL Editor.
-Consequência: nada do que depende do banco foi exercitado contra um Postgres real —
-RLS, triggers de imutabilidade, o FK composto e a RPC de publicação estão
-**escritos e revisados, não executados**. `verifySnapshotIntegrity` existe
-justamente para ser a primeira coisa a rodar depois de aplicar.
+### 6.1 Verificação contra o Supabase real — 08/08/2026
+
+Migration aplicada à mão pelo SQL Editor. Depois disso,
+`__tests__/blueprintE0.integration.test.ts` rodou com sessão autenticada:
+**10 de 10 casos passam**. Cobre RLS positiva e negativa cross-org, autosave sem
+publicar, round-trip real pelo banco, publicação com explosão de objetos,
+idempotência, conflito de revisão e reprodutibilidade do hash.
+
+O teste achou **dois defeitos que nenhuma revisão de código tinha pego**:
+
+**1. Código de erro que significava "tente de novo".** A recusa de revisão
+desatualizada usava `serialization_failure` (40001). O nome parecia certo — é um
+conflito de concorrência — mas 40001 é justamente o SQLSTATE que o PostgREST trata
+como retentável, e ele reexecuta a transação em laço. Como repetir nunca resolve (a
+revisão enviada segue velha), o cliente ficava pendurado até o timeout de 20 s de
+`lib/supabase.ts`, e o usuário veria falha de rede em vez de "recarregue o
+desenho". Corrigido para `restrict_violation` (23001) em
+`aplicar_20270905000001_blueprint_publish_errcode.sql`.
+
+A prova de que o diagnóstico estava certo: a suíte caiu de **22,78 s para 2,71 s**
+— exatamente os 20 s do timeout desaparecendo.
+
+**2. A asserção de imutabilidade media a coisa errada.** O caso exigia que o
+`UPDATE` num snapshot publicado devolvesse erro. Ele devolve sucesso — não porque a
+alteração passou, mas porque `blueprint_snapshots` só tem policy de `SELECT` e
+`INSERT`: sem policy de `UPDATE`, a RLS filtra a linha antes e o comando afeta zero
+linhas, o que não é erro. Ausência de erro não é ausência de proteção. O caso passou
+a verificar o que de fato prova imutabilidade — que o conteúdo continua igual depois
+de tentar alterar e apagar.
+
+**Limite que isso expõe:** o trigger `fn_blueprint_block_mutation` **não é
+exercitável** por esse caminho, porque a RLS barra antes dele. Ele é a segunda linha
+de defesa, para caminhos que não passam pela RLS (service-role, `psql`, job
+agendado). Fica coberto por inspeção da migration, não por teste.
 
 ## 7. Critério de pronto
 
@@ -136,7 +163,9 @@ justamente para ser a primeira coisa a rodar depois de aplicar.
 - [x] Round-trip payload → modelo → payload provado por teste
 - [x] Furo do identificador volátil fechado, com caso de regressão
 - [x] `tsc` limpo, 885 testes passando
-- [ ] **Pendente:** aplicar a migration à mão e rodar `verifySnapshotIntegrity`
-- [ ] **Pendente:** testes negativos de RLS (acesso cruzado entre orgs) — só dá
-      para fazer depois de aplicar
+- [x] Migration aplicada e verificada contra o Supabase real (10/10)
+- [x] Testes negativos de RLS (acesso cruzado entre organizações)
+- [x] Conflito de revisão corrigido: `restrict_violation`, não `serialization_failure`
+- [ ] **Coberto só por inspeção:** o trigger de imutabilidade, inalcançável por
+      cliente sob RLS. Exigiria conexão privilegiada para exercitar.
 - [ ] **Pendente:** E3 (editor) — é ele que dá uma tela para o usuário

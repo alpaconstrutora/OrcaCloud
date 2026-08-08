@@ -77,10 +77,35 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-// Larguras padrão do redimensionamento de colunas (§6.1) da tabela de Unidades.
-const PROPERTY_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 240, address: 240, occupancy: 140, block: 100, floor: 90,
-    private_area: 120, rental_analysis: 150, rental_value: 140, price: 150, status: 130, actions: 130,
+// Larguras padrão do redimensionamento de colunas (§6.1). Calibradas em
+// 2026-08-07 medindo no navegador, contra o container real de 1130px (viewport
+// 1440, gutter §20.2), duas coisas diferentes:
+//   • o PISO DO CABEÇALHO — largura do rótulo + seta de ordenação + 48px de
+//     padding (§6.6). Independe do dado: abaixo dele o cabeçalho é cortado, o
+//     que é sempre defeito. É a régua das colunas de dado.
+//   • o CONTEÚDO DA CÉLULA DE AÇÕES — 213px (botão "Negociação" + 2
+//     ActionIconButton). Também independe do dado.
+// ⚠️ `actions` estava em 130px contra 213px de conteúdo. A célula de ação é um
+// flex com `whitespace-nowrap`: não trunca nem quebra — TRANSBORDA para a
+// esquerda e pinta por cima da coluna de Status ("DisponíNegociação"). Coluna
+// de ação nunca é candidata a aperto.
+//
+// Os dois modos da tabela (edifícios × unidades de um edifício) têm records
+// separados porque disputavam a mesma largura de `name`: nome de edifício
+// ("Edifício Vista Alegre") pede 206px, nome de unidade ("Apto 101") pede 115.
+// Um valor só obrigava a escolher entre quebrar o nome do edifício em duas
+// linhas ou estourar o container no modo Unidades. A chave de storage continua
+// única — o que o usuário arrastar vale nos dois modos, como antes.
+const BUILDING_MODE_COL_WIDTHS: Record<string, number> = {
+    name: 210, address: 330, price: 145, occupancy: 120, status: 115, actions: 210,
+};
+// Soma 1141 num container de 1130: os 11px que sobram são comidos pelo padding
+// direito da última célula (24px), então nenhum ícone de ação some. Não dá para
+// baixar mais sem cortar cabeçalho — 9 colunas com `px-6` não cabem em 1130.
+// Quem quiser ajuste ao dado real tem o autofit (§6.1.2) na régua de controles.
+const UNIT_MODE_COL_WIDTHS: Record<string, number> = {
+    name: 115, block: 108, floor: 98, private_area: 118,
+    rental_analysis: 100, rental_value: 138, price: 141, status: 113, actions: 210,
 };
 
 // Colunas de dado aplicáveis a cada modo da tabela (edifícios × unidades de um
@@ -104,9 +129,14 @@ const DEAL_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+// Mesma calibragem por piso de cabeçalho. Somavam 1560px; com 11
+// colunas visíveis não existe arranjo legível que caiba nos 1130px do container
+// — aqui o scroll horizontal interno é o comportamento correto, e quem quiser a
+// tela inteira esconde coluna pela engrenagem (§3). O que foi corrigido é o
+// excesso gratuito (1560 → 1410) e a folga da coluna de ação.
 const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 110, _propertyName: 220, _clientName: 200, type: 100, value: 140, date: 120,
-    rental_analysis: 150, rental_value: 140, rental_base: 140, status: 130, actions: 110,
+    id: 95, _propertyName: 150, _clientName: 200, type: 100, value: 130, date: 115,
+    rental_analysis: 110, rental_value: 130, rental_base: 130, status: 120, actions: 130,
 };
 
 // Colunas da aba Corretores (§5.2/§6.1).
@@ -168,7 +198,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // Redimensionamento de colunas (§6.1) — a tabela troca de colunas conforme o
     // modo (edifícios × unidades de um edifício), por isso a largura total soma
     // só as colunas de dado do modo ativo, além de "Ações".
-    const unitsCols = useResizableColumns(PROPERTY_DEFAULT_COL_WIDTHS, 'rentalsUnitsColWidths');
+    // `getWidth` lê `defaultWidths` a cada render (não captura no mount), então
+    // trocar o record ao entrar/sair do edifício vale na hora.
+    const unitsCols = useResizableColumns(
+        selectedBuildingId ? UNIT_MODE_COL_WIDTHS : BUILDING_MODE_COL_WIDTHS,
+        'rentalsUnitsColWidths',
+    );
     const unitsModeColumnKeys = selectedBuildingId ? unitModeColumnKeys : buildingModeColumnKeys;
     const unitsTableTotalWidth = unitsModeColumnKeys
         .filter(key => unitsTableColumns.visibleColumns.includes(key))

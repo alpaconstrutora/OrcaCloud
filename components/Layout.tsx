@@ -1598,7 +1598,15 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
         {/* Content Body */}
-        <main className={`flex-1 overflow-y-auto p-4 md:p-8 scrollbar-hide relative ${w.main}`}>
+        {/* Gutter do container de conteúdo — 16px no mobile, 24px no desktop.
+            Era `md:p-8` (32px); virou 24px em 2026-08-07 por decisão de produto
+            (densidade). 24px é a régua de app denso de dados e casa com o `px-6`
+            das células; 16px é o piso do mobile. O topo pesa mais do que mede: o
+            `h1` das telas é 30px numa caixa de 36px, então ~8px de meia-entrelinha
+            entram no vão percebido — 32px lia como ~40px.
+            Ver docs/ui_ux_guia_unificado.md §20.2. Quem compensa esse padding com
+            margem negativa (full-bleed) tem que usar `-mx-4 md:-mx-6`, não `-8`. */}
+        <main className={`flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide relative ${w.main}`}>
           {children}
         </main>
       </div>

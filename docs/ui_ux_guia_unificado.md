@@ -195,6 +195,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §19 Navegação de módulos (+ §19.1 abas canônicas, §19.2 árvore lateral, §19.3 `tabsSlot`, §19.4 `chromeSlot`)
 - [ ] §20 Cabeçalho de tela (título + subtítulo + KPIs)
 - [ ] §20.1 Ritmo de espaçamento do cromo (24px → KPIs, 12px depois)
+- [ ] §20.2 Gutter do container — a raiz da tela NÃO declara `px-*`/`pt-*`; full-bleed usa `-mx-4 md:-mx-6`
 - [ ] §21 Rótulo de campo e título de modal
 - [ ] §22 Atualizar estado local em vez de recarregar a tabela inteira (criar/editar/excluir) + preservar scroll ao voltar de edição em página cheia
 - [ ] §23 Migalha de pão — decisão explícita (usa `ui/Breadcrumb.tsx` com 3+ níveis internos, ou "Voltar" com 1 salto, ou nada por §18)
@@ -1608,6 +1609,37 @@ si: são controles da mesma tarefa.
 > sempre que a pergunta muda; 12px enquanto for a mesma pergunta.
 > ℹ️ Referência: `BankReconciliation.tsx` (aba Extrato), 2026-07-16; ordem
 > abas/KPIs corrigida em 2026-08-02.
+
+### 20.2 Gutter do container — 16px no mobile, 24px no desktop
+
+O respiro entre a moldura do app (sidebar, barra superior) e o conteúdo da tela
+**não é decisão da tela**. Ele mora num lugar só:
+
+```tsx
+// components/Layout.tsx — <main>
+<main className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide relative">
+```
+
+| | Gutter |
+|---|---|
+| Mobile (< 768px) | **16px** — piso; abaixo disso o conteúdo cola na borda |
+| Desktop | **24px** — régua de app denso de dados; casa com o `px-6` das células (§6.6) |
+
+> ✅ **A tela não declara padding lateral nem superior própria.** A raiz é
+> `space-y-6 pb-20` e nada mais. Se você escreveu `px-*`/`pt-*` na raiz de uma
+> tela, ou está duplicando o gutter ou está brigando com ele.
+> ✅ **Full-bleed** (banner sangrando até a borda) é o único caso que cancela o
+> gutter, e os valores **têm que acompanhar** o `<main>`: `-mx-4 md:-mx-6`.
+> Com `md:-mx-8` contra um `md:p-6` sobra margem negativa e nasce scroll
+> lateral. Referência: `SupplierDashboard.tsx` (casca do portal público).
+> ❌ Não mexer no `<main>` para consertar UMA tela — é o container de todas.
+> ℹ️ **Por que 24px e não 32px:** o vão do topo pesa mais do que mede. O `h1`
+> de §20 é 30px numa caixa de linha de 36px, então ~8px de meia-entrelinha
+> entram no espaço percebido — os 32px antigos liam como ~40px, e a tela
+> gastava 324px (32% de um viewport de 1000px) antes da primeira linha de
+> dado. Medido em `RentalsModule.tsx` com Playwright, 2026-08-07; a razão
+> resultante entre o vão acima do título (~32px ópticos) e o de baixo (24px,
+> §20.1) é 1,33:1, dentro da faixa saudável de 1,3–1,8:1.
 
 ---
 

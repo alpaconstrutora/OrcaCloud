@@ -1148,9 +1148,13 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         <div className="space-y-6 pb-12 bg-[#F8FAFC]">
             {/* Casca do portal público (link do fornecedor) — banner + header com menu de conta,
                 espelhando o padrão do Portal do Parceiro/Corretor. Só aparece no acesso via token;
-                dentro do app autenticado o header já vem do Layout. */}
+                dentro do app autenticado o header já vem do Layout.
+                O `-mx`/`-mt` é full-bleed: cancela o gutter do <main> (Layout.tsx,
+                `p-4 md:p-6`) e por isso TEM que acompanhar aquele padding — com
+                `md:-mx-8` contra um `md:p-6` sobra margem negativa e nasce scroll
+                lateral. Ver docs/ui_ux_guia_unificado.md §20.2. */}
             {isStandalone && (
-                <div className="-mx-4 -mt-4 md:-mx-8 md:-mt-8 mb-2">
+                <div className="-mx-4 -mt-4 md:-mx-6 md:-mt-6 mb-2">
                     <div className="h-9 bg-blue-50 border-b border-blue-200 flex items-center justify-center gap-3 text-xs font-bold text-blue-700 uppercase tracking-wider">
                         <span>Acesso via link público</span>
                     </div>

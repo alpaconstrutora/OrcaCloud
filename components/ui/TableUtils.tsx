@@ -128,8 +128,8 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
   }, [visibleColumns, sortColumn, sortDirection, knownColumns, columnOrder, storageKey]);
 
   // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — é isso
-  // que a tela deve mapear para renderizar <col>/<th>/<td>, em vez da sequência
-  // fixa do JSX. Chave visível mas ausente de columnOrder (não deveria acontecer
+  // que a tela deve mapear para renderizar coluna/cabeçalho/célula, em vez da
+  // sequência fixa do JSX. Chave visível mas ausente de columnOrder (não deveria acontecer
   // após o merge de loadPersistedTableState, mas é defesa barata) vai pro fim.
   const orderedVisibleColumns = React.useMemo(() => {
     const inOrder = columnOrder.filter(k => visibleColumns.includes(k));
@@ -448,9 +448,11 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
       <div className="flex items-center gap-1.5">
         {label}
         {/* Ícone de ordenação sempre visível, não só na coluna ativa — sinaliza que TODA
-            coluna aqui é clicável para ordenar (ui_ux_guia_unificado.md §6.8). Cinza claro
-            e neutro (dois sentidos) quando inativa; azul + direção quando é a ativa. */}
-        <span className={`inline-flex items-center ${sortColumn === colKey ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-300 group-hover:text-gray-400'}`}>
+            coluna aqui é clicável para ordenar (ui_ux_guia_unificado.md §6.8). Cinza médio
+            e neutro (dois sentidos) quando inativa — precisa contrastar com o bg-gray-50
+            do <thead>, por isso não pode ser mais claro que gray-400 — escurecendo no
+            hover; azul + direção quando é a ativa. */}
+        <span className={`inline-flex items-center ${sortColumn === colKey ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`}>
           {sortColumn === colKey
             ? (sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)
             : <ChevronsUpDown className="w-3.5 h-3.5" />}

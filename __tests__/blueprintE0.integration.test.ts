@@ -140,7 +140,26 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     if (studyId) {
       // CASCADE leva ramo, snapshot e objetos. A auditoria fica: é append-only
       // e não tem FK para o estudo de propósito.
-      await supabase.from('blueprint_studies').delete().eq('id', studyId);
+      //
+      // CHECAR O ERRO, e não só disparar o delete. A primeira versão ignorava o
+      // retorno, e por isso não percebeu que o trigger de imutabilidade estava
+      // em `BEFORE UPDATE OR DELETE` e abortava o CASCADE inteiro: todo estudo
+      // com versão publicada ficava impossível de excluir. O lixo se acumulou no
+      // banco por várias execuções até aparecer na tela do editor.
+      const { error } = await supabase.from('blueprint_studies').delete().eq('id', studyId);
+      if (error) {
+        throw new Error(
+          `limpeza falhou — o estudo ${studyId} ficou no banco: ${error.message}`,
+        );
+      }
+
+      const { data } = await supabase
+        .from('blueprint_studies')
+        .select('id')
+        .eq('id', studyId);
+      if ((data ?? []).length > 0) {
+        throw new Error(`limpeza silenciosa: o estudo ${studyId} continua existindo`);
+      }
     }
     await supabase.auth.signOut();
   }, 60000);

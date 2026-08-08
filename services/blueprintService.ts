@@ -50,14 +50,24 @@ function fail(context: string, error: { message: string } | null): never {
 // Estudos
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function listStudies(organizationId: string): Promise<BlueprintStudy[]> {
-  const { data, error } = await supabase
+/**
+ * Lista os estudos.
+ *
+ * `organizationId === null` significa, e só significa, "Todas as organizações"
+ * (ver hooks/useOrgContext.tsx). Nesse caso a consulta vai SEM filtro e deixa a
+ * RLS recortar o que o usuário pode ver — nunca devolver vazio nem bloquear o
+ * carregamento, que é o que deixaria a tela em branco.
+ */
+export async function listStudies(organizationId: string | null): Promise<BlueprintStudy[]> {
+  let query = supabase
     .from('blueprint_studies')
     .select(STUDY_COLS)
-    .eq('organization_id', organizationId)
     .neq('status', 'ARQUIVADO')
     .order('updated_at', { ascending: false });
 
+  if (organizationId) query = query.eq('organization_id', organizationId);
+
+  const { data, error } = await query;
   if (error) fail('listStudies', error);
   return (data ?? []) as BlueprintStudy[];
 }

@@ -112,6 +112,7 @@ const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal')
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
 const SupplierPortalManager = React.lazy(() => import('./supplier/SupplierPortalManager').then(m => ({ default: m.SupplierPortalManager })));
 const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashboard'));
+const BlueprintModule       = React.lazy(() => import('./blueprint/BlueprintModule'));
 const DataTablePrototype    = React.lazy(() => import('./DataTablePrototype'));
 const ElectricalProjectsView = React.lazy(() => import('./electrical/ElectricalProjectsView'));
 const ElectricalEditorView   = React.lazy(() => import('./electrical/ElectricalEditorView'));
@@ -516,6 +517,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <PlantaAiDashboard />
+        </React.Suspense>
+      );
+
+    case 'blueprint':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <BlueprintModule />
         </React.Suspense>
       );
 

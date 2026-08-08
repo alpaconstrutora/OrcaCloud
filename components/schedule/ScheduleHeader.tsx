@@ -194,7 +194,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         key={key}
                         onClick={() => setViewMode(key)}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                            viewMode === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                            viewMode === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                         }`}
                     >
                         {label}
@@ -210,7 +210,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                 {(viewMode === 'table' || viewMode === 'gantt') && (
                     <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
                         {(['day', 'week', 'month', 'year'] as const).map((scale) => (
-                            <button key={scale} onClick={() => setTimeScale(scale)} className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${timeScale === scale ? 'bg-white shadow-sm text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}>
+                            <button key={scale} onClick={() => setTimeScale(scale)} className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${timeScale === scale ? 'bg-white shadow-sm text-gray-900' : 'text-gray-700 hover:text-gray-900'}`}>
                                 {{ day: 'Dia', week: 'Sem', month: 'Mês', year: 'Ano' }[scale]}
                             </button>
                         ))}

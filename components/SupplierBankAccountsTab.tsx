@@ -526,7 +526,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                 <button
                     type="button"
                     onClick={cancelForm}
-                    className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                    className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-700 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
                 >
                     Cancelar
                 </button>
@@ -556,7 +556,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowInactive(v => !v)}
-                        className="text-xs font-bold text-gray-400 hover:text-gray-600 transition-all uppercase tracking-wider"
+                        className="text-xs font-bold text-gray-700 hover:text-gray-900 transition-all uppercase tracking-wider"
                     >
                         {showInactive ? 'Ocultar inativas' : 'Ver inativas'}
                     </button>

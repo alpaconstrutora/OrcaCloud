@@ -1265,7 +1265,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm" />
                     </div>
                     {(filterDateFrom || filterDateTo) && (
-                        <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }} className="text-button text-gray-400 hover:text-gray-600 px-2 py-1 rounded-lg border border-gray-200 bg-white">✕ Limpar datas</button>
+                        <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }} className="text-button text-gray-700 hover:text-gray-900 px-2 py-1 rounded-lg border border-gray-200 bg-white">✕ Limpar datas</button>
                     )}
                     <select value={originFilter} onChange={e => setOriginFilter(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm">
                         <option value="all">Todas as Origens</option>

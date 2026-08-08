@@ -693,14 +693,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 <button
                                                     type="button"
                                                     onClick={() => setPaymentTermType('Vista')}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                                 >
                                                     À Vista
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setPaymentTermType('Parcelado')}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                                 >
                                                     Parcelado
                                                 </button>

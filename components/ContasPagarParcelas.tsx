@@ -378,7 +378,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                 <button
                                     key={s}
                                     onClick={() => setStatusFiltro(s)}
-                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFiltro === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-400 hover:text-gray-600'}`}
+                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFiltro === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-700 hover:text-gray-900'}`}
                                 >
                                     {s === 'all' ? 'Todos' : STATUS_PT[s]}
                                 </button>

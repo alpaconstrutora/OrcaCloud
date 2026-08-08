@@ -2046,7 +2046,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 key={cat.id}
                 onClick={() => { setActiveTab(cat.id); setShowMetrics(false); }}
                 className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                  isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                  isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                 }`}
               >
                 {cat.label}
@@ -2057,7 +2057,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           <button
             onClick={() => { setShowMetrics(true); setShowPendingOnly(false); }}
             className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-              showMetrics ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+              showMetrics ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
             }`}
           >
             📊 Saúde Documental
@@ -2066,7 +2066,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           {isOrgAdmin && (
             <button
               onClick={() => setShowSettingsModal(true)}
-              className="px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all text-gray-400 hover:text-gray-600 flex items-center gap-1.5"
+              className="px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all text-gray-700 hover:text-gray-900 flex items-center gap-1.5"
             >
               ⚙️ Ajustes do GED
             </button>

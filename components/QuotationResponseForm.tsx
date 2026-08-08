@@ -451,14 +451,14 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Vista' }))}
-                                                    className={`flex-1 py-1 px-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1 px-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                                 >
                                                     À Vista
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Parcelado' }))}
-                                                    className={`flex-1 py-1 px-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`flex-1 py-1 px-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                                 >
                                                     Parcelado
                                                 </button>

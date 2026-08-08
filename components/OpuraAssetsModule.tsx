@@ -840,7 +840,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2
               ${activeTab === tab 
                 ? 'border-blue-600 text-blue-600' 
-                : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                : 'border-transparent text-gray-700 hover:text-gray-900'}`}
           >
             {tab === 'bens' ? 'Ativos Patrimoniais' : tab === 'reservas' ? 'Reservas & Locação' : tab === 'manutencoes' ? 'Manutenções' : tab === 'custos_rateio' ? 'Custos & Rateio' : tab}
           </button>

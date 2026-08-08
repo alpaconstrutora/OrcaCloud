@@ -228,7 +228,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                             <button
                                 key={id}
                                 onClick={() => setActiveTab(id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow' : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'}`}
                             >
                                 <Icon className="w-3.5 h-3.5" />{label}
                             </button>

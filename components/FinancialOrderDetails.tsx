@@ -338,7 +338,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
 
             {/* Modal Footer */}
             <div className="px-10 py-8 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-4">
-                <Button variant="secondary" size="lg" onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                <Button variant="secondary" size="lg" onClick={onClose} className="text-gray-700 hover:text-gray-900">
                     Cancelar
                 </Button>
                 <button

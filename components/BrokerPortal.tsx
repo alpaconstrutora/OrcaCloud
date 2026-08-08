@@ -750,7 +750,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                         ? 'bg-white text-blue-600 shadow-sm'
                                         : hidden
                                             ? 'text-gray-300'
-                                            : 'text-gray-400 hover:text-gray-600'
+                                            : 'text-gray-700 hover:text-gray-900'
                                 }`}
                                 title={hidden ? 'Oculta para o corretor' : undefined}
                             >
@@ -779,7 +779,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                     onClick={() => setSelectedPurpose(p.id as 'SALE' | 'RENTAL' | 'BOTH')}
                                     className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedPurpose === p.id
                                         ? 'bg-white text-gray-900 shadow-sm'
-                                        : 'text-gray-400 hover:text-gray-600'
+                                        : 'text-gray-700 hover:text-gray-900'
                                         }`}
                                 >
                                     {p.label}
@@ -795,7 +795,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                         onClick={() => setSelectedBuildingId('all')}
                                         className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedBuildingId === 'all'
                                             ? 'bg-white text-blue-600 shadow-sm'
-                                            : 'text-gray-400 hover:text-gray-600'
+                                            : 'text-gray-700 hover:text-gray-900'
                                             }`}
                                     >
                                         Geral
@@ -806,7 +806,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                             onClick={() => setSelectedBuildingId(b.id)}
                                             className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all max-w-[150px] truncate ${selectedBuildingId === b.id
                                                 ? 'bg-white text-blue-600 shadow-sm'
-                                                : 'text-gray-400 hover:text-gray-600'
+                                                : 'text-gray-700 hover:text-gray-900'
                                                 }`}
                                             title={b.name}
                                         >

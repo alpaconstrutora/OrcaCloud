@@ -327,7 +327,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         onClick={() => handleNameModeChange('razao')}
                         className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'razao'
                             ? 'bg-blue-600 text-white'
-                            : 'text-gray-400 hover:text-gray-600'
+                            : 'text-gray-700 hover:text-gray-900'
                             }`}
                     >
                         Razão Social
@@ -336,7 +336,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         onClick={() => handleNameModeChange('apelido')}
                         className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'apelido'
                             ? 'bg-blue-600 text-white'
-                            : 'text-gray-400 hover:text-gray-600'
+                            : 'text-gray-700 hover:text-gray-900'
                             }`}
                     >
                         Apelido

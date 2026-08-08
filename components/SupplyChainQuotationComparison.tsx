@@ -616,13 +616,13 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                         <div className="flex bg-indigo-50/20 px-8 border-b border-gray-100">
                             <button
                                 onClick={() => setNegotiationTab('form')}
-                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'form' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'form' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                             >
                                 Nova Proposta
                             </button>
                             <button
                                 onClick={() => setNegotiationTab('history')}
-                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'history' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'history' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                             >
                                 Histórico ({responses.find(r => r.id === negotiatingId)?.negotiationHistory?.length || 0})
                             </button>
@@ -834,7 +834,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setNegotiatingId(null)}
-                                    className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
+                                    className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-700 hover:text-gray-900 transition-all"
                                 >
                                     Cancelar
                                 </button>
@@ -872,7 +872,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                     <div className="flex justify-end gap-3">
                         <button
                             onClick={() => setPendingConfirm(null)}
-                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-button font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
+                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-button font-black uppercase tracking-widest text-gray-700 hover:text-gray-900 transition-all"
                         >
                             Cancelar
                         </button>

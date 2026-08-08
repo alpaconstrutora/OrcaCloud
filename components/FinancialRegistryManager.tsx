@@ -491,7 +491,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                     variant="ghost"
                                     type="button"
                                     onClick={handleCancel}
-                                    className="text-gray-400 hover:text-gray-600"
+                                    className="text-gray-700 hover:text-gray-900"
                                 >
                                     Cancelar
                                 </Button>

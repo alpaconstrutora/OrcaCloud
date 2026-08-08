@@ -386,7 +386,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                             key={a.id}
                             onClick={() => setAba(a.id)}
                             className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                                aba === a.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                                aba === a.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >
                             {a.label}

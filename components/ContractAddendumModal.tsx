@@ -160,7 +160,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                 <div className="p-8 bg-gray-50 border-t border-gray-100 shrink-0 flex justify-end gap-4">
                     <button
                         onClick={onClose}
-                        className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 transition-all font-medium text-button uppercase tracking-widest"
+                        className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-700 hover:text-gray-900 transition-all font-medium text-button uppercase tracking-widest"
                     >
                         Cancelar
                     </button>

@@ -1151,7 +1151,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'retention' | 'penalties' | 'evaluation' | 'utility_bills' | 'emissao')}
                             className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
                                 ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-gray-400 hover:text-gray-600'
+                                : 'text-gray-700 hover:text-gray-900'
                                 }`}
                         >
                             <tab.icon className="w-3.5 h-3.5" />

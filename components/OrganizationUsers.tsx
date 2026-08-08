@@ -928,14 +928,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveSubTab('members')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         <Users className="w-4 h-4 inline mr-2" />
                         Membros
                     </button>
                     <button
                         onClick={() => setActiveSubTab('roles')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'roles' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'roles' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         <Briefcase className="w-4 h-4 inline mr-2" />
                         Cargos Customizados
@@ -943,7 +943,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     {isAdmin && (
                         <button
                             onClick={() => setActiveSubTab('visibility')}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'visibility' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'visibility' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             <Shield className="w-4 h-4 inline mr-2" />
                             Visibilidade de Módulos

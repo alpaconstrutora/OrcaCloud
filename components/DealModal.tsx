@@ -1478,7 +1478,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         className={`relative flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                             isActive
                                                 ? 'bg-white text-blue-600 shadow-sm'
-                                                : 'text-gray-400 hover:text-gray-600'
+                                                : 'text-gray-700 hover:text-gray-900'
                                         }`}
                                     >
                                         {tab.icon}
@@ -1890,7 +1890,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             key={t}
                                             type="button"
                                             onClick={() => setFormData({ ...formData, type: t })}
-                                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${formData.type === t ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${formData.type === t ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             {t === 'SALE' ? 'Venda' : t === 'RENTAL' ? 'Aluguel' : 'Serviço'}
                                         </button>
@@ -2665,7 +2665,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                                 contratoSubTab === sub.id
                                                     ? 'bg-blue-50 text-blue-600'
-                                                    : 'text-gray-400 hover:text-gray-600'
+                                                    : 'text-gray-700 hover:text-gray-900'
                                             }`}
                                         >
                                             {sub.label}

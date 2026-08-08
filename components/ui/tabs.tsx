@@ -56,7 +56,7 @@ export function TabsTrigger({ value, children, className = '' }: { value: string
       className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
         active
           ? 'bg-white text-blue-600 shadow-sm'
-          : 'text-gray-400 hover:text-gray-600'
+          : 'text-gray-700 hover:text-gray-900'
       } ${className}`}
     >
       {children}

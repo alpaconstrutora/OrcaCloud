@@ -119,7 +119,7 @@ const ContractLaborQuestionnaireModal: React.FC<ContractLaborQuestionnaireModalP
                                             className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                                 answers[q.key] === value
                                                     ? (value ? 'bg-amber-500 text-white' : 'bg-gray-700 text-white')
-                                                    : 'text-gray-400 hover:text-gray-600'
+                                                    : 'text-gray-700 hover:text-gray-900'
                                             }`}
                                         >
                                             {label}

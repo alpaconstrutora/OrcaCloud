@@ -255,7 +255,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                                 className={`px-4 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all -mb-px ${
                                     modalTab === tab
                                         ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-400 hover:text-gray-600'
+                                        : 'border-transparent text-gray-700 hover:text-gray-900'
                                 }`}
                             >
                                 {tab === 'cadastro' ? '📋 Cadastro' : '🏦 Dados Bancários'}
@@ -656,7 +656,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-400 hover:text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                        className="flex-1 px-4 py-2.5 text-sm font-bold text-gray-700 hover:text-gray-900 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
                     >
                         Descartar
                     </button>

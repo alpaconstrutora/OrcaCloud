@@ -119,7 +119,7 @@ export default function DataTablePrototype({ onBack }: { onBack: () => void }) {
       {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <button onClick={onBack} className="text-gray-400 hover:text-gray-600 mb-2 flex items-center gap-1 text-sm font-medium transition-colors">
+          <button onClick={onBack} className="text-gray-700 hover:text-gray-900 mb-2 flex items-center gap-1 text-sm font-medium transition-colors">
              <ArrowLeft className="w-4 h-4" /> Voltar
           </button>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">

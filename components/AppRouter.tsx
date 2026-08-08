@@ -922,7 +922,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <div className="space-y-6">
           <div>
             <button onClick={() => setActiveView('supplies-contracts')}
-              className="text-sm text-gray-400 hover:text-gray-600 font-medium mb-2">
+              className="text-sm text-gray-700 hover:text-gray-900 font-medium mb-2">
               ← Contratos
             </button>
             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Reajustes de Contrato</h1>

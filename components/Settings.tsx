@@ -219,7 +219,7 @@ const Settings: React.FC = () => {
                                             key={leaf.id}
                                             onClick={() => setActiveLeaf(leaf.id)}
                                             className={`px-3 h-8 rounded-[6px] text-sm font-medium text-left transition-all ${
-                                                activeLeaf === leaf.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                                                activeLeaf === leaf.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                                             }`}
                                         >{leaf.label}</button>
                                     ))}
@@ -295,7 +295,7 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática dos números de pedido. O sequencial é por obra e reinicia a cada obra.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('numbering')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('numbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
@@ -379,7 +379,7 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de Suprimentos. O sequencial é por obra e reinicia a cada obra.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('contractNumbering')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('contractNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
@@ -452,7 +452,7 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número das cotações de Suprimentos. O sequencial é por obra e reinicia a cada obra.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('quotationNumbering')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('quotationNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
@@ -527,7 +527,7 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Assunto e corpo do e-mail enviado ao fornecedor em cada mudança de status.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('email')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('email')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
@@ -651,7 +651,7 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Texto das mensagens enviadas ao fornecedor via Z-API.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('whatsapp')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('whatsapp')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>

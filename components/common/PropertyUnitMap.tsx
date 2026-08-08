@@ -321,13 +321,13 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                         <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200">
                             <button
                                 onClick={() => setGroupingMode('position')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${groupingMode === 'position' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${groupingMode === 'position' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-700 hover:text-gray-900'}`}
                             >
                                 Posição
                             </button>
                             <button
                                 onClick={() => setGroupingMode('orientation')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${groupingMode === 'orientation' ? 'bg-amber-500 text-white shadow-md shadow-amber-200' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${groupingMode === 'orientation' ? 'bg-amber-500 text-white shadow-md shadow-amber-200' : 'text-gray-700 hover:text-gray-900'}`}
                             >
                                 Sol
                             </button>
@@ -339,13 +339,13 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                         <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200">
                             <button
                                 onClick={() => handleDensityChange('completo')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${density === 'completo' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${density === 'completo' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-700 hover:text-gray-900'}`}
                             >
                                 Completa
                             </button>
                             <button
                                 onClick={() => handleDensityChange('compacto')}
-                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${density === 'compacto' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${density === 'compacto' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-700 hover:text-gray-900'}`}
                             >
                                 Compacta
                             </button>

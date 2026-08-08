@@ -397,13 +397,13 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                     <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
                         <button
                             onClick={() => setPriceMode('sale')}
-                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'sale' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'sale' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             Venda
                         </button>
                         <button
                             onClick={() => setPriceMode('rental')}
-                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'rental' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'rental' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             Locação
                         </button>

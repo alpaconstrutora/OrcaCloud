@@ -124,7 +124,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('executive_summary')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors rounded-tl-3xl ${activeTab === 'executive_summary'
                             ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <AlertCircle className="w-4 h-4" /> {/* Or any cool icon */}
@@ -135,7 +135,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('premises')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'premises'
                             ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <Building2 className="w-4 h-4" />
@@ -146,7 +146,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('capex')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'capex'
                             ? 'text-rose-600 border-b-2 border-rose-600 bg-rose-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <Calculator className="w-4 h-4" />
@@ -157,7 +157,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('funding')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'funding'
                             ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <Landmark className="w-4 h-4" /> {/* Need to import Landmark if not already */}
@@ -168,7 +168,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('risk_scenarios')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'risk_scenarios'
                             ? 'text-rose-600 border-b-2 border-rose-600 bg-rose-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <AlertCircle className="w-4 h-4" />
@@ -179,7 +179,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('esg_report')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'esg_report'
                             ? 'text-teal-600 border-b-2 border-teal-600 bg-teal-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <Award className="w-4 h-4" /> {/* Need to import Award */}
@@ -190,7 +190,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('viability_static')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'viability_static'
                             ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <Calculator className="w-4 h-4" />
@@ -201,7 +201,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         onClick={() => setActiveTab('viability_dynamic')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors rounded-tr-3xl ${activeTab === 'viability_dynamic'
                             ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
                             }`}
                     >
                         <LineChart className="w-4 h-4" />

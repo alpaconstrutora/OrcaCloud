@@ -244,7 +244,7 @@ const MaterialSelectionModal: React.FC<MaterialSelectionModalProps> = ({
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={onClose}
-                            className="px-8 py-4 text-xs font-black uppercase tracking-[0.2em] text-gray-400 hover:text-gray-600 transition-colors"
+                            className="px-8 py-4 text-xs font-black uppercase tracking-[0.2em] text-gray-700 hover:text-gray-900 transition-colors"
                         >
                             Cancelar
                         </button>

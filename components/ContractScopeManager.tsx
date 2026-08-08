@@ -290,7 +290,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                 <div className="flex border-b border-gray-100 bg-gray-50/50 shrink-0">
                     <button
                         onClick={() => setTab('catalog')}
-                        className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${tab === 'catalog' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${tab === 'catalog' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                     >
                         <BookOpen className="w-3.5 h-3.5" />
                         Catálogo
@@ -302,7 +302,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                     </button>
                     <button
                         onClick={() => setTab('saved')}
-                        className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${tab === 'saved' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${tab === 'saved' ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                     >
                         <ListChecks className="w-3.5 h-3.5" />
                         Modelos Salvos

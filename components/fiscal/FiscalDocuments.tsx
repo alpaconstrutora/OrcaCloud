@@ -883,7 +883,7 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                   key={f.k}
                   onClick={() => setFilter(f.k)}
                   className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                    filter === f.k ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                    filter === f.k ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                   }`}
                 >
                   {f.label} <span className="opacity-60 text-xs ml-1">{f.count}</span>

@@ -265,7 +265,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
               }`}
             >
               <t.icon className="w-3.5 h-3.5" /> {t.label}

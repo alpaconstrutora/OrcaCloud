@@ -140,14 +140,14 @@ const ProjectGallery: React.FC<ProjectGalleryProps> = ({
                 <div className="flex">
                     <button
                         onClick={() => setActiveTab('photos')}
-                        className={`px-6 py-4 text-button font-black uppercase tracking-widest transition-all ${activeTab === 'photos' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400 hover:text-gray-600'
+                        className={`px-6 py-4 text-button font-black uppercase tracking-widest transition-all ${activeTab === 'photos' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-700 hover:text-gray-900'
                             }`}
                     >
                         Galeria de Fotos
                     </button>
                     <button
                         onClick={() => setActiveTab('live')}
-                        className={`px-6 py-4 text-button font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'live' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-400 hover:text-gray-600'
+                        className={`px-6 py-4 text-button font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'live' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-700 hover:text-gray-900'
                             }`}
                     >
                         <div className={`w-2 h-2 rounded-full bg-red-600 ${activeTab === 'live' ? 'animate-pulse' : ''}`} />

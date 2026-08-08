@@ -814,7 +814,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                 <button
                                                     key={s.val}
                                                     onClick={() => setFormData({ ...formData, status: s.val as DiaryEntry['status'] })}
-                                                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${formData.status === s.val ? s.color : 'text-gray-400 hover:text-gray-600'}`}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-tighter transition-all ${formData.status === s.val ? s.color : 'text-gray-700 hover:text-gray-900'}`}
                                                 >
                                                     {s.val}
                                                 </button>
@@ -855,9 +855,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                         {/* Editor Tabs */}
                         <div className="flex border-b border-gray-100 bg-white">
-                            <button onClick={() => setActiveTab('geral')} className={`px-8 py-4 text-form-input font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'geral' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Dados Gerais</button>
-                            <button onClick={() => setActiveTab('comentarios')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'comentarios' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Comentários</button>
-                            <button onClick={() => setActiveTab('arquivos')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'arquivos' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Arquivos ({(formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0)})</button>
+                            <button onClick={() => setActiveTab('geral')} className={`px-8 py-4 text-form-input font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'geral' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-700 hover:text-gray-900'}`}>Dados Gerais</button>
+                            <button onClick={() => setActiveTab('comentarios')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'comentarios' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-700 hover:text-gray-900'}`}>Comentários</button>
+                            <button onClick={() => setActiveTab('arquivos')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'arquivos' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-700 hover:text-gray-900'}`}>Arquivos ({(formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0)})</button>
                         </div>
 
                         <div className="p-8">

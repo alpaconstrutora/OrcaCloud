@@ -843,7 +843,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
             className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap
               ${activeTab === tab
                 ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                : 'border-transparent text-gray-700 hover:text-gray-900'}`}
           >
             {tab === 'deducoes' ? 'Deduções (Scanner)' : tab === 'dctfweb' ? 'DCTFWeb / DARF' : tab === 'dossie' ? 'Dossiê Digital' : tab === 'areas' ? 'Áreas SERO' : tab === 'pre_moldados' ? 'Pré-moldados (SERO)' : tab}
           </button>

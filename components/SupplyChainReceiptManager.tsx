@@ -164,19 +164,19 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <button
                         onClick={() => setFilterStatus('all')}
-                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'all' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'all' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Todos
                     </button>
                     <button
                         onClick={() => setFilterStatus('pending')}
-                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'pending' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'pending' ? 'bg-amber-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Pendentes
                     </button>
                     <button
                         onClick={() => setFilterStatus('received')}
-                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'received' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`h-7 px-3 rounded-[6px] transition-all text-sm font-medium ${filterStatus === 'received' ? 'bg-emerald-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Recebidos
                     </button>

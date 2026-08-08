@@ -87,7 +87,7 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
               key={n.id}
               onClick={() => setPage(n.id)}
               className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                page === n.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                page === n.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
               }`}
             >
               {n.icon} {n.label}

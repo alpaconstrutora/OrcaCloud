@@ -248,7 +248,7 @@ const OperacionalModule: React.FC<Props> = ({
               <button
                 onClick={() => setPreView('select')}
                 className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                  preView === 'select' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                  preView === 'select' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                 }`}
               >
                 <Building2 className="w-3.5 h-3.5" />
@@ -257,7 +257,7 @@ const OperacionalModule: React.FC<Props> = ({
               <button
                 onClick={() => setPreView('manage')}
                 className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                  preView === 'manage' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                  preView === 'manage' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                 }`}
               >
                 <FolderCog className="w-3.5 h-3.5" />

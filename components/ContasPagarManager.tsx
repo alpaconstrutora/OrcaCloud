@@ -559,7 +559,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                                         key={v}
                                         onClick={() => setVisao(v)}
                                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                                            visao === v ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                                            visao === v ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                                         }`}
                                     >
                                         {v === 'parcelas' ? 'Parcelas' : 'Notas fiscais'}
@@ -648,7 +648,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                                         <button
                                             key={s}
                                             onClick={() => setStatusFilter(s)}
-                                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFilter === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFilter === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             {s === 'all' ? 'Todos' : s === 'overdue' ? 'Atrasado' : STATUS_PT[s]}
                                         </button>

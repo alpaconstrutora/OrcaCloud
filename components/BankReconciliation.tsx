@@ -3215,67 +3215,67 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveView('dashboard')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Dashboard
                     </button>
                     <button
                         onClick={() => setActiveView('statement')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Extrato
                     </button>
                     <button
                         onClick={() => setActiveView('center')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Central
                     </button>
                     <button
                         onClick={() => setActiveView('divergences')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Divergências
                     </button>
                     <button
                         onClick={() => setActiveView('anomalies')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Anomalias
                     </button>
                     <button
                         onClick={() => setActiveView('pending')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Pendentes
                     </button>
                     <button
                         onClick={() => setActiveView('conciliated')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Conciliados
                     </button>
                     <button
                         onClick={() => setActiveView('rules')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'rules' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'rules' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Regras
                     </button>
                     <button
                         onClick={() => setActiveView('categories')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Categorias
                     </button>
                     <button
                         onClick={() => setActiveView('close')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Fechamento
                     </button>
                     <button
                         onClick={() => setActiveView('prolabore')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Pró-labore
                     </button>
@@ -4171,7 +4171,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100 shrink-0">
                                     <button
                                         onClick={() => setFlowFilter('ALL')}
-                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                     >
                                         Tudo
                                     </button>

@@ -3663,7 +3663,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     ? 'bg-white text-blue-600 shadow-sm'
                                     : isAdmin && !isVisible
                                         ? 'text-gray-300 hover:text-gray-400'
-                                        : 'text-gray-400 hover:text-gray-600'
+                                        : 'text-gray-700 hover:text-gray-900'
                                 }
                             `}
                         >

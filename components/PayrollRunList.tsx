@@ -121,7 +121,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                         <button
                             key={t}
                             onClick={() => onTypeFilter(t)}
-                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${typeFilter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             {t === 'all' ? 'Todas' : (TYPE_LABELS[t] ?? t)}
                         </button>

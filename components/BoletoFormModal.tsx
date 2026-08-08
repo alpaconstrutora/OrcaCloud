@@ -716,7 +716,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-700">
                                                     <CheckCircle2 className="w-3.5 h-3.5" /> Sugerido via CNPJ
                                                 </span>
-                                                <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-400 hover:text-gray-600 underline">limpar</button>
+                                                <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-700 hover:text-gray-900 underline">limpar</button>
                                             </div>
                                         )}
                                         <div className="flex gap-2">

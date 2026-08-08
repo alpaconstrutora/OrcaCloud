@@ -621,7 +621,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 <div className="flex bg-white rounded-xl border border-blue-200 p-1 gap-1">
                                                     {(['PJ', 'PF'] as const).map(t => (
                                                         <button key={t} type="button" onClick={() => setNewClientType(t)}
-                                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${newClientType === t ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                                                            className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${newClientType === t ? 'bg-blue-600 text-white' : 'text-gray-700 hover:text-gray-900'}`}>
                                                             {t === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}
                                                         </button>
                                                     ))}
@@ -1168,14 +1168,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Vista' })}
-                                            className={`flex-1 py-3 px-4 rounded-xl text-form-label font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`flex-1 py-3 px-4 rounded-xl text-form-label font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             À Vista
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Parcelado' })}
-                                            className={`flex-1 py-3 px-4 rounded-xl text-button font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`flex-1 py-3 px-4 rounded-xl text-button font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             Parcelado
                                         </button>

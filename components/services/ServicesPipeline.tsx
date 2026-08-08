@@ -442,7 +442,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
                   className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${
                     filterPriority === p
                       ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-gray-600'
+                      : 'text-gray-700 hover:text-gray-900'
                   }`}
                 >
                   {p === 'all' ? 'Todos' : p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa'}

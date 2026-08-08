@@ -145,14 +145,14 @@ const OpportunitiesTab: React.FC<Props> = ({
                         <div className="flex bg-gray-100 p-1 rounded-lg">
                             <button
                                 onClick={() => setAdminTab('opportunities')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'opportunities' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'opportunities' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                             >
                                 <Building2 className="w-3.5 h-3.5" />
                                 Oportunidades
                             </button>
                             <button
                                 onClick={() => setAdminTab('interests')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'interests' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'interests' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                             >
                                 <Users className="w-3.5 h-3.5" />
                                 Interesses

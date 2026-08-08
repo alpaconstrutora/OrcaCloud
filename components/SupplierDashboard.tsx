@@ -1305,7 +1305,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     ? 'bg-white text-blue-600 shadow-sm'
                                     : hidden
                                         ? 'text-gray-300 border border-dashed border-gray-200'
-                                        : 'text-gray-400 hover:text-gray-600'
+                                        : 'text-gray-700 hover:text-gray-900'
                                     }`}
                             >
                                 <tab.icon className="w-4 h-4" />

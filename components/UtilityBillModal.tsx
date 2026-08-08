@@ -191,7 +191,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                         <div className="flex items-center gap-4 w-full md:w-auto">
                             <button
                                 onClick={onClose}
-                                className="flex-1 md:flex-none px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-all font-medium text-button uppercase tracking-widest"
+                                className="flex-1 md:flex-none px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-700 hover:text-gray-900 hover:border-gray-300 transition-all font-medium text-button uppercase tracking-widest"
                             >
                                 Cancelar
                             </button>

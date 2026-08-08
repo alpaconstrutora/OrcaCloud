@@ -589,7 +589,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         onClick={() => setActiveTab('budgets')}
                         className={`flex items-center h-9 px-4 text-sm font-medium rounded-[6px] transition-all ${activeTab === 'budgets'
                             ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                     >
                         <FolderOpen className="w-4 h-4 mr-2" />
@@ -599,7 +599,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         onClick={() => setActiveTab('templates')}
                         className={`flex items-center h-9 px-4 text-sm font-medium rounded-[6px] transition-all ${activeTab === 'templates'
                             ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                     >
                         <Copy className="w-4 h-4 mr-2" />

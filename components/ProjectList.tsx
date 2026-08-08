@@ -24,7 +24,7 @@ const TIPO_OBRA_COLORS: Record<TipoObra, string> = {
     outro: 'bg-gray-100 text-gray-600 border-gray-200',
 };
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Copy01Icon, FileDownloadIcon } from '@hugeicons/core-free-icons';
+import { FileDownloadIcon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 import ExcelImportModal from './ExcelImportModal';
@@ -93,6 +93,7 @@ const COLUMNS: ColumnConfig[] = [
     // comparável entre os contextos (Obra/Orçamento/Planejamento/Diário), ver §6.3.
     { key: 'linked',        label: 'Vinculado',   sortable: false },
     { key: 'client',        label: 'Cliente',     sortable: true },
+    { key: 'created',       label: 'Data de Criação', sortable: true },
     { key: 'updated',       label: 'Atualização', sortable: true },
     { key: 'status-budget', label: 'Status',      sortable: true },
     { key: 'status-obra',   label: 'Status Obra', sortable: true },
@@ -107,7 +108,7 @@ const COLUMNS: ColumnConfig[] = [
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     code: 118, name: 240, organization: 180, empreendimento: 184, linked: 200,
     'obra-vinculada': 180, 'planejamento-vinculada': 180,
-    client: 160, updated: 150, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
+    client: 160, created: 140, updated: 150, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -213,7 +214,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1). As 2 colunas extras do contexto Diário entram
     // condicionalmente — não fazem parte de COLUMNS/visibleColumns.
-    const tableTotalWidth = (['code', 'name', 'organization', 'empreendimento', 'linked', 'client', 'updated', 'status-budget', 'status-obra', 'lock'] as const)
+    const tableTotalWidth = (['code', 'name', 'organization', 'empreendimento', 'linked', 'client', 'created', 'updated', 'status-budget', 'status-obra', 'lock'] as const)
         .reduce((sum, key) => sum + (visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + (isDiaryContext ? cols.getWidth('obra-vinculada') + cols.getWidth('planejamento-vinculada') : 0)
         + cols.getWidth('actions');
@@ -360,6 +361,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         case 'updated':
                             valA = new Date(a.updated_at || a.created_at || 0).getTime();
                             valB = new Date(b.updated_at || b.created_at || 0).getTime();
+                            return sortDirection === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+                        case 'created':
+                            valA = new Date(a.created_at || 0).getTime();
+                            valB = new Date(b.created_at || 0).getTime();
                             return sortDirection === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
                         case 'client':
                             valA = a.settings?.client || '';
@@ -746,6 +751,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 {isDiaryContext && <col data-col-key="obra-vinculada" style={{ width: `${cols.getWidth('obra-vinculada')}px` }} />}
                                 {isDiaryContext && <col data-col-key="planejamento-vinculada" style={{ width: `${cols.getWidth('planejamento-vinculada')}px` }} />}
                                 {visibleColumns.includes('client') && <col data-col-key="client" style={{ width: `${cols.getWidth('client')}px` }} />}
+                                {visibleColumns.includes('created') && <col data-col-key="created" style={{ width: `${cols.getWidth('created')}px` }} />}
                                 {visibleColumns.includes('updated') && <col data-col-key="updated" style={{ width: `${cols.getWidth('updated')}px` }} />}
                                 {visibleColumns.includes('status-budget') && <col data-col-key="status-budget" style={{ width: `${cols.getWidth('status-budget')}px` }} />}
                                 {visibleColumns.includes('status-obra') && <col data-col-key="status-obra" style={{ width: `${cols.getWidth('status-obra')}px` }} />}
@@ -867,6 +873,19 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <cols.ResizeHandle colKey="client" />
                                         </SortableHeader>
                                     )}
+                                    {visibleColumns.includes('created') && (
+                                        <SortableHeader
+                                            label="Data de Criação"
+                                            colKey="created"
+                                            uppercase={false}
+                                            sortColumn={sortColumn}
+                                            sortDirection={sortDirection}
+                                            onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey="created" />
+                                        </SortableHeader>
+                                    )}
                                     {visibleColumns.includes('updated') && (
                                         <SortableHeader
                                             label={isDiaryContext ? 'Clima' : 'Atualização'}
@@ -949,14 +968,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         <div className="text-sm font-normal text-gray-900">
                                                             {project.name}
                                                         </div>
-                                                        <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
-                                                            <span>CR: {new Date(project.created_at || 0).toLocaleDateString()}</span>
-                                                            {project.settings?.tipoObra && (
+                                                        {project.settings?.tipoObra && (
+                                                            <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
                                                                 <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                                     {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
                                                                 </span>
-                                                            )}
-                                                        </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </td>
@@ -1089,6 +1107,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 )}
                                             </td>
                                         )}
+                                        {visibleColumns.includes('created') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                {new Date(project.created_at || 0).toLocaleDateString()}
+                                            </td>
+                                        )}
                                         {visibleColumns.includes('updated') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             {isDiaryContext ? (
@@ -1184,17 +1207,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     </button>
                                                 )}
                                                 <ActionIconButton kind="edit" className="ml-1" onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }} />
+                                                <ActionIconButton
+                                                    kind="duplicate"
+                                                    title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}
+                                                    onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }}
+                                                />
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         {
                                                             icon: <HugeiconsIcon icon={FileDownloadIcon} size={18} />,
                                                             label: 'Exportar Excel',
                                                             onClick: () => onExportProject(project.id),
-                                                        },
-                                                        {
-                                                            icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
-                                                            label: isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento',
-                                                            onClick: () => onDuplicateProject(project.id),
                                                         },
                                                     ]}
                                                     showDelete
@@ -1305,17 +1328,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                     <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
                                         <ActionIconButton kind="edit" title="Editar Dados" onClick={() => onEditProject(project.id)} />
+                                        <ActionIconButton
+                                            kind="duplicate"
+                                            title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}
+                                            onClick={() => onDuplicateProject(project.id)}
+                                        />
                                         <InlineDisclosureMenu
                                             menuItems={[
                                                 {
                                                     icon: <HugeiconsIcon icon={FileDownloadIcon} size={18} />,
                                                     label: 'Exportar Excel',
                                                     onClick: () => onExportProject(project.id),
-                                                },
-                                                {
-                                                    icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
-                                                    label: isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento',
-                                                    onClick: () => onDuplicateProject(project.id),
                                                 },
                                             ]}
                                             showDelete

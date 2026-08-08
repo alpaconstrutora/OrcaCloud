@@ -1080,8 +1080,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           </button>
         </aside>
 
-        {/* Dynamic Content Pane */}
-        <main className="flex-1 bg-white overflow-y-auto p-6 relative">
+        {/* Dynamic Content Pane. Casca própria (h-screen, header/aside inclusos) usada
+            tanto por staff interno (ProfileGroup.PARTNER) quanto por acesso via link
+            público — nenhum dos dois passa pelo <main> do <Layout>, então o gutter
+            §20.2 é reaplicado aqui, à mão. */}
+        <main className="flex-1 bg-white overflow-y-auto p-4 md:p-6 relative">
 
           {/* TAB: DASHBOARD */}
           {activeTab === 'dashboard' && (

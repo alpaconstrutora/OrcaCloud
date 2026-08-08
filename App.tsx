@@ -200,8 +200,9 @@ const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     </div>
   );
 
+  // Fora do <Layout> (guard roda antes dele) — gutter §20.2 reaplicado à mão.
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
         <InvestorDashboardPublic
           settings={{} as any}
@@ -340,8 +341,12 @@ const SupplierPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     </div>
   );
 
+  // Acesso via link público não passa por <Layout> (guard em App.tsx roda
+  // ANTES do <Layout>, ver render principal) — por isso o gutter §20.2 tem
+  // que ser reaplicado aqui, à mão. Era `md:p-8` (o valor antigo, 32px);
+  // nunca foi migrado porque só existe fora do Layout.
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6">
       <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
         <SupplierDashboardPublic supplierProfile={supplier} portalToken={token} />
       </React.Suspense>

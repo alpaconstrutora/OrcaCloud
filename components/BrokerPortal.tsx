@@ -583,7 +583,10 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                         ))}
                     </aside>
                 )}
-                <div className={isStandalone ? 'flex-1 bg-white overflow-y-auto p-6' : ''}>
+                {/* isStandalone = acesso via link público, fora do <Layout> — o gutter
+                    §20.2 tem que ser reaplicado à mão (senão o modo interno, que já
+                    recebe o padding do <main>, ficaria com o dobro). */}
+                <div className={isStandalone ? 'flex-1 bg-white overflow-y-auto p-4 md:p-6' : ''}>
                     <div className="space-y-6">
             {/* Prévia Mobile — renderiza o portal como o corretor vê, dentro de um iframe estreito */}
             {showMobilePreview && !isPreview && (

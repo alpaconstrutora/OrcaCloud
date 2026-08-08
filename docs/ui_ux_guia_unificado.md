@@ -196,6 +196,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §20 Cabeçalho de tela (título + subtítulo + KPIs)
 - [ ] §20.1 Ritmo de espaçamento do cromo (24px → KPIs, 12px depois)
 - [ ] §20.2 Gutter do container — a raiz da tela NÃO declara `px-*`/`pt-*`; full-bleed usa `-mx-4 md:-mx-6`
+- [ ] §20.2.1 Se a tela é casca própria fora do `<Layout>` (portal público/token, standalone) — repete `p-4 md:p-6` à mão, não herda
 - [ ] §21 Rótulo de campo e título de modal
 - [ ] §22 Atualizar estado local em vez de recarregar a tabela inteira (criar/editar/excluir) + preservar scroll ao voltar de edição em página cheia
 - [ ] §23 Migalha de pão — decisão explícita (usa `ui/Breadcrumb.tsx` com 3+ níveis internos, ou "Voltar" com 1 salto, ou nada por §18)
@@ -1640,6 +1641,42 @@ O respiro entre a moldura do app (sidebar, barra superior) e o conteúdo da tela
 > dado. Medido em `RentalsModule.tsx` com Playwright, 2026-08-07; a razão
 > resultante entre o vão acima do título (~32px ópticos) e o de baixo (24px,
 > §20.1) é 1,33:1, dentro da faixa saudável de 1,3–1,8:1.
+
+### 20.2.1 Fora do `<Layout>` — Portais e acesso por link público NÃO herdam o gutter
+
+O gutter de §20.2 só existe porque o `<main>` do `Layout.tsx` embrulha a tela.
+Existe uma classe inteira de telas que **nunca passa por ali**: os guards de
+acesso público em `App.tsx` (`if (portalToken) return <PortalTokenGate ... />`
+e os equivalentes de corretor/parceiro/fornecedor/investidor/cliente) rodam
+**antes** de `<Layout>` ser montado. O mesmo vale para `BrokerPortal.tsx` e
+`partner/PartnerPortal.tsx` em modo standalone: são casca própria (`h-screen`,
+header e `<main>` inclusos), não filhos do `<main>` do Layout.
+
+> ✅ Cada uma dessas cascas próprias **repete o mesmo valor** à mão —
+> `p-4 md:p-6` (ou `-mx-4 md:-mx-6` se for cancelar um pai que já tem
+> padding). Não existe herança automática aqui; é responsabilidade de quem
+> escreve a casca.
+> ❌ **Não copie o padding "que já estava lá" sem checar contra este valor.**
+> Foram encontrados três desvios reais, nenhum causado pela mesma pessoa/dia —
+> prova de que sem um valor de referência escrito, cada wrapper novo inventa
+> o próprio número:
+>   - `App.tsx` (Portal do Fornecedor, guard de token) — `md:p-8`, o padrão
+>     **antigo** (32px), nunca migrado por viver fora do Layout.
+>   - `App.tsx` (Portal do Investidor, guard de token) e `BrokerPortal.tsx`
+>     (standalone) — `p-6` fixo, sem o piso `p-4` do mobile.
+>   - `fiscal/FiscalModule.tsx` — `px-7 py-6` (28px, valor que não existe em
+>     nenhuma outra tela) num wrapper que já vive **dentro** do `<main>` do
+>     Layout — chegava a somar com o gutter do Layout em vez de substituí-lo,
+>     deixando Fiscal com MAIS respiro que qualquer outra tela do sistema.
+> ⚠️ **`h-full` não convive com `-mt`/`-mb` de cancelamento.** `h-full` mede
+> 100% do conteúdo já com o padding do pai descontado; uma margem negativa no
+> eixo vertical desloca a caixa sem esticar a altura, sobrando um vão do
+> tamanho da margem na borda oposta (medido com Playwright em
+> `fiscal/FiscalModule.tsx`, 2026-08-08). Nesse caso cancele só o eixo
+> horizontal (`-mx`) e aceite o padding vertical duplicado — invisível numa
+> caixa que rola, ao contrário do lateral, que dobra a margem visível.
+> ℹ️ Referência: `App.tsx:204,344`, `BrokerPortal.tsx:586`,
+> `partner/PartnerPortal.tsx:1084`, `fiscal/FiscalModule.tsx`, 2026-08-08.
 
 ---
 

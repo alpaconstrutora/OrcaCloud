@@ -33,7 +33,7 @@ import { BlueprintRevisionConflict } from '../types/blueprint';
 /** Intervalo do autosave. RNF-004 exige reconhecimento em até 2 s. */
 const AUTOSAVE_MS = 1500;
 
-export type BlueprintTool = 'selecionar' | 'parede';
+export type BlueprintTool = 'selecionar' | 'parede' | 'abertura';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 
@@ -53,7 +53,10 @@ export interface UseBlueprintEditor {
 
   saveState: SaveState;
   lastError: string | null;
+  /** `true` quando o erro atual é conflito de revisão — a UI oferece recarregar. */
+  hasConflict: boolean;
   clearError: () => void;
+  reload: () => void;
 
   baseRevision: number;
   publishing: boolean;
@@ -75,6 +78,8 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
   const [baseRevision, setBaseRevision] = useState(0);
   const [publishing, setPublishing] = useState(false);
   const [publishedHash, setPublishedHash] = useState<string | null>(null);
+  const [hasConflict, setHasConflict] = useState(false);
+  const [recarga, setRecarga] = useState(0);
 
   const [, force] = useState(0);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,6 +108,7 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
         // Se o ramo já publicou, o hash do snapshot é a referência do "limpo".
         setPublishedHash(branch?.parent_snapshot_id ? snapshotHash(inicial) : null);
         setSaveState('limpo');
+        setHasConflict(false);
       } catch (e) {
         if (!cancelado) setLastError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -114,7 +120,7 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
     return () => {
       cancelado = true;
     };
-  }, [branchId]);
+  }, [branchId, recarga]);
 
   // ── Autosave ──────────────────────────────────────────────────────────────
   const agendarAutosave = useCallback(
@@ -203,6 +209,7 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
         setSaveState('salvo');
       } catch (e) {
         if (e instanceof BlueprintRevisionConflict) {
+          setHasConflict(true);
           setLastError(
             `${e.message} Outra pessoa publicou neste estudo enquanto você editava.`,
           );
@@ -232,7 +239,19 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
     canRedo: historyRef.current.canRedo,
     saveState,
     lastError,
-    clearError: () => setLastError(null),
+    hasConflict,
+    clearError: () => {
+      setLastError(null);
+      setHasConflict(false);
+    },
+    // Recarrega do banco. Descarta o que estava em edição — por isso a UI só
+    // oferece isso no conflito, onde continuar editando por cima do desatualizado
+    // é que seria o caminho perigoso.
+    reload: () => {
+      setHasConflict(false);
+      setLastError(null);
+      setRecarga((n) => n + 1);
+    },
     baseRevision,
     publishing,
     publish,

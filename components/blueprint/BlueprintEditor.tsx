@@ -3,6 +3,10 @@ import {
   ArrowLeft,
   MousePointer2,
   Minus,
+  DoorOpen,
+  Scissors,
+  Combine,
+  Wrench,
   Redo2,
   Undo2,
   Upload,
@@ -15,7 +19,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
 import type { BlueprintStudy } from '../../types/blueprint';
-import type { Point } from '../../utils/blueprintKernel';
+import { wallLength, type Point } from '../../utils/blueprintKernel';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -41,6 +45,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   // `null` = automatico: o passo acompanha o zoom. Qualquer numero fixa o passo.
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
+  const [larguraAbertura, setLarguraAbertura] = useState(900);
+  const [tipoAbertura, setTipoAbertura] = useState<'door' | 'window'>('door');
 
   const levelId = editor.model.levels[0]?.id ?? null;
 
@@ -102,9 +108,105 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
   }
 
+  const paredeSel = editor.model.walls.find((w) => w.id === editor.selectedId) ?? null;
+  const aberturaSel = editor.model.openings.find((o) => o.id === editor.selectedId) ?? null;
+
+  function adicionarAbertura(wallId: string, offsetMm: number) {
+    editor.run({
+      type: 'AddOpening',
+      wallId,
+      kind: tipoAbertura,
+      offsetMm,
+      widthMm: larguraAbertura,
+      heightMm: tipoAbertura === 'door' ? 2100 : 1200,
+      sillMm: tipoAbertura === 'door' ? 0 : 900,
+    });
+  }
+
+  function dividirSelecionada() {
+    if (!paredeSel) return;
+    // Divide no meio: e o unico ponto que sempre existe e nunca coincide com
+    // ponta, entao nao depende de o usuario acertar um clique no eixo.
+    editor.run({
+      type: 'SplitWall',
+      wallId: paredeSel.id,
+      at: {
+        x: Math.round((paredeSel.a.x + paredeSel.b.x) / 2),
+        y: Math.round((paredeSel.a.y + paredeSel.b.y) / 2),
+      },
+    });
+    editor.setSelectedId(null);
+  }
+
+  /** Une a selecionada com a vizinha colinear que compartilha uma ponta. */
+  function unirSelecionada() {
+    if (!paredeSel) return;
+    const mesmaPonta = (p: Point, q: Point) => p.x === q.x && p.y === q.y;
+    const vizinha = editor.model.walls.find((o) => {
+      if (o.id === paredeSel.id || o.levelId !== paredeSel.levelId) return false;
+      if (o.thicknessMm !== paredeSel.thicknessMm) return false;
+      return (
+        mesmaPonta(o.a, paredeSel.b) ||
+        mesmaPonta(o.b, paredeSel.a) ||
+        mesmaPonta(o.a, paredeSel.a) ||
+        mesmaPonta(o.b, paredeSel.b)
+      );
+    });
+    if (!vizinha) {
+      editor.setSelectedId(paredeSel.id);
+      return;
+    }
+    editor.run({ type: 'MergeWalls', firstId: paredeSel.id, secondId: vizinha.id });
+    editor.setSelectedId(null);
+  }
+
+  /**
+   * Pontas de parede que nao encontram nada. Sao elas que impedem o ambiente de
+   * fechar, e o usuario nao tem como ver um vao de 3 mm na tela.
+   */
+  const pontasSoltas = useMemo(() => {
+    const grau = new Map<string, { p: Point; n: number }>();
+    for (const w of editor.model.walls) {
+      if (levelId && w.levelId !== levelId) continue;
+      for (const extremo of [w.a, w.b]) {
+        const k = `${extremo.x},${extremo.y}`;
+        const atual = grau.get(k);
+        if (atual) atual.n += 1;
+        else grau.set(k, { p: extremo, n: 1 });
+      }
+    }
+    return [...grau.values()].filter((v) => v.n === 1).map((v) => v.p);
+  }, [editor.model.walls, levelId]);
+
+  /**
+   * Fecha vaos: aproxima pontas soltas que estao perto uma da outra.
+   *
+   * O limite e generoso de proposito (30 cm). A tolerancia do kernel e 5 mm e
+   * serve para desenho quase-certo; aqui o usuario esta pedindo explicitamente
+   * "junte o que sobrou", e um vao visivel a olho nu passa de 5 mm.
+   */
+  function fecharVaos() {
+    const LIMITE = 300;
+    for (const w of editor.model.walls) {
+      if (levelId && w.levelId !== levelId) continue;
+      for (const end of ['a', 'b'] as const) {
+        const p = w[end];
+        if (!pontasSoltas.some((q) => q.x === p.x && q.y === p.y)) continue;
+        const destino = pontasSoltas.find(
+          (q) => (q.x !== p.x || q.y !== p.y) && Math.hypot(q.x - p.x, q.y - p.y) <= LIMITE,
+        );
+        if (!destino) continue;
+        editor.run({ type: 'MoveVertex', wallId: w.id, end, to: destino });
+        return; // um por vez: cada movimento muda quem ainda esta solto
+      }
+    }
+  }
+
   function removerSelecionada() {
     if (!editor.selectedId) return;
-    editor.run({ type: 'DeleteWall', wallId: editor.selectedId });
+    // Abertura e parede sao objetos diferentes com a mesma tecla de atalho.
+    if (aberturaSel) editor.run({ type: 'DeleteOpening', openingId: aberturaSel.id });
+    else editor.run({ type: 'DeleteWall', wallId: editor.selectedId });
     editor.setSelectedId(null);
   }
 
@@ -181,8 +283,45 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           onClick={editor.setTool}
         />
 
+        <Ferramenta
+          atual={editor.tool}
+          valor="abertura"
+          icone={DoorOpen}
+          rotulo="Abertura"
+          onClick={editor.setTool}
+        />
+
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
+        {editor.tool === 'abertura' ? (
+          <>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              Tipo
+              <select
+                value={tipoAbertura}
+                onChange={(e) => setTipoAbertura(e.target.value as 'door' | 'window')}
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+              >
+                <option value="door">Porta</option>
+                <option value="window">Janela</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              Largura
+              <select
+                value={larguraAbertura}
+                onChange={(e) => setLarguraAbertura(Number(e.target.value))}
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+              >
+                {[600, 700, 800, 900, 1000, 1200, 1500, 2000].map((mm) => (
+                  <option key={mm} value={mm}>
+                    {mm} mm
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        ) : (
         <label className="flex items-center gap-2 text-xs text-slate-600">
           Espessura
           <select
@@ -197,6 +336,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             ))}
           </select>
         </label>
+        )}
 
         <label className="flex items-center gap-2 text-xs text-slate-600">
           Grade
@@ -254,13 +394,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="flex-1">{editor.lastError}</span>
-          <button
-            type="button"
-            onClick={editor.clearError}
-            className="text-xs font-medium underline"
-          >
-            dispensar
-          </button>
+          {editor.hasConflict ? (
+            <button
+              type="button"
+              onClick={editor.reload}
+              className="shrink-0 rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+            >
+              Recarregar do servidor
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={editor.clearError}
+              className="text-xs font-medium underline"
+            >
+              dispensar
+            </button>
+          )}
         </div>
       )}
 
@@ -279,6 +429,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               selectedId={editor.selectedId}
               onSelect={editor.setSelectedId}
               onAddWall={adicionarParede}
+              onAddOpening={adicionarAbertura}
+              larguraAberturaMm={larguraAbertura}
               onDelete={removerSelecionada}
               espessuraMm={espessura}
               passoGradeMm={passoGrade}
@@ -298,6 +450,67 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               Derivados da topologia — não são desenhados à mão.
             </p>
           </div>
+
+          {(paredeSel || aberturaSel) && (
+            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {paredeSel ? 'Parede selecionada' : 'Abertura selecionada'}
+              </h3>
+
+              {paredeSel && (
+                <>
+                  <p className="mt-2 text-xs text-slate-600">
+                    Comprimento{' '}
+                    <span className="font-medium text-slate-800">
+                      {(wallLength(paredeSel) / 1000).toFixed(2)} m
+                    </span>
+                  </p>
+                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+                    Espessura
+                    <select
+                      value={paredeSel.thicknessMm}
+                      onChange={(e) =>
+                        editor.run({
+                          type: 'SetThickness',
+                          wallId: paredeSel.id,
+                          thicknessMm: Number(e.target.value),
+                        })
+                      }
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      {[100, 150, 200, 250].map((mm) => (
+                        <option key={mm} value={mm}>
+                          {mm} mm
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="mt-3 flex gap-2">
+                    <BotaoTexto icone={Scissors} rotulo="Dividir" onClick={dividirSelecionada} />
+                    <BotaoTexto icone={Combine} rotulo="Unir" onClick={unirSelecionada} />
+                  </div>
+                </>
+              )}
+
+              {aberturaSel && (
+                <p className="mt-2 text-xs text-slate-600">
+                  {aberturaSel.kind === 'door' ? 'Porta' : 'Janela'} de{' '}
+                  <span className="font-medium text-slate-800">{aberturaSel.widthMm} mm</span>, a{' '}
+                  {(aberturaSel.offsetMm / 1000).toFixed(2)} m do início da parede.
+                </p>
+              )}
+            </div>
+          )}
+
+          {pontasSoltas.length > 0 && (
+            <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs text-amber-800">
+                <strong>{pontasSoltas.length} ponta(s) solta(s).</strong> Enquanto houver
+                ponta sem encontro, o contorno não fecha e o ambiente não aparece.
+              </p>
+              <BotaoTexto icone={Wrench} rotulo="Fechar vão" onClick={fecharVaos} />
+            </div>
+          )}
 
           <div aria-live="polite" className="px-4 py-2 text-xs text-slate-600">
             {ambientes.length === 0
@@ -367,6 +580,28 @@ function BotaoBarra({
       className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"
     >
       <Icone className="h-4 w-4" />
+    </button>
+  );
+}
+
+/** Botão pequeno com ícone e rótulo, para ações do painel. */
+function BotaoTexto({
+  icone: Icone,
+  rotulo,
+  onClick,
+}: {
+  icone: React.ElementType;
+  rotulo: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+    >
+      <Icone className="h-3.5 w-3.5" />
+      {rotulo}
     </button>
   );
 }

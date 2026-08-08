@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   type BlueprintModel,
+  type Opening,
   type Point,
   type Wall,
   point,
+  wallLength,
 } from '../../utils/blueprintKernel';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
@@ -75,7 +77,11 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onAddWall: (a: Point, b: Point) => void;
+  /** Coloca abertura na parede indicada, com o offset ja medido a partir de `a`. */
+  onAddOpening: (wallId: string, offsetMm: number) => void;
   onDelete: () => void;
+  /** Largura da abertura em curso, para previa e para o comando. */
+  larguraAberturaMm: number;
   espessuraMm: number;
   /** `null` = automático pelo zoom. Número = passo fixo em mm, escolhido pelo usuário. */
   passoGradeMm: number | null;
@@ -98,7 +104,9 @@ export default function BlueprintCanvas({
   selectedId,
   onSelect,
   onAddWall,
+  onAddOpening,
   onDelete,
+  larguraAberturaMm,
   espessuraMm,
   passoGradeMm,
   onPassoEfetivo,
@@ -111,6 +119,7 @@ export default function BlueprintCanvas({
   const [inicio, setInicio] = useState<Point | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null);
   const [arrastando, setArrastando] = useState(false);
+  const [previaAbertura, setPreviaAbertura] = useState<{ wallId: string; offsetMm: number } | null>(null);
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
   // automatico. E o MESMO valor usado para desenhar e para encaixar — a grade
@@ -172,6 +181,27 @@ export default function BlueprintCanvas({
       );
     },
     [paredesDoNivel, vista.escala, passoEfetivo],
+  );
+
+  /**
+   * Onde, ao longo do eixo da parede, cai o cursor — em mm a partir de `a`.
+   * O resultado ja vem preso dentro dos limites uteis para uma abertura de
+   * `larguraAberturaMm`: e o kernel que recusaria, e recusar depois do clique
+   * seria pior do que nao deixar errar.
+   */
+  const offsetNaParede = useCallback(
+    (w: Wall, mundo: { x: number; y: number }): number => {
+      const dx = w.b.x - w.a.x;
+      const dy = w.b.y - w.a.y;
+      const comp2 = dx * dx + dy * dy;
+      if (comp2 === 0) return 0;
+      const t = ((mundo.x - w.a.x) * dx + (mundo.y - w.a.y) * dy) / comp2;
+      const comp = wallLength(w);
+      const centro = t * comp;
+      const bruto = centro - larguraAberturaMm / 2;
+      return Math.round(Math.max(0, Math.min(comp - larguraAberturaMm, bruto)));
+    },
+    [larguraAberturaMm],
   );
 
   const paredeSob = useCallback(
@@ -414,6 +444,89 @@ export default function BlueprintCanvas({
       ctx.stroke();
     }
 
+    // Aberturas — desenhadas DEPOIS das paredes, em tres etapas:
+    //   1. vao: branco atravessando a espessura inteira, abrindo o buraco;
+    //   2. batentes: as duas linhas que fecham a parede nas laterais do vao;
+    //   3. simbolo: arco de giro na porta, folha fina na janela.
+    //
+    // Sem os batentes o vao ficaria com as bordas da parede correndo soltas por
+    // dentro dele, que e o erro classico de quem so apaga o trecho.
+    const paredePorId = new Map(paredesDoNivel.map((w) => [w.id, w]));
+
+    for (const o of model.openings) {
+      const w = paredePorId.get(o.wallId);
+      if (!w) continue;
+
+      const comp = wallLength(w);
+      if (comp <= 0) continue;
+      const ux = (w.b.x - w.a.x) / comp;
+      const uy = (w.b.y - w.a.y) / comp;
+      // Normal do eixo, para atravessar a espessura.
+      const nx = -uy;
+      const ny = ux;
+      const meia = w.thicknessMm / 2;
+
+      const ini = { x: w.a.x + ux * o.offsetMm, y: w.a.y + uy * o.offsetMm };
+      const fim = {
+        x: w.a.x + ux * (o.offsetMm + o.widthMm),
+        y: w.a.y + uy * (o.offsetMm + o.widthMm),
+      };
+
+      const t1 = paraTela({ x: ini.x + nx * meia, y: ini.y + ny * meia } as Point);
+      const t2 = paraTela({ x: ini.x - nx * meia, y: ini.y - ny * meia } as Point);
+      const t3 = paraTela({ x: fim.x - nx * meia, y: fim.y - ny * meia } as Point);
+      const t4 = paraTela({ x: fim.x + nx * meia, y: fim.y + ny * meia } as Point);
+
+      // 1. abrir o vao
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(t1.x, t1.y);
+      ctx.lineTo(t2.x, t2.y);
+      ctx.lineTo(t3.x, t3.y);
+      ctx.lineTo(t4.x, t4.y);
+      ctx.closePath();
+      ctx.fill();
+
+      // 2. batentes
+      ctx.strokeStyle = o.id === selectedId ? COR_SELECIONADA : COR_PAREDE;
+      ctx.lineWidth = LINHA_PAREDE_PX;
+      ctx.beginPath();
+      ctx.moveTo(t1.x, t1.y);
+      ctx.lineTo(t2.x, t2.y);
+      ctx.moveTo(t3.x, t3.y);
+      ctx.lineTo(t4.x, t4.y);
+      ctx.stroke();
+
+      const larguraTela = Math.hypot(t4.x - t1.x, t4.y - t1.y);
+      if (larguraTela < 4) continue;
+
+      // 3. simbolo
+      if (o.kind === 'window') {
+        // Janela: folha fina no eixo da parede.
+        const e1 = paraTela(ini as Point);
+        const e2 = paraTela(fim as Point);
+        ctx.beginPath();
+        ctx.moveTo(e1.x, e1.y);
+        ctx.lineTo(e2.x, e2.y);
+        ctx.stroke();
+      } else {
+        // Porta: folha aberta a 90 graus mais o arco de giro, como em planta.
+        const piv = paraTela({ x: ini.x + nx * meia, y: ini.y + ny * meia } as Point);
+        const raio = larguraTela;
+        const angEixo = Math.atan2(uy, ux);
+        const angNormal = Math.atan2(ny, nx);
+
+        ctx.beginPath();
+        ctx.moveTo(piv.x, piv.y);
+        ctx.lineTo(piv.x + Math.cos(angNormal) * raio, piv.y + Math.sin(angNormal) * raio);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(piv.x, piv.y, raio, angEixo, angNormal, false);
+        ctx.stroke();
+      }
+    }
+
     // Prévia da parede em curso
     if (inicio && cursor) {
       const a = paraTela(inicio);
@@ -437,6 +550,30 @@ export default function BlueprintCanvas({
       );
     }
 
+    // Prévia da abertura sob o cursor
+    if (previaAbertura) {
+      const w = paredePorId.get(previaAbertura.wallId);
+      if (w) {
+        const comp = wallLength(w);
+        const ux = (w.b.x - w.a.x) / comp;
+        const uy = (w.b.y - w.a.y) / comp;
+        const a = paraTela({
+          x: w.a.x + ux * previaAbertura.offsetMm,
+          y: w.a.y + uy * previaAbertura.offsetMm,
+        } as Point);
+        const b = paraTela({
+          x: w.a.x + ux * (previaAbertura.offsetMm + larguraAberturaMm),
+          y: w.a.y + uy * (previaAbertura.offsetMm + larguraAberturaMm),
+        } as Point);
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.lineWidth = Math.max(2, w.thicknessMm * vista.escala);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+    }
+
     // Marcador de captura
     if (cursor && tool === 'parede') {
       const c = paraTela(cursor);
@@ -455,6 +592,8 @@ export default function BlueprintCanvas({
     selectedId,
     tool,
     espessuraMm,
+    larguraAberturaMm,
+    previaAbertura,
     passoEfetivo,
     paraTela,
     paredesDoNivel,
@@ -474,6 +613,15 @@ export default function BlueprintCanvas({
       setVista((v) => ({ ...v, dx: v.dx + e.movementX, dy: v.dy + e.movementY }));
       return;
     }
+    if (tool === 'abertura') {
+      const mundo = paraMundo(px, py);
+      const w = paredeSob(mundo);
+      setPreviaAbertura(w ? { wallId: w.id, offsetMm: offsetNaParede(w, mundo) } : null);
+      setCursor(null);
+      return;
+    }
+    setPreviaAbertura(null);
+
     if (tool !== 'parede') {
       setCursor(null);
       return;
@@ -493,8 +641,24 @@ export default function BlueprintCanvas({
     const { px, py } = posicao(e);
     const mundo = paraMundo(px, py);
 
+    if (tool === 'abertura') {
+      const w = paredeSob(mundo);
+      if (w) onAddOpening(w.id, offsetNaParede(w, mundo));
+      return;
+    }
+
     if (tool === 'selecionar') {
-      onSelect(paredeSob(mundo)?.id ?? null);
+      // Abertura antes de parede: ela esta POR CIMA e e menor, entao se o
+      // clique cair nas duas o usuario quis a de cima.
+      const w = paredeSob(mundo);
+      const aberturaClicada = w
+        ? model.openings.find((o) => {
+            if (o.wallId !== w.id) return false;
+            const off = offsetNaParede(w, mundo);
+            return Math.abs(off - o.offsetMm) < Math.max(o.widthMm, larguraAberturaMm);
+          })
+        : undefined;
+      onSelect(aberturaClicada?.id ?? w?.id ?? null);
       return;
     }
 

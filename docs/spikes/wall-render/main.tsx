@@ -42,7 +42,7 @@ function construir() {
     heightMm: H,
   });
 
-  return applyBatch(base.model, [
+  const base2 = applyBatch(base.model, [
     // Retângulo fechado: exercita os quatro cantos em L.
     w(0, 0, 16000, 0),
     w(16000, 0, 16000, 11000),
@@ -53,6 +53,35 @@ function construir() {
     // Ponta solta: exercita a extremidade LIVRE.
     w(16000, 5000, 21000, 5000),
   ]).model;
+
+  // Aberturas: uma porta e uma janela, para conferir vao, batente e simbolo.
+  const paredeSul = base2.walls.find((w) => w.a.y === 11000 && w.b.y === 11000);
+  const paredeOeste = base2.walls.find((w) => w.a.x === 0 && w.b.x === 0);
+
+  let comAberturas = base2;
+  if (paredeSul) {
+    comAberturas = applyCommand(comAberturas, {
+      type: 'AddOpening',
+      wallId: paredeSul.id,
+      kind: 'door',
+      offsetMm: 4000,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    }).model;
+  }
+  if (paredeOeste) {
+    comAberturas = applyCommand(comAberturas, {
+      type: 'AddOpening',
+      wallId: paredeOeste.id,
+      kind: 'window',
+      offsetMm: 3000,
+      widthMm: 2000,
+      heightMm: 1200,
+      sillMm: 900,
+    }).model;
+  }
+  return comAberturas;
 }
 
 const modelo = construir();
@@ -66,6 +95,8 @@ function App() {
       selectedId={null}
       onSelect={() => {}}
       onAddWall={() => {}}
+      onAddOpening={() => {}}
+      larguraAberturaMm={900}
       onDelete={() => {}}
       espessuraMm={T}
       passoGradeMm={null}

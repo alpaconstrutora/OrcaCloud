@@ -48,7 +48,8 @@ export type Command =
   | { type: 'MoveVertex'; wallId: ObjectId; end: 'a' | 'b'; to: Point }
   | { type: 'SplitWall'; wallId: ObjectId; at: Point }
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
-  | { type: 'DeleteWall'; wallId: ObjectId };
+  | { type: 'DeleteWall'; wallId: ObjectId }
+  | { type: 'DeleteOpening'; openingId: ObjectId };
 
 export interface Diff {
   created: ObjectId[];
@@ -281,6 +282,16 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       diff.deleted.push(first.id, second.id);
       diff.created.push(mergedId);
       diff.ancestry[mergedId] = [first.id, second.id];
+      break;
+    }
+
+    case 'DeleteOpening': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) {
+        throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      }
+      next.openings = next.openings.filter((o) => o.id !== opening.id);
+      diff.deleted.push(opening.id);
       break;
     }
 

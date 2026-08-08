@@ -51,7 +51,6 @@ function getAdvancedFilterValue(org: Organization, key: string): unknown {
     }
 }
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
-import { KpiCard } from './ui/KpiCard';
 import { Organization, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -226,11 +225,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
             });
     }, [organizations, searchTerm, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
-    const orgKpis = React.useMemo(() => ({
-        total: organizations.length,
-        comCnpj: organizations.filter(o => !!o.cnpj).length,
-    }), [organizations]);
-
     // Tabela fallback "Todos os Usuários" (só aparece sem organização selecionada).
     const allUsersColumns = useTableColumns(ALL_USERS_FALLBACK_COLUMNS, 'organizationListAllUsersColumns');
     const allUsersCols = useResizableColumns(ALL_USERS_COL_WIDTHS, 'organizationListAllUsersColWidths');
@@ -264,11 +258,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     <div>
                         <h2 className="text-3xl font-black text-gray-900 tracking-tight">Empresas do Grupo</h2>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie os perfis e logotipos das suas empresas.</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <KpiCard shadow={false} size="lg" label="Total de Organizações" value={orgKpis.total} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                        <KpiCard shadow={false} size="lg" label="Com CNPJ Cadastrado" value={orgKpis.comCnpj} icon={<Activity className="w-4 h-4" />} color="emerald" />
                     </div>
 
                     {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — mesma decisão já

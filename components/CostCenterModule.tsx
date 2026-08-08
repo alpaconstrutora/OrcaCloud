@@ -1,11 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import {
     Search, Plus, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
-    Download, Upload, FileDown, Layers, AlertCircle, Hash,
+    Download, Upload, FileDown, Layers, AlertCircle,
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import ActionIconButton from './ui/ActionIconButton';
-import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import CostCenterV2ImportModal from './CostCenterV2ImportModal';
@@ -91,7 +90,6 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     );
 
     const groups = useMemo(() => items.filter(i => !i.parent_id), [items]);
-    const subgroups = useMemo(() => items.filter(i => !!i.parent_id), [items]);
 
     const compareItems = useCallback((a: CostCenterV2, b: CostCenterV2) => {
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -247,12 +245,6 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                     </h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Estruture os grupos e centros de custo usados em Suprimentos, Comercial e Financeiro.</p>
                 </div>
-            </div>
-
-            {/* KPIs §4 */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Grupos" value={groups.length} icon={<Hash className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Centros de custo" value={subgroups.length} icon={<Layers className="w-5 h-5" />} color="indigo" />
             </div>
 
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

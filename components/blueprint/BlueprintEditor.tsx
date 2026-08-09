@@ -13,12 +13,26 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Calculator,
+  PencilRuler,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
-import type { BlueprintStudy } from '../../types/blueprint';
-import { areCollinear, wallLength, type Point } from '../../utils/blueprintKernel';
+import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
+import {
+  computeAndStoreQuantities,
+  getQuantitySnapshot,
+  listSnapshots,
+} from '../../services/blueprintService';
+import {
+  POLITICA_PADRAO,
+  areCollinear,
+  computeQuantities,
+  formatarQuantidade,
+  wallLength,
+  type Point,
+} from '../../utils/blueprintKernel';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -45,6 +59,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
+  const [aba, setAba] = useState<'ambientes' | 'quantitativos'>('ambientes');
+  const [qtdOficial, setQtdOficial] = useState<BlueprintQuantitySnapshot | null>(null);
+  const [gerando, setGerando] = useState(false);
   const [tipoAbertura, setTipoAbertura] = useState<'door' | 'window'>('door');
 
   const levelId = editor.model.levels[0]?.id ?? null;
@@ -76,6 +93,53 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
 
   const areaTotal = ambientes.reduce((soma, a) => soma + a.areaM2, 0);
+
+  const quant = useMemo(
+    () => computeQuantities(editor.model, POLITICA_PADRAO),
+    [editor.model],
+  );
+  const fmt = (v: number) => formatarQuantidade(v, POLITICA_PADRAO);
+
+  /**
+   * Quantitativo OFICIAL da última versão publicada.
+   *
+   * O painel calcula ao vivo enquanto se desenha, e isso é útil — mas número que
+   * o orçamento vai citar não pode vir de geometria que ainda muda. O oficial sai
+   * do snapshot publicado e fica gravado com a política que o produziu.
+   */
+  useEffect(() => {
+    let cancelado = false;
+    async function carregar() {
+      if (editor.baseRevision === 0) {
+        setQtdOficial(null);
+        return;
+      }
+      try {
+        const snaps = await listSnapshots(study.id);
+        if (cancelado || snaps.length === 0) return;
+        setQtdOficial(await getQuantitySnapshot(snaps[0].id, POLITICA_PADRAO.version));
+      } catch {
+        /* silencioso: a ausência do oficial não impede desenhar */
+      }
+    }
+    carregar();
+    return () => {
+      cancelado = true;
+    };
+  }, [study.id, editor.baseRevision]);
+
+  async function gerarQuantitativoOficial() {
+    setGerando(true);
+    try {
+      const snaps = await listSnapshots(study.id);
+      if (snaps.length === 0) return;
+      setQtdOficial(await computeAndStoreQuantities(snaps[0].id, POLITICA_PADRAO));
+    } catch (e) {
+      console.error('falha ao gerar quantitativo:', e);
+    } finally {
+      setGerando(false);
+    }
+  }
 
   function adicionarParede(a: Point, b: Point) {
     if (!levelId) return;
@@ -499,11 +563,38 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           )}
         </div>
 
-        {/* Painel de ambientes — é aqui que a planta vira navegável por teclado. */}
+        {/* Painel lateral — é aqui que a planta vira navegável por teclado. */}
         <aside
-          className="w-72 shrink-0 overflow-y-auto border-l border-slate-200 bg-white"
+          className="flex w-80 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
           aria-label="Ambientes derivados"
         >
+          <div className="flex shrink-0 border-b border-slate-200" role="tablist">
+            <BotaoAba
+              ativo={aba === 'ambientes'}
+              icone={PencilRuler}
+              rotulo="Ambientes"
+              onClick={() => setAba('ambientes')}
+            />
+            <BotaoAba
+              ativo={aba === 'quantitativos'}
+              icone={Calculator}
+              rotulo="Quantitativos"
+              onClick={() => setAba('quantitativos')}
+            />
+          </div>
+
+          {aba === 'quantitativos' ? (
+            <PainelQuantitativos
+              quant={quant}
+              fmt={fmt}
+              revisao={editor.baseRevision}
+              oficial={qtdOficial}
+              gerando={gerando}
+              onGerar={gerarQuantitativoOficial}
+              dirty={editor.dirtySincePublish}
+            />
+          ) : (
+          <div className="overflow-y-auto">
           <div className="border-b border-slate-200 px-4 py-3">
             <h2 className="text-sm font-semibold text-slate-800">Ambientes</h2>
             <p className="text-xs text-slate-500">
@@ -667,6 +758,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               não fecham área.
             </p>
           )}
+          </div>
+          )}
         </aside>
       </div>
     </div>
@@ -697,6 +790,171 @@ function BotaoBarra({
     >
       <Icone className="h-4 w-4" />
     </button>
+  );
+}
+
+function BotaoAba({
+  ativo,
+  icone: Icone,
+  rotulo,
+  onClick,
+}: {
+  ativo: boolean;
+  icone: React.ElementType;
+  rotulo: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={ativo}
+      onClick={onClick}
+      className={`flex flex-1 items-center justify-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+        ativo
+          ? 'border-blue-600 text-blue-700'
+          : 'border-transparent text-slate-500 hover:bg-slate-50'
+      }`}
+    >
+      <Icone className="h-3.5 w-3.5" />
+      {rotulo}
+    </button>
+  );
+}
+
+/**
+ * Quantitativos derivados do desenho.
+ *
+ * Mostra a área de EIXO ao lado da de PISO de propósito. Elas diferem em ~9% numa
+ * planta comum, e quem confere o orçamento precisa ver as duas para entender de
+ * onde veio o número — a de eixo é a que aparece na aba Ambientes, a de piso é a
+ * que vira material comprado.
+ */
+function PainelQuantitativos({
+  quant,
+  fmt,
+  revisao,
+  oficial,
+  gerando,
+  onGerar,
+  dirty,
+}: {
+  quant: ReturnType<typeof computeQuantities>;
+  fmt: (v: number) => string;
+  revisao: number;
+  oficial: BlueprintQuantitySnapshot | null;
+  gerando: boolean;
+  onGerar: () => void;
+  dirty: boolean;
+}) {
+  const t = quant.totais;
+  return (
+    <div className="overflow-y-auto">
+      <div className="border-b border-slate-200 px-4 py-3">
+        <h2 className="text-sm font-semibold text-slate-800">Quantitativos</h2>
+        <p className="text-xs text-slate-500">
+          Do desenho atual. Política {quant.policy.version}.
+        </p>
+      </div>
+
+      {/* Oficial × ao vivo. A distinção é o ponto: o orçamento cita o oficial. */}
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+        {revisao === 0 ? (
+          <p className="text-xs text-slate-500">
+            Publique uma versão para gerar o quantitativo oficial — o orçamento não
+            cita rascunho.
+          </p>
+        ) : oficial ? (
+          <>
+            <p className="text-xs text-emerald-700">
+              <strong>Oficial da revisão {revisao}</strong> gerado em{' '}
+              {new Date(oficial.computed_at).toLocaleDateString('pt-BR')}.
+            </p>
+            {dirty && (
+              <p className="mt-1 text-xs text-amber-700">
+                O desenho mudou desde então. Publique de novo para gerar o oficial da
+                próxima revisão.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-600">
+              A revisão {revisao} ainda não tem quantitativo oficial.
+            </p>
+            <BotaoTexto icone={Calculator} rotulo={gerando ? 'Gerando…' : 'Gerar oficial'} onClick={onGerar} disabled={gerando} />
+          </>
+        )}
+      </div>
+
+      {quant.ambientes.length === 0 ? (
+        <p className="px-4 py-3 text-xs text-slate-400">
+          Nenhum ambiente fechado — sem contorno fechado não há área para quantificar.
+        </p>
+      ) : (
+        <>
+          <dl className="divide-y divide-slate-100">
+            <Linha rotulo="Área de piso" valor={`${fmt(t.areaPisoM2)} m²`} forte />
+            <Linha
+              rotulo={`Piso + perda ${(quant.policy.perdaRevestimento * 100).toFixed(0)}%`}
+              valor={`${fmt(t.areaPisoComPerdaM2)} m²`}
+            />
+            <Linha
+              rotulo="Parede (2 faces)"
+              valor={`${fmt(t.areaParedeDuasFacesM2)} m²`}
+              forte
+            />
+            <Linha rotulo="Alvenaria" valor={`${fmt(t.volumeAlvenariaM3)} m³`} />
+            <Linha rotulo="Rodapé" valor={`${fmt(t.comprimentoRodapeM)} m`} />
+            <Linha
+              rotulo="Aberturas"
+              valor={`${t.portas} porta(s), ${t.janelas} janela(s) · ${fmt(t.areaAberturasM2)} m²`}
+            />
+          </dl>
+
+          <div className="border-t border-slate-200 px-4 py-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Por ambiente
+            </h3>
+            <ul className="mt-2 space-y-2">
+              {quant.ambientes.map((a, i) => (
+                <li key={a.spaceId} className="rounded-md border border-slate-200 p-2">
+                  <p className="text-xs font-medium text-slate-700">
+                    {a.nome ?? `Ambiente ${i + 1}`}
+                  </p>
+                  <dl className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                    <dt>Piso</dt>
+                    <dd className="text-right font-medium text-slate-700">
+                      {fmt(a.areaPisoM2)} m²
+                    </dd>
+                    <dt title="Inclui meia espessura de parede em volta">Eixo</dt>
+                    <dd className="text-right">{fmt(a.areaEixoM2)} m²</dd>
+                    <dt>Rodapé</dt>
+                    <dd className="text-right">{fmt(a.comprimentoRodapeM)} m</dd>
+                  </dl>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="px-4 py-3 text-[11px] leading-relaxed text-slate-400">
+            Estudo preliminar assistido; requer validação de profissional habilitado.
+            Área de piso = {quant.ambientes[0]?.formulaAreaPiso}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Linha({ rotulo, valor, forte }: { rotulo: string; valor: string; forte?: boolean }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2">
+      <dt className="text-xs text-slate-600">{rotulo}</dt>
+      <dd className={`text-xs ${forte ? 'font-semibold text-slate-800' : 'text-slate-700'}`}>
+        {valor}
+      </dd>
+    </div>
   );
 }
 

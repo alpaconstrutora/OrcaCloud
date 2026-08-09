@@ -14,8 +14,12 @@
 
 import { supabase } from '../lib/supabase';
 import {
+  POLITICA_PADRAO,
   type BlueprintModel,
+  type QuantityPolicy,
+  type Quantitativos,
   KERNEL_VERSION,
+  computeQuantities,
   canonicalPayload,
   modelFromCanonicalPayload,
   parseCanonicalPayload,
@@ -24,6 +28,7 @@ import {
 import {
   BlueprintRevisionConflict,
   type BlueprintAuditEvent,
+  type BlueprintQuantitySnapshot,
   type BlueprintBranch,
   type BlueprintSnapshot,
   type BlueprintSnapshotSummary,
@@ -304,6 +309,140 @@ export async function verifySnapshotIntegrity(snapshotId: string): Promise<{
     kernelVersion: snapshot.kernel_version,
     kernelMatches: snapshot.kernel_version === KERNEL_VERSION,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quantitativos
+// ─────────────────────────────────────────────────────────────────────────────
+
+const QTY_COLS =
+  'id, snapshot_id, organization_id, policy_version, policy, kernel_version, payload, totais, computed_by, computed_at';
+
+/**
+ * Calcula e grava o quantitativo de uma versão PUBLICADA.
+ *
+ * Nunca de rascunho: número que o orçamento vai citar não pode vir de geometria
+ * que ainda muda.
+ *
+ * Idempotente por (snapshot, versão da política), que é o que o CA-08 pede.
+ * Recalcular com a mesma política devolve o registro existente em vez de criar
+ * outro; trocar a política cria um NOVO, preservando o que o orçamento já citou.
+ */
+export async function computeAndStoreQuantities(
+  snapshotId: string,
+  policy: QuantityPolicy = POLITICA_PADRAO,
+): Promise<BlueprintQuantitySnapshot> {
+  const existente = await getQuantitySnapshot(snapshotId, policy.version);
+  if (existente) return existente;
+
+  const snapshot = await getSnapshot(snapshotId);
+  if (!snapshot) throw new Error(`blueprint/quantities: snapshot ${snapshotId} não encontrado`);
+
+  // Reconstrói o modelo a partir do payload canônico — o mesmo caminho que
+  // `verifySnapshotIntegrity` usa. É o que torna o número reproduzível: ele não
+  // depende do que estava na tela, e sim do que foi publicado.
+  const model = modelFromCanonicalPayload(parseCanonicalPayload(JSON.stringify(snapshot.payload)));
+  const quant = computeQuantities(model, policy, snapshot.kernel_version);
+
+  const { data, error } = await supabase
+    .from('blueprint_quantity_snapshots')
+    .insert({
+      snapshot_id: snapshotId,
+      organization_id: snapshot.organization_id,
+      policy_version: policy.version,
+      policy,
+      kernel_version: snapshot.kernel_version,
+      payload: quant,
+      totais: quant.totais,
+    })
+    .select(QTY_COLS)
+    .single();
+
+  // Corrida: outra aba pode ter gravado entre a consulta e o insert. A chave
+  // única barra, e o certo é devolver o que existe — não falhar.
+  if (error) {
+    if (error.code === '23505') {
+      const agora = await getQuantitySnapshot(snapshotId, policy.version);
+      if (agora) return agora;
+    }
+    fail('computeAndStoreQuantities', error);
+  }
+
+  await recordAudit({
+    organizationId: snapshot.organization_id,
+    studyId: snapshot.study_id,
+    action: 'QUANTITATIVO_GERADO',
+    targetType: 'QUANTITY_SNAPSHOT',
+    targetId: (data as BlueprintQuantitySnapshot).id,
+    metadata: { snapshot_id: snapshotId, policy_version: policy.version },
+  });
+
+  return data as BlueprintQuantitySnapshot;
+}
+
+export async function getQuantitySnapshot(
+  snapshotId: string,
+  policyVersion: string,
+): Promise<BlueprintQuantitySnapshot | null> {
+  const { data, error } = await supabase
+    .from('blueprint_quantity_snapshots')
+    .select(QTY_COLS)
+    .eq('snapshot_id', snapshotId)
+    .eq('policy_version', policyVersion)
+    .maybeSingle();
+
+  if (error) fail('getQuantitySnapshot', error);
+  return (data as BlueprintQuantitySnapshot) ?? null;
+}
+
+export async function listQuantitySnapshots(
+  snapshotId: string,
+): Promise<BlueprintQuantitySnapshot[]> {
+  const { data, error } = await supabase
+    .from('blueprint_quantity_snapshots')
+    .select(QTY_COLS)
+    .eq('snapshot_id', snapshotId)
+    .order('computed_at', { ascending: false });
+
+  if (error) fail('listQuantitySnapshots', error);
+  return (data ?? []) as BlueprintQuantitySnapshot[];
+}
+
+/**
+ * Recalcula e compara com o que está gravado (CA-08).
+ *
+ * É a prova de reprodutibilidade aplicada ao quantitativo, como
+ * `verifySnapshotIntegrity` é para a geometria: se o kernel ou a política mudarem
+ * de forma incompatível, o número diverge e isso aparece — em vez de virar
+ * orçamento errado sem ninguém notar.
+ */
+export async function verifyQuantitySnapshot(
+  snapshotId: string,
+  policyVersion: string,
+): Promise<{ ok: boolean; divergencias: string[] }> {
+  const gravado = await getQuantitySnapshot(snapshotId, policyVersion);
+  if (!gravado) throw new Error('blueprint/verifyQuantity: quantitativo não encontrado');
+
+  const snapshot = await getSnapshot(snapshotId);
+  if (!snapshot) throw new Error('blueprint/verifyQuantity: snapshot não encontrado');
+
+  const model = modelFromCanonicalPayload(parseCanonicalPayload(JSON.stringify(snapshot.payload)));
+  const recalculado = computeQuantities(
+    model,
+    gravado.policy as QuantityPolicy,
+    snapshot.kernel_version,
+  );
+
+  const antes = (gravado.totais ?? {}) as Record<string, number>;
+  const depois = recalculado.totais as unknown as Record<string, number>;
+  const divergencias: string[] = [];
+  for (const chave of Object.keys(depois)) {
+    if (antes[chave] !== depois[chave]) {
+      divergencias.push(`${chave}: gravado ${antes[chave]}, recalculado ${depois[chave]}`);
+    }
+  }
+
+  return { ok: divergencias.length === 0, divergencias };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

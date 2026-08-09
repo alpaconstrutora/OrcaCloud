@@ -42,6 +42,9 @@ vi.mock('../../services/blueprintService', () => ({
   })),
   saveDraft: vi.fn(async () => 'hash'),
   publishSnapshot: vi.fn(async () => 'snap_1'),
+  listSnapshots: vi.fn(async () => []),
+  getQuantitySnapshot: vi.fn(async () => null),
+  computeAndStoreQuantities: vi.fn(async () => null),
 }));
 
 // jsdom não implementa ResizeObserver, e o canvas o usa para acompanhar o
@@ -151,6 +154,48 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
 
     expect(screen.getByRole('option', { name: /porta/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /janela/i })).toBeInTheDocument();
+  });
+});
+
+describe('BlueprintEditor · quantitativos', () => {
+  it('a aba existe e anuncia a versão da política', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('tab', { name: /quantitativos/i }));
+    // RF-121: o resultado precisa dizer sob qual política foi calculado.
+    expect(screen.getByText(/pol[íi]tica quant-/i)).toBeInTheDocument();
+  });
+
+  it('sem ambiente fechado, explica que não há o que quantificar', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('tab', { name: /quantitativos/i }));
+    expect(screen.getByText(/sem contorno fechado n[ãa]o h[áa] [áa]rea/i)).toBeInTheDocument();
+  });
+
+  it('sem versão publicada, explica que orçamento não cita rascunho', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('tab', { name: /quantitativos/i }));
+    // A distinção oficial × ao vivo é o ponto do painel: o número que o orçamento
+    // cita não pode vir de geometria que ainda muda.
+    expect(screen.getByText(/o or[çc]amento n[ãa]o cita rascunho/i)).toBeInTheDocument();
+  });
+
+  it('as duas abas alternam sem perder a outra', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    const abaAmb = screen.getByRole('tab', { name: /ambientes/i });
+    const abaQtd = screen.getByRole('tab', { name: /quantitativos/i });
+
+    expect(abaAmb).toHaveAttribute('aria-selected', 'true');
+    await user.click(abaQtd);
+    expect(abaQtd).toHaveAttribute('aria-selected', 'true');
+    expect(abaAmb).toHaveAttribute('aria-selected', 'false');
   });
 });
 

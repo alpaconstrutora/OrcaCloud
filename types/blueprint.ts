@@ -78,6 +78,19 @@ export interface BlueprintAuditEvent {
   created_at: string;
 }
 
+export interface BlueprintQuantitySnapshot {
+  id: string;
+  snapshot_id: string;
+  organization_id: string;
+  policy_version: string;
+  policy: unknown;
+  kernel_version: string;
+  payload: unknown;
+  totais: unknown;
+  computed_by: string | null;
+  computed_at: string;
+}
+
 /** Erro de concorrência: o ramo avançou desde a leitura do cliente (PRD CA-05). */
 export class BlueprintRevisionConflict extends Error {
   constructor(

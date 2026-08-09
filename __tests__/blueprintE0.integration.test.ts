@@ -31,8 +31,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { supabase } from '../lib/supabase';
 import {
+  POLITICA_PADRAO,
   applyBatch,
   applyCommand,
+  computeQuantities,
   emptyModel,
   point,
   snapshotHash,
@@ -40,12 +42,16 @@ import {
   type Command,
 } from '../utils/blueprintKernel';
 import {
+  computeAndStoreQuantities,
   createStudy,
   getBranch,
+  getQuantitySnapshot,
+  listQuantitySnapshots,
   listSnapshots,
   loadBranchModel,
   publishSnapshot,
   saveDraft,
+  verifyQuantitySnapshot,
   verifySnapshotIntegrity,
 } from '../services/blueprintService';
 import { BlueprintRevisionConflict } from '../types/blueprint';
@@ -286,6 +292,72 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     // caminhos que não passam pela RLS (service-role, psql, job). Não dá para
     // exercitá-lo por aqui justamente porque a RLS barra antes — fica coberto
     // por inspeção da migration, não por este teste.
+  }, 60000);
+
+  it('grava o quantitativo da versão publicada, e o número bate com o local', async () => {
+    const [snapshot] = await listSnapshots(studyId);
+    const gravado = await computeAndStoreQuantities(snapshot.id);
+
+    expect(gravado.snapshot_id).toBe(snapshot.id);
+    expect(gravado.organization_id).toBe(orgId);
+    expect(gravado.policy_version).toBe(POLITICA_PADRAO.version);
+
+    // O valor gravado tem que ser o MESMO que o kernel produz sobre o modelo de
+    // teste — senão o banco estaria guardando um número que ninguém consegue
+    // reproduzir, que é exatamente o que o CA-08 proíbe.
+    const local = computeQuantities(modeloDeTeste(), POLITICA_PADRAO, snapshot.kernel_version);
+    expect(JSON.stringify(gravado.totais)).toBe(JSON.stringify(local.totais));
+  }, 60000);
+
+  it('recalcular com a mesma política devolve o registro existente (CA-08)', async () => {
+    const [snapshot] = await listSnapshots(studyId);
+    const primeiro = await getQuantitySnapshot(snapshot.id, POLITICA_PADRAO.version);
+    const repetido = await computeAndStoreQuantities(snapshot.id);
+
+    expect(repetido.id, 'não pode criar um segundo registro').toBe(primeiro!.id);
+    expect(await listQuantitySnapshots(snapshot.id)).toHaveLength(1);
+  }, 60000);
+
+  it('trocar a política cria OUTRO registro, sem sobrescrever o anterior', async () => {
+    // O que o orçamento já citou não pode mudar sob os pés dele. Política nova é
+    // linha nova; a antiga continua consultável com os parâmetros que a geraram.
+    const [snapshot] = await listSnapshots(studyId);
+    const outra = await computeAndStoreQuantities(snapshot.id, {
+      ...POLITICA_PADRAO,
+      version: 'quant-e2e-sem-perda',
+      perdaRevestimento: 0,
+    });
+
+    expect(outra.policy_version).toBe('quant-e2e-sem-perda');
+    expect(await listQuantitySnapshots(snapshot.id)).toHaveLength(2);
+
+    const padrao = await getQuantitySnapshot(snapshot.id, POLITICA_PADRAO.version);
+    expect(padrao, 'o registro anterior tem que continuar lá').not.toBeNull();
+    expect(
+      (outra.totais as Record<string, number>).areaPisoComPerdaM2,
+    ).not.toBeCloseTo((padrao!.totais as Record<string, number>).areaPisoComPerdaM2, 2);
+  }, 60000);
+
+  it('o quantitativo gravado sobrevive ao próprio recálculo', async () => {
+    const [snapshot] = await listSnapshots(studyId);
+    const resultado = await verifyQuantitySnapshot(snapshot.id, POLITICA_PADRAO.version);
+
+    expect(resultado.ok, `divergências: ${resultado.divergencias.join(', ')}`).toBe(true);
+  }, 60000);
+
+  it('quantitativo publicado não pode ser alterado', async () => {
+    // Mesma lição do snapshot: a RLS não tem policy de UPDATE, então o PostgREST
+    // devolve SUCESSO afetando zero linhas. O que se verifica é o conteúdo.
+    const [snapshot] = await listSnapshots(studyId);
+    const antes = await getQuantitySnapshot(snapshot.id, POLITICA_PADRAO.version);
+
+    await supabase
+      .from('blueprint_quantity_snapshots')
+      .update({ totais: { areaPisoM2: 99999 } })
+      .eq('id', antes!.id);
+
+    const depois = await getQuantitySnapshot(snapshot.id, POLITICA_PADRAO.version);
+    expect(JSON.stringify(depois!.totais)).toBe(JSON.stringify(antes!.totais));
   }, 60000);
 
   it('não é possível criar estudo em organização de terceiros (RLS negativa)', async () => {

@@ -20,5 +20,14 @@ export type { ArrangementResult } from './arrangement';
 export { canonicalPayload, snapshotHash, sha256, parseCanonicalPayload, modelFromCanonicalPayload } from './canonical';
 export type { CanonicalPayload } from './canonical';
 
+export { computeQuantities, formatarQuantidade, POLITICA_PADRAO } from './quantities';
+export type {
+  QuantityPolicy,
+  Quantitativos,
+  QuantidadeAmbiente,
+  QuantidadeParede,
+  QuantidadeAbertura,
+} from './quantities';
+
 export type { Command, CommandResult, Diff } from './commands';
 export { applyCommand, applyBatch, ModelHistory } from './commands';

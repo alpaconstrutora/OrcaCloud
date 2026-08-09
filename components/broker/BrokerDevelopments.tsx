@@ -90,6 +90,28 @@ const buildColumns = (priceMode: 'sale' | 'rental'): ColumnConfig[] => [
 ];
 const COLUMN_KEYS = buildColumns('sale').map(c => c.key);
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. Mesmos label/className que já estavam hardcoded em
+// cada <SortableHeader>/<th> abaixo. 'current'/'price' mudam de label com o eixo
+// Venda/Locação (mesmo texto de buildColumns), por isso é função, não const.
+const buildPriceColumnHeaders = (priceMode: 'sale' | 'rental'): Record<string, { label: string; sortable?: boolean; className: string }> => ({
+    photo: { label: 'Foto', sortable: false, className: 'px-6 py-2 border-r border-gray-100 w-16' },
+    unit: { label: 'Unidade', className: 'px-6 py-2 border-r border-gray-100' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100' },
+    privArea: { label: 'Área privativa', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    bedrooms: { label: 'Dormitórios', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    parking: { label: 'Vagas', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    bathrooms: { label: 'Banheiros', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    floor: { label: 'Pavimento', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    position: { label: 'Posição', className: 'px-6 py-2 border-r border-gray-100' },
+    current: { label: priceMode === 'rental' ? 'Aluguel vigente' : 'Preço vigente', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    price: { label: priceMode === 'rental' ? 'Aluguel nesta versão' : 'Preço nesta versão', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    delta: { label: 'Δ', className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    visibleToBroker: { label: 'Visível p/ Corretor', className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap' },
+    showPrice: { label: 'Exibir Preço', className: 'px-6 py-2 text-center whitespace-nowrap' },
+});
+
 // Colunas criadas DEPOIS que a preferência do portal passou a ser gravada no
 // banco (20270825000010). A preferência salva só guarda o que estava visível na
 // época, então uma coluna nova nunca entraria nela e ficaria invisível para
@@ -108,6 +130,69 @@ const itemDelta = (i: CommercialPriceTableItem) => {
     const cur = i.current_price ?? i.price;
     return cur > 0 ? ((i.price - cur) / cur) * 100 : 0;
 };
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna. `onEnlargePhoto` é o único handler
+// que a célula precisa (abre o lightbox); as demais colunas são só leitura.
+function renderPriceItemCell(key: string, item: CommercialPriceTableItem, ctx: { onEnlargePhoto: (url: string) => void }): React.ReactNode {
+    switch (key) {
+        case 'photo':
+            return (
+                <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
+                    {item.photo_url
+                        ? <img
+                            src={item.photo_url}
+                            alt={`Foto da unidade ${item.property_name || ''}`}
+                            title="Clique para ampliar"
+                            className="w-full h-full object-cover cursor-zoom-in transition-transform duration-300 hover:scale-105"
+                            onClick={() => ctx.onEnlargePhoto(item.photo_url!)}
+                        />
+                        : <ImageIcon className="w-4 h-4 text-gray-300" />}
+                </div>
+            );
+        // Sem chevron: ele sinalizava "clique na linha", que saiu em favor do
+        // botão da coluna de Ações (§9).
+        case 'unit':
+            return <span className="text-sm font-normal text-gray-700">{item.property_name || '—'}</span>;
+        case 'status':
+            return <UnitStatusBadge status={item.property_status} />;
+        case 'privArea':
+            return <span className="block text-right text-sm font-normal text-gray-600 whitespace-nowrap">{areaFmt(item.private_area)}</span>;
+        case 'bedrooms':
+            return <span className="block text-right text-sm font-normal text-gray-600">{num(item.bedrooms)}</span>;
+        case 'parking':
+            return <span className="block text-right text-sm font-normal text-gray-600">{num(item.parking_spaces)}</span>;
+        case 'bathrooms':
+            return <span className="block text-right text-sm font-normal text-gray-600">{num(item.bathrooms)}</span>;
+        case 'floor':
+            return <span className="block text-right text-sm font-normal text-gray-600">{num(item.floor)}</span>;
+        case 'position':
+            return <span className="text-sm font-normal text-gray-600">{item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : '—'}</span>;
+        // Switch "Exibir Preço" desligado na unidade: valor não aparece para o
+        // corretor (o corte principal é no servidor — RPCs do portal devolvem
+        // price/current_price NULL; aqui é a segunda barreira).
+        case 'current':
+            return <span className="block text-right text-sm font-medium text-gray-800 whitespace-nowrap">{showPrice(item) ? formatMoney(item.current_price ?? item.price) : '—'}</span>;
+        case 'price':
+            return <span className="block text-right text-sm font-medium text-gray-800 whitespace-nowrap">{showPrice(item) ? formatMoney(item.price) : '—'}</span>;
+        case 'delta': {
+            const diff = itemDelta(item);
+            return (
+                <span className={`block text-right text-sm font-medium ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+                    {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
+                </span>
+            );
+        }
+        // Leitura: o switch que edita este flag vive em PriceTableManager.tsx.
+        case 'visibleToBroker':
+            return <span className="block text-center text-sm font-normal text-gray-600">{(item.visible_to_broker ?? true) ? 'Sim' : 'Não'}</span>;
+        case 'showPrice':
+            return <span className="block text-center text-sm font-normal text-gray-600">{showPrice(item) ? 'Sim' : 'Não'}</span>;
+        default:
+            return null;
+    }
+}
 
 type SortKey = 'unit' | 'status' | 'privArea' | 'bedrooms' | 'parking' | 'bathrooms' | 'floor'
     | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker' | 'showPrice';
@@ -142,9 +227,11 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
     // banco (broker_portal_price_columns, por organização) — o localStorage do
     // useTableColumns fica só como cache otimista até a leitura chegar.
     const columns = useMemo(() => buildColumns(priceMode), [priceMode]);
+    // Metadados de header (label/className) por coluna, na ordem que o usuário
+    // arrasta — ver buildPriceColumnHeaders acima.
+    const priceColumnHeaders = useMemo(() => buildPriceColumnHeaders(priceMode), [priceMode]);
     const tableColumns = useTableColumns(buildColumns('sale'), 'brokerDevelopments:priceColumns');
     const { visibleColumns, setVisibleColumns } = tableColumns;
-    const isCol = (key: string) => visibleColumns.includes(key);
     const [prefsLoaded, setPrefsLoaded] = useState(false);
     const [savingColumns, setSavingColumns] = useState(false);
 
@@ -458,46 +545,16 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {isCol('photo') && <th className="px-6 py-2 border-r border-gray-100 w-16">Foto</th>}
-                                    {isCol('unit') && <SortableHeader colKey="unit" label="Unidade" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100" />}
-                                    {isCol('status') && <SortableHeader colKey="status" label="Status" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100" />}
-                                    {isCol('privArea') && <SortableHeader colKey="privArea" label="Área privativa" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
-                                    {isCol('bedrooms') && <SortableHeader colKey="bedrooms" label="Dormitórios" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
-                                    {isCol('parking') && <SortableHeader colKey="parking" label="Vagas" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
-                                    {isCol('bathrooms') && <SortableHeader colKey="bathrooms" label="Banheiros" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
-                                    {isCol('floor') && <SortableHeader colKey="floor" label="Pavimento" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
-                                    {isCol('position') && <SortableHeader colKey="position" label="Posição" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100" />}
-                                    {isCol('current') && <SortableHeader colKey="current" label={priceMode === 'rental' ? 'Aluguel vigente' : 'Preço vigente'} uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
-                                    {isCol('price') && <SortableHeader colKey="price" label={priceMode === 'rental' ? 'Aluguel nesta versão' : 'Preço nesta versão'} uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />}
-                                    {isCol('delta') && <SortableHeader colKey="delta" label="Δ" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right" />}
-                                    {isCol('visibleToBroker') && <SortableHeader colKey="visibleToBroker" label="Visível p/ Corretor" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap" />}
-                                    {isCol('showPrice') && <SortableHeader colKey="showPrice" label="Exibir Preço" uppercase={false}
-                                        sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                        className="px-6 py-2 text-center whitespace-nowrap" />}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = priceColumnHeaders[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className} />
+                                        );
+                                    })}
                                     {/* Coluna de seleção da cesta — fora do config de colunas
                                         por org (broker_portal_price_columns), que espelha as 13
                                         colunas de dados da tabela de preços. */}
@@ -517,67 +574,11 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                             className={`transition-colors group ${clickable ? 'hover:bg-blue-50/50' : 'opacity-60'}`}
                                             title={clickable ? undefined : 'Unidade não disponível no estoque atual'}
                                         >
-                                            {isCol('photo') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
-                                                    {item.photo_url
-                                                        ? <img
-                                                            src={item.photo_url}
-                                                            alt={`Foto da unidade ${item.property_name || ''}`}
-                                                            title="Clique para ampliar"
-                                                            className="w-full h-full object-cover cursor-zoom-in transition-transform duration-300 hover:scale-105"
-                                                            onClick={() => setLightbox(item.photo_url!)}
-                                                        />
-                                                        : <ImageIcon className="w-4 h-4 text-gray-300" />}
-                                                </div>
-                                            </td>}
-                                            {/* Sem chevron: ele sinalizava "clique na linha", que saiu
-                                                em favor do botão da coluna de Ações (§9). */}
-                                            {isCol('unit') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {item.property_name || '—'}
-                                            </td>}
-                                            {isCol('status') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <UnitStatusBadge status={item.property_status} />
-                                            </td>}
-                                            {isCol('privArea') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {areaFmt(item.private_area)}
-                                            </td>}
-                                            {isCol('bedrooms') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                {num(item.bedrooms)}
-                                            </td>}
-                                            {isCol('parking') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                {num(item.parking_spaces)}
-                                            </td>}
-                                            {isCol('bathrooms') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                {num(item.bathrooms)}
-                                            </td>}
-                                            {isCol('floor') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                {num(item.floor)}
-                                            </td>}
-                                            {isCol('position') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : '—'}
-                                            </td>}
-                                            {/* Switch "Exibir Preço" desligado na unidade: valor não aparece para o
-                                                corretor (o corte principal é no servidor — RPCs do portal devolvem
-                                                price/current_price NULL; aqui é a segunda barreira). */}
-                                            {isCol('current') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
-                                                {showPrice(item) ? formatMoney(item.current_price ?? item.price) : '—'}
-                                            </td>}
-                                            {isCol('price') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
-                                                {showPrice(item) ? formatMoney(item.price) : '—'}
-                                            </td>}
-                                            {isCol('delta') && (() => {
-                                                const diff = itemDelta(item);
-                                                return <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
-                                                    {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
-                                                </td>;
-                                            })()}
-                                            {/* Leitura: o switch que edita este flag vive em PriceTableManager.tsx. */}
-                                            {isCol('visibleToBroker') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal text-gray-600">
-                                                {(item.visible_to_broker ?? true) ? 'Sim' : 'Não'}
-                                            </td>}
-                                            {isCol('showPrice') && <td className="px-6 py-2.5 text-center text-sm font-normal text-gray-600">
-                                                {showPrice(item) ? 'Sim' : 'Não'}
-                                            </td>}
+                                            {tableColumns.orderedVisibleColumns.map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderPriceItemCell(key, item, { onEnlargePhoto: setLightbox })}
+                                                </td>
+                                            ))}
                                             {onToggleUnit && (
                                                 <td className="px-4 py-2.5 text-center" onClick={e => e.stopPropagation()}>
                                                     <input

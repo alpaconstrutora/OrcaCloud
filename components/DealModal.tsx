@@ -3,7 +3,7 @@ import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCi
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, CostCenter } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, useResizableColumns } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, useResizableColumns, SortableHeader } from './ui/TableUtils';
 import { paymentTypeService } from '../services/paymentTypeService';
 import {
     DEFAULT_PAYMENT_TYPES,
@@ -313,6 +313,43 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Header por coluna — usado para renderizar o <thead> a partir de
+// `parcelasCols.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa no
+// fim, nunca arrastável — ver renderização da tabela). sortable:false em
+// TODAS (igual a PARCELAS_COLUMNS): a ORDEM DAS LINHAS é o cronograma, então
+// clicar para ordenar mentiria (guia §6.3) — mas isso não impede arrastar a
+// POSIÇÃO DAS COLUNAS, que é um eixo independente (não mexe na ordem das
+// parcelas).
+const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    vencimento:   { label: 'Vencimento',      sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    valor:        { label: 'Valor',           sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    desconto:     { label: 'Desconto',        sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    valor_final:  { label: 'Valor final',     sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    origem:       { label: 'Origem',          sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    tipo:         { label: 'Tipo',            sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    forma_pagto:  { label: 'Forma pagto.',    sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    centro_custo: { label: 'Centro de Custo', sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    plano_contas: { label: 'Plano de Contas', sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    descricao:    { label: 'Descrição',       sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+};
+
+// Classes específicas por coluna do <td> (além da base comum "px-6 py-2.5
+// border-r border-gray-100", aplicada na renderização da linha) — extraídas
+// 1:1 das classes que já estavam hardcoded em cada <td>.
+const PARCELAS_TD_CLASS: Record<string, string> = {
+    vencimento: '',
+    valor: '',
+    desconto: '',
+    valor_final: 'text-sm font-medium text-gray-800',
+    origem: 'text-sm font-normal text-gray-600 truncate',
+    tipo: '',
+    forma_pagto: '',
+    centro_custo: '',
+    plano_contas: '',
+    descricao: '',
+};
+
 const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab }) => {
     const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
     // Sub-aba de "Contrato e Assinatura" (só locação com contrato gerado).
@@ -472,10 +509,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         <colgroup>
             <col style={{ width: '40px' }} />
             <col style={{ width: '48px' }} />
-            {PARCELAS_COLUMNS
-                .filter(c => c.key !== 'actions' && parcelasCols.visibleColumns.includes(c.key))
-                .map(c => (
-                    <col key={c.key} data-col-key={c.key} style={{ width: `${parcelasResize.getWidth(c.key)}px` }} />
+            {parcelasCols.orderedVisibleColumns
+                .filter(key => key !== 'actions')
+                .map(key => (
+                    <col key={key} data-col-key={key} style={{ width: `${parcelasResize.getWidth(key)}px` }} />
                 ))}
             <col />
             {parcelasCols.visibleColumns.includes('actions') && (
@@ -2125,6 +2162,136 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         // não se altera pela negociação (estorno é no financeiro).
                         const CELL_RO = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-100 text-gray-500 outline-none cursor-not-allowed';
 
+                        /** Conteúdo de cada <td> da tabela de parcelas, por chave de coluna —
+                         *  extraído 1:1 do que já estava hardcoded, para o <tbody> poder mapear
+                         *  `parcelasCols.orderedVisibleColumns` em vez de uma sequência fixa de
+                         *  JSX. Fecha sobre CELL/CELL_RO e os handlers do componente (não é
+                         *  módulo-level: precisaria de um ctx com ~8 campos para as mesmas
+                         *  coisas que já estão no escopo aqui). */
+                        const renderParcelaCell = (key: string, e: (typeof contractEntries)[number], i: number, pago: boolean): React.ReactNode => {
+                            switch (key) {
+                                case 'vencimento':
+                                    // Rascunho local + gravação no blur. Ligado ao onChange, cada
+                                    // segmento digitado virava um UPDATE no banco (ao digitar o ano,
+                                    // "0002" já é data válida) e o re-render otimista cortava a
+                                    // digitação no meio — a data final nunca chegava a Contas a Receber.
+                                    return (
+                                        <input
+                                            type="date"
+                                            value={entryDateDraft?.id === e.id
+                                                ? entryDateDraft.value
+                                                : e.transaction_date.slice(0, 10)}
+                                            disabled={pago}
+                                            onChange={(ev) => setEntryDateDraft({ id: e.id, value: ev.target.value })}
+                                            onBlur={() => {
+                                                const rascunho = entryDateDraft;
+                                                setEntryDateDraft(null);
+                                                if (!rascunho || rascunho.id !== e.id) return;
+                                                if (!rascunho.value || rascunho.value === e.transaction_date.slice(0, 10)) return;
+                                                patchContractEntry(e.id, { due_date: rascunho.value });
+                                            }}
+                                            onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ev.currentTarget.blur(); } }}
+                                            className={pago ? CELL_RO : CELL}
+                                        />
+                                    );
+                                case 'valor':
+                                    return (
+                                        <input
+                                            type="number"
+                                            value={e.original_amount ?? e.amount}
+                                            disabled={pago}
+                                            onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
+                                            className={pago ? CELL_RO : CELL}
+                                        />
+                                    );
+                                // Mesmos dropdowns do plano de pagamento — os campos passaram a
+                                // existir em internal_transactions (migration 20270828000005).
+                                // "Valor" e' o bruto; "Valor final" e' o liquido cobrado.
+                                case 'desconto':
+                                    return (
+                                        <div className="flex items-center gap-1.5">
+                                            <select
+                                                value={e.discount_type ?? ''}
+                                                disabled={pago}
+                                                onChange={(ev) => patchContractEntry(e.id, {
+                                                    discount_type: ev.target.value || null,
+                                                    discount_amount: ev.target.value ? (e.discount_amount ?? 0) : null,
+                                                })}
+                                                className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                            >
+                                                <option value="">Sem desconto</option>
+                                                <option value="VALUE">R$</option>
+                                                <option value="PERCENT">%</option>
+                                            </select>
+                                            {e.discount_type && (
+                                                <input
+                                                    type="number" min="0" step="0.01"
+                                                    value={e.discount_amount ?? ''}
+                                                    disabled={pago}
+                                                    placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
+                                                    onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
+                                                    className={`${pago ? CELL_RO : CELL} w-24`}
+                                                />
+                                            )}
+                                        </div>
+                                    );
+                                case 'valor_final':
+                                    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount);
+                                case 'origem':
+                                    return e.__origem || 'Contrato';
+                                case 'tipo':
+                                    return (
+                                        <select
+                                            value={e.installment_type ?? ''}
+                                            disabled={pago}
+                                            onChange={(ev) => patchContractEntry(e.id, { installment_type: ev.target.value || null })}
+                                            className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                        >
+                                            <option value="">Tipo Pagto.</option>
+                                            {installmentTypeOptions.map(t => (
+                                                <option key={t.code || t.id} value={t.code}>{t.name}</option>
+                                            ))}
+                                        </select>
+                                    );
+                                case 'forma_pagto':
+                                    return (
+                                        <select
+                                            value={e.payment_type ?? ''}
+                                            disabled={pago}
+                                            onChange={(ev) => patchContractEntry(e.id, { payment_type: ev.target.value || null })}
+                                            className={`${pago ? CELL_RO : CELL} cursor-pointer`}
+                                        >
+                                            <option value="">Forma Pagto.</option>
+                                            <option value="PIX">PIX</option>
+                                            <option value="TED">TED</option>
+                                            <option value="DOC">DOC</option>
+                                            <option value="DINHEIRO">Dinheiro</option>
+                                            <option value="CHEQUE">Cheque</option>
+                                            <option value="PERMUTA">Permuta</option>
+                                        </select>
+                                    );
+                                // Dimensões do CABEÇALHO: iguais em toda a série, por isso leitura —
+                                // mudar é na aba Forma de Pagamento.
+                                case 'centro_custo':
+                                    return <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>;
+                                case 'plano_contas':
+                                    return <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>;
+                                case 'descricao':
+                                    return (
+                                        <input
+                                            type="text"
+                                            value={e.description ?? ''}
+                                            disabled={pago}
+                                            placeholder="Descrição / observação"
+                                            onChange={(ev) => patchContractEntry(e.id, { description: ev.target.value })}
+                                            className={pago ? CELL_RO : CELL}
+                                        />
+                                    );
+                                default:
+                                    return null;
+                            }
+                        };
+
                         /* SÉRIE ÚNICA — o seletor "Ver parcelas de" foi removido em
                            2026-08-01. Ele existia porque o plano da negociação e as
                            parcelas do contrato eram origens diferentes, cada uma com sua
@@ -2200,9 +2367,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 {parcelasColGroup}
                                                 <thead>
                                                     {/* Sticky §6.5, sentence case §6.2, px-6 + border-r §6.6.
-                                                        Sem SortableHeader (§6.3): a ORDEM é o cronograma — a
-                                                        posição da parcela é o próprio dado (Parcela Avulsa
-                                                        insere "na posição N"), então reordenar mentiria. */}
+                                                        sortable=false em toda coluna (§6.3): a ORDEM DAS LINHAS
+                                                        é o cronograma — a posição da parcela é o próprio dado
+                                                        (Parcela Avulsa insere "na posição N"), então ordenar
+                                                        clicando mentiria. O arraste de COLUNAS (estilo ClickUp,
+                                                        via SortableHeader + onMoveColumn) é um eixo diferente —
+                                                        só troca a posição visual, não mexe na ordem das linhas —
+                                                        por isso pode ficar ligado mesmo aqui. */}
                                                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                         <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                             {contractEntries.length > 0 && (
@@ -2219,36 +2390,21 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             )}
                                                         </th>
                                                         <th className="w-12 px-6 py-2 border-r border-gray-100 text-table-header font-semibold">#</th>
-                                                        {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Vencimento<parcelasResize.ResizeHandle colKey="vencimento" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('valor') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor<parcelasResize.ResizeHandle colKey="valor" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('desconto') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Desconto<parcelasResize.ResizeHandle colKey="desconto" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Valor final<parcelasResize.ResizeHandle colKey="valor_final" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('origem') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Origem<parcelasResize.ResizeHandle colKey="origem" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('tipo') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Tipo<parcelasResize.ResizeHandle colKey="tipo" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Forma pagto.<parcelasResize.ResizeHandle colKey="forma_pagto" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('centro_custo') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Centro de Custo<parcelasResize.ResizeHandle colKey="centro_custo" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('plano_contas') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Plano de Contas<parcelasResize.ResizeHandle colKey="plano_contas" /></th>
-                                                        )}
-                                                        {parcelasCols.visibleColumns.includes('descricao') && (
-                                                            <th className="relative overflow-hidden px-6 py-2 border-r border-gray-100 text-table-header font-semibold">Descrição<parcelasResize.ResizeHandle colKey="descricao" /></th>
-                                                        )}
+                                                        {parcelasCols.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                                            const def = PARCELAS_COLUMN_HEADERS[key];
+                                                            if (!def) return null;
+                                                            return (
+                                                                <SortableHeader
+                                                                    key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                                    sortColumn={parcelasCols.sortColumn} sortDirection={parcelasCols.sortDirection}
+                                                                    onSort={parcelasCols.handleColumnSort}
+                                                                    onMoveColumn={parcelasCols.moveColumn}
+                                                                    className={def.className}
+                                                                >
+                                                                    <parcelasResize.ResizeHandle colKey={key} />
+                                                                </SortableHeader>
+                                                            );
+                                                        })}
                                                         <th aria-hidden="true" className="border-r border-gray-100"></th>
                                                         {parcelasCols.visibleColumns.includes('actions') && (
                                                             <th className="relative overflow-hidden px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações<parcelasResize.ResizeHandle colKey="actions" /></th>
@@ -2286,143 +2442,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                             )}
                                                                         </td>
                                                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{i + 1}</td>
-                                                                        {parcelasCols.visibleColumns.includes('vencimento') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                {/* Rascunho local + gravação no blur. Ligado ao
-                                                                                    onChange, cada segmento digitado virava um UPDATE
-                                                                                    no banco (ao digitar o ano, "0002" já é data
-                                                                                    válida) e o re-render otimista cortava a digitação
-                                                                                    no meio — a data final nunca chegava a Contas a
-                                                                                    Receber. */}
-                                                                                <input
-                                                                                    type="date"
-                                                                                    value={entryDateDraft?.id === e.id
-                                                                                        ? entryDateDraft.value
-                                                                                        : e.transaction_date.slice(0, 10)}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => setEntryDateDraft({ id: e.id, value: ev.target.value })}
-                                                                                    onBlur={() => {
-                                                                                        const rascunho = entryDateDraft;
-                                                                                        setEntryDateDraft(null);
-                                                                                        if (!rascunho || rascunho.id !== e.id) return;
-                                                                                        if (!rascunho.value || rascunho.value === e.transaction_date.slice(0, 10)) return;
-                                                                                        patchContractEntry(e.id, { due_date: rascunho.value });
-                                                                                    }}
-                                                                                    onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ev.currentTarget.blur(); } }}
-                                                                                    className={pago ? CELL_RO : CELL}
-                                                                                />
+                                                                        {parcelasCols.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                                            <td key={key} className={`px-6 py-2.5 border-r border-gray-100 ${PARCELAS_TD_CLASS[key] || ''}`}>
+                                                                                {renderParcelaCell(key, e, i, pago)}
                                                                             </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('valor') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <input
-                                                                                    type="number"
-                                                                                    value={e.original_amount ?? e.amount}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
-                                                                                    className={pago ? CELL_RO : CELL}
-                                                                                />
-                                                                            </td>
-                                                                        )}
-                                                                        {/* Mesmos dropdowns do plano de pagamento — os campos passaram
-                                                                            a existir em internal_transactions (migration 20270828000005).
-                                                                            "Valor" e' o bruto; "Valor final" e' o liquido cobrado. */}
-                                                                        {parcelasCols.visibleColumns.includes('desconto') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <div className="flex items-center gap-1.5">
-                                                                                    <select
-                                                                                        value={e.discount_type ?? ''}
-                                                                                        disabled={pago}
-                                                                                        onChange={(ev) => patchContractEntry(e.id, {
-                                                                                            discount_type: ev.target.value || null,
-                                                                                            discount_amount: ev.target.value ? (e.discount_amount ?? 0) : null,
-                                                                                        })}
-                                                                                        className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                                    >
-                                                                                        <option value="">Sem desconto</option>
-                                                                                        <option value="VALUE">R$</option>
-                                                                                        <option value="PERCENT">%</option>
-                                                                                    </select>
-                                                                                    {e.discount_type && (
-                                                                                        <input
-                                                                                            type="number" min="0" step="0.01"
-                                                                                            value={e.discount_amount ?? ''}
-                                                                                            disabled={pago}
-                                                                                            placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
-                                                                                            onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
-                                                                                            className={`${pago ? CELL_RO : CELL} w-24`}
-                                                                                        />
-                                                                                    )}
-                                                                                </div>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('valor_final') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount)}
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('origem') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
-                                                                                {e.__origem || 'Contrato'}
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('tipo') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <select
-                                                                                    value={e.installment_type ?? ''}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { installment_type: ev.target.value || null })}
-                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                                >
-                                                                                    <option value="">Tipo Pagto.</option>
-                                                                                    {installmentTypeOptions.map(t => (
-                                                                                        <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                                                                    ))}
-                                                                                </select>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('forma_pagto') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <select
-                                                                                    value={e.payment_type ?? ''}
-                                                                                    disabled={pago}
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { payment_type: ev.target.value || null })}
-                                                                                    className={`${pago ? CELL_RO : CELL} cursor-pointer`}
-                                                                                >
-                                                                                    <option value="">Forma Pagto.</option>
-                                                                                    <option value="PIX">PIX</option>
-                                                                                    <option value="TED">TED</option>
-                                                                                    <option value="DOC">DOC</option>
-                                                                                    <option value="DINHEIRO">Dinheiro</option>
-                                                                                    <option value="CHEQUE">Cheque</option>
-                                                                                    <option value="PERMUTA">Permuta</option>
-                                                                                </select>
-                                                                            </td>
-                                                                        )}
-                                                                        {/* Dimensões do CABEÇALHO: iguais em toda a série, por isso
-                                                                            leitura — mudar é na aba Forma de Pagamento. */}
-                                                                        {parcelasCols.visibleColumns.includes('centro_custo') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('plano_contas') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <span className="block truncate text-table-body text-gray-600" title={planoContasLabel}>{planoContasLabel}</span>
-                                                                            </td>
-                                                                        )}
-                                                                        {parcelasCols.visibleColumns.includes('descricao') && (
-                                                                            <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                                <input
-                                                                                    type="text"
-                                                                                    value={e.description ?? ''}
-                                                                                    disabled={pago}
-                                                                                    placeholder="Descrição / observação"
-                                                                                    onChange={(ev) => patchContractEntry(e.id, { description: ev.target.value })}
-                                                                                    className={pago ? CELL_RO : CELL}
-                                                                                />
-                                                                            </td>
-                                                                        )}
+                                                                        ))}
                                                                         <td aria-hidden="true"></td>
                                                                         {parcelasCols.visibleColumns.includes('actions') && (
                                                                             <td className="px-6 py-2.5 text-right">

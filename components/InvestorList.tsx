@@ -27,6 +27,17 @@ const INVESTOR_COLUMNS: ColumnConfig[] = [
     { key: 'project', label: 'Obra Vinculada', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (mesmo padrão de ClientList.tsx).
+const INVESTOR_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    name: { label: 'Investidor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    contact: { label: 'Acesso / Contato', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    document: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    project: { label: 'Obra Vinculada', sortable: false, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
+
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca já existente, não a substitui.
 type InvestorRow = Investor & { _projectNames?: string };
@@ -45,6 +56,61 @@ function getAdvancedFilterValue(inv: InvestorRow, key: string): unknown {
         case 'document': return inv.document ?? '';
         case 'project': return inv._projectNames ?? '';
         default: return null;
+    }
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna (mesmo padrão de ClientList.tsx).
+function renderInvestorCell(key: string, investor: Investor, investorProjects: any[]): React.ReactNode {
+    switch (key) {
+        case 'code':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{investor.code || '-'}</span>;
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                        <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-normal text-gray-900">{investor.name}</p>
+                        <p className="text-xs font-medium text-gray-400">Perfil investidor</p>
+                    </div>
+                </div>
+            );
+        case 'contact':
+            return (
+                <div className="space-y-1">
+                    <div className="flex items-center text-sm font-normal text-gray-600">
+                        <Mail className="w-3.5 h-3.5 mr-1.5 text-purple-500 shrink-0" />
+                        {investor.email}
+                    </div>
+                    {investor.phone && (
+                        <div className="flex items-center text-sm font-normal text-gray-600">
+                            <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
+                            {investor.phone}
+                        </div>
+                    )}
+                </div>
+            );
+        case 'document':
+            return <span className="text-sm font-normal text-gray-600">{investor.document || '-'}</span>;
+        case 'project':
+            if (investorProjects.length === 0) {
+                return <span className="text-sm font-normal text-gray-400">-</span>;
+            }
+            return (
+                <div className="flex flex-col gap-1">
+                    {investorProjects.map(p => (
+                        <div key={p.id} className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                            <Building2 className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate max-w-[200px]" title={p.name}>{p.name}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        default:
+            return null;
     }
 }
 
@@ -390,11 +456,9 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                         <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
-                                {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
-                                {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
-                                {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
-                                {tableColumns.visibleColumns.includes('project') && <col data-col-key="project" style={{ width: `${cols.getWidth('project')}px` }} />}
+                                {tableColumns.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* espaçador ANTES de "Ações": absorve a folga no meio, para a borda de
                                     "Ações" não "andar" a cada redimensionamento e desalinhar da toolbar
                                     acoplada acima (mesma correção feita em ClientList). */}
@@ -402,34 +466,24 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                             </colgroup>
                             {/* thead em sentence case (§6.2) — obrigatório porque a tela adotou a escala
-                                de radius compacta (§16), mesmo critério já usado em SupplierList/ClientList. */}
+                                de radius compacta (§16), mesmo critério já usado em SupplierList/ClientList.
+                                Ordem vem de orderedVisibleColumns — arrastar um header (onMoveColumn)
+                                reordena e persiste, estilo ClickUp. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="code" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Investidor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('contact') && (
-                                        <SortableHeader label="Acesso / Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="contact" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="document" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('project') && (
-                                        <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="project" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = INVESTOR_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -439,72 +493,18 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredInvestors.map(investor => (
+                                {filteredInvestors.map(investor => {
+                                    const investorProjects = projects.filter(p =>
+                                        (p.investor_id ?? p.settings?.investorId) === investor.id &&
+                                        isObra(p)
+                                    );
+                                    return (
                                     <tr key={investor.id} className="hover:bg-blue-50/50 transition-colors group">
-                                        {tableColumns.visibleColumns.includes('code') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {investor.code || '-'}
+                                        {tableColumns.orderedVisibleColumns.map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderInvestorCell(key, investor, investorProjects)}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('name') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
-                                                        <User className="w-4 h-4" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-normal text-gray-900">{investor.name}</p>
-                                                        <p className="text-xs font-medium text-gray-400">Perfil investidor</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('contact') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center text-sm font-normal text-gray-600">
-                                                        <Mail className="w-3.5 h-3.5 mr-1.5 text-purple-500 shrink-0" />
-                                                        {investor.email}
-                                                    </div>
-                                                    {investor.phone && (
-                                                        <div className="flex items-center text-sm font-normal text-gray-600">
-                                                            <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
-                                                            {investor.phone}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('document') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {investor.document || '-'}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('project') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {(() => {
-                                                    const investorProjects = projects.filter(p =>
-                                                        (p.investor_id ?? p.settings?.investorId) === investor.id &&
-                                                        isObra(p)
-                                                    );
-
-                                                    if (investorProjects.length === 0) {
-                                                        return <span className="text-sm font-normal text-gray-400">-</span>;
-                                                    }
-
-                                                    return (
-                                                        <div className="flex flex-col gap-1">
-                                                            {investorProjects.map(p => (
-                                                                <div key={p.id} className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
-                                                                    <Building2 className="w-3.5 h-3.5 shrink-0" />
-                                                                    <span className="truncate max-w-[200px]" title={p.name}>{p.name}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </td>
-                                        )}
+                                        ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">
@@ -538,7 +538,8 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                         </div>

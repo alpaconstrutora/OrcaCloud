@@ -26,6 +26,11 @@
 
 import type { BlueprintModel, Point, Wall } from './blueprintKernel';
 import { isFreeWallEnd, wallLength } from './blueprintKernel';
+import {
+  AVISO_COTA_DE_EIXO,
+  cadeiasDeCotas,
+  type CadeiaDeCotas,
+} from './blueprintCotas';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Papel e escala
@@ -58,6 +63,8 @@ export function orientar(papel: Papel, paisagem: boolean): Papel {
 export const MARGEM_MM = 12;
 /** Faixa inferior do carimbo: legenda, versão, escala e aviso. */
 export const CARIMBO_MM = 26;
+/** Faixa reservada para a cadeia de cotas, em milímetro de PAPEL. */
+export const FAIXA_COTA_MM = 14;
 
 export interface Enquadramento {
   cabe: boolean;
@@ -106,9 +113,15 @@ export function enquadrar(
   model: BlueprintModel,
   denominador: number,
   papel: Papel,
+  comCotas = false,
 ): Enquadramento {
-  const utilLarguraMm = papel.larguraMm - 2 * MARGEM_MM;
-  const utilAlturaMm = papel.alturaMm - 2 * MARGEM_MM - CARIMBO_MM;
+  // A faixa de cota é fixa em MILÍMETRO DE PAPEL, não em escala: texto de cota
+  // tem o mesmo tamanho em 1:50 e em 1:200. Por isso ela ENCOLHE a área útil,
+  // em vez de crescer junto com o desenho.
+  const faixa = comCotas ? FAIXA_COTA_MM : 0;
+
+  const utilLarguraMm = papel.larguraMm - 2 * MARGEM_MM - faixa;
+  const utilAlturaMm = papel.alturaMm - 2 * MARGEM_MM - CARIMBO_MM - faixa;
 
   const bb = boundingBox(model);
   const folgaMm = Math.max(0, ...model.walls.map((w) => w.thicknessMm)) / 2;
@@ -134,7 +147,9 @@ export function enquadrar(
     utilAlturaMm,
     // Centralizado na área útil. Centralizar não altera a escala — mexe só em
     // onde o desenho começa.
-    offsetXMm: MARGEM_MM + Math.max(0, (utilLarguraMm - desenhoLarguraMm) / 2),
+    // A cadeia vertical fica à ESQUERDA e a horizontal ABAIXO, então o desenho
+    // desloca para a direita e a faixa de baixo sai do espaço já descontado.
+    offsetXMm: MARGEM_MM + faixa + Math.max(0, (utilLarguraMm - desenhoLarguraMm) / 2),
     offsetYMm: MARGEM_MM + Math.max(0, (utilAlturaMm - desenhoAlturaMm) / 2),
     escalaSugerida,
   };
@@ -195,6 +210,9 @@ export interface OpcoesExportacao {
   hash: string;
   /** Aviso de finalidade. O PRD o exige; o padrão está em `AVISO_PADRAO`. */
   aviso?: string;
+  /** Cadeias de cota externas. O enquadramento precisa saber ANTES: elas
+   *  consomem uma faixa fixa de papel. */
+  cotas?: boolean;
   data?: Date;
 }
 
@@ -334,7 +352,104 @@ export function desenharPlanta(
     d.texto(px(cx), py(cy) + ESPESSURA_TEXTO_MM, `${area} m²`, ESPESSURA_TEXTO_MM * 0.8);
   }
 
+  if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
+
   desenharCarimbo(d, opcoes, enq);
+}
+
+const COR_COTA = '#333333';
+const TEXTO_COTA_MM = 2.0;
+
+/**
+ * Cadeias de cota externas, uma por direção, mais a cota total por fora.
+ *
+ * O TRAÇO DE COTA É FINO E CINZA de propósito: ele não pode competir com a
+ * parede. Numa planta em que a cota tem o mesmo peso do corte, o olho perde a
+ * geometria — e é a geometria que se lê primeiro.
+ */
+function desenharCotas(
+  d: Desenhista,
+  model: BlueprintModel,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+  px: (x: number) => number,
+  py: (y: number) => number,
+): void {
+  const { x: cadeiaX, y: cadeiaY } = cadeiasDeCotas(model);
+  const fino = { espessuraMm: 0.1, cor: COR_COTA };
+
+  // Distâncias em MILÍMETRO DE PAPEL: a cota tem o mesmo tamanho em qualquer
+  // escala, senão em 1:200 ela vira um risco e em 1:25 domina a folha.
+  const AFASTA = 6;
+  const AFASTA_TOTAL = 11;
+  const TIQUE = 1.2;
+
+  /** Tique a 45°, a marca de fim de cota do desenho de arquitetura. */
+  const tique = (x: number, y: number, girado: boolean) => {
+    const t = TIQUE / 2;
+    if (girado) d.linha(x - t, y - t, x + t, y + t, fino);
+    else d.linha(x - t, y + t, x + t, y - t, fino);
+  };
+
+  if (cadeiaX) {
+    const base = enq.offsetYMm + enq.desenhoAlturaMm;
+    const desenhar = (seg: { de: number; ate: number; rotulo: string }, afasta: number) => {
+      const y = base + afasta;
+      const x1 = px(seg.de);
+      const x2 = px(seg.ate);
+      d.linha(x1, y, x2, y, fino);
+      tique(x1, y, false);
+      tique(x2, y, false);
+      // Texto ACIMA da linha, centrado — convenção de cota horizontal.
+      d.texto((x1 + x2) / 2 - seg.rotulo.length * 0.55, y - 0.8, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
+    };
+
+    for (const seg of cadeiaX.segmentos) desenhar(seg, AFASTA);
+    if (cadeiaX.total) desenhar(cadeiaX.total, AFASTA_TOTAL);
+
+    // Linhas de chamada, ligando o desenho à cota.
+    for (const c of extremos(cadeiaX)) {
+      d.linha(px(c), base, px(c), base + AFASTA_TOTAL, {
+        espessuraMm: 0.08,
+        cor: '#999999',
+      });
+    }
+  }
+
+  if (cadeiaY) {
+    const base = enq.offsetXMm;
+    const desenhar = (seg: { de: number; ate: number; rotulo: string }, afasta: number) => {
+      const x = base - afasta;
+      const y1 = py(seg.de);
+      const y2 = py(seg.ate);
+      d.linha(x, y1, x, y2, fino);
+      tique(x, y1, true);
+      tique(x, y2, true);
+      // Cota vertical não é girada aqui: texto rotacionado exige suporte que o
+      // `Desenhista` não tem, e número deitado é legível. Fica ao lado da linha.
+      d.texto(x - 5.5, (y1 + y2) / 2, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
+    };
+
+    for (const seg of cadeiaY.segmentos) desenhar(seg, AFASTA);
+    if (cadeiaY.total) desenhar(cadeiaY.total, AFASTA_TOTAL);
+
+    for (const c of extremos(cadeiaY)) {
+      d.linha(base, py(c), base - AFASTA_TOTAL, py(c), {
+        espessuraMm: 0.08,
+        cor: '#999999',
+      });
+    }
+  }
+}
+
+/** Coordenadas em que a cadeia é quebrada — onde vai a linha de chamada. */
+function extremos(c: CadeiaDeCotas): number[] {
+  const set = new Set<number>();
+  for (const s of c.segmentos) {
+    set.add(s.de);
+    set.add(s.ate);
+  }
+  return [...set];
 }
 
 /** Legenda, escala, versão e aviso — a faixa inferior da folha. */
@@ -359,7 +474,10 @@ function desenharCarimbo(d: Desenhista, o: OpcoesExportacao, enq: Enquadramento)
   // O hash é o que liga o papel à versão publicada. Sem ele, duas impressões
   // parecidas são indistinguíveis, e é sempre a errada que vai para a obra.
   d.texto(MARGEM_MM + 3, topo + 15.5, `Hash ${o.hash.slice(0, 16)}`, 2.0, '#555555');
-  d.texto(MARGEM_MM + 3, topo + 21, o.aviso ?? AVISO_PADRAO, 2.2, '#000000');
+  d.texto(MARGEM_MM + 3, topo + 20, o.aviso ?? AVISO_PADRAO, 2.2, '#000000');
+  // COTA SEM DIZER DE ONDE É MEDIDA ENGANA. Quem mede a face vai achar meia
+  // espessura a menos de cada lado, e vai achar que o desenho está errado.
+  if (o.cotas) d.texto(MARGEM_MM + 3, topo + 23.5, AVISO_COTA_DE_EIXO, 1.9, '#555555');
 
   desenharEscalaGrafica(d, o, MARGEM_MM + largura - 45, topo + 20);
 }

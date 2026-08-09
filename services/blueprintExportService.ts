@@ -19,6 +19,8 @@ import {
   type OpcoesExportacao,
 } from '../utils/blueprintExport';
 import { KERNEL_VERSION, type BlueprintModel } from '../utils/blueprintKernel';
+import { COBERTURA_DXF, gerarDxf } from '../utils/blueprintDxf';
+import { COBERTURA_IFC, gerarIfc } from '../utils/blueprintIfc';
 
 /**
  * Canvas, para PNG.
@@ -148,7 +150,10 @@ export class EscalaNaoCabe extends Error {
  * pior do que não exportar: o erro sai da tela e vira papel.
  */
 function exigirQueCaiba(model: BlueprintModel, o: OpcoesExportacao) {
-  const enq = enquadrar(model, o.denominador, o.papel);
+  // `o.cotas` entra aqui: a faixa de cota consome área útil, então ligar cota
+  // pode fazer uma escala que cabia deixar de caber. Descobrir isso na hora de
+  // desenhar seria tarde — o desenho já teria saído por cima da margem.
+  const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
   if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
   return enq;
 }
@@ -185,6 +190,75 @@ export function exportarPng(model: BlueprintModel, o: OpcoesExportacao, dpi = 30
   canvas.toBlob((blob) => {
     if (blob) baixar(blob, nomeArquivo(o, 'png'));
   }, 'image/png');
+}
+
+/**
+ * DXF — 1:1, em milímetro real.
+ *
+ * NÃO recebe escala nem papel de propósito: no CAD o desenho vive em unidades do
+ * mundo, e quem define 1:50 é a prancha na hora de plotar. Dividir as
+ * coordenadas pela escala produziria um arquivo em que uma parede de 4 m mede
+ * 4 cm, e toda medição feita nele sairia errada por duas ordens de grandeza.
+ */
+export function exportarDxf(model: BlueprintModel, o: OpcoesExportacao): void {
+  const conteudo = gerarDxf(model, {
+    titulo: o.titulo,
+    revisao: o.revisao,
+    hash: o.hash,
+    cotas: o.cotas,
+  });
+
+  baixar(new Blob([conteudo], { type: 'application/dxf' }), nomeArquivoSemEscala(o, 'dxf'));
+  baixarCobertura(o, 'dxf', COBERTURA_DXF);
+}
+
+/**
+ * IFC parcial — e o "parcial" é a parte que não pode ser omitida.
+ *
+ * O que um IFC não contém é indistinguível do que não existe: sem portas, quem
+ * recebe conclui que a planta não tem portas. Por isso a cobertura vai DENTRO do
+ * arquivo (cabeçalho STEP e descrição do projeto) e ainda sai num `.txt` ao
+ * lado — o requisito é IFC parcial SOMENTE COM declaração, não IFC parcial.
+ */
+export function exportarIfc(model: BlueprintModel, o: OpcoesExportacao): void {
+  const conteudo = gerarIfc(model, {
+    titulo: o.titulo,
+    revisao: o.revisao,
+    hash: o.hash,
+  });
+
+  baixar(new Blob([conteudo], { type: 'application/x-step' }), nomeArquivoSemEscala(o, 'ifc'));
+  baixarCobertura(o, 'ifc', COBERTURA_IFC);
+}
+
+/** Nome sem a escala: DXF e IFC não têm escala, e citá-la no nome mentiria. */
+function nomeArquivoSemEscala(o: OpcoesExportacao, extensao: string): string {
+  return nomeArquivo(o, extensao).replace(/-1_\d+\./, '.');
+}
+
+/**
+ * A cobertura também sai como arquivo ao lado.
+ *
+ * Ela já vai dentro do DXF (comentário) e do IFC (cabeçalho e descrição do
+ * projeto), mas quem recebe o arquivo por e-mail costuma abrir só o desenho. Um
+ * `.txt` de nome parecido é o único jeito de a limitação chegar junto.
+ */
+function baixarCobertura(o: OpcoesExportacao, tipo: string, itens: string[]): void {
+  const texto = [
+    `COBERTURA DA EXPORTAÇÃO ${tipo.toUpperCase()}`,
+    `${o.titulo} — versão ${o.revisao}`,
+    `hash ${o.hash}`,
+    '',
+    ...itens.map((i) => `- ${i}`),
+    '',
+    AVISO_PADRAO,
+    '',
+  ].join('\n');
+
+  baixar(
+    new Blob([texto], { type: 'text/plain;charset=utf-8' }),
+    nomeArquivoSemEscala(o, `${tipo}.cobertura.txt`),
+  );
 }
 
 /** Manifesto em JSON, ao lado do desenho. É o que liga o arquivo à versão. */

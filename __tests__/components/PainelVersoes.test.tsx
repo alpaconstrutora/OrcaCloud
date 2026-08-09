@@ -26,6 +26,8 @@ const getSnapshot = vi.fn();
 const exportarPdf = vi.fn();
 const exportarPng = vi.fn();
 const exportarManifesto = vi.fn();
+const exportarDxf = vi.fn();
+const exportarIfc = vi.fn();
 
 vi.mock('../../services/blueprintService', () => ({
   listSnapshots: (...a: unknown[]) => listSnapshots(...a),
@@ -36,6 +38,8 @@ vi.mock('../../services/blueprintExportService', () => ({
   exportarPdf: (...a: unknown[]) => exportarPdf(...a),
   exportarPng: (...a: unknown[]) => exportarPng(...a),
   exportarManifesto: (...a: unknown[]) => exportarManifesto(...a),
+  exportarDxf: (...a: unknown[]) => exportarDxf(...a),
+  exportarIfc: (...a: unknown[]) => exportarIfc(...a),
 }));
 
 const study: BlueprintStudy = {
@@ -228,5 +232,48 @@ describe('PainelVersoes · comparação (RF-124)', () => {
     await user.click(screen.getByRole('button', { name: /comparar/i }));
 
     expect(await screen.findByText(/mesma geometria/i)).toBeInTheDocument();
+  });
+});
+
+describe('PainelVersoes · DXF, IFC e cotas', () => {
+  it('DXF e IFC NÃO dependem da escala caber — eles não têm escala', () => {
+    // Os dois saem em 1:1, em unidade real. Desabilitá-los junto com o PDF
+    // esconderia uma exportação que funcionaria perfeitamente.
+    return (async () => {
+      await montar();
+      const user = userEvent.setup();
+
+      await user.selectOptions(screen.getByLabelText(/escala/i), '20');
+      await waitFor(() => expect(screen.getByRole('button', { name: /PDF/i })).toBeDisabled());
+
+      expect(screen.getByRole('button', { name: /DXF/i })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /IFC/i })).toBeEnabled();
+    })();
+  });
+
+  it('a tela avisa que o IFC não leva portas nem janelas', async () => {
+    // O que um IFC não contém é indistinguível do que não existe. Descobrir isso
+    // só depois de abrir o arquivo no visualizador é tarde.
+    await montar();
+    expect(await screen.findByText(/não leva portas nem janelas/i)).toBeInTheDocument();
+  });
+
+  it('a tela declara que DXF e IFC saem em 1:1', async () => {
+    await montar();
+    expect(await screen.findByText(/1:1, em milímetro real/i)).toBeInTheDocument();
+  });
+
+  it('ligar cota chega ao serviço e avisa que a cota é de EIXO', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('checkbox', { name: /cotas/i }));
+    expect(await screen.findByText(/medidas no EIXO das paredes/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /PDF/i }));
+    expect(exportarPdf).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ cotas: true }),
+    );
   });
 });

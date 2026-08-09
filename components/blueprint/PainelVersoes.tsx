@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, FileText, GitCompare, Image } from 'lucide-react';
+import { Boxes, Download, FileText, GitCompare, Image, Ruler, Shapes } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import { getSnapshot, listSnapshots } from '../../services/blueprintService';
 import {
+  exportarDxf,
+  exportarIfc,
   exportarManifesto,
   exportarPdf,
   exportarPng,
@@ -39,6 +41,7 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
   const [denominador, setDenominador] = useState(100);
   const [papelId, setPapelId] = useState('A4');
   const [paisagem, setPaisagem] = useState(false);
+  const [cotas, setCotas] = useState(false);
 
   const [compararCom, setCompararCom] = useState<string>('');
   const [diff, setDiff] = useState<DiffSnapshots | null>(null);
@@ -78,7 +81,9 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
 
   const papel = orientar(PAPEIS.find((p) => p.id === papelId) ?? PAPEIS[0], paisagem);
   const snapshot = snapshots.find((s) => s.id === selecionada) ?? null;
-  const enq = modelo ? enquadrar(modelo, denominador, papel) : null;
+  // O enquadramento precisa saber das cotas: elas consomem uma faixa fixa de
+  // papel, então ligar cota pode fazer uma escala que cabia deixar de caber.
+  const enq = modelo ? enquadrar(modelo, denominador, papel, cotas) : null;
 
   function opcoes(): OpcoesExportacao {
     return {
@@ -87,6 +92,7 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
       titulo: study.name,
       revisao: snapshot?.revision ?? 0,
       hash: snapshot?.hash ?? '',
+      cotas,
     };
   }
 
@@ -205,14 +211,30 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
               </label>
             </div>
 
-            <label className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-600">
-              <input
-                type="checkbox"
-                checked={paisagem}
-                onChange={(e) => setPaisagem(e.target.checked)}
-              />
-              Paisagem
-            </label>
+            <div className="mt-2 flex gap-4">
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={paisagem}
+                  onChange={(e) => setPaisagem(e.target.checked)}
+                />
+                Paisagem
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={cotas}
+                  onChange={(e) => setCotas(e.target.checked)}
+                />
+                <Ruler className="h-3 w-3" /> Cotas
+              </label>
+            </div>
+            {cotas && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Cotas medidas no EIXO das paredes — a medida de face é menor em meia
+                espessura de cada lado. A folha declara isso.
+              </p>
+            )}
 
             {/* O aviso vem ANTES do botão: descobrir que não cabe depois de
                 clicar em exportar é descobrir tarde. */}
@@ -250,6 +272,32 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
             <p className="mt-1 text-[11px] text-slate-500">
               O manifesto é o JSON que liga o arquivo à versão — não depende de alguém
               ter lido o carimbo.
+            </p>
+
+            {/* Troca de arquivo com CAD e BIM. Separado da folha de propósito: os
+                dois saem em 1:1, em unidade real, e a escala do papel não se
+                aplica a eles. */}
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Para outros programas
+            </h3>
+            <div className="mt-1.5 flex gap-1.5">
+              <BotaoExportar
+                icone={Shapes}
+                rotulo="DXF"
+                onClick={() => exportar(exportarDxf)}
+                disabled={!modelo}
+              />
+              <BotaoExportar
+                icone={Boxes}
+                rotulo="IFC"
+                onClick={() => exportar(exportarIfc)}
+                disabled={!modelo}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              DXF e IFC saem em <strong>1:1, em milímetro real</strong> — a escala é da
+              prancha, não do arquivo. Cada um vem com um <code>.txt</code> dizendo o que
+              contém e o que não contém; o IFC <strong>não leva portas nem janelas</strong>.
             </p>
           </div>
 

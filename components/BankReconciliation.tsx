@@ -152,6 +152,16 @@ const STATEMENT_FILTER_FIELDS: FilterFieldConfig[] = [
     ] },
 ];
 
+// Com o filtro Receitas/Despesas ativo, a coluna do lado que não se aplica
+// (Credor em Receitas, Cliente em Despesas) só mostraria "—" em toda linha —
+// por isso soma-se ao filtro de colunas do usuário (tableColumns.visibleColumns),
+// em vez de deixá-la visível e vazia.
+function isStatementColumnVisibleForFlow(key: string, flowFilter: 'ALL' | 'INCOME' | 'EXPENSE'): boolean {
+    if (key === 'creditor' && flowFilter === 'INCOME') return false;
+    if (key === 'client' && flowFilter === 'EXPENSE') return false;
+    return true;
+}
+
 function getBankTxFilterValue(tx: BankTransaction, key: string): unknown {
     switch (key) {
         case 'description':  return tx.description_normalized || tx.description_raw || '';
@@ -774,7 +784,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // arrastar (bug real documentado em ui_ux_guia_unificado.md §6.1).
     const statementTableTotalWidth = 40 // checkbox
         + STATEMENT_COLUMNS.filter(c => c.key !== 'actions')
-            .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? statementResize.getWidth(c.key) : 0), 0)
+            .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) && isStatementColumnVisibleForFlow(c.key, flowFilter) ? statementResize.getWidth(c.key) : 0), 0)
         + statementResize.getWidth('actions');
 
     const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
@@ -840,6 +850,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [bankCatDropdownOpen, setBankCatDropdownOpen] = useState(false);
     const [internalCatDropdownOpen, setInternalCatDropdownOpen] = useState(false);
     const [bankCpDropdownOpen, setBankCpDropdownOpen] = useState(false);
+    const [flowFilterDropdownOpen, setFlowFilterDropdownOpen] = useState(false);
     const [internalEntityFilter, setInternalEntityFilter] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem('reconciliation_internal_entity_filter') || '[]'); } catch { return []; }
     });
@@ -1334,7 +1345,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     }, [selectedAccountId, activeView, startDate, endDate, competencia]);
 
     useEffect(() => {
-        const close = () => { setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); setInternalEntityDropdownOpen(false); };
+        const close = () => { setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); setInternalEntityDropdownOpen(false); setFlowFilterDropdownOpen(false); };
         document.addEventListener('mousedown', close);
         return () => document.removeEventListener('mousedown', close);
     }, []);
@@ -3777,7 +3788,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-14 cursor-pointer"
                         >
                             <option value="">Ano</option>
-                            {Array.from({length: 10}, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                            {/* Faixa alargada pra trás (era -5, cobria só até 2021) — extrato
+                                bancário pode ter competências bem mais antigas que 5 anos. */}
+                            {Array.from({length: 19}, (_, i) => new Date().getFullYear() - 15 + i).map(year => (
                                 <option key={year} value={String(year)}>{year}</option>
                             ))}
                         </select>
@@ -4574,25 +4587,33 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </div>
                             )}
                             <div className={useAcoplada ? "flex items-center gap-2 order-2 shrink-0" : "flex flex-wrap items-center gap-2 gap-y-2"}>
-                                <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100 shrink-0">
+                                {/* Tudo/Receitas/Despesas agrupados num dropdown — antes eram 3 botões
+                                    soltos no toolbar acoplado. */}
+                                <div className="relative shrink-0">
                                     <button
-                                        onClick={() => setFlowFilter('ALL')}
-                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                        onClick={() => { setFlowFilterDropdownOpen(o => !o); setBankCatDropdownOpen(false); setBankCpDropdownOpen(false); }}
+                                        className={`h-9 px-2.5 border rounded-[6px] text-xs font-medium focus:outline-none cursor-pointer flex items-center gap-1.5 ${
+                                            flowFilter === 'INCOME' ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                                            : flowFilter === 'EXPENSE' ? 'bg-red-50 border-red-200 text-red-600'
+                                            : 'bg-gray-50 border-gray-100 text-gray-700'
+                                        }`}
                                     >
-                                        Tudo
+                                        {flowFilter === 'INCOME' ? 'Receitas' : flowFilter === 'EXPENSE' ? 'Despesas' : 'Tudo'}
+                                        <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                     </button>
-                                    <button
-                                        onClick={() => setFlowFilter('INCOME')}
-                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
-                                    >
-                                        Receitas
-                                    </button>
-                                    <button
-                                        onClick={() => setFlowFilter('EXPENSE')}
-                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
-                                    >
-                                        Despesas
-                                    </button>
+                                    {flowFilterDropdownOpen && (
+                                        <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-[10px] shadow-xl min-w-[130px] py-1">
+                                            {([{ value: 'ALL', label: 'Tudo' }, { value: 'INCOME', label: 'Receitas' }, { value: 'EXPENSE', label: 'Despesas' }] as const).map(opt => (
+                                                <button
+                                                    key={opt.value}
+                                                    onClick={() => { setFlowFilter(opt.value); setFlowFilterDropdownOpen(false); }}
+                                                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${flowFilter === opt.value ? 'font-semibold text-blue-600' : 'font-normal text-gray-700'}`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="relative">
                                     <button
@@ -4775,7 +4796,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <table ref={statementResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: statementTableTotalWidth, minWidth: '100%' }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
-                                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions' && isStatementColumnVisibleForFlow(key, flowFilter)).map(key => (
                                                     <col key={key} data-col-key={key} style={{ width: `${statementResize.getWidth(key)}px` }} />
                                                 ))}
                                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
@@ -4803,7 +4824,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             }}
                                                         />
                                                     </th>
-                                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions' && isStatementColumnVisibleForFlow(key, flowFilter)).map(key => {
                                                         const def = STATEMENT_COLUMN_HEADERS[key];
                                                         if (!def) return null;
                                                         // colKey precisa ser a chave REAL da coluna (bate com orderedVisibleColumns) —
@@ -4865,7 +4886,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     onChange={(e) => handleStatementRowCheck(tx.id, rowIndex, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
                                                                 />
                                                             </td>
-                                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions' && isStatementColumnVisibleForFlow(key, flowFilter)).map(key => (
                                                                 <td key={key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${STATEMENT_TD_CLASS[key] || ''}`}>
                                                                     {renderStatementCell(key, tx, statementCtx)}
                                                                 </td>

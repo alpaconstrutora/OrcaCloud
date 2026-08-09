@@ -8,16 +8,20 @@
 import { supabase } from '../lib/supabase';
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import {
+  codigoDeItemAvulso,
   medir,
   perimetroM,
+  temDestinoNoOrcamento,
   type FormaMedida,
   type TipoMedida,
 } from '../utils/blueprintMedicoes';
+import { SinapiType } from '../types/budget';
 import { prefixoDoEstudo } from '../utils/blueprintBudget';
 import type { Point } from '../utils/blueprintKernel';
 
 const COLS =
-  'id, study_id, organization_id, level_id, tipo, pontos, nome, item_code, cor, created_at, updated_at';
+  'id, study_id, organization_id, level_id, underlay_id, tipo, pontos, nome, ' +
+  'item_code, item_nome, item_preco, camada, cor, created_at, updated_at';
 
 export interface MedicaoRow {
   id: string;
@@ -28,6 +32,10 @@ export interface MedicaoRow {
   pontos: Point[];
   nome: string;
   item_code: string | null;
+  item_nome: string | null;
+  item_preco: number | null;
+  underlay_id: string | null;
+  camada: string;
   cor: string;
   created_at: string;
   updated_at: string;
@@ -44,6 +52,10 @@ export function formaDaLinha(r: MedicaoRow): FormaMedida {
     pontos: r.pontos,
     nome: r.nome,
     itemCode: r.item_code,
+    itemNome: r.item_nome,
+    itemPreco: r.item_preco,
+    underlayId: r.underlay_id,
+    camada: r.camada || 'Geral',
     cor: r.cor,
   };
 }
@@ -82,6 +94,10 @@ export async function salvarMedicao(e: SalvarMedicao): Promise<MedicaoRow> {
     pontos: e.forma.pontos,
     nome: e.forma.nome,
     item_code: e.forma.itemCode ?? null,
+    item_nome: e.forma.itemNome ?? null,
+    item_preco: e.forma.itemPreco ?? null,
+    underlay_id: e.forma.underlayId ?? null,
+    camada: e.forma.camada || 'Geral',
     cor: e.forma.cor,
     updated_at: new Date().toISOString(),
   };
@@ -156,17 +172,36 @@ export function lancamentosDeMedicao(
     '. NÃO é derivado da geometria — não pode ser recalculado sem retraçar.';
 
   for (const f of formas) {
-    if (!f.itemCode) {
+    if (!temDestinoNoOrcamento(f)) {
       semItemLigado.push(f);
-      continue;
-    }
-    const item = itens.get(f.itemCode);
-    if (!item) {
-      semCatalogo.push(f);
       continue;
     }
 
     const m = medir(f);
+
+    // Item do catálogo, ou ARBITRADO pela pessoa. O segundo é a lacuna que o
+    // Medição cobria: "Demolição de alvenaria, R$ 45/m²" não existe no SINAPI.
+    let item: SinapiItem | undefined;
+    if (f.itemCode) {
+      item = itens.get(f.itemCode);
+      if (!item) {
+        semCatalogo.push(f);
+        continue;
+      }
+    } else {
+      item = {
+        // Código DERIVADO DO NOME, nunca aleatório: o `MED-{4 dígitos}` do
+        // Medição muda a cada exportação, o casamento falha e a linha duplica.
+        code: codigoDeItemAvulso(f.itemNome!),
+        description: f.itemNome!.trim(),
+        unit: m.unidade === 'M2' ? 'm²' : m.unidade === 'M' ? 'm' : 'un',
+        price: f.itemPreco ?? 0,
+        type: SinapiType.INPUT,
+        category: 'Medido na planta',
+        source: 'Própria',
+      };
+    }
+
     const perimetro = perimetroM(f);
 
     entries.push({

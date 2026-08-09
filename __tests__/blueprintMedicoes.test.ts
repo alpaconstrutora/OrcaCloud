@@ -11,6 +11,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIMENSAO_POR_TIPO,
+  camadas,
+  codigoDeItemAvulso,
+  temDestinoNoOrcamento,
   formaValida,
   medir,
   perimetroM,
@@ -30,6 +33,7 @@ function forma(over: Partial<FormaMedida> = {}): FormaMedida {
     pontos: [point(0, 0), point(4000, 0), point(4000, 3000), point(0, 3000)],
     nome: 'Sala',
     itemCode: '87251',
+    camada: 'Geral',
     cor: '#2563eb',
     ...over,
   };
@@ -206,5 +210,66 @@ describe('medições · totais por item', () => {
 
     expect(totaisPorItem([ligada, solta])).toHaveLength(1);
     expect(semItem([ligada, solta]).map((f) => f.id)).toEqual(['b']);
+  });
+});
+
+describe('medições · item arbitrado, fora do catálogo', () => {
+  it('O CÓDIGO VEM DO NOME, NUNCA É ALEATÓRIO', () => {
+    // O Medição Inteligente gera `MED-{4 dígitos aleatórios}` e é por isso que
+    // reexportar duplica linha: o código muda a cada vez, o casamento falha e
+    // uma entrada nova é criada. Derivar do nome faz o mesmo item produzir
+    // sempre o mesmo código.
+    const a = codigoDeItemAvulso('Demolição de alvenaria');
+    const b = codigoDeItemAvulso('Demolição de alvenaria');
+
+    expect(a).toBe(b);
+    expect(a).toMatch(/^MED-[0-9A-Z]{1,7}$/);
+  });
+
+  it('ignora espaço em volta e caixa', () => {
+    // Quem redigita o nome de uma linha para outra não pode criar item novo.
+    expect(codigoDeItemAvulso('  Reboco Interno ')).toBe(codigoDeItemAvulso('reboco interno'));
+  });
+
+  it('nomes diferentes dão códigos diferentes', () => {
+    expect(codigoDeItemAvulso('Reboco')).not.toBe(codigoDeItemAvulso('Chapisco'));
+  });
+
+  it('a forma chega ao orçamento por catálogo OU por item arbitrado', () => {
+    expect(temDestinoNoOrcamento(forma())).toBe(true);
+    expect(
+      temDestinoNoOrcamento(forma({ itemCode: null, itemNome: 'Demolição', itemPreco: 45 })),
+    ).toBe(true);
+    expect(temDestinoNoOrcamento(forma({ itemCode: null }))).toBe(false);
+    // Nome só de espaço não é nome.
+    expect(temDestinoNoOrcamento(forma({ itemCode: null, itemNome: '   ' }))).toBe(false);
+  });
+
+  it('item arbitrado ENTRA no total, agrupado pelo código derivado', () => {
+    const a = forma({ id: 'a', itemCode: null, itemNome: 'Demolição', itemPreco: 45 });
+    const b = forma({ id: 'b', itemCode: null, itemNome: 'demolição', itemPreco: 45 });
+
+    const totais = totaisPorItem([a, b]);
+    // O mesmo nome, digitado diferente, soma numa linha só.
+    expect(totais).toHaveLength(1);
+    expect(totais[0].total).toBeCloseTo(24, 6);
+    expect(totais[0].itemCode).toBe(codigoDeItemAvulso('Demolição'));
+  });
+});
+
+describe('medições · camadas', () => {
+  it('a lista sai dos valores em uso, ordenada', () => {
+    // Camada é CAMPO, não tabela: a lista se mantém sozinha e não sobra camada
+    // vazia para alguém limpar depois.
+    const formas = [
+      forma({ id: 'a', camada: 'Revestimento' }),
+      forma({ id: 'b', camada: 'Piso' }),
+      forma({ id: 'c', camada: 'Piso' }),
+    ];
+    expect(camadas(formas)).toEqual(['Piso', 'Revestimento']);
+  });
+
+  it('camada vazia cai em Geral', () => {
+    expect(camadas([forma({ camada: '' })])).toEqual(['Geral']);
   });
 });

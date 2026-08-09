@@ -33,6 +33,10 @@ export function useBlueprintMedicoes(
   studyId: string,
   organizationId: string,
   levelId: string | null,
+  /** Prancha ativa: a forma nasce ligada a ela, e o filtro se apoia nisso. */
+  underlayId: string | null,
+  /** Camada em que as formas novas nascem. */
+  camada = 'Geral',
 ) {
   const [linhas, setLinhas] = useState<MedicaoRow[]>([]);
   const [selecionada, setSelecionada] = useState<string | null>(null);
@@ -63,6 +67,8 @@ export function useBlueprintMedicoes(
         pontos,
         nome: '',
         itemCode: null,
+        underlayId,
+        camada,
         cor: CORES[linhas.length % CORES.length],
       };
       // Forma degenerada é recusada AQUI, antes de virar linha no banco: uma
@@ -90,7 +96,12 @@ export function useBlueprintMedicoes(
   );
 
   const atualizar = useCallback(
-    async (id: string, campos: Partial<Pick<FormaMedida, 'nome' | 'itemCode'>>) => {
+    async (
+      id: string,
+      campos: Partial<
+        Pick<FormaMedida, 'nome' | 'itemCode' | 'itemNome' | 'itemPreco' | 'camada'>
+      >,
+    ) => {
       const linha = linhas.find((l) => l.id === id);
       if (!linha) return;
 
@@ -102,6 +113,9 @@ export function useBlueprintMedicoes(
                 ...l,
                 nome: campos.nome ?? l.nome,
                 item_code: campos.itemCode !== undefined ? campos.itemCode : l.item_code,
+                item_nome: campos.itemNome !== undefined ? campos.itemNome : l.item_nome,
+                item_preco: campos.itemPreco !== undefined ? campos.itemPreco : l.item_preco,
+                camada: campos.camada ?? l.camada,
               }
             : l,
         ),
@@ -143,11 +157,15 @@ export function useBlueprintMedicoes(
    * traçado, e o número medido vira ficção — sem nada na tela denunciando.
    */
   const reposicionar = useCallback(
-    async (antes: Underlay, depois: Underlay) => {
-      if (linhas.length === 0) return;
+    async (antes: Underlay, depois: Underlay, prancha: string | null) => {
+      // SÓ as formas daquela prancha. Antes de haver várias, transformar tudo
+      // era inofensivo; agora recalibrar a cobertura moveria o que foi traçado
+      // no térreo — em coordenadas que só fazem sentido sob a outra aferição.
+      const alvo = linhas.filter((l) => l.underlay_id === prancha);
+      if (alvo.length === 0) return;
       setOcupado(true);
       try {
-        const movidas = transformarPorRecalibracao(linhas.map(formaDaLinha), antes, depois);
+        const movidas = transformarPorRecalibracao(alvo.map(formaDaLinha), antes, depois);
         await regravarPontos(movidas.map((f) => ({ id: f.id, pontos: f.pontos })));
         setLinhas((atual) =>
           atual.map((l) => ({
@@ -191,7 +209,7 @@ export function useBlueprintMedicoes(
         });
 
         if (entries.length === 0) {
-          setErro('Nenhuma medição com item encontrado no catálogo.');
+          setErro('Nenhuma medição pronta para o orçamento: ligue um item de catálogo ou informe nome e preço.');
           return;
         }
 

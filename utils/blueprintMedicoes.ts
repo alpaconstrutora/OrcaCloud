@@ -43,6 +43,17 @@ export interface FormaMedida {
   nome: string;
   /** Código no catálogo — SINAPI ou base própria. Opcional até alguém ligar. */
   itemCode?: string | null;
+  /**
+   * Item ARBITRADO, quando não há código de catálogo. É a lacuna que o Medição
+   * cobria e a planta não: "Demolição de alvenaria, R$ 45/m²" não existe no
+   * SINAPI e precisava de algum lugar para morar.
+   */
+  itemNome?: string | null;
+  itemPreco?: number | null;
+  /** Prancha sobre a qual foi traçada. Nulo = traçada sem fundo. */
+  underlayId?: string | null;
+  /** Agrupamento de tela. Camada é campo, não tabela — ver o plano. */
+  camada: string;
   cor: string;
 }
 
@@ -132,6 +143,38 @@ export function transformarPorRecalibracao(
   }));
 }
 
+/**
+ * Código de orçamento para item arbitrado, DERIVADO DO NOME.
+ *
+ * O Medição Inteligente gera `MED-{4 dígitos aleatórios}`, e é por isso que
+ * reexportar duplica linha: o código muda a cada vez, o casamento falha e uma
+ * entrada nova é criada. Derivar do nome faz o mesmo item produzir sempre o
+ * mesmo código — repetir a exportação atualiza em vez de acumular.
+ *
+ * O hash é curto de propósito: ele identifica dentro de um orçamento, não no
+ * mundo. Colisão entre dois nomes diferentes é possível e sem consequência
+ * prática — as duas linhas se fundiriam, e é o que se quer quando o nome é o
+ * mesmo a menos de um acento.
+ */
+export function codigoDeItemAvulso(nome: string): string {
+  const limpo = nome.trim().toLowerCase();
+  let h = 0x811c9dc5;
+  for (let i = 0; i < limpo.length; i++) {
+    h = Math.imul(h ^ limpo.charCodeAt(i), 0x01000193) >>> 0;
+  }
+  return `MED-${h.toString(36).toUpperCase().padStart(7, '0').slice(0, 7)}`;
+}
+
+/** A forma tem para onde ir no orçamento? Catálogo OU item arbitrado. */
+export function temDestinoNoOrcamento(f: FormaMedida): boolean {
+  return !!f.itemCode || !!(f.itemNome && f.itemNome.trim());
+}
+
+/** Camadas em uso, para o filtro da tela. */
+export function camadas(formas: FormaMedida[]): string[] {
+  return [...new Set(formas.map((f) => f.camada || 'Geral'))].sort();
+}
+
 export interface TotalPorItem {
   itemCode: string;
   unidade: 'M2' | 'M' | 'UN';
@@ -151,9 +194,10 @@ export function totaisPorItem(formas: FormaMedida[]): TotalPorItem[] {
   const mapa = new Map<string, TotalPorItem>();
 
   for (const f of formas) {
-    if (!f.itemCode) continue;
+    if (!temDestinoNoOrcamento(f)) continue;
+    const codigo = f.itemCode || codigoDeItemAvulso(f.itemNome!);
     const m = medir(f);
-    const chave = `${f.itemCode}|${m.unidade}`;
+    const chave = `${codigo}|${m.unidade}`;
     const atual = mapa.get(chave);
 
     if (atual) {
@@ -161,7 +205,7 @@ export function totaisPorItem(formas: FormaMedida[]): TotalPorItem[] {
       atual.formas += 1;
     } else {
       mapa.set(chave, {
-        itemCode: f.itemCode,
+        itemCode: codigo,
         unidade: m.unidade,
         total: m.valor,
         formas: 1,
@@ -172,9 +216,9 @@ export function totaisPorItem(formas: FormaMedida[]): TotalPorItem[] {
   return [...mapa.values()].sort((a, b) => a.itemCode.localeCompare(b.itemCode));
 }
 
-/** Formas sem item ligado — medem, mas não chegam ao orçamento. */
+/** Formas sem destino — medem, mas não chegam ao orçamento. */
 export function semItem(formas: FormaMedida[]): FormaMedida[] {
-  return formas.filter((f) => !f.itemCode);
+  return formas.filter((f) => !temDestinoNoOrcamento(f));
 }
 
 /**

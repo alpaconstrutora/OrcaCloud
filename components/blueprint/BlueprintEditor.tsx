@@ -90,7 +90,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const levelId = editor.model.levels[0]?.id ?? null;
 
   const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
-  const medicoes = useBlueprintMedicoes(study.id, study.organization_id, levelId);
+  const [camadaAtiva, setCamadaAtiva] = useState('Geral');
+  const medicoes = useBlueprintMedicoes(
+    study.id,
+    study.organization_id,
+    levelId,
+    fundo.linha?.id ?? null,
+    camadaAtiva,
+  );
 
   // Atalhos de desfazer/refazer. Ctrl+Z / Ctrl+Shift+Z, como todo editor.
   useEffect(() => {
@@ -387,7 +394,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         // devolveria o valor velho, porque o React só atualiza o closure na
         // renderização seguinte — e as medições seriam transformadas de uma
         // escala para ela mesma, ou seja, não seriam transformadas.
-        if (escalaAnterior && nova) void medicoes.reposicionar(escalaAnterior, nova);
+        if (escalaAnterior && nova)
+          void medicoes.reposicionar(escalaAnterior, nova, fundo.linha?.id ?? null);
       });
     setAfericao(null);
     setDistanciaDigitada('');

@@ -1,6 +1,12 @@
 export interface MeasureProject {
   id: string;
+  /** AUTORIA — quem criou. Não é dono: dono é a organização. */
   user_id: string;
+  /**
+   * Dono organizacional. Nulo só nos levantamentos criados antes de a coluna
+   * existir, cuja organização não pôde ser inferida sem ambiguidade.
+   */
+  organization_id: string | null;
   orcamento_id: string | null;
   associated_project_id: string | null;
   nome: string;

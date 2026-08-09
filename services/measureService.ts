@@ -21,12 +21,26 @@ export const measureService = {
   // ==========================================
   // PROJETOS DE MEDIÇÃO
   // ==========================================
-  async listProjects(userId: string): Promise<MeasureProject[]> {
-    const { data, error } = await supabase
+  /**
+   * Lista os levantamentos da organização — não os "meus".
+   *
+   * Filtrar por `user_id` era o que prendia o trabalho à pessoa: ninguém mais na
+   * empresa via o levantamento, e quem saía levava tudo. Agora quem recorta é a
+   * RLS, por organização.
+   *
+   * `organizationId` nulo significa "Todas" no seletor do topo, e aí NÃO se
+   * filtra: a RLS já recorta o que a conta enxerga, e bloquear por causa do nulo
+   * esconderia a tela.
+   */
+  async listProjects(organizationId: string | null): Promise<MeasureProject[]> {
+    let query = supabase
       .from('measure_projects')
       .select('*')
-      .eq('user_id', userId)
       .order('updated_at', { ascending: false });
+
+    if (organizationId) query = query.eq('organization_id', organizationId);
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('[MeasureService] Erro ao listar projetos:', error);

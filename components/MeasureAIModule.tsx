@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { Stage, Layer, Image as KonvaImage, Line, Circle, Label, Text as KonvaText, Group } from 'react-konva';
 import {
   Calculator, Layers, Ruler, Plus, Trash2, Edit, Save, FileText, ChevronRight,
@@ -29,6 +30,9 @@ interface MeasureAIModuleProps {
 }
 
 export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, activeOrganizationId }) => {
+  // Seletor do topo como autoridade: com uma organização escolhida usa ela sem
+  // perguntar; em "Todas" abre o modal. Mesmo padrão do BlueprintModule.
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
   // --- Estados do Projeto e Arquivos ---
   const [projects, setProjects] = useState<MeasureProject[]>([]);
   const [activeProject, setActiveProject] = useState<MeasureProject | null>(null);
@@ -94,7 +98,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
   const loadProjects = async () => {
     try {
-      const data = await measureService.listProjects(userId);
+      const data = await measureService.listProjects(activeOrganizationId ?? null);
       setProjects(data);
       if (data.length > 0 && !activeProject) {
         selectProject(data[0]);
@@ -281,8 +285,16 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
     if (!newProjectName.trim()) return;
 
     try {
+      // A organização vem do seletor do topo, que é a autoridade. Sem ela o
+      // levantamento nasceria órfão — foi exatamente isso que prendeu o acervo
+      // antigo à pessoa que o criou.
+      const alvo = await resolveWriteOrg('single');
+      if (!alvo) return;
+      const organizationId = alvo.kind === 'org' ? alvo.orgId : alvo.orgIds[0];
+
       const proj = await measureService.createProject({
         user_id: userId,
+        organization_id: organizationId,
         nome: newProjectName,
         status: 'RASCUNHO',
         orcamento_id: linkType === 'PRO' ? (selectedOrcamentoId || null) : null,
@@ -897,6 +909,8 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
 
   return (
     <div className="flex h-[calc(100vh-6rem)] overflow-hidden bg-slate-900 text-slate-100 rounded-3xl border border-slate-800 shadow-2xl">
+      {/* Modal de escolha de organização, para quando o topo está em "Todas". */}
+      {orgTargetModal}
       {/* ── BARRA LATERAL ESQUERDA: Projetos, Arquivos e Camadas ── */}
       <aside className="w-80 border-r border-slate-800 bg-slate-950 flex flex-col shrink-0">
         

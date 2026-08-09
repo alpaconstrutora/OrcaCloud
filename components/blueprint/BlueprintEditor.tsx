@@ -17,11 +17,13 @@ import {
   PencilRuler,
   Coins,
   Pencil,
+  History,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
 import PainelOrcamento from './PainelOrcamento';
+import PainelVersoes from './PainelVersoes';
 import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
 import {
   computeAndStoreQuantities,
@@ -62,7 +64,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
-  const [aba, setAba] = useState<'ambientes' | 'quantitativos' | 'orcamento'>('ambientes');
+  const [aba, setAba] = useState<'ambientes' | 'quantitativos' | 'orcamento' | 'versoes'>(
+    'ambientes',
+  );
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [qtdOficial, setQtdOficial] = useState<BlueprintQuantitySnapshot | null>(null);
   const [gerando, setGerando] = useState(false);
@@ -592,9 +596,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               rotulo="Orçamento"
               onClick={() => setAba('orcamento')}
             />
+            <BotaoAba
+              ativo={aba === 'versoes'}
+              icone={History}
+              rotulo="Versões"
+              onClick={() => setAba('versoes')}
+            />
           </div>
 
-          {aba === 'orcamento' ? (
+          {aba === 'versoes' ? (
+            <PainelVersoes study={study} />
+          ) : aba === 'orcamento' ? (
             <PainelOrcamento
               study={study}
               revisao={editor.baseRevision}

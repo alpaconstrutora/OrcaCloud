@@ -19,6 +19,7 @@ import {
   ModelHistory,
   applyBatch,
   applyCommand,
+  areCollinear,
   buildArrangement,
   canonicalPayload,
   emptyModel,
@@ -384,6 +385,35 @@ describe('Spike A · split e merge', () => {
     expect(() =>
       applyCommand(built.model, { type: 'MergeWalls', firstId: first, secondId: second }),
     ).toThrow(/colinear/i);
+  });
+
+  it('caso 21b — numa sala, a vizinha que encosta NÃO é candidata a unir', () => {
+    // Regressão de um bug de UI: a busca por "vizinha para unir" pegava a
+    // primeira parede que compartilhasse uma ponta. Numa sala retangular toda
+    // vizinha é PERPENDICULAR, então ela escolhia a errada e o kernel recusava
+    // com "Paredes não são colineares" — depois do clique, não antes.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+
+    const primeira = built.walls[0]; // (0,0) -> (4000,0)
+    const encostadas = built.walls.filter(
+      (o) =>
+        o.id !== primeira.id &&
+        [o.a, o.b].some((p) =>
+          [primeira.a, primeira.b].some((q) => p.x === q.x && p.y === q.y),
+        ),
+    );
+
+    // Duas paredes encostam nela, e nenhuma serve para unir.
+    expect(encostadas).toHaveLength(2);
+    for (const o of encostadas) {
+      const colinear =
+        areCollinear(primeira.a, primeira.b, o.a) && areCollinear(primeira.a, primeira.b, o.b);
+      expect(colinear).toBe(false);
+      expect(() =>
+        applyCommand(built, { type: 'MergeWalls', firstId: primeira.id, secondId: o.id }),
+      ).toThrow(/colinear/i);
+    }
   });
 
   it('caso 21 — split seguido de merge devolve o payload canônico original', () => {

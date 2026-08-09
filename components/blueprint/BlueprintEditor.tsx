@@ -18,7 +18,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
 import type { BlueprintStudy } from '../../types/blueprint';
-import { wallLength, type Point } from '../../utils/blueprintKernel';
+import { areCollinear, wallLength, type Point } from '../../utils/blueprintKernel';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -137,25 +137,44 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.setSelectedId(null);
   }
 
-  /** Une a selecionada com a vizinha colinear que compartilha uma ponta. */
-  function unirSelecionada() {
-    if (!paredeSel) return;
+  /**
+   * A vizinha que pode ser unida à selecionada.
+   *
+   * Precisa ser COLINEAR, e não só encostada. A primeira versão pegava qualquer
+   * parede que compartilhasse uma ponta — mas numa sala retangular toda vizinha
+   * é perpendicular, então ela escolhia a errada e o kernel recusava com
+   * "Paredes não são colineares". O botão ficava quebrado no caso mais comum, e
+   * o erro aparecia depois do clique em vez de antes.
+   *
+   * Calculado como memo para a UI poder DESABILITAR o botão quando não houver
+   * candidata, em vez de deixar o usuário descobrir clicando.
+   */
+  const vizinhaParaUnir = useMemo(() => {
+    if (!paredeSel) return null;
     const mesmaPonta = (p: Point, q: Point) => p.x === q.x && p.y === q.y;
-    const vizinha = editor.model.walls.find((o) => {
-      if (o.id === paredeSel.id || o.levelId !== paredeSel.levelId) return false;
-      if (o.thicknessMm !== paredeSel.thicknessMm) return false;
-      return (
-        mesmaPonta(o.a, paredeSel.b) ||
-        mesmaPonta(o.b, paredeSel.a) ||
-        mesmaPonta(o.a, paredeSel.a) ||
-        mesmaPonta(o.b, paredeSel.b)
-      );
-    });
-    if (!vizinha) {
-      editor.setSelectedId(paredeSel.id);
-      return;
-    }
-    editor.run({ type: 'MergeWalls', firstId: paredeSel.id, secondId: vizinha.id });
+    return (
+      editor.model.walls.find((o) => {
+        if (o.id === paredeSel.id || o.levelId !== paredeSel.levelId) return false;
+        if (o.thicknessMm !== paredeSel.thicknessMm) return false;
+        const encosta =
+          mesmaPonta(o.a, paredeSel.b) ||
+          mesmaPonta(o.b, paredeSel.a) ||
+          mesmaPonta(o.a, paredeSel.a) ||
+          mesmaPonta(o.b, paredeSel.b);
+        if (!encosta) return false;
+        // Os quatro pontos têm que estar na mesma reta — testado com os dois
+        // extremos da vizinha, senão uma parede que só toca de raspão passa.
+        return (
+          areCollinear(paredeSel.a, paredeSel.b, o.a) &&
+          areCollinear(paredeSel.a, paredeSel.b, o.b)
+        );
+      }) ?? null
+    );
+  }, [paredeSel, editor.model.walls]);
+
+  function unirSelecionada() {
+    if (!paredeSel || !vizinhaParaUnir) return;
+    editor.run({ type: 'MergeWalls', firstId: paredeSel.id, secondId: vizinhaParaUnir.id });
     editor.setSelectedId(null);
   }
 
@@ -546,7 +565,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   </label>
                   <div className="mt-3 flex gap-2">
                     <BotaoTexto icone={Scissors} rotulo="Dividir" onClick={dividirSelecionada} />
-                    <BotaoTexto icone={Combine} rotulo="Unir" onClick={unirSelecionada} />
+                    <BotaoTexto
+                      icone={Combine}
+                      rotulo="Unir"
+                      onClick={unirSelecionada}
+                      disabled={!vizinhaParaUnir}
+                      titulo={
+                        vizinhaParaUnir
+                          ? 'Une com a parede colinear vizinha'
+                          : 'Só é possível unir com uma parede colinear, de mesma espessura, que compartilhe uma ponta'
+                      }
+                    />
                   </div>
                 </>
               )}
@@ -694,16 +723,22 @@ function BotaoTexto({
   icone: Icone,
   rotulo,
   onClick,
+  disabled,
+  titulo,
 }: {
   icone: React.ElementType;
   rotulo: string;
   onClick: () => void;
+  disabled?: boolean;
+  titulo?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+      disabled={disabled}
+      title={titulo ?? rotulo}
+      className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
     >
       <Icone className="h-3.5 w-3.5" />
       {rotulo}

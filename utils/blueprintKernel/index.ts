@@ -9,7 +9,7 @@
 export { KERNEL_VERSION, DEFAULT_TOLERANCE_MM, KernelError, metersToMm, mmToMeters, roundToMm } from './units';
 
 export type { Point, Segment, IntersectionResult } from './geom';
-export { point, intersectSegments, polygonArea, polygonPerimeter, isSimplePolygon, canonicalizeRing } from './geom';
+export { point, intersectSegments, polygonArea, polygonPerimeter, isSimplePolygon, canonicalizeRing, areCollinear } from './geom';
 
 export type { BlueprintModel, Level, Wall, Opening, Boundary, Space, ObjectId } from './model';
 export { emptyModel, cloneModel, wallLength, assertModelInvariants } from './model';

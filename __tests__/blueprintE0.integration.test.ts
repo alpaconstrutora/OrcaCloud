@@ -54,6 +54,13 @@ import {
   verifyQuantitySnapshot,
   verifySnapshotIntegrity,
 } from '../services/blueprintService';
+import {
+  aplicarNoProjeto,
+  deleteMapping,
+  listMappings,
+  preverLancamentos,
+  saveMapping,
+} from '../services/blueprintBudgetService';
 import { BlueprintRevisionConflict } from '../types/blueprint';
 
 /**
@@ -87,6 +94,8 @@ let orgId = '';
 let outraOrgId: string | null = null;
 let studyId = '';
 let branchId = '';
+let projetoDescartavelId = '';
+const mapeamentosCriados: string[] = [];
 
 /** Sala de 4 paredes + divisória: dois ambientes, geometria não trivial. */
 function modeloDeTeste(): BlueprintModel {
@@ -167,6 +176,33 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
         throw new Error(`limpeza silenciosa: o estudo ${studyId} continua existindo`);
       }
     }
+
+    for (const id of mapeamentosCriados) await deleteMapping(id);
+
+    if (projetoDescartavelId) {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projetoDescartavelId);
+      if (error) {
+        throw new Error(
+          `limpeza falhou — o projeto ${projetoDescartavelId} ficou no banco: ${error.message}`,
+        );
+      }
+
+      // Mesma lição do estudo: RLS pode filtrar a linha e o DELETE devolver
+      // sucesso afetando zero linhas. Ausência de erro não é ausência de lixo.
+      const { data: resto } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', projetoDescartavelId);
+      if ((resto ?? []).length > 0) {
+        throw new Error(
+          `limpeza silenciosa: a obra de teste ${projetoDescartavelId} continua existindo`,
+        );
+      }
+    }
+
     await supabase.auth.signOut();
   }, 60000);
 
@@ -305,8 +341,24 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     // O valor gravado tem que ser o MESMO que o kernel produz sobre o modelo de
     // teste — senão o banco estaria guardando um número que ninguém consegue
     // reproduzir, que é exatamente o que o CA-08 proíbe.
+    //
+    // COMPARAR VALOR A VALOR, NUNCA A SERIALIZAÇÃO. `JSONB` não preserva ordem
+    // de chave: o Postgres reordena por tamanho e depois por bytes na gravação.
+    // A primeira versão deste caso comparava `JSON.stringify` dos dois lados e
+    // reprovou com TODOS os números idênticos, só porque o que voltou do banco
+    // veio com as chaves em outra ordem.
+    //
+    // Vale para qualquer comparação de payload que passe por JSONB. O hash do
+    // snapshot escapa disso porque não é calculado sobre o JSON gravado: o
+    // modelo é reconstruído e RE-serializado em ordem canônica antes.
     const local = computeQuantities(modeloDeTeste(), POLITICA_PADRAO, snapshot.kernel_version);
-    expect(JSON.stringify(gravado.totais)).toBe(JSON.stringify(local.totais));
+    const gravadoTotais = gravado.totais as Record<string, number>;
+    const localTotais = local.totais as unknown as Record<string, number>;
+
+    expect(Object.keys(gravadoTotais).sort()).toEqual(Object.keys(localTotais).sort());
+    for (const chave of Object.keys(localTotais)) {
+      expect(gravadoTotais[chave], `total "${chave}"`).toBe(localTotais[chave]);
+    }
   }, 60000);
 
   it('recalcular com a mesma política devolve o registro existente (CA-08)', async () => {
@@ -358,6 +410,144 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
 
     const depois = await getQuantitySnapshot(snapshot.id, POLITICA_PADRAO.version);
     expect(JSON.stringify(depois!.totais)).toBe(JSON.stringify(antes!.totais));
+  }, 60000);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // RF-122 — de-para para o orçamento
+  //
+  // Os itens vêm do catálogo REAL, não de constante inventada: metade do que
+  // este trecho verifica é se `resolverItens` acha o código e devolve a unidade
+  // que o Postgres tem gravada. Item fabricado no teste provaria só que a função
+  // sabe ler um objeto que ela mesma recebeu.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  let itemM2 = '';
+  let itemM = '';
+
+  it('acha no catálogo real um item por m² e outro por metro', async () => {
+    const { data } = await supabase
+      .from('sinapi_items')
+      .select('code, unit')
+      .in('unit', ['M2', 'M'])
+      .limit(400);
+
+    itemM2 = (data ?? []).find((i) => i.unit === 'M2')?.code ?? '';
+    itemM = (data ?? []).find((i) => i.unit === 'M')?.code ?? '';
+
+    expect(itemM2, 'catálogo sem item em M2 — o resto do bloco não mede nada').toBeTruthy();
+    expect(itemM, 'catálogo sem item em M').toBeTruthy();
+  }, 60000);
+
+  it('A TRAVA DE UNIDADE FUNCIONA CONTRA O CATÁLOGO REAL', async () => {
+    // Área de piso (m²) apontada para item cotado por metro linear. É o erro que
+    // não se anuncia: sairia uma linha plausível e errada por um fator de 4 ou 5.
+    const m = await saveMapping({
+      organization_id: orgId,
+      medida: 'AREA_PISO',
+      item_code: itemM,
+      phase: '',
+      budget_group: MARCADOR,
+      agrupamento: 'TOTAL',
+      filtro_ambiente: [],
+      active: true,
+    });
+    mapeamentosCriados.push(m.id);
+
+    const [snapshot] = await listSnapshots(studyId);
+    const previa = await preverLancamentos(snapshot.id);
+
+    expect(previa.entries, 'nenhuma linha pode ser gerada').toHaveLength(0);
+    expect(previa.divergencias).toHaveLength(1);
+    expect(previa.divergencias[0].itemCode).toBe(itemM);
+  }, 60000);
+
+  it('com a unidade certa, a linha sai com a área de PISO', async () => {
+    for (const id of mapeamentosCriados) await deleteMapping(id);
+    mapeamentosCriados.length = 0;
+
+    const m = await saveMapping({
+      organization_id: orgId,
+      medida: 'AREA_PISO',
+      item_code: itemM2,
+      phase: '',
+      budget_group: MARCADOR,
+      agrupamento: 'TOTAL',
+      filtro_ambiente: [],
+      active: true,
+    });
+    mapeamentosCriados.push(m.id);
+
+    const [snapshot] = await listSnapshots(studyId);
+    const previa = await preverLancamentos(snapshot.id);
+
+    expect(previa.divergencias).toHaveLength(0);
+    expect(previa.entries).toHaveLength(1);
+
+    // Sala 6 × 4 dividida ao meio, parede de 150 mm. Piso de cada metade:
+    //   x: 3,00 − 0,075 − 0,075 = 2,85     (parede externa de um lado, divisória do outro)
+    //   y: 4,00 − 0,15          = 3,85
+    //   2 × (2,85 × 3,85) = 21,945 m²
+    expect(previa.entries[0].quantity).toBeCloseTo(21.945, 3);
+    expect(previa.entries[0].sinapiItem.unit).toBe('M2');
+  }, 60000);
+
+  it('o de-para volta do banco como foi gravado', async () => {
+    const lista = await listMappings(orgId);
+    const meu = lista.find((m) => m.id === mapeamentosCriados[0]);
+
+    expect(meu, 'o mapeamento gravado tem que aparecer na listagem').toBeTruthy();
+    expect(meu!.item_code).toBe(itemM2);
+    // `filtro_ambiente` é TEXT[]: se voltasse como string, o filtro por nome
+    // silenciosamente não casaria com nada.
+    expect(Array.isArray(meu!.filtro_ambiente)).toBe(true);
+  }, 60000);
+
+  it('APLICAR NO ORÇAMENTO NÃO DUPLICA AO REGERAR', async () => {
+    // Contra uma obra DESCARTÁVEL, nunca uma real: aplicar reescreve
+    // `projects.budget`, e o defeito que este caso procura é justamente o de
+    // empilhar linha a cada revisão publicada.
+    const { data: projeto, error } = await supabase
+      .from('projects')
+      .insert({
+        organization_id: orgId,
+        name: `${MARCADOR} obra descartável`,
+        budget: [
+          {
+            id: 'digitado-a-mao',
+            sinapiItem: { code: 'X', description: 'linha manual', unit: 'M2', price: 1 },
+            quantity: 1,
+            phase: 'Manual',
+            group: 'Manual',
+          },
+        ],
+      })
+      .select('id')
+      .single();
+
+    expect(error, `não foi possível criar a obra de teste: ${error?.message}`).toBeNull();
+    projetoDescartavelId = projeto!.id;
+
+    const [snapshot] = await listSnapshots(studyId);
+    const previa = await preverLancamentos(snapshot.id);
+
+    const primeira = await aplicarNoProjeto(projetoDescartavelId, previa.entries, previa.contexto);
+    expect(primeira.adicionadas).toBe(1);
+    expect(primeira.removidas, 'na primeira vez não há o que substituir').toBe(0);
+    expect(primeira.total, 'a linha manual continua lá').toBe(2);
+
+    const segunda = await aplicarNoProjeto(projetoDescartavelId, previa.entries, previa.contexto);
+    expect(segunda.removidas, 'a segunda passada substitui a primeira').toBe(1);
+    expect(segunda.total, 'o orçamento não pode ter crescido').toBe(2);
+
+    // E a linha digitada à mão sobreviveu às duas passadas.
+    const { data: depois } = await supabase
+      .from('projects')
+      .select('budget')
+      .eq('id', projetoDescartavelId)
+      .single();
+
+    const budget = (depois?.budget ?? []) as { id: string }[];
+    expect(budget.find((e) => e.id === 'digitado-a-mao'), 'linha manual apagada').toBeTruthy();
   }, 60000);
 
   it('não é possível criar estudo em organização de terceiros (RLS negativa)', async () => {

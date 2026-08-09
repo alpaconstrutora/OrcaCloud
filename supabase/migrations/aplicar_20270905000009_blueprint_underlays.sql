@@ -10,6 +10,11 @@
 --
 -- ⚠️ SEM FK PARA auth.users (ver aplicar_20270905000004).
 -- ⚠️ APLICAR À MÃO pelo SQL Editor, UM BLOCO POR VEZ.
+--
+-- ⚠️ RENUMERADA. Nasceu como `aplicar_20270905000006` e colidiu com uma
+--    migration de outra frente, criada mais cedo no mesmo dia. Prefixo repetido tira a única coisa
+--    que o prefixo faz: dizer a ordem. Quem renomeia é quem chegou depois.
+--    JÁ APLICADA em 09/08/2026, sob o número antigo.
 -- ============================================================================
 
 -- ═══ BLOCO 1 — tabela ═══════════════════════════════════════════════════════

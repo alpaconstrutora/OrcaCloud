@@ -19,6 +19,11 @@
 --    do bloco 6 mostrar zero linhas sem organização.
 --
 -- ⚠️ APLICAR À MÃO, UM BLOCO POR VEZ.
+--
+-- ⚠️ RENUMERADA. Nasceu como `aplicar_20270905000008` e colidiu com uma
+--    migration de outra frente, criada mais cedo no mesmo dia. Prefixo repetido tira a única coisa
+--    que o prefixo faz: dizer a ordem. Quem renomeia é quem chegou depois.
+--    AINDA NÃO aplicada.
 -- ============================================================================
 
 -- ═══ BLOCO 1 — a coluna ═════════════════════════════════════════════════════

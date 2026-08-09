@@ -444,8 +444,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       </header>
 
       {/* Barra de ferramentas */}
+      {/* `flex-wrap`: a barra ganhou muitos controles (ferramentas, espessura,
+          planta de fundo, orto, grade, desfazer/refazer) e sem quebra de linha
+          ela transborda em tela estreita. Item de flex NÃO encolhe abaixo do
+          próprio conteúdo — foi assim que duas abas sumiram nesta mesma tela.
+          Quebrar linha torna o recorte estruturalmente impossível. */}
       <div
-        className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-2"
+        className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2"
         role="toolbar"
         aria-label="Ferramentas de desenho"
       >

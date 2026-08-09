@@ -440,11 +440,32 @@ export const measureService = {
     return data.path;
   },
 
-  getPlantPublicUrl(path: string): string {
-    const { data } = supabase.storage
+  /**
+   * URL ASSINADA, com validade de uma hora.
+   *
+   * Era `getPublicUrl`, e o bucket era `public = true`: a URL funcionava para
+   * sempre, sem autenticação e sem expirar. O caminho tem dois UUID e portanto
+   * não é enumerável — o risco nunca foi varredura, foi PERMANÊNCIA. Quem saía
+   * da empresa seguia com acesso a toda planta cujo link tivesse guardado, e o
+   * link atravessa histórico de navegador, cache de CDN e qualquer conversa
+   * onde tenha sido colado. Planta de cliente traz endereço e nome do
+   * proprietário.
+   *
+   * Esta função estava SEM NENHUM CHAMADOR quando o bucket foi fechado — o app
+   * lê por `downloadPlantFile`, que já é chamada autenticada. Foi mantida em vez
+   * de apagada para que um uso futuro caia no caminho assinado, e não recrie o
+   * `getPublicUrl` do zero.
+   */
+  async getPlantSignedUrl(path: string): Promise<string> {
+    const { data, error } = await supabase.storage
       .from('measure-plants')
-      .getPublicUrl(path);
-    return data.publicUrl;
+      .createSignedUrl(path, 60 * 60);
+
+    if (error) {
+      console.error('[MeasureService] Erro ao assinar URL da planta:', error);
+      throw error;
+    }
+    return data.signedUrl;
   },
 
   async downloadPlantFile(path: string): Promise<Blob> {

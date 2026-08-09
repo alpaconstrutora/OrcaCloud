@@ -61,7 +61,12 @@ SET lock_timeout = '5s';
 UPDATE public.measure_projects m
    SET organization_id = unica.org
   FROM (
-        SELECT om.user_id, MIN(om.organization_id) AS org
+        -- `MIN()` NÃO existe para uuid no Postgres. E não precisa existir: o
+        -- HAVING abaixo já garante que há exatamente UMA organização distinta,
+        -- então basta tirá-la do array. Trocar por `min(...::text)::uuid`
+        -- funcionaria e seria pior — daria a impressão de que se está
+        -- escolhendo a "menor" de várias, quando só existe uma.
+        SELECT om.user_id, (array_agg(DISTINCT om.organization_id))[1] AS org
           FROM public.organization_members om
          WHERE om.user_id IS NOT NULL
          GROUP BY om.user_id

@@ -574,10 +574,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
         {/* Painel lateral — é aqui que a planta vira navegável por teclado. */}
         <aside
-          className="flex w-80 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
+          className="flex w-96 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
           aria-label="Ambientes derivados"
         >
-          <div className="flex shrink-0 border-b border-slate-200" role="tablist">
+          {/* GRADE, não flex. Com `flex-1` o conteúdo de cada aba não encolhe
+              abaixo do próprio tamanho (min-width: auto), a barra transborda os
+              320 px do painel e o `overflow-hidden` do <aside> RECORTA a última
+              aba — foi exatamente o que sumiu com a quarta. Coluna de grade tem
+              largura fixa de 1/4 e o rótulo trunca dentro dela. */}
+          <div
+            className="grid shrink-0 grid-cols-4 border-b border-slate-200"
+            role="tablist"
+          >
             <BotaoAba
               ativo={aba === 'ambientes'}
               icone={PencilRuler}
@@ -871,14 +879,15 @@ function BotaoAba({
       role="tab"
       aria-selected={ativo}
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
+      title={rotulo}
+      className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-b-2 px-1 py-1.5 text-[11px] font-medium transition-colors ${
         ativo
           ? 'border-blue-600 text-blue-700'
           : 'border-transparent text-slate-500 hover:bg-slate-50'
       }`}
     >
-      <Icone className="h-3.5 w-3.5" />
-      {rotulo}
+      <Icone className="h-3.5 w-3.5 shrink-0" />
+      <span className="w-full truncate text-center">{rotulo}</span>
     </button>
   );
 }

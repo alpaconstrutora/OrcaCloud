@@ -42,3 +42,6 @@ docs/spikes/wall-render/saida-*.png
 docs/spikes/digitalizador/segmentos.svg
 docs/spikes/digitalizador/segmentos.png
 docs/spikes/digitalizador/raster-componentes.png
+
+# Prints gerados pelos harnesses de verificacao visual
+docs/spikes/**/*.png

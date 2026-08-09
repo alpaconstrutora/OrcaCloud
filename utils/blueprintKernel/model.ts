@@ -152,6 +152,44 @@ export function wallLength(wall: Wall): number {
 }
 
 /**
+ * Uma ponta de parede é LIVRE quando nada a encosta.
+ *
+ * Serve ao desenho: em ponta que encontra outra parede, a pincelada precisa ser
+ * ESTENDIDA em meia espessura, senão sobra um quadrado vazio no canto externo —
+ * o degrau que já apareceu em uso duas vezes, uma na tela e outra no papel.
+ *
+ * Contar só PONTAS não basta: numa junção em T a divisória termina no MEIO da
+ * parede que a recebe, e aquele ponto não é ponta de ninguém. Sem o teste de
+ * pertinência ao corpo das outras, ela seria classificada como livre e ganharia
+ * um tampo, desenhando uma linha atravessada dentro da junção.
+ *
+ * Vive no kernel, e não em cada renderizador, porque é GEOMETRIA — não estilo.
+ * Duas cópias divergem: foi exatamente o que aconteceu quando a exportação
+ * nasceu sem esta regra e o canto voltou a falhar só no papel.
+ */
+export function isFreeWallEnd(walls: Wall[], p: Point, exceptId: ObjectId): boolean {
+  let encontros = 0;
+  for (const w of walls) {
+    if (w.a.x === p.x && w.a.y === p.y) encontros++;
+    if (w.b.x === p.x && w.b.y === p.y) encontros++;
+  }
+  if (encontros > 1) return false;
+
+  for (const o of walls) {
+    if (o.id === exceptId) continue;
+    const dx = o.b.x - o.a.x;
+    const dy = o.b.y - o.a.y;
+    const comp2 = dx * dx + dy * dy;
+    if (comp2 === 0) continue;
+    let t = ((p.x - o.a.x) * dx + (p.y - o.a.y) * dy) / comp2;
+    t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(o.a.x + t * dx - p.x, o.a.y + t * dy - p.y);
+    if (d <= o.thicknessMm / 2) return false;
+  }
+  return true;
+}
+
+/**
  * Invariantes do PRD §9.1 que o kernel se recusa a violar.
  * Roda a cada comando aplicado — barato, e transforma bug silencioso em erro.
  */

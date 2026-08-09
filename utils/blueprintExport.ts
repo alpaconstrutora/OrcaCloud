@@ -25,7 +25,7 @@
  */
 
 import type { BlueprintModel, Point, Wall } from './blueprintKernel';
-import { wallLength } from './blueprintKernel';
+import { isFreeWallEnd, wallLength } from './blueprintKernel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Papel e escala
@@ -246,24 +246,74 @@ export function desenharPlanta(
   }
 
   // ── Paredes, vazadas ──────────────────────────────────────────────────────
-  const espessuraPapel = (w: Wall) => w.thicknessMm / opcoes.denominador;
+  //
+  // O DETALHE QUE FAZ O CANTO FUNCIONAR: estender a pincelada em meia espessura
+  // nas pontas que encontram outra parede.
+  //
+  // Com corte reto terminando no eixo, o traço de cada parede cobre uma faixa
+  // centrada no próprio eixo — e no canto externo sobra um quadrado vazio de
+  // meia espessura por meia espessura, que nenhuma das duas cobre. É o degrau
+  // que apareceu na primeira exportação. Estendendo, as duas pinceladas cobrem
+  // esse quadrado exatamente e o canto sai VIVO, não arredondado.
+  //
+  // Na ponta LIVRE não se estende: a parede ficaria meia espessura mais longa
+  // do que é. A regra de "livre" mora no kernel — ter duas cópias foi o que
+  // deixou a tela certa e o papel errado.
+  const tracos = model.walls.map((w) => {
+    const ax = px(w.a.x);
+    const ay = py(w.a.y);
+    const bx = px(w.b.x);
+    const by = py(w.b.y);
+    const comp = Math.hypot(bx - ax, by - ay);
+    const ux = comp > 0 ? (bx - ax) / comp : 0;
+    const uy = comp > 0 ? (by - ay) / comp : 0;
+    const cheia = w.thicknessMm / opcoes.denominador;
+    const meia = cheia / 2;
+    const extA = isFreeWallEnd(model.walls, w.a, w.id) ? 0 : meia;
+    const extB = isFreeWallEnd(model.walls, w.b, w.id) ? 0 : meia;
 
-  for (const w of model.walls) {
-    d.linha(px(w.a.x), py(w.a.y), px(w.b.x), py(w.b.y), {
-      espessuraMm: espessuraPapel(w),
-      cor: COR_TRACO,
-    });
+    return { cheia, ax, ay, bx, by, ux, uy, comp, extA, extB };
+  });
+
+  // Passada 1 — silhueta, já estendida.
+  for (const t of tracos) {
+    d.linha(
+      t.ax - t.ux * t.extA,
+      t.ay - t.uy * t.extA,
+      t.bx + t.ux * t.extB,
+      t.by + t.uy * t.extB,
+      { espessuraMm: t.cheia, cor: COR_TRACO },
+    );
   }
-  for (const w of model.walls) {
-    const miolo = espessuraPapel(w) - 2 * ESPESSURA_FINA_MM;
+
+  // Passada 2 — escavar o miolo.
+  for (const t of tracos) {
+    const miolo = t.cheia - 2 * ESPESSURA_FINA_MM;
     // Abaixo do mínimo imprimível a passada branca não vira nada no papel — ou
     // pior, vira artefato. Parede fina demais para a escala sai SÓLIDA, que é a
     // convenção quando o corte é pequeno demais para mostrar espessura.
     if (miolo < MIOLO_MINIMO_MM) continue;
-    d.linha(px(w.a.x), py(w.a.y), px(w.b.x), py(w.b.y), {
-      espessuraMm: miolo,
-      cor: '#ffffff',
-    });
+
+    // O MIOLO AVANÇA UMA ESPESSURA DE TRAÇO A MENOS QUE A SILHUETA.
+    //
+    // É daqui que vinha o canto aberto, e a silhueta estava certa o tempo todo.
+    // Estendendo o branco tanto quanto o preto, a escavação de uma parede
+    // alcança a borda EXTERNA da outra e apaga a linha dela — o canto fica com
+    // um pedaço de contorno faltando.
+    //
+    // A mesma conta serve para a ponta LIVRE, onde `ext` é 0: o resultado fica
+    // negativo, o branco RECUA e sobra borda fechando a extremidade.
+    const recA = t.extA - ESPESSURA_FINA_MM;
+    const recB = t.extB - ESPESSURA_FINA_MM;
+    if (t.comp + recA + recB <= 0) continue;
+
+    d.linha(
+      t.ax - t.ux * recA,
+      t.ay - t.uy * recA,
+      t.bx + t.ux * recB,
+      t.by + t.uy * recB,
+      { espessuraMm: miolo, cor: '#ffffff' },
+    );
   }
 
   // ── Limites sem material: tracejado seria melhor, fino resolve por ora ────

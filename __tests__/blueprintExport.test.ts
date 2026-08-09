@@ -271,14 +271,131 @@ describe('exportação · o que vai para o papel', () => {
     const ys = linhas.flatMap((c) => [c.args[1] as number, c.args[3] as number]);
 
     // A base do modelo (y = 0) tem que virar o MAIOR y de papel.
-    const baseNoModelo = 0;
-    const topoNoModelo = 6000;
+    //
+    // A meia espessura entra duas vezes e por motivos diferentes: uma na FOLGA
+    // do enquadramento (o traço avança meia espessura para fora do eixo) e outra
+    // na EXTENSÃO da pincelada no canto. Em 1:100 cada uma vale 0,75 mm.
     const enq = enquadrar(assimetrica, 100, A4);
+    const meiaMm = 75 / 100;
     const yPapel = (yModelo: number) =>
       enq.offsetYMm + (enq.desenhoAlturaMm - (yModelo + 75) / 100);
 
-    expect(Math.max(...ys)).toBeCloseTo(yPapel(baseNoModelo), 3);
-    expect(Math.min(...ys)).toBeCloseTo(yPapel(topoNoModelo), 3);
+    expect(Math.max(...ys)).toBeCloseTo(yPapel(0) + meiaMm, 3);
+    expect(Math.min(...ys)).toBeCloseTo(yPapel(6000) - meiaMm, 3);
+  });
+});
+
+describe('exportação · o canto', () => {
+  function tracosPretos(m: BlueprintModel, den = 100) {
+    const op = opcoes({ denominador: den });
+    const d = new DesenhistaDeProva();
+    desenharPlanta(d, m, op, enquadrar(m, den, op.papel));
+    return d.chamadas.filter(
+      (c) => c.tipo === 'linha' && (c.args[4] as { cor: string }).cor === '#000000',
+    );
+  }
+
+  it('O DEGRAU DO CANTO: a pincelada é ESTENDIDA em meia espessura', () => {
+    // Com corte reto terminando no eixo, sobra um quadrado vazio de meia
+    // espessura no canto externo — nenhuma das duas paredes o cobre. Foi o
+    // defeito que apareceu na primeira exportação, e o mesmo que já tinha
+    // aparecido na tela meses antes.
+    const m = planta(4, 3);
+    const horizontais = tracosPretos(m).filter(
+      (c) => Math.abs((c.args[1] as number) - (c.args[3] as number)) < 0.001,
+    );
+
+    // Parede de 4,00 m em 1:100 mede 40 mm de eixo. Com as duas pontas
+    // estendidas em 0,75 mm, a pincelada mede 41,5 mm.
+    const comprimento = Math.abs(
+      (horizontais[0].args[2] as number) - (horizontais[0].args[0] as number),
+    );
+    expect(comprimento).toBeCloseTo(41.5, 3);
+  });
+
+  it('ponta LIVRE não é estendida — a parede não pode crescer', () => {
+    // Parede solta: estender a deixaria meia espessura mais longa do que é, e
+    // a cota do desenho passaria a mentir.
+    const { model, levelId } = comNivel();
+    const solta = applyCommand(model, parede(levelId, 0, 0, 4000, 0)).model;
+
+    const [t] = tracosPretos(solta);
+    const comprimento = Math.abs((t.args[2] as number) - (t.args[0] as number));
+    expect(comprimento).toBeCloseTo(40, 3);
+  });
+
+  it('junção em T: a divisória encosta no MEIO e também é estendida', () => {
+    // O ponto onde a divisória termina não é ponta de ninguém. Contar só pontas
+    // a classificaria como livre, e o encontro ficaria com um degrau.
+    const { model, levelId } = comNivel();
+    const comT = applyBatch(model, [
+      ...sala(levelId, 0, 0, 6000, 3000),
+      parede(levelId, 3000, 0, 3000, 3000),
+    ]).model;
+
+    const divisoria = tracosPretos(comT).find((c) => {
+      const dx = Math.abs((c.args[2] as number) - (c.args[0] as number));
+      const dy = Math.abs((c.args[3] as number) - (c.args[1] as number));
+      return dx < 0.001 && dy > 25 && dy < 35;
+    })!;
+
+    const comprimento = Math.abs((divisoria.args[3] as number) - (divisoria.args[1] as number));
+    // 30 mm de eixo + 0,75 em cada ponta.
+    expect(comprimento).toBeCloseTo(31.5, 3);
+  });
+
+  it('O MIOLO BRANCO AVANÇA UMA ESPESSURA DE TRAÇO A MENOS QUE A SILHUETA', () => {
+    // ERA DAQUI QUE VINHA O CANTO ABERTO, e a silhueta estava certa o tempo
+    // todo. Estendendo o branco tanto quanto o preto, a escavação de uma parede
+    // alcança a borda EXTERNA da outra e apaga a linha dela — o canto sai com um
+    // pedaço de contorno faltando.
+    //
+    // A primeira versão deste caso exigia extensão IGUAL nas duas passadas, ou
+    // seja, codificava o defeito. Passava.
+    const m = planta(4, 3);
+    const op = opcoes();
+    const d = new DesenhistaDeProva();
+    desenharPlanta(d, m, op, enquadrar(m, 100, op.papel));
+
+    const linhas = d.chamadas.filter((c) => c.tipo === 'linha');
+    const pretas = linhas.filter((c) => (c.args[4] as { cor: string }).cor === '#000000');
+    const brancas = linhas.filter((c) => (c.args[4] as { cor: string }).cor === '#ffffff');
+
+    const horizontal = (c: (typeof linhas)[number]) =>
+      Math.abs((c.args[1] as number) - (c.args[3] as number)) < 0.001;
+
+    const preta = pretas.find(horizontal)!;
+    const branca = brancas.find(horizontal)!;
+
+    const comp = (c: (typeof linhas)[number]) =>
+      Math.abs((c.args[2] as number) - (c.args[0] as number));
+
+    // Preta: 40 mm de eixo + 0,75 de extensão em cada ponta = 41,5 mm.
+    // Branca: a mesma coisa, menos 0,13 de cada lado = 41,24 mm.
+    expect(comp(preta)).toBeCloseTo(41.5, 3);
+    expect(comp(branca)).toBeCloseTo(41.24, 3);
+    expect(comp(preta) - comp(branca)).toBeCloseTo(0.26, 4);
+  });
+
+  it('na ponta LIVRE o branco RECUA, deixando borda que fecha a extremidade', () => {
+    // Com extensão zero, o recuo fica negativo: o miolo para antes do fim e
+    // sobra silhueta tampando a ponta. Sem isso a parede solta fica aberta.
+    const { model, levelId } = comNivel();
+    const solta = applyCommand(model, parede(levelId, 0, 0, 4000, 0)).model;
+
+    const op = opcoes();
+    const d = new DesenhistaDeProva();
+    desenharPlanta(d, solta, op, enquadrar(solta, 100, op.papel));
+
+    const linhas = d.chamadas.filter((c) => c.tipo === 'linha');
+    const preta = linhas.find((c) => (c.args[4] as { cor: string }).cor === '#000000')!;
+    const branca = linhas.find((c) => (c.args[4] as { cor: string }).cor === '#ffffff')!;
+
+    const comp = (c: (typeof linhas)[number]) =>
+      Math.abs((c.args[2] as number) - (c.args[0] as number));
+
+    expect(comp(preta)).toBeCloseTo(40, 3);
+    expect(comp(branca), 'o branco tem que ser MENOR que a silhueta').toBeCloseTo(39.74, 3);
   });
 });
 

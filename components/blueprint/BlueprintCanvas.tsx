@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  isFreeWallEnd,
   type BlueprintModel,
   type Opening,
   type Point,
@@ -345,40 +346,13 @@ export default function BlueprintCanvas({
     ctx.lineCap = 'butt';
     ctx.lineJoin = 'round';
 
-    // Quantas pontas de parede chegam em cada vertice. Serve para saber se uma
-    // extremidade e LIVRE: ali o miolo precisa parar antes, senao a parede fica
-    // com a ponta aberta, sem nada fechando o contorno.
-    const grauDaPonta = new Map<string, number>();
-    for (const w of paredesDoNivel) {
-      for (const extremo of [w.a, w.b]) {
-        const chave = `${extremo.x},${extremo.y}`;
-        grauDaPonta.set(chave, (grauDaPonta.get(chave) ?? 0) + 1);
-      }
-    }
 
-    /**
-     * Uma ponta é livre quando nada a encosta.
-     *
-     * Contar só PONTAS não basta: numa junção em T a divisória termina no MEIO
-     * da parede que a recebe, e aquele ponto não é ponta de ninguém — ela seria
-     * classificada como livre e ganharia um tampo, desenhando uma linha atravessada
-     * dentro da junção. Por isso também se testa a pertinência ao corpo das outras.
-     */
-    const pontaLivre = (p: Point, id: string) => {
-      if ((grauDaPonta.get(`${p.x},${p.y}`) ?? 0) > 1) return false;
-      for (const o of paredesDoNivel) {
-        if (o.id === id) continue;
-        const dx = o.b.x - o.a.x;
-        const dy = o.b.y - o.a.y;
-        const comp2 = dx * dx + dy * dy;
-        if (comp2 === 0) continue;
-        let t = ((p.x - o.a.x) * dx + (p.y - o.a.y) * dy) / comp2;
-        t = Math.max(0, Math.min(1, t));
-        const d = Math.hypot(o.a.x + t * dx - p.x, o.a.y + t * dy - p.y);
-        if (d <= o.thicknessMm / 2) return false;
-      }
-      return true;
-    };
+    // A regra de "ponta livre" vive no KERNEL, não aqui.
+    //
+    // Ela tinha uma cópia neste arquivo e a exportação nasceu sem ela — o canto
+    // ficou certo na tela e aberto no papel. Regra de geometria duplicada é
+    // regra que diverge; a definição e o porquê estão em `isFreeWallEnd`.
+    const pontaLivre = (p: Point, id: string) => isFreeWallEnd(paredesDoNivel, p, id);
 
     // Geometria de desenho de cada parede.
     //

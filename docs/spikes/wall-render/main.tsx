@@ -49,10 +49,14 @@ function construir() {
     w(16000, 11000, 0, 11000),
     w(0, 11000, 0, 0),
     // Divisória: junção em T nas duas pontas.
-    w(8000, 0, 8000, 11000),
+    w(8000, 0, 8000, 4500),
+    w(8000, 5400, 8000, 11000),
     // Ponta solta: exercita a extremidade LIVRE.
     w(16000, 5000, 21000, 5000),
   ]).model;
+
+  // Divisoria com VAO ABERTO no meio: e o caso que trava o ambiente e que o
+  // painel de vaos existe para resolver. Duas pontas soltas a 900 mm.
 
   // Aberturas: uma porta e uma janela, para conferir vao, batente e simbolo.
   const paredeSul = base2.walls.find((w) => w.a.y === 11000 && w.b.y === 11000);
@@ -100,6 +104,8 @@ function App() {
       onDelete={() => {}}
       espessuraMm={T}
       passoGradeMm={null}
+      vaos={[{ a: point(8000, 4500), b: point(8000, 5400), mm: 900 }]}
+      pontasSoltas={[point(8000, 4500), point(8000, 5400)]}
     />
   );
 }

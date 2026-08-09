@@ -6,7 +6,6 @@ import {
   DoorOpen,
   Scissors,
   Combine,
-  Wrench,
   Redo2,
   Undo2,
   Upload,
@@ -161,10 +160,19 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /**
-   * Pontas de parede que nao encontram nada. Sao elas que impedem o ambiente de
-   * fechar, e o usuario nao tem como ver um vao de 3 mm na tela.
+   * Vãos candidatos: pares de pontas de parede que não encontram nada e estão
+   * perto o bastante para ser abertura.
+   *
+   * O sistema NÃO decide qual fechar — só apresenta. Cinco rodadas do Spike C
+   * mostraram que essa decisão é justamente a que a máquina erra: fechar por
+   * proximidade junta parede com guarda-corpo; fechar por colinearidade fecha a
+   * borda de terraço, que devia ficar aberta. Porta, guarda-corpo e limite do
+   * envelope têm geometria parecida demais.
+   *
+   * O que a máquina faz bem é ACHAR os candidatos e medir. Quem sabe se aquele
+   * vão de 90 cm é porta ou passagem é quem conhece o projeto.
    */
-  const pontasSoltas = useMemo(() => {
+  const vaosCandidatos = useMemo(() => {
     const grau = new Map<string, { p: Point; n: number }>();
     for (const w of editor.model.walls) {
       if (levelId && w.levelId !== levelId) continue;
@@ -175,30 +183,79 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         else grau.set(k, { p: extremo, n: 1 });
       }
     }
-    return [...grau.values()].filter((v) => v.n === 1).map((v) => v.p);
+    const soltas = [...grau.values()].filter((v) => v.n === 1).map((v) => v.p);
+
+    // Faixa de abertura de verdade: de 40 cm (passagem estreita) a 3 m (vão de
+    // sala). Fora disso não é abertura — é parede faltando ou desenho separado.
+    const MIN = 400;
+    const MAX = 3000;
+    const pares: { a: Point; b: Point; mm: number }[] = [];
+    for (let i = 0; i < soltas.length; i++) {
+      for (let j = i + 1; j < soltas.length; j++) {
+        const mm = Math.round(Math.hypot(soltas[i].x - soltas[j].x, soltas[i].y - soltas[j].y));
+        if (mm < MIN || mm > MAX) continue;
+        pares.push({ a: soltas[i], b: soltas[j], mm });
+      }
+    }
+    // Cada ponta entra num par só: o mais curto ganha.
+    pares.sort((p, q) => p.mm - q.mm);
+    const usada = new Set<string>();
+    const escolhidos: { a: Point; b: Point; mm: number }[] = [];
+    for (const par of pares) {
+      const ka = `${par.a.x},${par.a.y}`;
+      const kb = `${par.b.x},${par.b.y}`;
+      if (usada.has(ka) || usada.has(kb)) continue;
+      usada.add(ka);
+      usada.add(kb);
+      escolhidos.push(par);
+    }
+    return { soltas, vaos: escolhidos };
   }, [editor.model.walls, levelId]);
 
+  /** Fecha o vão com parede cheia. Use quando a interrupção era só desenho. */
+  function fecharComParede(vao: { a: Point; b: Point }) {
+    if (!levelId) return;
+    editor.run({
+      type: 'AddWall',
+      levelId,
+      a: vao.a,
+      b: vao.b,
+      thicknessMm: espessura,
+      heightMm: ALTURA_PADRAO_MM,
+    });
+  }
+
   /**
-   * Fecha vaos: aproxima pontas soltas que estao perto uma da outra.
+   * Fecha o vão e marca que ali existe uma porta.
    *
-   * O limite e generoso de proposito (30 cm). A tolerancia do kernel e 5 mm e
-   * serve para desenho quase-certo; aqui o usuario esta pedindo explicitamente
-   * "junte o que sobrou", e um vao visivel a olho nu passa de 5 mm.
+   * Duas operações porque são dois fatos: o contorno passa a fechar (e o
+   * ambiente aparece com a área certa) E fica registrado que aquele trecho é
+   * abertura, não alvenaria. Sem a segunda, o quantitativo contaria parede onde
+   * há porta.
    */
-  function fecharVaos() {
-    const LIMITE = 300;
-    for (const w of editor.model.walls) {
-      if (levelId && w.levelId !== levelId) continue;
-      for (const end of ['a', 'b'] as const) {
-        const p = w[end];
-        if (!pontasSoltas.some((q) => q.x === p.x && q.y === p.y)) continue;
-        const destino = pontasSoltas.find(
-          (q) => (q.x !== p.x || q.y !== p.y) && Math.hypot(q.x - p.x, q.y - p.y) <= LIMITE,
-        );
-        if (!destino) continue;
-        editor.run({ type: 'MoveVertex', wallId: w.id, end, to: destino });
-        return; // um por vez: cada movimento muda quem ainda esta solto
-      }
+  function fecharComPorta(vao: { a: Point; b: Point; mm: number }) {
+    if (!levelId) return;
+    const antes = editor.model.walls.length;
+    editor.run({
+      type: 'AddWall',
+      levelId,
+      a: vao.a,
+      b: vao.b,
+      thicknessMm: espessura,
+      heightMm: ALTURA_PADRAO_MM,
+    });
+    // A parede recém-criada é a última; a abertura ocupa o vão inteiro.
+    const criada = editor.model.walls[antes];
+    if (criada) {
+      editor.run({
+        type: 'AddOpening',
+        wallId: criada.id,
+        kind: 'door',
+        offsetMm: 0,
+        widthMm: vao.mm,
+        heightMm: 2100,
+        sillMm: 0,
+      });
     }
   }
 
@@ -435,6 +492,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               espessuraMm={espessura}
               passoGradeMm={passoGrade}
               onPassoEfetivo={setPassoEmVigor}
+              vaos={vaosCandidatos.vaos}
+              pontasSoltas={vaosCandidatos.soltas}
             />
           )}
         </div>
@@ -502,13 +561,59 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </div>
           )}
 
-          {pontasSoltas.length > 0 && (
+          {vaosCandidatos.soltas.length > 0 && (
             <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-xs text-amber-800">
-                <strong>{pontasSoltas.length} ponta(s) solta(s).</strong> Enquanto houver
-                ponta sem encontro, o contorno não fecha e o ambiente não aparece.
+                <strong>{vaosCandidatos.soltas.length} ponta(s) solta(s).</strong> Enquanto
+                houver ponta sem encontro, o contorno não fecha e o ambiente não aparece.
               </p>
-              <BotaoTexto icone={Wrench} rotulo="Fechar vão" onClick={fecharVaos} />
+
+              {vaosCandidatos.vaos.length === 0 ? (
+                <p className="mt-2 text-xs text-amber-700">
+                  Nenhum par de pontas na faixa de abertura (40 cm a 3 m). Aproxime as
+                  paredes ou desenhe o trecho que falta.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-2 text-xs text-amber-700">
+                    {vaosCandidatos.vaos.length} vão(s) encontrado(s). O sistema não decide
+                    qual fechar — porta, guarda-corpo e limite externo têm a mesma
+                    geometria. Você decide:
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {vaosCandidatos.vaos.map((v, i) => (
+                      <li
+                        key={`${v.a.x},${v.a.y}-${v.b.x},${v.b.y}`}
+                        className="rounded-md border border-amber-300 bg-white p-2"
+                      >
+                        <p className="text-xs font-medium text-slate-700">
+                          Vão {i + 1} · {(v.mm / 1000).toFixed(2)} m
+                        </p>
+                        <div className="mt-1 flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => fecharComPorta(v)}
+                            className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <DoorOpen className="h-3 w-3" /> É porta
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => fecharComParede(v)}
+                            className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <Minus className="h-3 w-3" /> É parede
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-amber-700">
+                    Vão que é limite externo (varanda, terraço) deve ficar aberto — não
+                    feche.
+                  </p>
+                </>
+              )}
             </div>
           )}
 

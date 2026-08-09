@@ -39,3 +39,6 @@ _dev_scripts/
 
 # Saidas geradas pelo harness de render (regeraveis)
 docs/spikes/wall-render/saida-*.png
+docs/spikes/digitalizador/segmentos.svg
+docs/spikes/digitalizador/segmentos.png
+docs/spikes/digitalizador/raster-componentes.png

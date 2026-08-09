@@ -29,6 +29,8 @@ import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 const COR_PAREDE = '#334155';
 const COR_SELECIONADA = '#dc2626';
 const COR_PREVIA = '#2563eb';
+/** Âmbar: vão em aberto e ponta solta. Mesma cor do aviso no painel. */
+const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
 const COR_GRADE = '#e2e8f0';
 const COR_GRADE_FORTE = '#cbd5e1';
@@ -87,6 +89,10 @@ interface Props {
   passoGradeMm: number | null;
   /** Informa de volta qual passo está valendo, para a barra mostrar no modo automático. */
   onPassoEfetivo?: (mm: number) => void;
+  /** Vãos que a lista do painel oferece para fechar — destacados aqui. */
+  vaos?: { a: Point; b: Point; mm: number }[];
+  /** Pontas de parede sem encontro. São elas que impedem o ambiente de fechar. */
+  pontasSoltas?: Point[];
 }
 
 interface Vista {
@@ -110,6 +116,8 @@ export default function BlueprintCanvas({
   espessuraMm,
   passoGradeMm,
   onPassoEfetivo,
+  vaos = [],
+  pontasSoltas = [],
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -550,6 +558,39 @@ export default function BlueprintCanvas({
       );
     }
 
+    // Pontas soltas e vãos candidatos.
+    //
+    // Desenhados por último, por cima de tudo: são o que impede o ambiente de
+    // aparecer, e o usuário precisa achá-los sem procurar. Uma ponta solta de
+    // 3 mm é invisível na planta e explica sozinha por que a área não saiu.
+    if (pontasSoltas.length > 0) {
+      ctx.strokeStyle = COR_ALERTA;
+      ctx.lineWidth = 1.5;
+      for (const p of pontasSoltas) {
+        const t = paraTela(p);
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    for (const v of vaos) {
+      const a = paraTela(v.a);
+      const b = paraTela(v.b);
+      ctx.strokeStyle = COR_ALERTA;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = COR_ALERTA;
+      ctx.font = '600 11px system-ui, sans-serif';
+      ctx.fillText(`${(v.mm / 1000).toFixed(2)} m`, (a.x + b.x) / 2 + 6, (a.y + b.y) / 2 - 6);
+    }
+
     // Prévia da abertura sob o cursor
     if (previaAbertura) {
       const w = paredePorId.get(previaAbertura.wallId);
@@ -594,6 +635,8 @@ export default function BlueprintCanvas({
     espessuraMm,
     larguraAberturaMm,
     previaAbertura,
+    vaos,
+    pontasSoltas,
     passoEfetivo,
     paraTela,
     paredesDoNivel,

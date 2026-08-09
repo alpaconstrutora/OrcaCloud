@@ -68,17 +68,27 @@ Cada item: **arquivo** — critério de pronto = `tsc --noEmit` limpo no arquivo
 - [x] InvoiceManager.tsx
 
 ### Fase 2 — Comercial / Locações / Parceiros
-- [ ] BrokerList.tsx
-- [ ] broker/BrokerDevelopments.tsx
-- [ ] InvestorList.tsx
-- [ ] RentalsModule.tsx
-- [ ] rentals/RentalRenewals.tsx
-- [ ] SalesModule.tsx
-- [ ] DealModal.tsx
-- [ ] WarrantyModule.tsx
-- [ ] partner/PartnerWorkspaceManager.tsx
-- [ ] supplier/SupplierPortalManager.tsx
-- [ ] PriceTableManager.tsx
+- [x] BrokerList.tsx — commit `17a4b13`, deployado
+- [x] broker/BrokerDevelopments.tsx — commit `17a4b13`, deployado
+- [x] InvestorList.tsx — commit `17a4b13`, deployado
+- [ ] RentalsModule.tsx — PARCIAL: tabela de unidades convertida; deals/brokers têm
+      headers/renderCell já criados mas ainda não ligados ao JSX (código morto por ora)
+- [ ] rentals/RentalRenewals.tsx — PARCIAL: headers/renderCell criados, JSX ainda não ligado
+- [ ] SalesModule.tsx — PARCIAL: headers/renderCell das 3 tabelas (inventário/deals/brokers)
+      criados, JSX ainda não ligado
+- [x] DealModal.tsx — commit `17a4b13`, deployado (tabela de Parcelas)
+- [ ] WarrantyModule.tsx — não iniciado
+- [ ] partner/PartnerWorkspaceManager.tsx — não iniciado
+- [ ] supplier/SupplierPortalManager.tsx — não iniciado
+- [ ] PriceTableManager.tsx — não iniciado
+
+⚠️ 2026-08-09: dois lotes de agentes caíram por limite de sessão de API (resets
+12:20 e 13:10 America/Sao_Paulo) no meio do trabalho. Nenhum arquivo ficou com
+erro de sintaxe além de um caso em RentalsModule.tsx, já corrigido manualmente
+(`.tbody` sem fechar chave do `.map`). Os arquivos marcados PARCIAL acima
+compilam limpo (`tsc`) mas têm funções auxiliares (`XXX_COLUMN_HEADERS`/
+`renderXCell`) já criadas e não usadas ainda — retomar ligando o JSX ao invés
+de recriar essas funções.
 
 ### Fase 3 — Suprimentos / Fornecedores
 - [ ] SupplierList.tsx

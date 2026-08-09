@@ -18,6 +18,7 @@ import {
   Coins,
   Pencil,
   History,
+  Grid3x3,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -68,6 +69,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     'ambientes',
   );
   const [renomeando, setRenomeando] = useState<string | null>(null);
+  const [ortogonal, setOrtogonal] = useState(true);
   const [qtdOficial, setQtdOficial] = useState<BlueprintQuantitySnapshot | null>(null);
   const [gerando, setGerando] = useState(false);
   const [tipoAbertura, setTipoAbertura] = useState<'door' | 'window'>('door');
@@ -77,6 +79,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   // Atalhos de desfazer/refazer. Ctrl+Z / Ctrl+Shift+Z, como todo editor.
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent) {
+      // F8 alterna a trava ortogonal — é a tecla que todo CAD usa, e quem
+      // desenha planta chega aqui com o dedo já treinado nela.
+      if (e.key === 'F8') {
+        e.preventDefault();
+        setOrtogonal((v) => !v);
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey)) return;
       if (e.key.toLowerCase() !== 'z') return;
       e.preventDefault();
@@ -333,6 +342,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
   }
 
+  /**
+   * Move a ponta de uma parede.
+   *
+   * O comando já existia no kernel desde o Spike A — com undo e rederivação de
+   * ambientes — e nenhuma parte da tela o acionava. Consertar uma parede torta
+   * exigia apagar e redesenhar, e redesenhar é justamente onde o erro nasce.
+   */
+  function moverPonta(wallId: string, end: 'a' | 'b', to: Point) {
+    editor.run({ type: 'MoveVertex', wallId, end, to });
+  }
+
   function removerSelecionada() {
     if (!editor.selectedId) return;
     // Abertura e parede sao objetos diferentes com a mesma tecla de atalho.
@@ -469,6 +489,29 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </label>
         )}
 
+        {/* ORTO. Encaixar na grade NÃO impede parede torta: impede só que a
+            ponta pare fora da grade. Um desvio de um passo é invisível na escala
+            da tela e só aparece no CAD — ou na obra. Foi assim que uma parede
+            saiu 200 mm fora do esquadro sem ninguém notar. */}
+        <button
+          type="button"
+          onClick={() => setOrtogonal((v) => !v)}
+          aria-pressed={ortogonal}
+          title={
+            ortogonal
+              ? 'Orto LIGADO: as paredes travam em 90°. Shift libera; F8 alterna.'
+              : 'Orto desligado: a parede segue o cursor. Shift trava; F8 alterna.'
+          }
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+            ortogonal
+              ? 'border-blue-600 bg-blue-50 text-blue-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Grid3x3 className="h-3.5 w-3.5" />
+          Orto
+        </button>
+
         <label className="flex items-center gap-2 text-xs text-slate-600">
           Grade
           <select
@@ -568,6 +611,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onPassoEfetivo={setPassoEmVigor}
               vaos={vaosCandidatos.vaos}
               pontasSoltas={vaosCandidatos.soltas}
+              ortogonal={ortogonal}
+              onMoveVertex={moverPonta}
             />
           )}
         </div>

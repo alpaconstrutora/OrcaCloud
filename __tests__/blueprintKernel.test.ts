@@ -31,6 +31,7 @@ import {
   point,
   sha256,
   snapshotHash,
+  travarOrtogonal,
   vertexDegrees,
 } from '../utils/blueprintKernel';
 
@@ -860,5 +861,57 @@ describe('nome de ambiente', () => {
 
     expect(pointInPolygon(anel, p)).toBe(true);
     expect(pointInPolygon(buraco, p), 'a âncora caiu no vazio central').toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trava ortogonal
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('trava ortogonal', () => {
+  it('projeta no eixo de MAIOR deslocamento', () => {
+    const de = point(0, 0);
+    // Mais longe em x que em y: vira horizontal.
+    expect(travarOrtogonal(de, point(4000, 200))).toEqual({ x: 4000, y: 0 });
+    // Mais longe em y: vira vertical.
+    expect(travarOrtogonal(de, point(200, 4000))).toEqual({ x: 0, y: 4000 });
+  });
+
+  it('O DEFEITO QUE ELA IMPEDE: um passo de grade fora do esquadro', () => {
+    // Caso real. A ponta encaixou na grade de 200 mm, mas 200 mm ACIMA da
+    // outra: a parede saiu com 2,6° de inclinação, invisível na escala da tela,
+    // e só apareceu quando o desenho foi aberto no CAD.
+    const de = point(0, 0);
+    const torto = point(4400, 200);
+
+    expect(travarOrtogonal(de, torto)).toEqual({ x: 4400, y: 0 });
+  });
+
+  it('o resultado CONTINUA na grade', () => {
+    // A trava roda depois do encaixe, e copia uma coordenada da âncora — que já
+    // está na grade. Travar antes de encaixar devolveria o ponto para fora dela.
+    const de = point(1000, 2000);
+    const encaixado = point(3400, 2600);
+    const travado = travarOrtogonal(de, encaixado);
+
+    expect(travado.x % 200).toBe(0);
+    expect(travado.y % 200).toBe(0);
+  });
+
+  it('no empate a escolha é estável, não oscila', () => {
+    // Qual eixo vence num deslocamento igual é arbitrário. O que não pode é a
+    // mesma posição devolver respostas diferentes.
+    const de = point(0, 0);
+    const diagonal = point(1000, 1000);
+    const a = travarOrtogonal(de, diagonal);
+    const b = travarOrtogonal(de, diagonal);
+
+    expect(a).toEqual(b);
+  });
+
+  it('travar duas vezes não muda o resultado', () => {
+    const de = point(0, 0);
+    const uma = travarOrtogonal(de, point(4000, 300));
+    expect(travarOrtogonal(de, uma)).toEqual(uma);
   });
 });

@@ -343,3 +343,41 @@ describe('BlueprintEditor · o editor não pode mentir que já publicou', () => 
     await waitFor(() => expect(botao(/publicar/i)).toBeEnabled());
   });
 });
+
+describe('BlueprintEditor · orto e mover ponta', () => {
+  it('O ORTO NASCE LIGADO — é ele que impede a parede torta', async () => {
+    // O defeito que motivou isto: uma ponta encaixou na grade de 200 mm, mas
+    // 200 mm acima da outra. A parede saiu fora do esquadro, invisível na escala
+    // da tela, e só apareceu quando o desenho foi para o CAD. Nascer desligado
+    // deixaria o erro possível para quem nunca abrir a barra.
+    await montar();
+    expect(botao(/orto/i)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('o botão alterna, e diz o que Shift faz em cada estado', async () => {
+    // Shift INVERTE o modo, não liga: com orto ligado ele libera. Ter tecla e
+    // botão fazendo a mesma coisa seria dois caminhos para o mesmo lugar.
+    await montar();
+    const user = userEvent.setup();
+
+    expect(botao(/orto/i).title).toMatch(/Shift libera/i);
+
+    await user.click(botao(/orto/i));
+    expect(botao(/orto/i)).toHaveAttribute('aria-pressed', 'false');
+    expect(botao(/orto/i).title).toMatch(/Shift trava/i);
+  });
+
+  it('F8 alterna o orto, como em qualquer CAD', async () => {
+    await montar();
+    expect(botao(/orto/i)).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.setup().keyboard('{F8}');
+    await waitFor(() => expect(botao(/orto/i)).toHaveAttribute('aria-pressed', 'false'));
+  });
+
+  it('a dica do rodapé anuncia o estado do orto', async () => {
+    // O canvas é opaco para leitor de tela; o estado precisa existir em DOM.
+    await montar();
+    expect(screen.getByText(/orto \(Shift libera\)/i)).toBeInTheDocument();
+  });
+});

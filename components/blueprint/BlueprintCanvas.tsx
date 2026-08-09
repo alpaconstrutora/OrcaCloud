@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  travarOrtogonal,
   isFreeWallEnd,
   type BlueprintModel,
   type Opening,
@@ -94,6 +95,10 @@ interface Props {
   vaos?: { a: Point; b: Point; mm: number }[];
   /** Pontas de parede sem encontro. São elas que impedem o ambiente de fechar. */
   pontasSoltas?: Point[];
+  /** Trava ortogonal ligada. Shift INVERTE o estado, como em todo CAD. */
+  ortogonal?: boolean;
+  /** Move a ponta de uma parede. Sem isto, a alça é desenhada e não faz nada. */
+  onMoveVertex?: (wallId: string, end: 'a' | 'b', to: Point) => void;
 }
 
 interface Vista {
@@ -103,6 +108,9 @@ interface Vista {
   dx: number;
   dy: number;
 }
+
+/** Distância de clique para pegar a alça de uma ponta, em pixels de tela. */
+const ALCA_PX = 9;
 
 export default function BlueprintCanvas({
   model,
@@ -119,6 +127,8 @@ export default function BlueprintCanvas({
   onPassoEfetivo,
   vaos = [],
   pontasSoltas = [],
+  ortogonal = false,
+  onMoveVertex,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -129,6 +139,9 @@ export default function BlueprintCanvas({
   const [cursor, setCursor] = useState<Point | null>(null);
   const [arrastando, setArrastando] = useState(false);
   const [previaAbertura, setPreviaAbertura] = useState<{ wallId: string; offsetMm: number } | null>(null);
+  /** Ponta em arraste, e para onde ela iria se soltasse agora. */
+  const [movendo, setMovendo] = useState<{ wallId: string; end: 'a' | 'b' } | null>(null);
+  const [destinoPonta, setDestinoPonta] = useState<Point | null>(null);
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
   // automatico. E o MESMO valor usado para desenhar e para encaixar — a grade
@@ -532,6 +545,63 @@ export default function BlueprintCanvas({
       );
     }
 
+    // Alças da parede selecionada.
+    //
+    // Desenhá-las é o que torna o arraste DESCOBRÍVEL. Uma ponta arrastável sem
+    // marca na tela é a mesma classe de defeito de um botão que não funciona: a
+    // ação existe e ninguém encontra.
+    const selecionadaParaAlca = paredesDoNivel.find((w) => w.id === selectedId);
+    if (selecionadaParaAlca && !movendo) {
+      for (const extremo of [selecionadaParaAlca.a, selecionadaParaAlca.b]) {
+        const t = paraTela(extremo);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.rect(t.x - 4, t.y - 4, 8, 8);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    // Prévia do arraste: a parede como ficaria se soltasse agora.
+    if (movendo && destinoPonta) {
+      const w = paredePorId.get(movendo.wallId);
+      if (w) {
+        const fixa = paraTela(movendo.end === 'a' ? w.b : w.a);
+        const solta = paraTela(destinoPonta);
+
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = Math.max(1, w.thicknessMm * vista.escala);
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath();
+        ctx.moveTo(fixa.x, fixa.y);
+        ctx.lineTo(solta.x, solta.y);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Comprimento em tempo real: é a informação que decide o arraste, e
+        // conferi-la depois de soltar seria tarde.
+        const comp = Math.hypot(destinoPonta.x - (movendo.end === 'a' ? w.b.x : w.a.x),
+                                destinoPonta.y - (movendo.end === 'a' ? w.b.y : w.a.y));
+        ctx.fillStyle = COR_SELECIONADA;
+        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.fillText(
+          `${(comp / 1000).toFixed(2)} m`,
+          (fixa.x + solta.x) / 2 + 8,
+          (fixa.y + solta.y) / 2 - 8,
+        );
+
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.rect(solta.x - 4, solta.y - 4, 8, 8);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
     // Pontas soltas e vãos candidatos.
     //
     // Desenhados por último, por cima de tudo: são o que impede o ambiente de
@@ -611,6 +681,8 @@ export default function BlueprintCanvas({
     previaAbertura,
     vaos,
     pontasSoltas,
+    movendo,
+    destinoPonta,
     passoEfetivo,
     paraTela,
     paredesDoNivel,
@@ -623,11 +695,36 @@ export default function BlueprintCanvas({
     return { px: e.clientX - r.left, py: e.clientY - r.top };
   }
 
+  /**
+   * Orto em vigor. Shift INVERTE o modo, como em todo CAD: com orto ligado ele
+   * libera o traço livre; com orto desligado ele trava. Ter um botão que só liga
+   * e uma tecla que só liga seria duas formas de fazer a mesma coisa.
+   */
+  function ortoAtivo(e: { shiftKey: boolean }): boolean {
+    return ortogonal !== e.shiftKey;
+  }
+
+  /** Ponta OPOSTA à que está sendo arrastada — é dela que a trava se mede. */
+  function ancoraDoArraste(): Point | null {
+    if (!movendo) return null;
+    const w = model.walls.find((x) => x.id === movendo.wallId);
+    if (!w) return null;
+    return movendo.end === 'a' ? w.b : w.a;
+  }
+
   function aoMover(e: React.PointerEvent) {
     const { px, py } = posicao(e);
 
     if (arrastando) {
       setVista((v) => ({ ...v, dx: v.dx + e.movementX, dy: v.dy + e.movementY }));
+      return;
+    }
+
+    if (movendo) {
+      const ancora = ancoraDoArraste();
+      let alvo = capturar(paraMundo(px, py));
+      if (ancora && ortoAtivo(e)) alvo = travarOrtogonal(ancora, alvo);
+      setDestinoPonta(alvo);
       return;
     }
     if (tool === 'abertura') {
@@ -643,7 +740,12 @@ export default function BlueprintCanvas({
       setCursor(null);
       return;
     }
-    setCursor(capturar(paraMundo(px, py)));
+    // A PRÉVIA TEM QUE APLICAR A MESMA TRAVA DO CLIQUE. Se ela mostrasse o traço
+    // livre e o clique gravasse o travado, a linha "pularia" ao soltar — e o
+    // usuário aprenderia a não confiar na prévia.
+    let alvo = capturar(paraMundo(px, py));
+    if (inicio && ortoAtivo(e)) alvo = travarOrtogonal(inicio, alvo);
+    setCursor(alvo);
   }
 
   function aoApertar(e: React.PointerEvent) {
@@ -665,6 +767,23 @@ export default function BlueprintCanvas({
     }
 
     if (tool === 'selecionar') {
+      // ALÇA ANTES DE SELEÇÃO. As alças só existem na parede JÁ selecionada —
+      // é a convenção de CAD (selecionar, depois pegar o grip) e evita que um
+      // clique para selecionar vire um arraste acidental de geometria.
+      const selecionada = model.walls.find((w) => w.id === selectedId);
+      if (selecionada) {
+        const limite = ALCA_PX / vista.escala;
+        for (const end of ['a', 'b'] as const) {
+          const p = selecionada[end];
+          if (Math.hypot(p.x - mundo.x, p.y - mundo.y) <= limite) {
+            setMovendo({ wallId: selecionada.id, end });
+            setDestinoPonta(p);
+            canvasRef.current?.setPointerCapture(e.pointerId);
+            return;
+          }
+        }
+      }
+
       // Abertura antes de parede: ela esta POR CIMA e e menor, entao se o
       // clique cair nas duas o usuario quis a de cima.
       const w = paredeSob(mundo);
@@ -679,11 +798,12 @@ export default function BlueprintCanvas({
       return;
     }
 
-    const capturado = capturar(mundo);
+    let capturado = capturar(mundo);
     if (!inicio) {
       setInicio(capturado);
       return;
     }
+    if (ortoAtivo(e)) capturado = travarOrtogonal(inicio, capturado);
     if (capturado.x !== inicio.x || capturado.y !== inicio.y) {
       onAddWall(inicio, capturado);
       // Encadeia: a ponta vira o início da próxima, que é como se desenha
@@ -695,6 +815,24 @@ export default function BlueprintCanvas({
   function aoSoltar(e: React.PointerEvent) {
     if (arrastando) {
       setArrastando(false);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
+    if (movendo) {
+      const w = model.walls.find((x) => x.id === movendo.wallId);
+      const outra = w ? (movendo.end === 'a' ? w.b : w.a) : null;
+      // Soltar em cima da outra ponta faria uma parede de comprimento zero, que
+      // o kernel recusa com erro. Descartar em silêncio é o certo: o usuário
+      // desistiu do arraste, não pediu uma parede degenerada.
+      if (
+        destinoPonta &&
+        outra &&
+        (destinoPonta.x !== outra.x || destinoPonta.y !== outra.y)
+      ) {
+        onMoveVertex?.(movendo.wallId, movendo.end, destinoPonta);
+      }
+      setMovendo(null);
+      setDestinoPonta(null);
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
   }
@@ -716,6 +854,8 @@ export default function BlueprintCanvas({
   function aoTeclar(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
       setInicio(null);
+      setMovendo(null);
+      setDestinoPonta(null);
       onSelect(null);
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
@@ -732,7 +872,13 @@ export default function BlueprintCanvas({
         role="application"
         aria-label="Área de desenho da planta. Use a lista de ambientes ao lado para navegar por teclado."
         className="block h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-        style={{ cursor: arrastando ? 'grabbing' : tool === 'parede' ? 'crosshair' : 'default' }}
+        style={{
+          cursor: arrastando || movendo
+            ? 'grabbing'
+            : tool === 'parede'
+              ? 'crosshair'
+              : 'default',
+        }}
         onPointerMove={aoMover}
         onPointerDown={aoApertar}
         onPointerUp={aoSoltar}
@@ -748,7 +894,7 @@ export default function BlueprintCanvas({
             : 'Clique para iniciar a parede'
           : 'Clique numa parede para selecionar · Delete remove'}
         <span className="ml-2 text-slate-400">
-          · grade {rotuloPasso(passoEfetivo)} · botão direito arrasta · roda dá zoom
+          · grade {rotuloPasso(passoEfetivo)}{ortogonal ? ' · orto (Shift libera)' : ' · Shift trava em 90°'} · botão direito arrasta · roda dá zoom
         </span>
       </div>
     </div>

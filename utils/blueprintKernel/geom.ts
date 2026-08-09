@@ -271,6 +271,27 @@ export function pointInPolygon(ring: Point[], p: Point): boolean {
 }
 
 /**
+ * Projeta `para` no eixo dominante em relação a `de` — a trava ortogonal.
+ *
+ * Vive no kernel porque é GEOMETRIA, não interação. A lição custou caro uma vez:
+ * a regra de ponta livre tinha uma cópia no renderizador e a exportação nasceu
+ * sem ela, deixando o canto certo na tela e aberto no papel.
+ *
+ * Aplicar DEPOIS do encaixe na grade, nunca antes: como uma das coordenadas é
+ * copiada de `de`, que já está na grade, o resultado continua na grade. Travar
+ * primeiro e encaixar depois devolveria o ponto para fora do eixo.
+ *
+ * O eixo escolhido é o de maior deslocamento — o que o usuário está indicando
+ * com o movimento. No empate exato vence a horizontal; a escolha é arbitrária, o
+ * que não pode é oscilar entre os dois na mesma posição.
+ */
+export function travarOrtogonal(de: Point, para: Point): Point {
+  return Math.abs(para.x - de.x) >= Math.abs(para.y - de.y)
+    ? { x: para.x, y: de.y }
+    : { x: de.x, y: para.y };
+}
+
+/**
  * Um ponto garantidamente DENTRO do polígono, respeitando os buracos.
  *
  * Serve de âncora para a etiqueta de ambiente. O centroide resolve o caso comum

@@ -5,9 +5,11 @@
 // empreendimento, cadastra-se aqui uma vez por cidade e o empreendimento importa (aba "Mapa
 // Regulatório" → "Importar de mapa cadastrado").
 import React from 'react';
-import { Plus, Map, Search, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Map, Search, RefreshCw, AlertCircle, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { KpiCard } from '../ui/KpiCard';
 import { regulatoryMapService } from '../../services/regulatoryMapService';
 import { RegulatoryMapWithCity, RegulatoryMapStatus } from '../../types';
 import RegulatoryMapForm from './RegulatoryMapForm';
@@ -30,13 +32,23 @@ const STATUS_TEXT_COLOR: Record<RegulatoryMapStatus, string> = {
     ARQUIVADO: 'text-slate-500',
 };
 
+const MAP_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Mapa', sortable: true },
+    { key: 'city', label: 'Cidade', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+const MAP_COL_WIDTHS: Record<string, number> = { name: 320, city: 220, status: 130, actions: 80 };
+
 export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
     const orgIdParam = isAllOrgs ? undefined : activeOrganizationId as string;
 
     const [items, setItems] = React.useState<RegulatoryMapWithCity[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [search, setSearch] = React.useState('');
+    const [search, setSearch] = usePersistedState<string>('regulatoryMap:search', '');
+    const tableColumns = useTableColumns(MAP_COLUMNS, 'regulatoryMapColumns');
+    const cols = useResizableColumns(MAP_COL_WIDTHS, 'regulatoryMapColWidths');
     const [selected, setSelected] = React.useState<RegulatoryMapWithCity | null>(null);
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [editing, setEditing] = React.useState<RegulatoryMapWithCity | null>(null);
@@ -89,14 +101,21 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
 
     const filtered = React.useMemo(() => {
         const q = search.toLowerCase();
-        return items
-            .filter(i =>
-                i.name.toLowerCase().includes(q) ||
-                (i.city_name || '').toLowerCase().includes(q) ||
-                (i.state_code || '').toLowerCase().includes(q),
-            )
-            .sort((a, b) => a.name.localeCompare(b.name));
-    }, [items, search]);
+        const rows = items.filter(i =>
+            i.name.toLowerCase().includes(q) ||
+            (i.city_name || '').toLowerCase().includes(q) ||
+            (i.state_code || '').toLowerCase().includes(q),
+        );
+        const key = tableColumns.sortColumn;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        if (key === 'city') {
+            return [...rows].sort((a, b) => (a.city_name || '').localeCompare(b.city_name || '') * dir);
+        }
+        if (key === 'status') {
+            return [...rows].sort((a, b) => STATUS_LABELS[a.status].localeCompare(STATUS_LABELS[b.status]) * dir);
+        }
+        return [...rows].sort((a, b) => a.name.localeCompare(b.name) * (key === 'name' ? dir : 1));
+    }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // ── Detalhe ────────────────────────────────────────────────────────────────
     if (selected) {
@@ -143,6 +162,14 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                 </button>
             </div>
 
+            {items.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <KpiCard label="Total de mapas" value={items.length} icon={<Map className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Ativos" value={items.filter(i => i.status === 'ATIVO').length} icon={<Map className="w-5 h-5" />} color="emerald" />
+                    <KpiCard label="Rascunho" value={items.filter(i => i.status === 'RASCUNHO').length} icon={<Map className="w-5 h-5" />} color="amber" />
+                </div>
+            )}
+
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -160,6 +187,23 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                 >
                     <RefreshCw className="w-4 h-4" />
                 </button>
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                    <ColumnConfigButton
+                        columns={MAP_COLUMNS.filter(c => c.key !== 'actions')}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                    <button
+                        onClick={() => cols.autoFit()}
+                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                        title="Ajustar largura das colunas ao conteúdo"
+                    >
+                        <MoveHorizontal className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
 
             {loading ? (
@@ -175,16 +219,39 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                         {search ? 'Tente ajustar sua busca.' : 'Cadastre o mapa regulatório de uma cidade no botão acima.'}
                     </p>
                 </div>
-            ) : (
+            ) : (() => {
+                const visible = MAP_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
+                const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+                return (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                            <colgroup>
+                                {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <th className="px-6 py-2 border-r border-gray-100">Mapa</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Cidade</th>
-                                    <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Status</th>
-                                    <th className="px-6 py-2 text-right">Ações</th>
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <SortableHeader colKey="name" label="Mapa" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                            <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('city') && (
+                                        <SortableHeader colKey="city" label="Cidade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="city" />
+                                        </SortableHeader>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="status" />
+                                        </SortableHeader>
+                                    )}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -194,37 +261,47 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                                         onClick={() => setSelected(item)}
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                     >
-                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                                    <Map className="w-4 h-4" />
+                                        {tableColumns.visibleColumns.includes('name') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                                        <Map className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
+                                                        <p className="text-sm font-normal text-gray-400 truncate">{item.lei_referencia || '—'}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
-                                                    <p className="text-sm font-normal text-gray-400 truncate">{item.lei_referencia || '—'}</p>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('city') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 whitespace-nowrap">
+                                                {item.city_name}{item.state_code ? ` - ${item.state_code}` : ''}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
+                                                    {STATUS_LABELS[item.status]}
+                                                </span>
+                                            </td>
+                                        )}
+                                        <td aria-hidden="true"></td>
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                                                    <ActionIconButton kind="delete" onClick={(e) => handleDelete(e, item)} />
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap">
-                                            {item.city_name}{item.state_code ? ` - ${item.state_code}` : ''}
-                                        </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                            <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
-                                                {STATUS_LABELS[item.status]}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-2.5 text-right">
-                                            <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
-                                                <ActionIconButton kind="delete" onClick={(e) => handleDelete(e, item)} />
-                                            </div>
-                                        </td>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {isFormOpen && (
                 <RegulatoryMapForm

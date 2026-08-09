@@ -21,7 +21,8 @@ import {
   FileText,
   Search,
   RefreshCw,
-  ArrowLeft
+  ArrowLeft,
+  MoveHorizontal
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
@@ -30,7 +31,7 @@ import { partnerPortalTokenService, PartnerPortalToken } from '../../services/pa
 import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
 import { appSettingsService } from '../../services/appSettingsService';
 import { organizationService } from '../../services/organizationService';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { DocumentsTable } from '../documents/DocumentsTable';
 import { useConfirm } from '../ui/confirm';
 import { KpiCard } from '../ui/KpiCard';
@@ -76,6 +77,21 @@ const WS_DOC_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
+const WS_DOC_COL_WIDTHS: Record<string, number> = {
+  nome: 260, autor: 150, tipo_documento: 160, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
+};
+const PARTNER_COL_WIDTHS: Record<string, number> = {
+  supplier: 220, organization: 180, users: 110, documents: 120, requests: 130, status: 120,
+};
+const WS_USER_COLUMNS: ColumnConfig[] = [
+  { key: 'name', label: 'Nome', sortable: true },
+  { key: 'email', label: 'E-mail', sortable: true },
+  { key: 'phone', label: 'Telefone', sortable: true },
+  { key: 'role', label: 'Papel/Função', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
+const WS_USER_COL_WIDTHS: Record<string, number> = { name: 180, email: 220, phone: 130, role: 140, status: 100, actions: 90 };
 
 const CATEGORIA_LABELS: Record<string, string> = {
   engenharia: 'Projetos',
@@ -132,7 +148,11 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // Tela de listagem (KPI + tabela, ui_ux_guia_unificado.md) — filtros sobrevivem a navegação (§3)
   const [searchTerm, setSearchTerm] = usePersistedState('partnerWorkspaceList:search', '');
   const tableColumns = useTableColumns(PARTNER_COLUMNS, 'partnerWorkspaceListColumns');
+  const partnerCols = useResizableColumns(PARTNER_COL_WIDTHS, 'partnerWorkspaceListColWidths');
   const wsDocColumns = useTableColumns(WS_DOC_COLUMNS, 'partnerWsDocsColumns');
+  const wsDocCols = useResizableColumns(WS_DOC_COL_WIDTHS, 'partnerWsDocsColWidths');
+  const wsUserColumns = useTableColumns(WS_USER_COLUMNS, 'partnerWsUsersColumns');
+  const wsUserCols = useResizableColumns(WS_USER_COL_WIDTHS, 'partnerWsUsersColWidths');
   // <DocumentsTable> recebe OpuraDocument, não o vínculo — mesma derivação do portal.
   const sharedDocuments = useMemo(
     () => sharedDocs.map((sd) => sd.document).filter((d): d is OpuraDocument => !!d),
@@ -906,56 +926,112 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-gray-800">Equipe Externa do Parceiro</h3>
-                  <Button onClick={() => setIsInviteUserModalOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/10">
-                    <UserPlus className="w-4 h-4" />
-                    Convidar Integrante
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                      <ColumnConfigButton
+                        columns={WS_USER_COLUMNS.filter((c) => c.key !== 'actions')}
+                        visibleColumns={wsUserColumns.visibleColumns}
+                        showColumnConfig={wsUserColumns.showColumnConfig}
+                        onToggleShow={() => wsUserColumns.setShowColumnConfig(!wsUserColumns.showColumnConfig)}
+                        onToggleColumn={wsUserColumns.toggleColumn}
+                        onReset={wsUserColumns.resetColumns}
+                      />
+                      <button
+                        onClick={() => wsUserCols.autoFit()}
+                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                        title="Ajustar largura das colunas ao conteúdo"
+                      >
+                        <MoveHorizontal className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <Button onClick={() => setIsInviteUserModalOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/10">
+                      <UserPlus className="w-4 h-4" />
+                      Convidar Integrante
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm bg-white">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                        <th className="px-5 py-3">Nome</th>
-                        <th className="px-5 py-3">E-mail</th>
-                        <th className="px-5 py-3">Telefone</th>
-                        <th className="px-5 py-3">Papel/Função</th>
-                        <th className="px-5 py-3 text-center">Status</th>
-                        <th className="px-5 py-3 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-xs">
-                      {partnerUsers.map((user) => (
-                        <tr key={user.id} className="hover:bg-gray-50">
-                          <td className="px-5 py-4 text-sm font-normal text-gray-900">{user.name}</td>
-                          <td className="px-5 py-4 text-sm font-normal text-gray-500">{user.email}</td>
-                          <td className="px-5 py-4 text-sm font-normal text-gray-500">{user.phone || '-'}</td>
-                          <td className="px-5 py-4 text-sm font-normal text-gray-600">
-                            {user.role}
-                          </td>
-                          <td className="px-5 py-4 text-center">
-                            <button
-                              onClick={() => handleToggleUserActive(user)}
-                              className={`text-sm font-normal ${user.is_active ? 'text-emerald-700' : 'text-gray-500'}`}
-                            >
-                              {user.is_active ? 'Ativo' : 'Inativo'}
-                            </button>
-                          </td>
-                          <td className="px-5 py-4 text-right">
-                            <ActionIconButton kind="delete" title="Excluir Usuário" onClick={() => handleDeleteUser(user.id)} />
-                          </td>
-                        </tr>
-                      ))}
-                      {partnerUsers.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="text-center py-10 text-table-body text-gray-400 bg-white">
-                            Nenhum usuário convidado para este parceiro.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                {(() => {
+                  const key = wsUserColumns.sortColumn;
+                  const dir = wsUserColumns.sortDirection === 'asc' ? 1 : -1;
+                  const sortedUsers = !key ? partnerUsers : [...partnerUsers].sort((a, b) => {
+                    if (key === 'status') return (Number(a.is_active) - Number(b.is_active)) * dir;
+                    const av = (a as unknown as Record<string, unknown>)[key];
+                    const bv = (b as unknown as Record<string, unknown>)[key];
+                    return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+                  });
+                  const visible = WS_USER_COLUMNS.filter(c => c.key !== 'actions' && wsUserColumns.visibleColumns.includes(c.key));
+                  const tableWidth = visible.reduce((s, c) => s + wsUserCols.getWidth(c.key), 0) + wsUserCols.getWidth('actions');
+                  return (
+                    <div className="border border-gray-200 rounded-[10px] overflow-hidden shadow-sm bg-white">
+                      <div className="overflow-x-auto">
+                        <table ref={wsUserCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                          <colgroup>
+                            {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${wsUserCols.getWidth(c.key)}px` }} />)}
+                            <col />
+                            <col data-col-key="actions" style={{ width: `${wsUserCols.getWidth('actions')}px` }} />
+                          </colgroup>
+                          <thead>
+                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                              {WS_USER_COLUMNS.filter(c => c.key !== 'actions').map(c => wsUserColumns.visibleColumns.includes(c.key) && (
+                                <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
+                                  sortColumn={wsUserColumns.sortColumn} sortDirection={wsUserColumns.sortDirection} onSort={wsUserColumns.handleColumnSort}
+                                  className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                  <wsUserCols.ResizeHandle colKey={c.key} />
+                                </SortableHeader>
+                              ))}
+                              <th aria-hidden="true" className="border-r border-gray-100" />
+                              {wsUserColumns.visibleColumns.includes('actions') && (
+                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {sortedUsers.map((user) => (
+                              <tr key={user.id} className="hover:bg-blue-50/50 transition-colors">
+                                {wsUserColumns.visibleColumns.includes('name') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">{user.name}</td>
+                                )}
+                                {wsUserColumns.visibleColumns.includes('email') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{user.email}</td>
+                                )}
+                                {wsUserColumns.visibleColumns.includes('phone') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{user.phone || '-'}</td>
+                                )}
+                                {wsUserColumns.visibleColumns.includes('role') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{user.role}</td>
+                                )}
+                                {wsUserColumns.visibleColumns.includes('status') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                    <button
+                                      onClick={() => handleToggleUserActive(user)}
+                                      className={`text-sm font-normal ${user.is_active ? 'text-emerald-700' : 'text-gray-500'}`}
+                                    >
+                                      {user.is_active ? 'Ativo' : 'Inativo'}
+                                    </button>
+                                  </td>
+                                )}
+                                <td aria-hidden="true"></td>
+                                {wsUserColumns.visibleColumns.includes('actions') && (
+                                  <td className="px-6 py-2.5 text-right">
+                                    <ActionIconButton kind="delete" title="Excluir Usuário" onClick={() => handleDeleteUser(user.id)} />
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                            {sortedUsers.length === 0 && (
+                              <tr>
+                                <td colSpan={visible.length + 2} className="text-center py-10 text-sm text-gray-400 bg-white">
+                                  Nenhum usuário convidado para este parceiro.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -974,6 +1050,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                         onToggleColumn={wsDocColumns.toggleColumn}
                         onReset={wsDocColumns.resetColumns}
                       />
+                      <button
+                        onClick={() => wsDocCols.autoFit()}
+                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                        title="Ajustar largura das colunas ao conteúdo"
+                      >
+                        <MoveHorizontal className="w-4 h-4" />
+                      </button>
                     </div>
                   <Button onClick={() => setIsShareDocModalOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/10">
                     <Share2 className="w-4 h-4" />
@@ -1023,6 +1106,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <DocumentsTable
                   documents={sharedDocuments}
                   tableColumns={wsDocColumns}
+                  cols={wsDocCols}
                   resolveProjectName={() => '-'}
                   renderActions={(doc) => (
                     <>
@@ -1229,6 +1313,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   onToggleColumn={tableColumns.toggleColumn}
                   onReset={tableColumns.resetColumns}
                 />
+                <button
+                  onClick={() => partnerCols.autoFit()}
+                  className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                  title="Ajustar largura das colunas ao conteúdo"
+                >
+                  <MoveHorizontal className="w-4 h-4" />
+                </button>
               </div>
 
               {/* Variante compacta do CTA primário (§17) — ativar parceiro não é o fluxo mais frequente da tela */}
@@ -1263,45 +1354,68 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             ) : (
               <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table ref={partnerCols.tableRef} className="text-left border-collapse" style={{
+                    tableLayout: 'fixed',
+                    width: PARTNER_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).reduce((s, c) => s + partnerCols.getWidth(c.key), 0) + partnerCols.getWidth('actions'),
+                  }}>
+                    <colgroup>
+                      {PARTNER_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).map(c => (
+                        <col key={c.key} data-col-key={c.key} style={{ width: `${partnerCols.getWidth(c.key)}px` }} />
+                      ))}
+                      <col />
+                      <col data-col-key="actions" style={{ width: `${partnerCols.getWidth('actions')}px` }} />
+                    </colgroup>
                     <thead>
                       <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                         {tableColumns.visibleColumns.includes('supplier') && (
                           <SortableHeader colKey="supplier" label="Parceiro" uppercase={false}
                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                             onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100" />
+                            className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                            <partnerCols.ResizeHandle colKey="supplier" />
+                          </SortableHeader>
                         )}
                         {tableColumns.visibleColumns.includes('organization') && (
                           <SortableHeader colKey="organization" label="Organização" uppercase={false}
                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                             onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                            <partnerCols.ResizeHandle colKey="organization" />
+                          </SortableHeader>
                         )}
                         {tableColumns.visibleColumns.includes('users') && (
                           <SortableHeader colKey="users" label="Usuários" uppercase={false}
                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                             onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                            <partnerCols.ResizeHandle colKey="users" />
+                          </SortableHeader>
                         )}
                         {tableColumns.visibleColumns.includes('documents') && (
                           <SortableHeader colKey="documents" label="Documentos" uppercase={false}
                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                             onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                            <partnerCols.ResizeHandle colKey="documents" />
+                          </SortableHeader>
                         )}
                         {tableColumns.visibleColumns.includes('requests') && (
                           <SortableHeader colKey="requests" label="Solicitações" uppercase={false}
                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                             onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                            <partnerCols.ResizeHandle colKey="requests" />
+                          </SortableHeader>
                         )}
                         {tableColumns.visibleColumns.includes('status') && (
                           <SortableHeader colKey="status" label="Status" uppercase={false}
                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                             onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                            <partnerCols.ResizeHandle colKey="status" />
+                          </SortableHeader>
                         )}
+                        <th aria-hidden="true" className="border-r border-gray-100" />
                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                       </tr>
                     </thead>
@@ -1352,6 +1466,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                                 </span>
                               </td>
                             )}
+                            <td aria-hidden="true"></td>
                             <td className="px-6 py-2.5 text-right">
                               {/* Editar/gerenciar = clique na linha (ação dominante, §9.1). Ações aqui são só o que sobra. */}
                               <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>

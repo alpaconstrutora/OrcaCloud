@@ -1,6 +1,6 @@
 import React from 'react';
 import { FileText, FileSpreadsheet, Image as ImageIcon, Briefcase, Lock } from 'lucide-react';
-import { SortableHeader, useTableColumns } from '../ui/TableUtils';
+import { SortableHeader, useTableColumns, useResizableColumns } from '../ui/TableUtils';
 import { OpuraDocument } from '../../types';
 
 /** Subconjunto do retorno de `useTableColumns` que a tabela precisa — cada tela
@@ -9,6 +9,10 @@ type TableColumnsState = Pick<
   ReturnType<typeof useTableColumns>,
   'visibleColumns' | 'sortColumn' | 'sortDirection' | 'handleColumnSort'
 >;
+
+/** Resize/autofit (§6.1) — opcional: quem não passar `cols` mantém o comportamento
+ * anterior (sem redimensionamento), sem quebrar as telas que ainda não migraram. */
+type ResizableColumnsState = ReturnType<typeof useResizableColumns>;
 
 /**
  * Ícone por tipo de arquivo (extraído de `OpuraDocsModule.tsx` — GED). Compartilhado
@@ -62,6 +66,11 @@ export interface DocumentsTableProps {
   onToggleRow?: (doc: OpuraDocument, index: number, shiftKey: boolean) => void;
   allSelectableSelected?: boolean;
   onToggleAll?: () => void;
+
+  /** §6.1/§6.1.2 — instância de `useResizableColumns` do chamador. Omitir mantém a
+   * tabela sem redimensionamento/autofit (comportamento anterior, ainda usado por
+   * quem não migrou). */
+  cols?: ResizableColumnsState;
 }
 
 const DEFAULT_EMPTY_STATE = (
@@ -91,13 +100,34 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   onToggleRow,
   allSelectableSelected = false,
   onToggleAll,
+  cols,
 }) => {
   const { visibleColumns, sortColumn, sortDirection, handleColumnSort } = tableColumns;
+
+  // §6.1 — só entra na conta quando `cols` foi passado (opt-in).
+  const dataColKeys = ['nome', 'descricao', ...dynamicColumns, 'autor', 'tipo_documento', 'project_id',
+    ...(showValidade ? ['data_validade'] : []), 'data_emissao', 'status']
+    .filter(k => visibleColumns.includes(k) || dynamicColumns.includes(k));
+  const tableWidth = cols
+    ? (selectable ? 40 : 0) + dataColKeys.reduce((s, k) => s + cols.getWidth(k), 0) + (visibleColumns.includes('actions') ? cols.getWidth('actions') : 0)
+    : undefined;
 
   return (
     <div className="bg-white overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table
+          ref={cols?.tableRef}
+          className={cols ? 'text-left border-collapse' : 'w-full text-left border-collapse'}
+          style={cols ? { tableLayout: 'fixed', width: tableWidth } : undefined}
+        >
+          {cols && (
+            <colgroup>
+              {selectable && <col style={{ width: '40px' }} />}
+              {dataColKeys.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+              <col />
+              {visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+            </colgroup>
+          )}
           <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
             <tr>
               {selectable && (
@@ -111,36 +141,54 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 </th>
               )}
               {visibleColumns.includes('nome') && (
-                <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="nome" />}
+                </SortableHeader>
               )}
               {visibleColumns.includes('descricao') && (
-                <SortableHeader colKey="descricao" label="Descrição" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                <SortableHeader colKey="descricao" label="Descrição" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="descricao" />}
+                </SortableHeader>
               )}
 
               {dynamicColumns.map((col, idx) => (
-                <th key={`dyn-head-${idx}`} className="px-6 py-2 border-r border-gray-100 text-left text-table-header font-semibold text-gray-500 whitespace-nowrap">
+                <th key={`dyn-head-${idx}`} className="px-6 py-2 border-r border-gray-100 text-left text-table-header font-semibold text-gray-500 whitespace-nowrap relative overflow-hidden">
                   {getDynamicColumnLabel ? getDynamicColumnLabel(col) : col}
+                  {cols && <cols.ResizeHandle colKey={col} />}
                 </th>
               ))}
 
               {visibleColumns.includes('autor') && (
-                <SortableHeader colKey="autor" label="Autor" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                <SortableHeader colKey="autor" label="Autor" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="autor" />}
+                </SortableHeader>
               )}
               {visibleColumns.includes('tipo_documento') && (
-                <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="tipo_documento" />}
+                </SortableHeader>
               )}
               {visibleColumns.includes('project_id') && (
-                <SortableHeader colKey="project_id" label="Obra Vinculada" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                <SortableHeader colKey="project_id" label="Obra Vinculada" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="project_id" />}
+                </SortableHeader>
               )}
               {visibleColumns.includes('data_emissao') && (
-                <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="data_emissao" />}
+                </SortableHeader>
               )}
               {visibleColumns.includes('data_validade') && showValidade && (
-                <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="data_validade" />}
+                </SortableHeader>
               )}
               {visibleColumns.includes('status') && (
-                <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                  {cols && <cols.ResizeHandle colKey="status" />}
+                </SortableHeader>
               )}
+              {cols && <th aria-hidden="true" className="border-r border-gray-100" />}
               {visibleColumns.includes('actions') && (
                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Ações</th>
               )}
@@ -149,7 +197,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
           <tbody className="divide-y divide-gray-200">
             {documents.length === 0 ? (
               <tr>
-                <td colSpan={visibleColumns.length + dynamicColumns.length + (selectable ? 1 : 0)} className="px-6 py-20 text-center">
+                <td colSpan={visibleColumns.length + dynamicColumns.length + (selectable ? 1 : 0) + (cols ? 1 : 0)} className="px-6 py-20 text-center">
                   {emptyState ?? DEFAULT_EMPTY_STATE}
                 </td>
               </tr>
@@ -235,6 +283,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                         <span className={statusColor}>{statusLabel}</span>
                       </td>
                     )}
+                    {cols && <td aria-hidden="true"></td>}
                     {visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

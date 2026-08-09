@@ -1,7 +1,7 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Inbox } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Inbox, Search, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
-import { SortableHeader } from '../ui/TableUtils';
+import { SortableHeader, useResizableColumns, usePersistedState } from '../ui/TableUtils';
 import type {
     AreaEngineRpcResult,
     AreaFractionIdeal,
@@ -333,11 +333,22 @@ export function StructureAdminList({ title, rows, empty, disabled, onEdit, onDel
  * §6.2 cabeçalho em sentence case · §6.3 toda coluna ordenável (os valores de
  * ordenação vêm crus em `sortKeys`, porque as células chegam já formatadas em
  * pt-BR e ordenar o texto "1.234,56 m2" daria ordem errada) · §6.5 cabeçalho
- * fixo · §6.6 `px-6` + separador vertical · §7 tipografia por tipo de dado.
+ * fixo · §6.6 `px-6` + separador vertical · §7 tipografia por tipo de dado ·
+ * §6.1/§6.1.2 colunas redimensionáveis + autofit (chaves de coluna são o
+ * índice, já que os cabeçalhos são dinâmicos por quadro — sem `ColumnConfig`
+ * fixo não há "mostrar/ocultar coluna" com sentido aqui).
  */
-export function ResultTable({ headers, rows, empty, sortKeys }: { headers: string[]; rows: string[][]; empty: string; sortKeys?: (string | number)[][] }) {
+export function ResultTable({ id, headers, rows, empty, sortKeys }: { id: string; headers: string[]; rows: string[][]; empty: string; sortKeys?: (string | number)[][] }) {
     const [sortColumn, setSortColumn] = React.useState<string | null>(null);
     const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
+    const [search, setSearch] = usePersistedState<string>(`resultTable:${id}:search`, '');
+
+    const defaultWidths = React.useMemo(() => {
+        const widths: Record<string, number> = {};
+        headers.forEach((_, idx) => { widths[String(idx)] = 180; });
+        return widths;
+    }, [headers]);
+    const cols = useResizableColumns(defaultWidths, `resultTable:${id}:colWidths`);
 
     const handleSort = (colKey: string) => {
         if (sortColumn === colKey) {
@@ -348,64 +359,101 @@ export function ResultTable({ headers, rows, empty, sortKeys }: { headers: strin
         }
     };
 
-    const orderedRows = React.useMemo(() => {
-        if (sortColumn === null) return rows;
-        const colIdx = Number(sortColumn);
-        if (!Number.isInteger(colIdx)) return rows;
-        const factor = sortDirection === 'asc' ? 1 : -1;
-        const keyOf = (rowIdx: number): string | number => sortKeys?.[rowIdx]?.[colIdx] ?? rows[rowIdx]?.[colIdx] ?? '';
+    const filteredRows = React.useMemo(() => {
+        const term = search.trim().toLowerCase();
+        if (!term) return rows.map((row, rowIdx) => ({ row, rowIdx }));
         return rows
             .map((row, rowIdx) => ({ row, rowIdx }))
-            .sort((a, b) => {
-                const ka = keyOf(a.rowIdx);
-                const kb = keyOf(b.rowIdx);
-                if (typeof ka === 'number' && typeof kb === 'number') return (ka - kb) * factor;
-                return String(ka).localeCompare(String(kb), 'pt-BR', { numeric: true }) * factor;
-            })
-            .map(entry => entry.row);
-    }, [rows, sortKeys, sortColumn, sortDirection]);
+            .filter(({ row }) => row.some(cell => cell.toLowerCase().includes(term)));
+    }, [rows, search]);
+
+    const orderedRows = React.useMemo(() => {
+        if (sortColumn === null) return filteredRows;
+        const colIdx = Number(sortColumn);
+        if (!Number.isInteger(colIdx)) return filteredRows;
+        const factor = sortDirection === 'asc' ? 1 : -1;
+        const keyOf = (rowIdx: number): string | number => sortKeys?.[rowIdx]?.[colIdx] ?? rows[rowIdx]?.[colIdx] ?? '';
+        return [...filteredRows].sort((a, b) => {
+            const ka = keyOf(a.rowIdx);
+            const kb = keyOf(b.rowIdx);
+            if (typeof ka === 'number' && typeof kb === 'number') return (ka - kb) * factor;
+            return String(ka).localeCompare(String(kb), 'pt-BR', { numeric: true }) * factor;
+        });
+    }, [filteredRows, rows, sortKeys, sortColumn, sortDirection]);
 
     if (rows.length === 0) {
         return <EmptyState title="Quadro ainda não calculado" message={empty} icon={<FileSpreadsheet className="w-12 h-12" />} />;
     }
 
+    const tableWidth = headers.reduce((sum, _, idx) => sum + cols.getWidth(String(idx)), 0);
+
     return (
-        <div className="overflow-auto max-h-[70vh]">
-            <table className="w-full text-left border-collapse">
-                <thead>
-                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                        {headers.map((header, idx) => (
-                            <SortableHeader
-                                key={header}
-                                colKey={String(idx)}
-                                label={header}
-                                uppercase={false}
-                                sortColumn={sortColumn}
-                                sortDirection={sortDirection}
-                                onSort={handleSort}
-                                className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap"
-                            />
-                        ))}
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                    {orderedRows.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
-                            {/* §7: 1ª coluna é o rótulo (texto padrão); as demais são números de
-                                área/coeficiente — texto atenuado. `font-medium` é reservado a valor
-                                financeiro, então não se aplica aqui. */}
-                            {row.map((cell, cellIdx) => (
-                                <td
-                                    key={`${idx}-${cellIdx}`}
-                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 whitespace-nowrap text-sm font-normal ${cellIdx === 0 ? 'text-gray-700' : 'text-gray-600'}`}
-                                >
-                                    {cell}
-                                </td>
+        <div className="space-y-2.5">
+            <div className="flex items-center gap-2.5">
+                <div className="flex-1 relative max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        placeholder="Buscar nas linhas..."
+                        className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    />
+                </div>
+                <button
+                    onClick={() => cols.autoFit()}
+                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all shrink-0"
+                    title="Ajustar largura das colunas ao conteúdo"
+                >
+                    <MoveHorizontal className="w-4 h-4" />
+                </button>
+            </div>
+            {orderedRows.length === 0 ? (
+                <div className="text-center py-10 text-sm text-gray-400">Nenhuma linha encontrada com a busca aplicada.</div>
+            ) : (
+                <div className="overflow-auto max-h-[70vh]">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                        <colgroup>
+                            {headers.map((_, idx) => <col key={idx} data-col-key={String(idx)} style={{ width: `${cols.getWidth(String(idx))}px` }} />)}
+                        </colgroup>
+                        <thead>
+                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                {headers.map((header, idx) => (
+                                    <SortableHeader
+                                        key={header}
+                                        colKey={String(idx)}
+                                        label={header}
+                                        uppercase={false}
+                                        sortColumn={sortColumn}
+                                        sortDirection={sortDirection}
+                                        onSort={handleSort}
+                                        className="px-6 py-2 border-r border-gray-100 last:border-r-0 overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey={String(idx)} />
+                                    </SortableHeader>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {orderedRows.map(({ row, rowIdx }) => (
+                                <tr key={rowIdx} className="hover:bg-blue-50/50 transition-colors">
+                                    {/* §7: 1ª coluna é o rótulo (texto padrão); as demais são números de
+                                        área/coeficiente — texto atenuado. `font-medium` é reservado a valor
+                                        financeiro, então não se aplica aqui. */}
+                                    {row.map((cell, cellIdx) => (
+                                        <td
+                                            key={`${rowIdx}-${cellIdx}`}
+                                            className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 whitespace-nowrap text-sm font-normal ${cellIdx === 0 ? 'text-gray-700' : 'text-gray-600'}`}
+                                        >
+                                            {cell}
+                                        </td>
+                                    ))}
+                                </tr>
                             ))}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 }

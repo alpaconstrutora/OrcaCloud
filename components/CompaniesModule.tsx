@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Building2, Plus, Star, ChevronDown, ChevronUp,
-    Save, X, AlertCircle, Loader2, Settings2, BarChart3,
+    Save, X, AlertCircle, Loader2, Settings2, BarChart3, Search, MoveHorizontal,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import {
@@ -15,6 +15,8 @@ import CompanyDetailPage from './CompanyDetailPage';
 import CompanyGroupDashboard from './CompanyGroupDashboard';
 import { formatMoney } from './ui/Format';
 import { useConfirm } from './ui/confirm';
+import { KpiCard } from './ui/KpiCard';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 interface CompaniesModuleProps {
     orgId: string;
@@ -169,6 +171,16 @@ const inputCls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm foc
 const selectCls = inputCls + " cursor-pointer";
 const checkboxRowCls = "flex items-center gap-2 text-sm text-gray-700 cursor-pointer";
 
+const COMPANY_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
+    { key: 'razao_social', label: 'Razão Social', sortable: true },
+    { key: 'tipo', label: 'Tipo', sortable: true },
+    { key: 'cnpj', label: 'CNPJ', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+const COMPANY_COL_WIDTHS: Record<string, number> = { code: 90, razao_social: 280, tipo: 160, cnpj: 170, status: 140, actions: 140 };
+
 // ─── Main component ───────────────────────────────────────────
 
 const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
@@ -192,6 +204,9 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     const [showForm, setShowForm] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [form, setForm] = useState<FormData>(EMPTY_FORM);
+    const [search, setSearch] = usePersistedState<string>('companiesModule:search', '');
+    const tableColumns = useTableColumns(COMPANY_COLUMNS, 'companiesModuleColumns');
+    const cols = useResizableColumns(COMPANY_COL_WIDTHS, 'companiesModuleColWidths');
 
     const load = useCallback(async () => {
         if (!orgId) return;
@@ -557,128 +572,232 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                 </form>
             )}
 
-            {/* List */}
-            {loading ? (
-                <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-2 text-gray-500">Carregando...</p>
+            {/* KPIs — §4 */}
+            {!showForm && companies.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KpiCard label="Total de empresas" value={companies.length} icon={<Building2 className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Ativas" value={companies.filter(c => c.status === 'ativa').length} icon={<Building2 className="w-5 h-5" />} color="emerald" />
+                    <KpiCard label="Em implantação" value={companies.filter(c => c.status === 'em_implantacao').length} icon={<Building2 className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Encerradas" value={companies.filter(c => c.status === 'encerrada').length} icon={<Building2 className="w-5 h-5" />} color="gray" />
                 </div>
-            ) : companies.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
-                    <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma empresa cadastrada</h3>
-                    <p className="text-sm text-gray-500">Clique em "Nova empresa" para começar.</p>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {companies.map(c => (
-                        <div key={c.id}
-                            className="bg-white border border-gray-100 rounded-[10px] overflow-hidden hover:shadow-md transition-shadow">
-                            {/* Card header */}
-                            <div className="flex items-center gap-4 px-5 py-4">
-                                {/* Código sequencial (§ui_ux_guia_unificado.md) */}
-                                <span className="text-xs font-normal text-gray-400 shrink-0 w-8 text-center">{c.code || '-'}</span>
+            )}
 
-                                {/* Color badge */}
-                                <div className="w-2 h-10 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: c.cor_sistema }} />
-
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-normal text-gray-900 text-sm truncate">{c.razao_social}</span>
-                                        {c.is_headquarters && (
-                                            <span className="flex items-center gap-1 text-xs font-normal text-amber-700">
-                                                <Star className="w-3 h-3" /> Sede
-                                            </span>
-                                        )}
-                                        <span className={`text-xs font-normal ${
-                                            c.status === 'ativa' ? 'text-green-700' :
-                                            c.status === 'encerrada' ? 'text-red-700' :
-                                            c.status === 'em_implantacao' ? 'text-blue-700' :
-                                            'text-gray-500'
-                                        }`}>
-                                            {c.status.replace('_', ' ')}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                                        <span className="text-xs text-gray-400">{COMPANY_TIPO_LABELS[c.tipo]}</span>
-                                        {c.cnpj && <span className="text-xs text-gray-400">CNPJ: {c.cnpj}</span>}
-                                        {c.regime_tributario && (
-                                            <span className="text-xs text-gray-400">{REGIME_TRIBUTARIO_LABELS[c.regime_tributario]}</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                    <button onClick={() => setSelectedCompany(c)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-button font-black uppercase tracking-wide">
-                                        <Settings2 className="w-3.5 h-3.5" />
-                                        Gerenciar
-                                    </button>
-                                    {!c.is_headquarters && (
-                                        <ActionIconButton kind="delete" onClick={() => handleDelete(c.id, c.razao_social)} />
-                                    )}
-                                    <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
-                                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
-                                        {expandedId === c.id
-                                            ? <ChevronUp className="w-4 h-4" />
-                                            : <ChevronDown className="w-4 h-4" />}
-                                    </button>
-                                </div>
+            {/* Toolbar acoplada + tabela — §5.2 */}
+            {!showForm && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    {companies.length > 0 && (
+                        <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Buscar por razão social ou CNPJ..."
+                                    className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
                             </div>
-
-                            {/* Expanded detail */}
-                            {expandedId === c.id && (
-                                <div className="border-t border-gray-100 px-5 py-4 bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {c.endereco_fiscal?.logradouro && (
-                                        <div className="col-span-2">
-                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Endereço Fiscal</p>
-                                            <p className="text-xs text-gray-700">
-                                                {c.endereco_fiscal.logradouro}, {c.endereco_fiscal.numero}
-                                                {c.endereco_fiscal.complemento && ` — ${c.endereco_fiscal.complemento}`}
-                                                <br />{c.endereco_fiscal.bairro} — {c.endereco_fiscal.cidade}/{c.endereco_fiscal.uf}
-                                                {c.endereco_fiscal.cep && ` — ${c.endereco_fiscal.cep}`}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {c.email_financeiro && (
-                                        <div>
-                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">E-mail Financeiro</p>
-                                            <p className="text-xs text-gray-700">{c.email_financeiro}</p>
-                                        </div>
-                                    )}
-                                    {c.email_fiscal && (
-                                        <div>
-                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">E-mail Fiscal</p>
-                                            <p className="text-xs text-gray-700">{c.email_fiscal}</p>
-                                        </div>
-                                    )}
-                                    {c.capital_social != null && (
-                                        <div>
-                                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Capital Social</p>
-                                            <p className="text-xs text-gray-700">
-                                                {formatMoney(c.capital_social)}
-                                            </p>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Módulos Ativos</p>
-                                        <p className="text-xs text-gray-700">
-                                            {Object.entries(c.modulos_habilitados)
-                                                .filter(([, v]) => v)
-                                                .map(([k]) => k)
-                                                .join(', ')}
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        {c.retencao_iss && <span className="text-xs font-normal text-orange-700">Ret. ISS</span>}
-                                        {c.retencao_inss && <span className="text-xs font-normal text-orange-700">Ret. INSS</span>}
-                                        {c.retencao_irrf && <span className="text-xs font-normal text-orange-700">Ret. IRRF</span>}
-                                    </div>
-                                </div>
-                            )}
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={COMPANY_COLUMNS.filter(c => c.key !== 'actions')}
+                                    visibleColumns={tableColumns.visibleColumns}
+                                    showColumnConfig={tableColumns.showColumnConfig}
+                                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                    onToggleColumn={tableColumns.toggleColumn}
+                                    onReset={tableColumns.resetColumns}
+                                />
+                                <button
+                                    onClick={() => cols.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
-                    ))}
+                    )}
+
+                    {loading ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500">Carregando...</p>
+                        </div>
+                    ) : companies.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma empresa cadastrada</h3>
+                            <p className="text-sm text-gray-500">Clique em "Nova empresa" para começar.</p>
+                        </div>
+                    ) : (() => {
+                        const term = search.trim().toLowerCase();
+                        const filtered = !term ? companies : companies.filter(c =>
+                            c.razao_social.toLowerCase().includes(term) || (c.cnpj || '').toLowerCase().includes(term));
+                        const key = tableColumns.sortColumn;
+                        const sorted = !key ? filtered : [...filtered].sort((a, b) => {
+                            const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                            if (key === 'tipo') return COMPANY_TIPO_LABELS[a.tipo].localeCompare(COMPANY_TIPO_LABELS[b.tipo]) * dir;
+                            const av = (a as unknown as Record<string, unknown>)[key];
+                            const bv = (b as unknown as Record<string, unknown>)[key];
+                            return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+                        });
+                        const visible = COMPANY_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
+                        const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+
+                        if (sorted.length === 0) {
+                            return (
+                                <div className="text-center py-12">
+                                    <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma empresa encontrada</h3>
+                                    <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div className="overflow-x-auto">
+                                <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                                    <colgroup>
+                                        {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                                        <col />
+                                        <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                    </colgroup>
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            {COMPANY_COLUMNS.filter(c => c.key !== 'actions').map(c => tableColumns.visibleColumns.includes(c.key) && (
+                                                <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                    <cols.ResizeHandle colKey={c.key} />
+                                                </SortableHeader>
+                                            ))}
+                                            <th aria-hidden="true" className="border-r border-gray-100" />
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {sorted.map(c => (
+                                            <React.Fragment key={c.id}>
+                                                <tr className="hover:bg-blue-50/50 transition-colors">
+                                                    {tableColumns.visibleColumns.includes('code') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{c.code || '—'}</td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('razao_social') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.cor_sistema }} />
+                                                                <span className="truncate">{c.razao_social}</span>
+                                                                {c.is_headquarters && (
+                                                                    <span className="flex items-center gap-1 text-xs text-amber-700 shrink-0">
+                                                                        <Star className="w-3 h-3" /> Sede
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('tipo') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{COMPANY_TIPO_LABELS[c.tipo]}</td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('cnpj') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{c.cnpj || '—'}</td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('status') && (
+                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${
+                                                            c.status === 'ativa' ? 'text-green-700' :
+                                                            c.status === 'encerrada' ? 'text-red-700' :
+                                                            c.status === 'em_implantacao' ? 'text-blue-700' :
+                                                            'text-gray-500'
+                                                        }`}>
+                                                            {c.status.replace('_', ' ')}
+                                                        </td>
+                                                    )}
+                                                    <td aria-hidden="true"></td>
+                                                    {tableColumns.visibleColumns.includes('actions') && (
+                                                        <td className="px-6 py-2.5 text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <button onClick={() => setSelectedCompany(c)}
+                                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1">
+                                                                    <Settings2 className="w-3.5 h-3.5" />
+                                                                    Gerenciar
+                                                                </button>
+                                                                {!c.is_headquarters && (
+                                                                    <ActionIconButton kind="delete" onClick={() => handleDelete(c.id, c.razao_social)} />
+                                                                )}
+                                                                <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
+                                                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
+                                                                    {expandedId === c.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                                {expandedId === c.id && (
+                                                    <tr>
+                                                        <td colSpan={visible.length + 2} className="border-t border-gray-100 px-6 py-4 bg-gray-50">
+                                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                {c.endereco_fiscal?.logradouro && (
+                                                                    <div className="col-span-2">
+                                                                        <p className="text-xs font-semibold text-gray-500 mb-1">Endereço Fiscal</p>
+                                                                        <p className="text-xs text-gray-700">
+                                                                            {c.endereco_fiscal.logradouro}, {c.endereco_fiscal.numero}
+                                                                            {c.endereco_fiscal.complemento && ` — ${c.endereco_fiscal.complemento}`}
+                                                                            <br />{c.endereco_fiscal.bairro} — {c.endereco_fiscal.cidade}/{c.endereco_fiscal.uf}
+                                                                            {c.endereco_fiscal.cep && ` — ${c.endereco_fiscal.cep}`}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                                {c.email_financeiro && (
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold text-gray-500 mb-1">E-mail Financeiro</p>
+                                                                        <p className="text-xs text-gray-700">{c.email_financeiro}</p>
+                                                                    </div>
+                                                                )}
+                                                                {c.email_fiscal && (
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold text-gray-500 mb-1">E-mail Fiscal</p>
+                                                                        <p className="text-xs text-gray-700">{c.email_fiscal}</p>
+                                                                    </div>
+                                                                )}
+                                                                {c.regime_tributario && (
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold text-gray-500 mb-1">Regime Tributário</p>
+                                                                        <p className="text-xs text-gray-700">{REGIME_TRIBUTARIO_LABELS[c.regime_tributario]}</p>
+                                                                    </div>
+                                                                )}
+                                                                {c.capital_social != null && (
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold text-gray-500 mb-1">Capital Social</p>
+                                                                        <p className="text-xs text-gray-700">
+                                                                            {formatMoney(c.capital_social)}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                                <div>
+                                                                    <p className="text-xs font-semibold text-gray-500 mb-1">Módulos Ativos</p>
+                                                                    <p className="text-xs text-gray-700">
+                                                                        {Object.entries(c.modulos_habilitados)
+                                                                            .filter(([, v]) => v)
+                                                                            .map(([k]) => k)
+                                                                            .join(', ')}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="flex gap-4">
+                                                                    {c.retencao_iss && <span className="text-xs font-normal text-orange-700">Ret. ISS</span>}
+                                                                    {c.retencao_inss && <span className="text-xs font-normal text-orange-700">Ret. INSS</span>}
+                                                                    {c.retencao_irrf && <span className="text-xs font-normal text-orange-700">Ret. IRRF</span>}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 

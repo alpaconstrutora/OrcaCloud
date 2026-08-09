@@ -6,6 +6,7 @@ import { PurchaseOrder } from '../types';
 import OrderReceiptModal from './OrderReceiptModal';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
+import { useToast } from '../hooks/useToast';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -33,6 +34,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
     const [filterStatus, setFilterStatus] = usePersistedState<string>('supplyChainReceiptFilters:status', 'all');
     const [selectedOrder, setSelectedOrder] = React.useState<PurchaseOrder | null>(null);
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
+    const { localToast, showToast } = useToast();
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainReceiptColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplyChainReceiptColWidths');
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
@@ -51,6 +53,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             setOrders(filtered);
         } catch (error) {
             console.error("Erro ao carregar pedidos para recebimento:", error);
+            showToast('Erro ao carregar pedidos para recebimento', 'error');
         } finally {
             setLoading(false);
         }
@@ -386,6 +389,15 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     }}
                     onSave={() => loadOrders()}
                 />
+            )}
+
+            {localToast && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    {localToast.message}
+                </div>
             )}
         </div>
     );

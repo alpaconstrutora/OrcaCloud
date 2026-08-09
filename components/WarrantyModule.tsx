@@ -1,8 +1,10 @@
 import React from 'react';
-import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star } from 'lucide-react';
+import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, ChevronRight } from 'lucide-react';
 import { warrantyService } from '../services/warrantyService';
 import { useToast } from '../hooks/useToast';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import type { WarrantyClaim, ClaimState, WarrantyKPIs, ClaimFilters } from '../types/warranty';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
@@ -22,24 +24,25 @@ const STATE_LABELS: Record<ClaimState, string> = {
     ENCERRADO:       'Encerrado',
 };
 
+// §8 — StatusBadge: texto colorido simples, sem pílula/fundo/uppercase.
 const STATE_COLORS: Record<ClaimState, string> = {
-    ABERTO:          'bg-blue-100 text-blue-700',
-    TRIAGEM:         'bg-yellow-100 text-yellow-700',
-    EM_GARANTIA:     'bg-green-100 text-green-700',
-    FORA_GARANTIA:   'bg-red-100 text-red-700',
-    VISITA_AGENDADA: 'bg-purple-100 text-purple-700',
-    EM_REPARO:       'bg-orange-100 text-orange-700',
-    CONCLUIDO:       'bg-teal-100 text-teal-700',
-    CONTESTADO:      'bg-pink-100 text-pink-700',
-    REABERTO:        'bg-amber-100 text-amber-700',
-    ENCERRADO:       'bg-gray-100 text-gray-500',
+    ABERTO:          'text-blue-700',
+    TRIAGEM:         'text-yellow-700',
+    EM_GARANTIA:     'text-green-700',
+    FORA_GARANTIA:   'text-red-700',
+    VISITA_AGENDADA: 'text-purple-700',
+    EM_REPARO:       'text-orange-700',
+    CONCLUIDO:       'text-teal-700',
+    CONTESTADO:      'text-pink-700',
+    REABERTO:        'text-amber-700',
+    ENCERRADO:       'text-gray-500',
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
-    baixa:   'bg-green-50 text-green-600',
-    media:   'bg-yellow-50 text-yellow-600',
-    alta:    'bg-orange-50 text-orange-600',
-    critica: 'bg-red-50 text-red-700',
+    baixa:   'text-green-600',
+    media:   'text-yellow-700',
+    alta:    'text-orange-600',
+    critica: 'text-red-700',
 };
 
 function KPICard({ label, value, sub, icon: Icon, color }: {
@@ -60,44 +63,67 @@ function KPICard({ label, value, sub, icon: Icon, color }: {
     );
 }
 
-function ClaimRow({ claim, onSelect, projects }: { claim: WarrantyClaim; onSelect: (c: WarrantyClaim) => void; projects: ProjectOption[] }) {
+const CLAIM_COLUMNS: ColumnConfig[] = [
+    { key: 'chamado', label: 'Chamado', sortable: true },
+    { key: 'state', label: 'Estado', sortable: true },
+    { key: 'severity', label: 'Severidade', sortable: true },
+    { key: 'sla_deadline', label: 'SLA', sortable: true },
+    { key: 'created_at', label: 'Abertura', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+const CLAIM_COL_WIDTHS: Record<string, number> = { chamado: 300, state: 140, severity: 120, sla_deadline: 140, created_at: 130, actions: 60 };
+
+function ClaimRow({ claim, onSelect, projects, visibleColumns }: { claim: WarrantyClaim; onSelect: (c: WarrantyClaim) => void; projects: ProjectOption[]; visibleColumns: string[] }) {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
     const today = new Date().toISOString().slice(0, 10);
     const slaVencido = claim.sla_deadline && claim.sla_deadline < today && !['ENCERRADO', 'FORA_GARANTIA'].includes(claim.state);
 
     return (
         <tr
-            className="hover:bg-gray-50 cursor-pointer transition-colors"
+            className="hover:bg-blue-50/50 cursor-pointer transition-colors"
             onClick={() => onSelect(claim)}
         >
-            <td className="px-4 py-3">
-                <p className="font-semibold text-sm text-gray-900 truncate max-w-[220px]">{claim.sistema_descricao}</p>
-                <p className="text-xs text-gray-400 truncate max-w-[220px]">
-                    {obraName && <span className="text-blue-500 font-semibold">{obraName} · </span>}
-                    {claim.client_name || '—'} · {claim.unidade_ref || '—'}
-                </p>
-            </td>
-            <td className="px-4 py-3">
-                <span className={`px-2 py-0.5 rounded-full text-table-body font-bold ${STATE_COLORS[claim.state]}`}>
+            {visibleColumns.includes('chamado') && (
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                    <p className="truncate max-w-[260px]">{claim.sistema_descricao}</p>
+                    <p className="text-xs text-gray-400 truncate max-w-[260px]">
+                        {obraName && <span className="text-blue-500 font-medium">{obraName} · </span>}
+                        {claim.client_name || '—'} · {claim.unidade_ref || '—'}
+                    </p>
+                </td>
+            )}
+            {visibleColumns.includes('state') && (
+                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${STATE_COLORS[claim.state]}`}>
                     {STATE_LABELS[claim.state]}
-                </span>
-            </td>
-            <td className="px-4 py-3">
-                <span className={`px-2 py-0.5 rounded-full text-table-body font-semibold capitalize ${SEVERITY_COLORS[claim.severity]}`}>
+                </td>
+            )}
+            {visibleColumns.includes('severity') && (
+                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal capitalize ${SEVERITY_COLORS[claim.severity]}`}>
                     {claim.severity}
-                </span>
-            </td>
-            <td className="px-4 py-3 text-table-body text-gray-500">
-                {claim.sla_deadline ? (
-                    <span className={slaVencido ? 'text-red-600 font-semibold' : ''}>
-                        {new Date(claim.sla_deadline + 'T00:00:00').toLocaleDateString('pt-BR')}
-                        {slaVencido && ' ⚠'}
-                    </span>
-                ) : '—'}
-            </td>
-            <td className="px-4 py-3 text-table-body text-gray-400">
-                {new Date(claim.created_at).toLocaleDateString('pt-BR')}
-            </td>
+                </td>
+            )}
+            {visibleColumns.includes('sla_deadline') && (
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                    {claim.sla_deadline ? (
+                        <span className={slaVencido ? 'text-red-600 font-medium' : ''}>
+                            {new Date(claim.sla_deadline + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            {slaVencido && ' ⚠'}
+                        </span>
+                    ) : '—'}
+                </td>
+            )}
+            {visibleColumns.includes('created_at') && (
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                    {new Date(claim.created_at).toLocaleDateString('pt-BR')}
+                </td>
+            )}
+            <td aria-hidden="true"></td>
+            {visibleColumns.includes('actions') && (
+                // §9.1 — a linha já abre o detalhe (ação dominante); sem duplicar como botão.
+                <td className="px-6 py-2.5 text-right">
+                    <ChevronRight className="w-4 h-4 text-blue-400 ml-auto" />
+                </td>
+            )}
         </tr>
     );
 }
@@ -123,6 +149,9 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
     const [showModal, setShowModal] = React.useState(false);
     const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [filterState, setFilterState] = React.useState<ClaimState | ''>('');
+    const [search, setSearch] = usePersistedState<string>('warranty:search', '');
+    const tableColumns = useTableColumns(CLAIM_COLUMNS, 'warrantyClaimsColumns');
+    const cols = useResizableColumns(CLAIM_COL_WIDTHS, 'warrantyClaimsColWidths');
 
     const handleOpenClaim = async () => {
         const target = await resolveWriteOrg('single');
@@ -164,15 +193,13 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                         Gestão de chamados de assistência técnica e controle de prazos NBR 17170.
                     </p>
                 </div>
-                <Button
+                <button
                     onClick={handleOpenClaim}
-                    variant="primary"
-                    size="lg"
-                    className="rounded-[1.25rem] shadow-xl shadow-blue-900/20"
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                 >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-[15px] h-[15px]" />
                     Abrir Chamado
-                </Button>
+                </button>
             </div>
 
             {/* KPIs */}
@@ -188,16 +215,16 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                 </div>
             )}
 
-            {/* Filtros */}
-            <div className="flex gap-2 flex-wrap">
+            {/* Filtros rápidos por estado — §5 */}
+            <div className="flex gap-1.5 flex-wrap">
                 {(['', 'ABERTO', 'TRIAGEM', 'EM_GARANTIA', 'VISITA_AGENDADA', 'EM_REPARO', 'ENCERRADO'] as const).map(s => (
                     <button
                         key={s}
                         onClick={() => setFilterState(s)}
-                        className={`px-3 py-1.5 rounded-full text-table-body font-bold transition-all ${
+                        className={`h-8 px-3 rounded-[6px] text-sm font-medium transition-all ${
                             filterState === s
-                                ? 'bg-blue-600 text-white shadow'
-                                : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
                         }`}
                     >
                         {s === '' ? 'Todos' : STATE_LABELS[s as ClaimState]}
@@ -205,40 +232,114 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                 ))}
             </div>
 
-            {/* Tabela */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                {loading ? (
-                    <div className="flex items-center justify-center h-32 text-sm text-gray-400">Carregando...</div>
-                ) : claims.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-40 gap-2">
-                        <Shield className="w-10 h-10 text-gray-200" />
-                        <p className="text-sm text-gray-400 font-medium">Nenhum chamado de garantia encontrado.</p>
-                        {activeOrganizationId && (
-                            <button onClick={() => setShowModal(true)} className="text-button text-blue-600 font-semibold hover:underline">
-                                Abrir primeiro chamado
-                            </button>
-                        )}
+            {/* Toolbar acoplada + tabela — §5.2 */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
+                    <div className="flex-1 relative w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Buscar por sistema, cliente ou unidade..."
+                            className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        />
                     </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-gray-100 bg-gray-50/50">
-                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Chamado</th>
-                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Estado</th>
-                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Severidade</th>
-                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">SLA</th>
-                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Abertura</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {claims.map(c => (
-                                    <ClaimRow key={c.id} claim={c} onSelect={setSelected} projects={projects} />
-                                ))}
-                            </tbody>
-                        </table>
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <ColumnConfigButton
+                            columns={CLAIM_COLUMNS.filter(c => c.key !== 'actions')}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
                     </div>
-                )}
+                </div>
+
+                {(() => {
+                    const term = search.trim().toLowerCase();
+                    const filteredClaims = !term ? claims : claims.filter(c =>
+                        c.sistema_descricao.toLowerCase().includes(term) ||
+                        (c.client_name || '').toLowerCase().includes(term) ||
+                        (c.unidade_ref || '').toLowerCase().includes(term));
+                    const sortKey = tableColumns.sortColumn;
+                    const sortedClaims = !sortKey ? filteredClaims : [...filteredClaims].sort((a, b) => {
+                        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                        if (sortKey === 'chamado') return a.sistema_descricao.localeCompare(b.sistema_descricao) * dir;
+                        if (sortKey === 'state') return a.state.localeCompare(b.state) * dir;
+                        if (sortKey === 'severity') return a.severity.localeCompare(b.severity) * dir;
+                        if (sortKey === 'sla_deadline') return (a.sla_deadline || '').localeCompare(b.sla_deadline || '') * dir;
+                        if (sortKey === 'created_at') return a.created_at.localeCompare(b.created_at) * dir;
+                        return 0;
+                    });
+                    const visible = CLAIM_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
+                    const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+
+                    if (loading) {
+                        return <div className="flex items-center justify-center h-32 text-sm text-gray-400">Carregando...</div>;
+                    }
+                    if (claims.length === 0) {
+                        return (
+                            <div className="flex flex-col items-center justify-center h-40 gap-2">
+                                <Shield className="w-10 h-10 text-gray-200" />
+                                <p className="text-sm text-gray-400 font-medium">Nenhum chamado de garantia encontrado.</p>
+                                {activeOrganizationId && (
+                                    <button onClick={() => setShowModal(true)} className="text-sm text-blue-600 font-medium hover:underline">
+                                        Abrir primeiro chamado
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    }
+                    if (sortedClaims.length === 0) {
+                        return (
+                            <div className="text-center py-12">
+                                <Shield className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum chamado encontrado</h3>
+                                <p className="text-sm text-gray-500">Tente ajustar sua busca ou filtro.</p>
+                            </div>
+                        );
+                    }
+                    return (
+                        <div className="overflow-x-auto">
+                            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                                <colgroup>
+                                    {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                                    <col />
+                                    <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                </colgroup>
+                                <thead>
+                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        {CLAIM_COLUMNS.filter(c => c.key !== 'actions').map(c => tableColumns.visibleColumns.includes(c.key) && (
+                                            <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                <cols.ResizeHandle colKey={c.key} />
+                                            </SortableHeader>
+                                        ))}
+                                        <th aria-hidden="true" className="border-r border-gray-100" />
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {sortedClaims.map(c => (
+                                        <ClaimRow key={c.id} claim={c} onSelect={setSelected} projects={projects} visibleColumns={tableColumns.visibleColumns} />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Modal novo chamado */}
@@ -460,6 +561,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 }) => {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
     const { showToast } = useToast();
+    const confirm = useConfirm();
     const [events, setEvents] = React.useState<import('../types/warranty').WarrantyClaimEvent[]>([]);
     const [visits, setVisits] = React.useState<import('../types/warranty').WarrantyClaimVisit[]>([]);
     const [tab, setTab] = React.useState<'info' | 'visitas' | 'historico'>('info');
@@ -468,7 +570,6 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const [npsNota, setNpsNota] = React.useState<number | ''>('');
     const [editMode, setEditMode] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
-    const [confirmDelete, setConfirmDelete] = React.useState(false);
     const [deleting, setDeleting] = React.useState(false);
     const [editForm, setEditForm] = React.useState({
         sistema_descricao: claim.sistema_descricao,
@@ -511,6 +612,12 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
     const handleDelete = async () => {
         if (deleting) return;
+        if (!await confirm({
+            title: 'Excluir chamado?',
+            message: 'Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        })) return;
         setDeleting(true);
         try {
             await warrantyService.delete(claim.id, organizationId);
@@ -519,8 +626,8 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         } catch (e: unknown) {
             showToast('Erro ao excluir chamado', 'error');
             console.error('[DeleteClaim]', e);
+        } finally {
             setDeleting(false);
-            setConfirmDelete(false);
         }
     };
 
@@ -594,10 +701,11 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                 <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
                     <div className="flex-1 min-w-0 pr-4">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`px-2 py-0.5 rounded-full text-button font-bold ${STATE_COLORS[claim.state]}`}>
+                            <span className={`text-sm font-normal ${STATE_COLORS[claim.state]}`}>
                                 {STATE_LABELS[claim.state]}
                             </span>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${SEVERITY_COLORS[claim.severity]}`}>
+                            <span className="text-gray-300">·</span>
+                            <span className={`text-sm font-normal capitalize ${SEVERITY_COLORS[claim.severity]}`}>
                                 {claim.severity}
                             </span>
                         </div>
@@ -607,43 +715,19 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                     <div className="flex items-center gap-1 flex-shrink-0">
                         <ActionIconButton
                             kind="edit"
-                            onClick={() => { setEditMode(e => !e); setTab('info'); setConfirmDelete(false); }}
+                            onClick={() => { setEditMode(e => !e); setTab('info'); }}
                             title="Editar chamado"
                             aria-pressed={editMode}
                         />
                         <ActionIconButton
                             kind="delete"
-                            onClick={() => { setConfirmDelete(true); setEditMode(false); }}
+                            disabled={deleting}
+                            onClick={() => { setEditMode(false); void handleDelete(); }}
                             title="Excluir chamado"
                         />
                         <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors ml-1">✕</button>
                     </div>
                 </div>
-
-                {/* Confirmação de exclusão */}
-                {confirmDelete && (
-                    <div className="mx-6 mt-3 border border-red-200 bg-red-50 rounded-xl p-4 flex flex-col gap-3">
-                        <p className="text-sm font-semibold text-red-700">Excluir este chamado permanentemente?</p>
-                        <p className="text-xs text-red-500">Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.</p>
-                        <div className="flex gap-2">
-                            <Button
-                                onClick={handleDelete}
-                                disabled={deleting}
-                                variant="danger"
-                                className="flex-1"
-                            >
-                                {deleting ? 'Excluindo...' : 'Sim, excluir'}
-                            </Button>
-                            <Button
-                                onClick={() => setConfirmDelete(false)}
-                                variant="secondary"
-                                className="flex-1"
-                            >
-                                Cancelar
-                            </Button>
-                        </div>
-                    </div>
-                )}
 
                 {/* Tabs */}
                 <div className="flex gap-1 px-6 pt-3 border-b border-gray-100">
@@ -851,10 +935,10 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 <div key={v.id} className="bg-gray-50 rounded-xl p-4 text-sm">
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="font-bold text-gray-900">{v.technician_name}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-form-label font-bold ${
-                                            v.status === 'REALIZADA' ? 'bg-green-100 text-green-700' :
-                                            v.status === 'CANCELADA' ? 'bg-red-100 text-red-700' :
-                                            'bg-blue-100 text-blue-700'
+                                        <span className={`text-xs font-normal ${
+                                            v.status === 'REALIZADA' ? 'text-green-700' :
+                                            v.status === 'CANCELADA' ? 'text-red-700' :
+                                            'text-blue-700'
                                         }`}>{v.status}</span>
                                     </div>
                                     <p className="text-xs text-gray-500">

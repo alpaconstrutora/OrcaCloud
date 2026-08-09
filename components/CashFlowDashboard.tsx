@@ -3,10 +3,13 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, ReferenceLine, Legend,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Download } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Download, MoveHorizontal } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
+import { useResizableColumns } from './ui/TableUtils';
 import type { CashFlowSummary, CashFlowGranularity } from '../types/financial';
+
+const CASHFLOW_COL_WIDTHS: Record<string, number> = { periodo: 160, entradas: 150, saidas: 150, saldo: 150, acumulado: 150 };
 
 function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -64,6 +67,7 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
     const [data, setData]   = React.useState<CashFlowSummary | null>(null);
     const [loading, setLoading] = React.useState(false);
     const [chartMode, setChartMode] = React.useState<'acumulado' | 'periodo'>('acumulado');
+    const cols = useResizableColumns(CASHFLOW_COL_WIDTHS, 'cashFlowReportColWidths');
 
     const load = React.useCallback(async () => {
         setLoading(true);
@@ -156,7 +160,7 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
                     <div className="flex gap-2">
                         {(['acumulado', 'periodo'] as const).map(m => (
                             <button key={m} onClick={() => setChartMode(m)}
-                                className={`px-4 py-1.5 rounded-full text-form-input font-bold transition-all ${
+                                className={`h-8 px-3 rounded-[6px] text-sm font-medium transition-all ${
                                     chartMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
                                 }`}
                             >
@@ -216,31 +220,37 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
                     </div>
 
                     {/* Tabela de períodos */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-                            <h3 className="text-xs font-black text-gray-500 uppercase tracking-wider">Detalhamento por Período</h3>
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                            <h3 className="text-xs font-semibold text-gray-500">Detalhamento por Período</h3>
+                            <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full">
+                            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(CASHFLOW_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+                                <colgroup>
+                                    {Object.keys(CASHFLOW_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+                                </colgroup>
                                 <thead>
-                                    <tr className="border-b border-gray-100">
-                                        <th className="px-4 py-2.5 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Período</th>
-                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Entradas</th>
-                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Saídas</th>
-                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Saldo</th>
-                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Acumulado</th>
+                                    <tr className="bg-gray-50 text-gray-500 border-b border-gray-200 text-xs font-semibold">
+                                        <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Período<cols.ResizeHandle colKey="periodo" /></th>
+                                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Entradas<cols.ResizeHandle colKey="entradas" /></th>
+                                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Saídas<cols.ResizeHandle colKey="saidas" /></th>
+                                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Saldo<cols.ResizeHandle colKey="saldo" /></th>
+                                        <th className="px-6 py-2 text-right relative overflow-hidden">Acumulado<cols.ResizeHandle colKey="acumulado" /></th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50">
+                                <tbody className="divide-y divide-gray-100">
                                     {data.points.map(p => (
-                                        <tr key={p.period_label} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-4 py-2.5 text-sm font-semibold text-gray-700">{p.period_label}</td>
-                                            <td className="px-4 py-2.5 text-sm text-right tabular-nums text-green-600 font-semibold">{formatBRL(p.credit_real)}</td>
-                                            <td className="px-4 py-2.5 text-sm text-right tabular-nums text-red-500 font-semibold">{formatBRL(p.debit_real)}</td>
-                                            <td className={`px-4 py-2.5 text-sm text-right tabular-nums font-bold ${p.saldo_real >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                        <tr key={p.period_label} className="hover:bg-blue-50/50 transition-colors">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{p.period_label}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-green-600 font-medium">{formatBRL(p.credit_real)}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-red-500 font-medium">{formatBRL(p.debit_real)}</td>
+                                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${p.saldo_real >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                                                 {formatBRL(p.saldo_real)}
                                             </td>
-                                            <td className={`px-4 py-2.5 text-sm text-right tabular-nums font-black ${p.saldo_acumulado >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                            <td className={`px-6 py-2.5 text-sm text-right tabular-nums font-medium ${p.saldo_acumulado >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                                                 {formatBRL(p.saldo_acumulado)}
                                             </td>
                                         </tr>

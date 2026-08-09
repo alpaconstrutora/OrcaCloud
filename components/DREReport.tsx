@@ -1,9 +1,16 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2, MoveHorizontal } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import type { DRESummary, DRELine, DREGroup, DREProjectSummary, RegimeContabil } from '../types/financial';
 import Button from './ui/Button';
+import { useResizableColumns } from './ui/TableUtils';
+
+// §6.3 — as linhas do DRE/comparativo têm ordem contábil fixa (Receita → Deduções →
+// Resultado), não fazem sentido reordenadas por clique de coluna; por isso as tabelas
+// abaixo usam <th> simples (sem SortableHeader), mas ganham resize+autofit (§6.1/§6.1.2).
+const DRE_COL_WIDTHS: Record<string, number> = { linha: 260, realizado: 180, previsto: 180 };
+const PROJECT_COL_WIDTHS: Record<string, number> = { obra: 220, receita: 150, custo: 150, margem: 150, margem_pct: 110 };
 
 // ── Labels e ordem dos grupos ─────────────────────────────────────────────────
 
@@ -76,13 +83,13 @@ function SummaryRow({ linha, realizado, previsto }: { linha: string; realizado: 
         const hasValue = realizado !== 0 || previsto !== 0;
         return (
             <tr className={`border-t-2 border-gray-100 ${hasValue ? 'bg-amber-50' : ''}`}>
-                <td className="px-4 py-2.5 text-sm font-semibold text-amber-700 pl-8" title="Lançamentos sem categoria mapeada no plano de contas — não entram no Resultado Líquido. Classifique-os no Plano de Contas.">
+                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-amber-700 pl-8" title="Lançamentos sem categoria mapeada no plano de contas — não entram no Resultado Líquido. Classifique-os no Plano de Contas.">
                     ⚠ {linha.replace('(!) ', '')}
                 </td>
-                <td className={`px-4 py-2.5 text-sm text-right tabular-nums font-semibold ${realizado < 0 ? 'text-red-600' : 'text-amber-700'}`}>
+                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : 'text-amber-700'}`}>
                     {formatBRL(realizado)}
                 </td>
-                <td className="px-4 py-2.5 text-sm text-right tabular-nums text-amber-500">
+                <td className="px-6 py-2.5 text-sm text-right tabular-nums font-normal text-amber-500">
                     {formatBRL(previsto)}
                 </td>
             </tr>
@@ -90,14 +97,14 @@ function SummaryRow({ linha, realizado, previsto }: { linha: string; realizado: 
     }
 
     return (
-        <tr className={`${isTotal ? 'bg-gray-50 font-black' : ''} border-b border-gray-100 last:border-0`}>
-            <td className={`px-4 py-2.5 text-sm ${isTotal ? 'text-gray-900 font-black' : isDeduction ? 'text-red-600 font-semibold pl-8' : 'text-gray-700 font-semibold pl-8'}`}>
+        <tr className={`${isTotal ? 'bg-gray-50 border-t-2 border-gray-200' : ''} border-b border-gray-100 last:border-0`}>
+            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm ${isTotal ? 'text-gray-900 font-medium' : isDeduction ? 'text-red-600 font-normal pl-8' : 'text-gray-700 font-normal pl-8'}`}>
                 {linha}
             </td>
-            <td className={`px-4 py-2.5 text-sm text-right tabular-nums ${realizado < 0 ? 'text-red-600' : isTotal ? 'text-gray-900 font-black' : 'text-gray-700'}`}>
+            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : isTotal ? 'text-gray-900' : 'text-gray-700'}`}>
                 {formatBRL(realizado)}
             </td>
-            <td className={`px-4 py-2.5 text-sm text-right tabular-nums ${previsto < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+            <td className={`px-6 py-2.5 text-sm text-right tabular-nums font-normal ${previsto < 0 ? 'text-red-500' : 'text-gray-400'}`}>
                 {formatBRL(previsto)}
             </td>
         </tr>
@@ -116,24 +123,24 @@ function DetailGroup({ group, lines }: { group: DREGroup; lines: DRELine[] }) {
                 className="cursor-pointer hover:bg-gray-50 border-b border-gray-100"
                 onClick={() => setOpen(o => !o)}
             >
-                <td className="px-4 py-2.5 text-sm font-bold text-gray-800 flex items-center gap-2">
+                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 flex items-center gap-2">
                     {open ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
                     {DRE_GROUP_LABELS[group]}
                 </td>
-                <td className={`px-4 py-2.5 text-sm text-right font-bold tabular-nums ${total < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums ${total < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                     {formatBRL(total)}
                 </td>
-                <td className="px-4 py-2.5 text-sm text-right text-gray-400 tabular-nums">
+                <td className="px-6 py-2.5 text-sm text-right text-gray-400 tabular-nums font-normal">
                     {formatBRL(lines.reduce((s, l) => s + l.pending_credit - l.pending_debit, 0))}
                 </td>
             </tr>
             {open && lines.map(l => (
                 <tr key={l.category_name} className="bg-gray-50/50 border-b border-gray-50">
-                    <td className="px-4 py-2 pl-12 text-table-body text-gray-500">{l.category_name}</td>
-                    <td className={`px-4 py-2 text-table-body text-right tabular-nums ${l.net < 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                    <td className="px-6 py-2 border-r border-gray-100 pl-12 text-sm font-normal text-gray-500">{l.category_name}</td>
+                    <td className={`px-6 py-2 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${l.net < 0 ? 'text-red-500' : 'text-gray-700'}`}>
                         {formatBRL(l.net)}
                     </td>
-                    <td className="px-4 py-2 text-table-body text-right tabular-nums text-gray-400">
+                    <td className="px-6 py-2 text-sm text-right tabular-nums font-normal text-gray-400">
                         {formatBRL(l.pending_credit - l.pending_debit)}
                     </td>
                 </tr>
@@ -145,6 +152,8 @@ function DetailGroup({ group, lines }: { group: DREGroup; lines: DRELine[] }) {
 // ── Comparativo por Obra ──────────────────────────────────────────────────────
 
 function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSummary[]; onSelect: (projectId: string) => void }) {
+    const cols = useResizableColumns(PROJECT_COL_WIDTHS, 'dreProjectComparisonColWidths');
+
     if (projects.length === 0) {
         return (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
@@ -157,17 +166,31 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
         (acc, p) => ({ receita: acc.receita + p.receita, custo: acc.custo + p.custo, margem: acc.margem + p.margem }),
         { receita: 0, custo: 0, margem: 0 },
     );
+    const tableWidth = Object.keys(PROJECT_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0);
 
     return (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <table className="w-full">
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex justify-end p-2 border-b border-gray-100">
+                <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                    <MoveHorizontal className="w-4 h-4" />
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                <colgroup>
+                    <col data-col-key="obra" style={{ width: `${cols.getWidth('obra')}px` }} />
+                    <col data-col-key="receita" style={{ width: `${cols.getWidth('receita')}px` }} />
+                    <col data-col-key="custo" style={{ width: `${cols.getWidth('custo')}px` }} />
+                    <col data-col-key="margem" style={{ width: `${cols.getWidth('margem')}px` }} />
+                    <col data-col-key="margem_pct" style={{ width: `${cols.getWidth('margem_pct')}px` }} />
+                </colgroup>
                 <thead>
-                    <tr className="bg-gray-50/80 border-b border-gray-100">
-                        <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Obra</th>
-                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Receita</th>
-                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Custo</th>
-                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Margem</th>
-                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Margem %</th>
+                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Obra<cols.ResizeHandle colKey="obra" /></th>
+                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Receita<cols.ResizeHandle colKey="receita" /></th>
+                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Custo<cols.ResizeHandle colKey="custo" /></th>
+                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Margem<cols.ResizeHandle colKey="margem" /></th>
+                        <th className="px-6 py-2 text-right relative overflow-hidden">Margem %<cols.ResizeHandle colKey="margem_pct" /></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -177,32 +200,33 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                             onClick={() => onSelect(p.project_id)}
                             title="Ver DRE desta obra"
                         >
-                            <td className="px-4 py-2.5 text-sm font-semibold text-gray-700 flex items-center gap-2">
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 flex items-center gap-2">
                                 <Building2 className="w-3.5 h-3.5 text-gray-300" /> {p.project_name}
                             </td>
-                            <td className="px-4 py-2.5 text-sm text-right tabular-nums text-gray-700">{formatBRL(p.receita)}</td>
-                            <td className="px-4 py-2.5 text-sm text-right tabular-nums text-red-600">{formatBRL(p.custo)}</td>
-                            <td className={`px-4 py-2.5 text-sm text-right font-bold tabular-nums ${p.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-700">{formatBRL(p.receita)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-red-600">{formatBRL(p.custo)}</td>
+                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums ${p.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                                 {formatBRL(p.margem)}
                             </td>
-                            <td className={`px-4 py-2.5 text-sm text-right tabular-nums ${(p.margem_pct ?? 0) < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                            <td className={`px-6 py-2.5 text-sm text-right tabular-nums font-normal ${(p.margem_pct ?? 0) < 0 ? 'text-red-500' : 'text-green-600'}`}>
                                 {formatPct(p.margem_pct)}
                             </td>
                         </tr>
                     ))}
-                    <tr className="bg-gray-50 font-black border-t-2 border-gray-200">
-                        <td className="px-4 py-2.5 text-sm text-gray-900">Total</td>
-                        <td className="px-4 py-2.5 text-sm text-right tabular-nums text-gray-900">{formatBRL(totals.receita)}</td>
-                        <td className="px-4 py-2.5 text-sm text-right tabular-nums text-red-600">{formatBRL(totals.custo)}</td>
-                        <td className={`px-4 py-2.5 text-sm text-right tabular-nums ${totals.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                    <tr className="bg-gray-50 border-t-2 border-gray-200">
+                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-900">Total</td>
+                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-900">{formatBRL(totals.receita)}</td>
+                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-red-600">{formatBRL(totals.custo)}</td>
+                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${totals.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                             {formatBRL(totals.margem)}
                         </td>
-                        <td className="px-4 py-2.5 text-sm text-right tabular-nums text-gray-500">
+                        <td className="px-6 py-2.5 text-sm text-right tabular-nums font-normal text-gray-500">
                             {formatPct(totals.receita ? totals.margem / totals.receita * 100 : null)}
                         </td>
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     );
 }
@@ -229,6 +253,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
     const [regime, setRegime]       = React.useState<RegimeContabil>('CAIXA');
     const [loading, setLoading] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe' | 'por_obra'>('resumo');
+    const dreCols = useResizableColumns(DRE_COL_WIDTHS, 'dreSummaryColWidths');
 
     const load = React.useCallback(async () => {
         setLoading(true);
@@ -342,7 +367,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                     <div className="flex gap-2">
                         {(['resumo', 'detalhe', 'por_obra'] as const).map(m => (
                             <button key={m} onClick={() => setViewMode(m)}
-                                className={`px-4 py-1.5 rounded-full text-table-body font-bold transition-all ${
+                                className={`h-8 px-3 rounded-[6px] text-sm font-medium transition-all ${
                                     viewMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
                                 }`}
                             >
@@ -355,13 +380,24 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                     {viewMode === 'por_obra' ? (
                         <ProjectComparisonTable projects={projects} onSelect={pid => { setProjectId(pid); setViewMode('resumo'); }} />
                     ) : (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <table className="w-full">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="flex justify-end p-2 border-b border-gray-100">
+                            <button onClick={() => dreCols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="overflow-x-auto">
+                        <table ref={dreCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(DRE_COL_WIDTHS).reduce((s, k) => s + dreCols.getWidth(k), 0) }}>
+                            <colgroup>
+                                <col data-col-key="linha" style={{ width: `${dreCols.getWidth('linha')}px` }} />
+                                <col data-col-key="realizado" style={{ width: `${dreCols.getWidth('realizado')}px` }} />
+                                <col data-col-key="previsto" style={{ width: `${dreCols.getWidth('previsto')}px` }} />
+                            </colgroup>
                             <thead>
-                                <tr className="bg-gray-50/80 border-b border-gray-100">
-                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Linha</th>
-                                    <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Realizado</th>
-                                    <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Previsto</th>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Linha<dreCols.ResizeHandle colKey="linha" /></th>
+                                    <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Realizado<dreCols.ResizeHandle colKey="realizado" /></th>
+                                    <th className="px-6 py-2 text-right relative overflow-hidden">Previsto<dreCols.ResizeHandle colKey="previsto" /></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -383,6 +419,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                                 }
                             </tbody>
                         </table>
+                        </div>
                     </div>
                     )}
 

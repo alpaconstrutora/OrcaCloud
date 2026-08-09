@@ -2,8 +2,9 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { DRESPELine, RegimeContabil } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, MoveHorizontal } from 'lucide-react'
 import Button from './ui/Button'
+import { useResizableColumns } from './ui/TableUtils'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (v: number | null) => v === null ? '—' : `${v.toFixed(1)}%`
@@ -39,6 +40,8 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
     const [regime, setRegime]     = React.useState<RegimeContabil>('CAIXA')
     const [data, setData]         = React.useState<DRESPELine[]>([])
     const [loading, setLoading]   = React.useState(false)
+    // §6.1 — colunas dinâmicas (1 por SPE); largura padrão 180px, ajustável por empresa.
+    const cols = useResizableColumns({}, 'drespeReportColWidths', { min: 140, max: 400 })
 
     const load = React.useCallback(async () => {
         setLoading(true)
@@ -101,19 +104,34 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                     <p className="mt-2 text-xs">Certifique-se de que os projetos têm uma empresa/SPE associada.</p>
                 </div>
             ) : (
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
-                    <table className="w-full text-left">
+                <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
+                    <div className="flex justify-end p-2 border-b border-slate-100">
+                        <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                    <table
+                        ref={cols.tableRef}
+                        className="text-left border-collapse"
+                        style={{ tableLayout: 'fixed', width: 220 + data.reduce((s, spe) => s + cols.getWidth(spe.empresa_id), 0) }}
+                    >
+                        <colgroup>
+                            <col style={{ width: '220px' }} />
+                            {data.map(spe => <col key={spe.empresa_id} data-col-key={spe.empresa_id} style={{ width: `${cols.getWidth(spe.empresa_id)}px` }} />)}
+                        </colgroup>
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="px-5 py-3 text-xs font-black text-slate-400 uppercase tracking-widest sticky left-0 bg-slate-50 min-w-[180px]">
+                                <th className="px-5 py-2 text-xs font-semibold text-slate-500 sticky left-0 bg-slate-50">
                                     Linha DRE
                                 </th>
                                 {data.map(spe => (
-                                    <th key={spe.empresa_id} className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-widest text-right min-w-[160px]">
+                                    <th key={spe.empresa_id} className="px-4 py-2 text-xs font-semibold text-slate-600 text-right relative overflow-hidden">
                                         {spe.empresa_nome}
-                                        <span className="block text-slate-400 font-normal normal-case tracking-normal">
+                                        <span className="block text-slate-400 font-normal">
                                             {spe.n_transacoes} lançamentos
                                         </span>
+                                        <cols.ResizeHandle colKey={spe.empresa_id} />
                                     </th>
                                 ))}
                             </tr>
@@ -124,7 +142,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                                 const isTotalRow = isTotal(col.key)
                                 return (
                                     <tr key={col.key} className={isTotalRow ? 'bg-slate-50/70' : 'hover:bg-blue-50/20'}>
-                                        <td className={`px-5 py-2.5 sticky left-0 ${isTotalRow ? 'bg-slate-50/70' : 'bg-white'} text-form-label ${isTotalRow ? 'font-black text-slate-700' : isDeduction(col.key) ? 'text-slate-500 pl-8' : 'font-semibold text-slate-600'}`}>
+                                        <td className={`px-5 py-2.5 sticky left-0 text-sm ${isTotalRow ? 'bg-slate-50/70 font-medium text-slate-700' : 'bg-white'} ${!isTotalRow && isDeduction(col.key) ? 'text-slate-500 pl-8 font-normal' : !isTotalRow ? 'font-normal text-slate-600' : ''}`}>
                                             {col.label}
                                         </td>
                                         {data.map(spe => {
@@ -133,11 +151,11 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                                             const isNeg = v < 0
                                             return (
                                                 <td key={spe.empresa_id} className="px-4 py-2.5 text-right tabular-nums">
-                                                    <span className={`text-sm ${isTotalRow ? 'font-black' : 'font-medium'} ${isNeg ? 'text-red-600' : v > 0 && isTotalRow ? 'text-emerald-700' : 'text-slate-700'}`}>
+                                                    <span className={`text-sm font-medium ${isNeg ? 'text-red-600' : v > 0 && isTotalRow ? 'text-emerald-700' : 'text-slate-700'}`}>
                                                         {fmt(v)}
                                                     </span>
                                                     {pct !== null && (
-                                                        <span className={`ml-2 text-xs font-semibold flex items-center justify-end gap-0.5 ${pct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                        <span className={`ml-2 text-xs font-normal flex items-center justify-end gap-0.5 ${pct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                                                             {pct >= 0
                                                                 ? <TrendingUp className="w-3 h-3" />
                                                                 : <TrendingDown className="w-3 h-3" />
@@ -153,6 +171,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                             })}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             )}
         </div>

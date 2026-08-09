@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Search } from 'lucide-react';
+import { BookOpen, Search, MoveHorizontal } from 'lucide-react';
 import { listJournalEntries } from '../services/diarioService';
 import type { JournalEntryPair } from '../services/diarioService';
+import { useResizableColumns, usePersistedState } from './ui/TableUtils';
+
+const DIARIO_COL_WIDTHS: Record<string, number> = {
+  data: 110, descricao: 220, origem: 110, contaDebito: 150, contaCredito: 150, valor: 140, status: 120,
+};
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -23,7 +28,8 @@ export default function DiarioReport({ organizationId }: Props) {
   const [entries, setEntries] = useState<JournalEntryPair[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedState<string>('diarioReport:search', '');
+  const cols = useResizableColumns(DIARIO_COL_WIDTHS, 'diarioReportColWidths');
 
   const now = new Date();
   const defaultFrom = `${now.getFullYear()}-01-01`;
@@ -102,61 +108,71 @@ export default function DiarioReport({ organizationId }: Props) {
       </div>
 
       {/* Tabela */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-[10px] border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm">Carregando lançamentos…</span>
           </div>
         ) : error ? (
-          <div className="p-8 text-center text-red-600 text-sm font-semibold">{error}</div>
+          <div className="p-8 text-center text-red-600 text-sm font-medium">{error}</div>
         ) : shown.length === 0 ? (
           <div className="p-12 text-center text-slate-400 text-sm">
             Nenhum lançamento encontrado para o período.
           </div>
         ) : (
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                {['Data', 'Descrição', 'Origem', 'Conta Débito', 'Conta Crédito', 'Valor', 'Status'].map(h => (
-                  <th key={h} className="px-4 py-2.5 font-black uppercase tracking-wider text-xs text-slate-400 whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {shown.map(e => (
-                <tr key={e.journalEntryId} className="hover:bg-blue-50/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-slate-500 whitespace-nowrap">
-                    {fmtDate(e.entryDate)}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-slate-700 max-w-[200px] truncate" title={e.description}>
-                    {e.description}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-xs uppercase">
-                      {SOURCE_LABEL[e.sourceSystem ?? ''] ?? (e.sourceSystem ?? '—')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-blue-700 font-semibold">{e.debitAccount}</td>
-                  <td className="px-4 py-3 text-emerald-700 font-semibold">{e.creditAccount}</td>
-                  <td className="px-4 py-3 font-black font-mono text-slate-800 whitespace-nowrap">
-                    {fmt(e.debitAmount)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase ${
-                      e.status === 'CONCILIATED'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-amber-50 text-amber-700'
-                    }`}>
-                      {e.status === 'CONCILIATED' ? 'Conciliado' : 'Pendente'}
-                    </span>
-                  </td>
+          <>
+            <div className="flex justify-end p-2 border-b border-slate-100">
+              <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                <MoveHorizontal className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(DIARIO_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+              <colgroup>
+                {Object.keys(DIARIO_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+              </colgroup>
+              <thead>
+                <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
+                  {[
+                    ['data', 'Data'], ['descricao', 'Descrição'], ['origem', 'Origem'],
+                    ['contaDebito', 'Conta Débito'], ['contaCredito', 'Conta Crédito'], ['valor', 'Valor'], ['status', 'Status'],
+                  ].map(([key, h]) => (
+                    <th key={key} className="px-6 py-2 border-r border-gray-100 last:border-r-0 font-semibold text-xs text-gray-500 whitespace-nowrap relative overflow-hidden">
+                      {h}
+                      <cols.ResizeHandle colKey={key} />
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {shown.map(e => (
+                  <tr key={e.journalEntryId} className="hover:bg-blue-50/50 transition-colors">
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-slate-500 whitespace-nowrap">
+                      {fmtDate(e.entryDate)}
+                    </td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-slate-700 truncate" title={e.description}>
+                      {e.description}
+                    </td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-indigo-700">
+                      {SOURCE_LABEL[e.sourceSystem ?? ''] ?? (e.sourceSystem ?? '—')}
+                    </td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-blue-700">{e.debitAccount}</td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-emerald-700">{e.creditAccount}</td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-slate-800 whitespace-nowrap">
+                      {fmt(e.debitAmount)}
+                    </td>
+                    <td className="px-6 py-2.5 text-sm font-normal">
+                      <span className={e.status === 'CONCILIATED' ? 'text-emerald-700' : 'text-amber-700'}>
+                        {e.status === 'CONCILIATED' ? 'Conciliado' : 'Pendente'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </>
         )}
       </div>
     </div>

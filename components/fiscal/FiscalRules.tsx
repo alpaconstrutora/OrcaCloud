@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Tags, Search, Plus, X } from 'lucide-react';
+import { Tags, Search, Plus, X, MoveHorizontal } from 'lucide-react';
 import { listClassificationRules, createClassificationRule, toggleClassificationRule } from '../../services/nfeService';
 import type { ClassificationRule, RuleType } from '../../types/fiscal';
 import { KpiCard } from '../ui/KpiCard';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { useOrgWriteTarget, forEachTargetOrg, errorMessage } from '../../hooks/useOrgContext';
 
 interface Props {
@@ -54,6 +54,7 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
+const COL_WIDTHS: Record<string, number> = { type: 110, value: 160, category: 140, priority: 110, scope: 110, status: 100, actions: 110 };
 
 export function FiscalRules({ organizationId, writeOrganizationId, onToast, chromeSlot }: Props) {
   const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
@@ -64,6 +65,7 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = usePersistedState<string>('fiscalRules:search', '');
   const tableColumns = useTableColumns(COLUMNS, 'fiscalRulesColumns');
+  const cols = useResizableColumns(COL_WIDTHS, 'fiscalRulesColWidths');
 
   const loadRules = () => {
     setLoading(true);
@@ -172,6 +174,13 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
             onToggleColumn={tableColumns.toggleColumn}
             onReset={tableColumns.resetColumns}
           />
+          <button
+            onClick={() => cols.autoFit()}
+            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+            title="Ajustar largura das colunas ao conteúdo"
+          >
+            <MoveHorizontal className="w-4 h-4" />
+          </button>
         </div>
         <button
           onClick={() => setShowForm(v => !v)}
@@ -240,39 +249,61 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
       ) : (
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            {(() => {
+              const visibleR = COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
+              const rulesTableWidth = visibleR.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+              return (
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: rulesTableWidth }}>
+              <colgroup>
+                {visibleR.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                <col />
+                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+              </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                   {tableColumns.visibleColumns.includes('type') && (
                     <SortableHeader colKey="type" label="Tipo" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="type" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('value') && (
                     <SortableHeader colKey="value" label="Valor" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="value" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('category') && (
                     <SortableHeader colKey="category" label="Categoria" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="category" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('priority') && (
                     <SortableHeader colKey="priority" label="Prioridade" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="priority" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('scope') && (
                     <SortableHeader colKey="scope" label="Escopo" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="scope" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('status') && (
                     <SortableHeader colKey="status" label="Status" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="status" />
+                    </SortableHeader>
                   )}
+                  <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                   )}
@@ -305,6 +336,7 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
                         <span className={r.is_active ? 'text-emerald-700' : 'text-gray-400'}>{r.is_active ? 'Ativa' : 'Inativa'}</span>
                       </td>
                     )}
+                    <td aria-hidden="true"></td>
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">
                         {r.organization_id ? (
@@ -323,6 +355,8 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
                 ))}
               </tbody>
             </table>
+              );
+            })()}
           </div>
 
           <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-500">

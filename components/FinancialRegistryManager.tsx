@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Save, Search, AlertCircle, Download, FileDown, Upload, Hash, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { Plus, Trash2, Save, Search, AlertCircle, Download, FileDown, Upload, Hash, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, MoveHorizontal } from 'lucide-react';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -97,6 +97,12 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     }, [showCode, showDescription, showBankDetails, showNature]);
 
     const tableColumns = useTableColumns(registryColumns, 'financialRegistryColumns');
+    // §6.1 — larguras padrão por chave de coluna; `title` na storageKey evita colisão
+    // entre as duas telas que reaproveitam este componente (Contas de Pagamento × Plano de Contas).
+    const registryColWidths = useMemo<Record<string, number>>(() => ({
+        code: 130, name: 280, details: 320, accounting_nature: 130, actions: 100,
+    }), []);
+    const cols = useResizableColumns(registryColWidths, `financialRegistry:${title}:colWidths`);
 
     // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Campos variam
     // com as mesmas props que já controlam as colunas (showCode/showDescription/
@@ -368,6 +374,13 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
+                    <button
+                        onClick={() => cols.autoFit()}
+                        className="h-9 w-9 flex items-center justify-center text-gray-500 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95"
+                        title="Ajustar largura das colunas ao conteúdo"
+                    >
+                        <MoveHorizontal className="w-4 h-4" />
+                    </button>
 
                     <button
                         onClick={handleAdd}
@@ -511,28 +524,46 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                 {/* thead em sentence case (§6.2) — obrigatório porque a tela adotou a
                     escala de radius compacta (§16), mesmo critério do resto do módulo. */}
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    {(() => {
+                        const visible = registryColumns.filter(c => tableColumns.visibleColumns.includes(c.key));
+                        const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+                        return (
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                        <colgroup>
+                            {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                            <col />
+                            <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                        </colgroup>
                         <thead>
                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {showCode && tableColumns.visibleColumns.includes('code') && (
-                                    <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 w-32" />
+                                    <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="code" />
+                                    </SortableHeader>
                                 )}
                                 {tableColumns.visibleColumns.includes('name') && (
-                                    <SortableHeader label="Nome" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Nome" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="name" />
+                                    </SortableHeader>
                                 )}
                                 {(showDescription || showBankDetails) && tableColumns.visibleColumns.includes('details') && (
-                                    <SortableHeader label="Detalhes" colKey="details" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100" />
+                                    <SortableHeader label="Detalhes" colKey="details" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="details" />
+                                    </SortableHeader>
                                 )}
                                 {showNature && tableColumns.visibleColumns.includes('accounting_nature') && (
-                                    <SortableHeader label="Natureza" colKey="accounting_nature" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 w-28" />
+                                    <SortableHeader label="Natureza" colKey="accounting_nature" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                        <cols.ResizeHandle colKey="accounting_nature" />
+                                    </SortableHeader>
                                 )}
-                                <th className="px-6 py-2 text-right w-20 text-table-header font-semibold text-gray-500">Ações</th>
+                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
                             {visibleRows.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-6 py-12 text-center">
+                                    <td colSpan={visible.length + 2} className="px-6 py-12 text-center">
                                         <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum registro encontrado</h3>
                                         <p className="text-sm text-gray-500">Tente ajustar sua busca ou cadastre o primeiro registro.</p>
@@ -590,6 +621,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                                 </span>
                                             </td>
                                         )}
+                                        <td aria-hidden="true"></td>
                                         <td className="px-6 py-2.5 text-right">
                                             {/* Editar = clique na linha (ação dominante, §9.1); ação sempre visível
                                                 (nunca opacity-0 group-hover, proibido pelo §9). Kebab só tem Excluir. */}
@@ -609,6 +641,8 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                             )}
                         </tbody>
                     </table>
+                        );
+                    })()}
                 </div>
             </div>
             </div>

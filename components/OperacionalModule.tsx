@@ -3,8 +3,10 @@ import { isObra } from '../utils/projectClassification'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
   ChevronRight, Building2, Loader2, LayoutGrid, List,
-  Kanban, Library, FolderCog,
+  Kanban, Library, FolderCog, Search, MoveHorizontal,
 } from 'lucide-react'
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils'
+import { KpiCard } from './ui/KpiCard'
 import OperacionalList from './OperacionalList'
 import OperacionalDetail from './OperacionalDetail'
 import OperacionalForm from './OperacionalForm'
@@ -57,13 +59,22 @@ const TabBtn: React.FC<{
 )
 
 // ── Project selector ─────────────────────────────────────────────────────────
+const OBRA_COLUMNS: ColumnConfig[] = [
+  { key: 'name', label: 'Nome', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+]
+const OBRA_COL_WIDTHS: Record<string, number> = { name: 320, actions: 140 }
+
 const ProjectSelector: React.FC<{
   projects: Array<{ id: string; name: string; settings?: { organizationId?: string } }>
   selectedId: string | null
   orgId?: string
   onSelect: (id: string) => void
 }> = ({ projects, selectedId, orgId, onSelect }) => {
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards')
+  const [viewMode, setViewMode] = usePersistedState<'cards' | 'list'>('operacional:obraSelectorViewMode', 'cards')
+  const [search, setSearch] = usePersistedState<string>('operacional:obraSelectorSearch', '')
+  const tableColumns = useTableColumns(OBRA_COLUMNS, 'operacionalObraSelectorColumns')
+  const cols = useResizableColumns(OBRA_COL_WIDTHS, 'operacionalObraSelectorColWidths')
 
   const filtered = orgId
     ? projects.filter(p => p.settings?.organizationId === orgId)
@@ -87,8 +98,17 @@ const ProjectSelector: React.FC<{
     )
   }
 
+  const term = search.trim().toLowerCase()
+  const searchedObras = !term ? obras : obras.filter(p => p.name.toLowerCase().includes(term))
+  const sortedObras = tableColumns.sortColumn === 'name'
+    ? [...searchedObras].sort((a, b) => a.name.localeCompare(b.name) * (tableColumns.sortDirection === 'asc' ? 1 : -1))
+    : searchedObras
+
+  const visible = OBRA_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key))
+  const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions')
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-black text-slate-900">Selecione uma Obra</h2>
@@ -116,9 +136,51 @@ const ProjectSelector: React.FC<{
         </div>
       </div>
 
-      {viewMode === 'cards' ? (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <KpiCard label="Obras disponíveis" value={obras.length} icon={<Building2 className="w-5 h-5" />} color="blue" />
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-2.5 items-center">
+        <div className="flex-1 relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar obra por nome..."
+            className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+          />
+        </div>
+        {viewMode === 'list' && (
+          <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+            <ColumnConfigButton
+              columns={OBRA_COLUMNS.filter(c => c.key !== 'actions')}
+              visibleColumns={tableColumns.visibleColumns}
+              showColumnConfig={tableColumns.showColumnConfig}
+              onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+              onToggleColumn={tableColumns.toggleColumn}
+              onReset={tableColumns.resetColumns}
+            />
+            <button
+              onClick={() => cols.autoFit()}
+              className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+              title="Ajustar largura das colunas ao conteúdo"
+            >
+              <MoveHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {sortedObras.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+          <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma obra encontrada</h3>
+          <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
+        </div>
+      ) : viewMode === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {obras.map(p => (
+          {sortedObras.map(p => (
             <button
               key={p.id}
               onClick={() => onSelect(p.id)}
@@ -138,25 +200,50 @@ const ProjectSelector: React.FC<{
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm divide-y divide-slate-50">
-          {obras.map(p => (
-            <button
-              key={p.id}
-              onClick={() => onSelect(p.id)}
-              className={`w-full text-left px-5 py-3.5 flex items-center justify-between gap-3 transition-colors hover:bg-blue-50/50 active:bg-blue-100/50 ${
-                selectedId === p.id ? 'bg-blue-50' : ''
-              }`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <Building2 className="w-4 h-4 text-slate-300 flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="font-bold text-slate-900 text-sm truncate">{p.name}</p>
-                  <p className="text-xs text-slate-400 font-medium">Obra</p>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
-            </button>
-          ))}
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+              <colgroup>
+                {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                <col />
+                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+              </colgroup>
+              <thead>
+                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                  {tableColumns.visibleColumns.includes('name') && (
+                    <SortableHeader colKey="name" label="Nome" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="name" />
+                    </SortableHeader>
+                  )}
+                  <th aria-hidden="true" className="border-r border-gray-100" />
+                  {tableColumns.visibleColumns.includes('actions') && (
+                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {sortedObras.map(p => (
+                  <tr key={p.id} onClick={() => onSelect(p.id)} className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedId === p.id ? 'bg-blue-50/60' : ''}`}>
+                    {tableColumns.visibleColumns.includes('name') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                          <span className="truncate">{p.name}</span>
+                        </div>
+                      </td>
+                    )}
+                    <td aria-hidden="true"></td>
+                    {tableColumns.visibleColumns.includes('actions') && (
+                      // §9.1 — a linha já seleciona a obra (ação dominante); sem duplicar como botão.
+                      <td className="px-6 py-2.5 text-right">
+                        <ChevronRight className="w-4 h-4 text-blue-400 ml-auto" />
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

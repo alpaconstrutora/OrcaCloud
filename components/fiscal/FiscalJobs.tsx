@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ListChecks, Search, AlertTriangle, RotateCw, Zap, Archive, X } from 'lucide-react';
+import { ListChecks, Search, AlertTriangle, RotateCw, Zap, Archive, X, MoveHorizontal } from 'lucide-react';
 import { listProcessingJobs, replayDeadLetter, dismissDeadLetter, listParsingErrors } from '../../services/nfeService';
 import type { ProcessingJobWithDoc, ParsingError } from '../../types/fiscal';
 import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
 import FiscalDeadLetterLoteModal from './FiscalDeadLetterLoteModal';
@@ -61,6 +61,9 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'duration', label: 'Duração', sortable: true },
   { key: 'actions', label: 'Ação', sortable: false },
 ];
+const COL_WIDTHS: Record<string, number> = {
+  status: 110, document: 220, type: 130, retries: 100, failure: 100, error: 130, duration: 100, actions: 160,
+};
 
 export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
   const [jobs, setJobs] = useState<ProcessingJobWithDoc[]>([]);
@@ -69,6 +72,7 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
   const [replaying, setReplaying] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = usePersistedState<string>('fiscalJobs:search', '');
   const tableColumns = useTableColumns(COLUMNS, 'fiscalJobsColumns');
+  const cols = useResizableColumns(COL_WIDTHS, 'fiscalJobsColWidths');
   const confirm = useConfirm();
 
   const [selectedJob, setSelectedJob] = useState<ProcessingJobWithDoc | null>(null);
@@ -308,6 +312,13 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
             onToggleColumn={tableColumns.toggleColumn}
             onReset={tableColumns.resetColumns}
           />
+          <button
+            onClick={() => cols.autoFit()}
+            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+            title="Ajustar largura das colunas ao conteúdo"
+          >
+            <MoveHorizontal className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -337,7 +348,17 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
       ) : (
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            {(() => {
+              const visibleJ = COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
+              const jobsTableWidth = 40 + visibleJ.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+              return (
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: jobsTableWidth }}>
+              <colgroup>
+                <col style={{ width: '40px' }} />
+                {visibleJ.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                <col />
+                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+              </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                   <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -353,38 +374,53 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
                   {tableColumns.visibleColumns.includes('status') && (
                     <SortableHeader colKey="status" label="Status" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="status" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('document') && (
                     <SortableHeader colKey="document" label="Documento" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="document" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('type') && (
                     <SortableHeader colKey="type" label="Tipo" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="type" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('retries') && (
                     <SortableHeader colKey="retries" label="Retries" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="retries" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('failure') && (
                     <SortableHeader colKey="failure" label="Falha" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="failure" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('error') && (
                     <SortableHeader colKey="error" label="Erro" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="error" />
+                    </SortableHeader>
                   )}
                   {tableColumns.visibleColumns.includes('duration') && (
                     <SortableHeader colKey="duration" label="Duração" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100" />
+                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="duration" />
+                    </SortableHeader>
                   )}
+                  <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ação</th>
                   )}
@@ -441,6 +477,7 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
                     {tableColumns.visibleColumns.includes('duration') && (
                       <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{durationLabel(job)}</td>
                     )}
+                    <td aria-hidden="true"></td>
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -466,6 +503,8 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
                 ))}
               </tbody>
             </table>
+              );
+            })()}
           </div>
         </div>
       )}

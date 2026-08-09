@@ -11,6 +11,7 @@ import {
     FolderOpen,
     Layers,
     Lock,
+    MoveHorizontal,
     Plus,
     RefreshCw,
     Ruler,
@@ -23,7 +24,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import ActionIconButton from './ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import {
     statusLabel,
     formatNumber,
@@ -73,6 +74,7 @@ const PROJECT_COLUMNS: ColumnConfig[] = [
     { key: 'updated_at', label: 'Atualizado em', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+const PROJECT_COL_WIDTHS: Record<string, number> = { name: 240, project_type: 130, normative_reference: 200, status: 120, updated_at: 140, actions: 170 };
 
 const PROJECT_TYPE_LABEL: Record<string, string> = {
     vertical: 'Vertical',
@@ -110,6 +112,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     // Tela de gestão de projetos (lista) × workspace de cálculo de um projeto
     const [screenMode, setScreenMode] = usePersistedState<ScreenMode>('areaEngine:screenMode', 'list');
     const projectTableColumns = useTableColumns(PROJECT_COLUMNS, 'areaEngine:projectsColumns');
+    const projectCols = useResizableColumns(PROJECT_COL_WIDTHS, 'areaEngine:projectsColWidths');
     const [projects, setProjects] = React.useState<AreaProject[]>([]);
     const [versions, setVersions] = React.useState<AreaVersion[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
@@ -1337,12 +1340,19 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                 onToggleColumn={projectTableColumns.toggleColumn}
                                 onReset={projectTableColumns.resetColumns}
                             />
+                            {/* §6.1.2 — ajuste automático de largura ao conteúdo */}
+                            <button
+                                onClick={() => projectCols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
 
-                    {/* §6 — tabela: esta lista não usa redimensionamento de colunas (§6.1)
-                        nem cabeçalho fixo (§6.5) — poucas colunas, poucas linhas por
-                        organização (um projeto de áreas por empreendimento/torre). */}
+                    {/* §6.1 — redimensionamento + autofit; poucas linhas por organização,
+                        mas o pedido explícito de auto-ajuste vale para toda tabela. */}
                     <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                         {loading && projects.length === 0 ? (
                             <div className="py-12"><LoadingState message="Carregando projetos..." /></div>
@@ -1354,92 +1364,115 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                     icon={<FolderOpen className="w-12 h-12" />}
                                 />
                             </div>
-                        ) : (
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <tr>
-                                        {projectTableColumns.visibleColumns.includes('name') && (
-                                            <SortableHeader colKey="name" label="Nome" uppercase={false}
-                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                        )}
-                                        {projectTableColumns.visibleColumns.includes('project_type') && (
-                                            <SortableHeader colKey="project_type" label="Tipo" uppercase={false}
-                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                        )}
-                                        {projectTableColumns.visibleColumns.includes('normative_reference') && (
-                                            <SortableHeader colKey="normative_reference" label="Referência normativa" uppercase={false}
-                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                        )}
-                                        {projectTableColumns.visibleColumns.includes('status') && (
-                                            <SortableHeader colKey="status" label="Status" uppercase={false}
-                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                        )}
-                                        {projectTableColumns.visibleColumns.includes('updated_at') && (
-                                            <SortableHeader colKey="updated_at" label="Atualizado em" uppercase={false}
-                                                sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                        )}
-                                        {projectTableColumns.visibleColumns.includes('actions') && (
-                                            <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
-                                        )}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {sortedProjects.map(project => (
-                                        <tr
-                                            key={project.id}
-                                            className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedProjectId === project.id ? 'bg-blue-50/60' : ''}`}
-                                            onClick={() => openProjectWorkspace(project.id)}
-                                        >
-                                            {projectTableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{project.name}</td>
-                                            )}
-                                            {projectTableColumns.visibleColumns.includes('project_type') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{PROJECT_TYPE_LABEL[project.project_type] || project.project_type}</td>
-                                            )}
-                                            {projectTableColumns.visibleColumns.includes('normative_reference') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{project.normative_reference}</td>
-                                            )}
-                                            {projectTableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <span className={`text-sm font-normal ${projectStatusTone(project.status)}`}>{PROJECT_STATUS_LABEL[project.status] || project.status}</span>
-                                                </td>
-                                            )}
-                                            {projectTableColumns.visibleColumns.includes('updated_at') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatDateShort(project.updated_at)}</td>
-                                            )}
-                                            {projectTableColumns.visibleColumns.includes('actions') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            onClick={(event) => { event.stopPropagation(); openProjectWorkspace(project.id); }}
-                                                            className="text-sm font-normal text-blue-600 hover:underline"
-                                                        >
-                                                            Ver detalhes
-                                                        </button>
-                                                        <ActionIconButton
-                                                            kind={project.status === 'archived' ? 'unlock' : 'lock'}
-                                                            title={project.status === 'archived' ? 'Reativar' : 'Arquivar'}
-                                                            disabled={actionLoading === `archive-${project.id}`}
-                                                            onClick={(event) => void toggleArchiveProject(project, event)}
-                                                        />
-                                                        <ActionIconButton
-                                                            kind="delete"
-                                                            disabled={actionLoading === `delete-project-${project.id}`}
-                                                            onClick={(event) => void deleteAreaProject(project, event)}
-                                                        />
-                                                    </div>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
+                        ) : (() => {
+                            const visible = PROJECT_COLUMNS.filter(c => c.key !== 'actions' && projectTableColumns.visibleColumns.includes(c.key));
+                            const tableWidth = visible.reduce((s, c) => s + projectCols.getWidth(c.key), 0) + projectCols.getWidth('actions');
+                            return (
+                                <div className="overflow-x-auto">
+                                    <table ref={projectCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                                        <colgroup>
+                                            {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${projectCols.getWidth(c.key)}px` }} />)}
+                                            <col />
+                                            <col data-col-key="actions" style={{ width: `${projectCols.getWidth('actions')}px` }} />
+                                        </colgroup>
+                                        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr>
+                                                {projectTableColumns.visibleColumns.includes('name') && (
+                                                    <SortableHeader colKey="name" label="Nome" uppercase={false}
+                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <projectCols.ResizeHandle colKey="name" />
+                                                    </SortableHeader>
+                                                )}
+                                                {projectTableColumns.visibleColumns.includes('project_type') && (
+                                                    <SortableHeader colKey="project_type" label="Tipo" uppercase={false}
+                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <projectCols.ResizeHandle colKey="project_type" />
+                                                    </SortableHeader>
+                                                )}
+                                                {projectTableColumns.visibleColumns.includes('normative_reference') && (
+                                                    <SortableHeader colKey="normative_reference" label="Referência normativa" uppercase={false}
+                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <projectCols.ResizeHandle colKey="normative_reference" />
+                                                    </SortableHeader>
+                                                )}
+                                                {projectTableColumns.visibleColumns.includes('status') && (
+                                                    <SortableHeader colKey="status" label="Status" uppercase={false}
+                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <projectCols.ResizeHandle colKey="status" />
+                                                    </SortableHeader>
+                                                )}
+                                                {projectTableColumns.visibleColumns.includes('updated_at') && (
+                                                    <SortableHeader colKey="updated_at" label="Atualizado em" uppercase={false}
+                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <projectCols.ResizeHandle colKey="updated_at" />
+                                                    </SortableHeader>
+                                                )}
+                                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                                {projectTableColumns.visibleColumns.includes('actions') && (
+                                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                                )}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                            {sortedProjects.map(project => (
+                                                <tr
+                                                    key={project.id}
+                                                    className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedProjectId === project.id ? 'bg-blue-50/60' : ''}`}
+                                                    onClick={() => openProjectWorkspace(project.id)}
+                                                >
+                                                    {projectTableColumns.visibleColumns.includes('name') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{project.name}</td>
+                                                    )}
+                                                    {projectTableColumns.visibleColumns.includes('project_type') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{PROJECT_TYPE_LABEL[project.project_type] || project.project_type}</td>
+                                                    )}
+                                                    {projectTableColumns.visibleColumns.includes('normative_reference') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{project.normative_reference}</td>
+                                                    )}
+                                                    {projectTableColumns.visibleColumns.includes('status') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <span className={`text-sm font-normal ${projectStatusTone(project.status)}`}>{PROJECT_STATUS_LABEL[project.status] || project.status}</span>
+                                                        </td>
+                                                    )}
+                                                    {projectTableColumns.visibleColumns.includes('updated_at') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatDateShort(project.updated_at)}</td>
+                                                    )}
+                                                    <td aria-hidden="true"></td>
+                                                    {projectTableColumns.visibleColumns.includes('actions') && (
+                                                        <td className="px-6 py-2.5 text-right">
+                                                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                                <button
+                                                                    onClick={() => openProjectWorkspace(project.id)}
+                                                                    className="text-sm font-normal text-blue-600 hover:underline"
+                                                                >
+                                                                    Ver detalhes
+                                                                </button>
+                                                                <ActionIconButton
+                                                                    kind={project.status === 'archived' ? 'unlock' : 'lock'}
+                                                                    title={project.status === 'archived' ? 'Reativar' : 'Arquivar'}
+                                                                    disabled={actionLoading === `archive-${project.id}`}
+                                                                    onClick={(event) => void toggleArchiveProject(project, event)}
+                                                                />
+                                                                <ActionIconButton
+                                                                    kind="delete"
+                                                                    disabled={actionLoading === `delete-project-${project.id}`}
+                                                                    onClick={(event) => void deleteAreaProject(project, event)}
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </>
             ) : (
@@ -1968,6 +2001,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm overflow-hidden">
                                 {loading ? <LoadingState /> : (
                                     <ResultTable
+                                        id="quadroI"
                                         empty="Calcule a versão para gerar o Quadro I."
                                         headers={['Pavimento', 'Área real', 'Área equivalente']}
                                         rows={quadroI.map(row => [row.floor_label, `${formatNumber(row.qi_17_floor_real_total_raw)} m²`, `${formatNumber(row.qi_18_floor_equivalent_total_raw)} m²`])}
@@ -1980,6 +2014,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm overflow-hidden">
                                 {loading ? <LoadingState /> : (
                                     <ResultTable
+                                        id="quadroII"
                                         empty="Calcule a versão para gerar o Quadro II."
                                         headers={['Unidade', 'Coeficiente', 'Área real', 'Área equivalente']}
                                         rows={quadroII.map(row => [row.unit_label, formatNumber(row.qii_31_proportionality_coefficient_raw, 12), `${formatNumber(row.qii_37_unit_real_total_raw)} m²`, `${formatNumber(row.qii_38_unit_equivalent_total_raw)} m²`])}
@@ -1992,6 +2027,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             <div className="bg-white border border-gray-100 rounded-[10px] shadow-sm overflow-hidden">
                                 {loading ? <LoadingState /> : (
                                     <ResultTable
+                                        id="quadroIVB"
                                         empty="Calcule a versão para gerar o Quadro IV-B."
                                         headers={['Unidade', 'Área real', 'Coeficiente', 'Fração ideal']}
                                         rows={quadroIVB.map(row => [row.unit_label, `${formatNumber(row.qivb_f_real_total_area_raw)} m²`, formatNumber(row.qivb_g_proportionality_coefficient_raw, 12), formatNumber(row.fraction_decimal_raw, 12)])}

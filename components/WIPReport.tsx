@@ -2,9 +2,15 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertTriangle, MoveHorizontal } from 'lucide-react'
 import Button from './ui/Button'
 import { formatMoney, formatPercent } from './ui/Format'
+import { useResizableColumns } from './ui/TableUtils'
+
+const WIP_COL_WIDTHS: Record<string, number> = {
+    project_name: 220, empresa_nome: 160, contrato_valor: 150, receita_reconhecida: 160,
+    custo_incorrido: 150, margem_bruta: 150, saldo_contrato: 150,
+}
 
 const fmt = formatMoney
 const fmtPct = (v: number | null) => formatPercent(v, { asPoints: true, decimals: 1 })
@@ -42,6 +48,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
     const [loading, setLoading] = React.useState(false)
     const [sortKey, setSortKey] = React.useState<keyof WIPLine>('receita_reconhecida')
     const [sortAsc, setSortAsc] = React.useState(false)
+    const cols = useResizableColumns(WIP_COL_WIDTHS, 'wipReportColWidths')
 
     const load = React.useCallback(async () => {
         setLoading(true)
@@ -98,10 +105,11 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
 
     const Th = ({ label, k, right }: { label: string; k: keyof WIPLine; right?: boolean }) => (
         <th
-            className={`px-4 py-3 cursor-pointer select-none hover:bg-slate-100 transition-colors text-xs font-black text-slate-400 uppercase tracking-widest ${right ? 'text-right' : ''}`}
+            className={`px-6 py-2 border-r border-gray-100 last:border-r-0 cursor-pointer select-none hover:bg-slate-100 transition-colors text-xs font-semibold text-slate-500 relative overflow-hidden ${right ? 'text-right' : ''}`}
             onClick={() => handleSort(k)}
         >
             {label}<SortIcon k={k} />
+            <cols.ResizeHandle colKey={k} />
         </th>
     )
 
@@ -171,10 +179,19 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                     Nenhuma obra com movimentação financeira encontrada.
                 </div>
             ) : (
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-x-auto">
-                    <table className="w-full text-left min-w-[900px]">
+                <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
+                    <div className="flex justify-end p-2 border-b border-slate-100">
+                        <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(WIP_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+                        <colgroup>
+                            {Object.keys(WIP_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+                        </colgroup>
                         <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200">
+                            <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
                                 <Th label="Obra" k="project_name" />
                                 <Th label="Empresa" k="empresa_nome" />
                                 <Th label="Valor Contrato" k="contrato_valor" right />
@@ -241,28 +258,29 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                         </tbody>
                         <tfoot>
                             <tr className="border-t-2 border-slate-200 bg-slate-50">
-                                <td colSpan={2} className="px-4 py-3 text-table-body font-black text-slate-600 uppercase tracking-widest">
+                                <td colSpan={2} className="px-4 py-3 text-sm font-medium text-slate-600">
                                     Total ({rows.length} obras)
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-right tabular-nums text-slate-700">
+                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-slate-700">
                                     {fmt(totals.contrato_valor)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-right tabular-nums text-emerald-700">
+                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-emerald-700">
                                     {fmt(totals.receita_reconhecida)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-right tabular-nums text-red-600">
+                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-red-600">
                                     {fmt(totals.custo_incorrido)}
                                 </td>
-                                <td className={`px-4 py-3 text-sm font-black text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                <td className={`px-4 py-3 text-sm font-medium text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                                     {fmt(totals.margem_bruta)}
                                     <span className="block text-xs font-normal text-slate-400">{fmtPct(totalMargem)}</span>
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-right tabular-nums text-slate-700">
+                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-slate-700">
                                     {fmt(totals.saldo_contrato)}
                                 </td>
                             </tr>
                         </tfoot>
                     </table>
+                    </div>
                 </div>
             )}
         </div>

@@ -4,6 +4,10 @@ import type { BalanceteLine, DREGroup, RegimeContabil } from '../types/financial
 import { useToast } from '../hooks/useToast'
 import Button from './ui/Button'
 import { formatMoney } from './ui/Format'
+import { useResizableColumns } from './ui/TableUtils'
+import { MoveHorizontal } from 'lucide-react'
+
+const BALANCETE_COL_WIDTHS: Record<string, number> = { conta: 260, creditos: 150, debitos: 150, saldo: 150, lancamentos: 130 }
 
 // ── Labels ────────────────────────────────────────────────────────────────────
 
@@ -31,9 +35,9 @@ const GROUP_ORDER: DREGroup[] = [
 const fmt = formatMoney
 
 function colorSaldo(v: number) {
-    if (v > 0) return 'text-emerald-700 font-semibold'
-    if (v < 0) return 'text-red-600 font-semibold'
-    return 'text-slate-400'
+    if (v > 0) return 'text-emerald-700 font-medium'
+    if (v < 0) return 'text-red-600 font-medium'
+    return 'text-slate-400 font-normal'
 }
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
@@ -60,6 +64,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
     const [lines, setLines] = React.useState<BalanceteLine[]>([])
     const [loading, setLoading] = React.useState(false)
     const [expanded, setExpanded] = React.useState<Set<DREGroup>>(new Set(GROUP_ORDER))
+    const cols = useResizableColumns(BALANCETE_COL_WIDTHS, 'balanceteReportColWidths')
 
     const load = React.useCallback(async () => {
         setLoading(true)
@@ -172,15 +177,24 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                     Nenhum lançamento encontrado para o período selecionado.
                 </div>
             ) : (
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
+                <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
+                    <div className="flex justify-end p-2 border-b border-slate-100">
+                        <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(BALANCETE_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+                        <colgroup>
+                            {Object.keys(BALANCETE_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+                        </colgroup>
                         <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-400 uppercase tracking-widest">
-                                <th className="px-5 py-3">Conta / Categoria</th>
-                                <th className="px-4 py-3 text-right">Créditos</th>
-                                <th className="px-4 py-3 text-right">Débitos</th>
-                                <th className="px-4 py-3 text-right">Saldo Líquido</th>
-                                <th className="px-4 py-3 text-right">Lançamentos</th>
+                            <tr className="bg-gray-50 text-gray-500 border-b border-gray-200 text-xs font-semibold">
+                                <th className="px-6 py-2 border-r border-gray-100 relative overflow-hidden">Conta / Categoria<cols.ResizeHandle colKey="conta" /></th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Créditos<cols.ResizeHandle colKey="creditos" /></th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Débitos<cols.ResizeHandle colKey="debitos" /></th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Saldo Líquido<cols.ResizeHandle colKey="saldo" /></th>
+                                <th className="px-6 py-2 text-right relative overflow-hidden">Lançamentos<cols.ResizeHandle colKey="lancamentos" /></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -200,7 +214,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                                                 <span className="text-slate-400 text-xs select-none">
                                                     {open ? '▾' : '▸'}
                                                 </span>
-                                                <span className="text-xs font-black text-slate-600 uppercase tracking-wider">
+                                                <span className="text-sm font-medium text-slate-600">
                                                     {GROUP_LABEL[grp]}
                                                 </span>
                                             </td>
@@ -247,24 +261,25 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                         {/* Totais */}
                         <tfoot>
                             <tr className="border-t-2 border-slate-200 bg-slate-50">
-                                <td className="px-5 py-3 text-table-body font-black text-slate-700 uppercase tracking-widest">
+                                <td className="px-5 py-3 text-sm font-medium text-slate-700">
                                     Total Geral
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-right text-slate-700 tabular-nums">
+                                <td className="px-4 py-3 text-sm font-medium text-right text-slate-700 tabular-nums">
                                     {fmt(totals.creditos)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-right text-slate-700 tabular-nums">
+                                <td className="px-4 py-3 text-sm font-medium text-right text-slate-700 tabular-nums">
                                     {fmt(totals.debitos)}
                                 </td>
-                                <td className={`px-4 py-3 text-sm text-right tabular-nums font-black ${colorSaldo(totals.saldo)}`}>
+                                <td className={`px-4 py-3 text-sm text-right tabular-nums ${colorSaldo(totals.saldo)}`}>
                                     {fmt(totals.saldo)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-bold text-right text-slate-500 tabular-nums">
+                                <td className="px-4 py-3 text-sm font-medium text-right text-slate-500 tabular-nums">
                                     {totals.n.toLocaleString('pt-BR')}
                                 </td>
                             </tr>
                         </tfoot>
                     </table>
+                    </div>
                 </div>
             )}
         </div>

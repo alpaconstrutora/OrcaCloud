@@ -33,13 +33,16 @@ import {
   ExternalLink,
   TrendingDown,
   LayoutGrid,
-  List
+  List,
+  MoveHorizontal
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
 import { laborService } from '../services/laborService';
 import { useStore } from '../store/useStore';
 import { AssetImportModal } from './AssetImportModal';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import {
   OpuraAsset,
   AssetCategory,
@@ -59,6 +62,62 @@ import {
 interface OpuraAssetsModuleProps {
   activeOrganizationId: string | null;
   onChangeView: (view: string) => void;
+}
+
+// Tabela "Ativos Patrimoniais" (aba Ativos) — guia §1/§2
+const ASSET_COLUMNS: ColumnConfig[] = [
+  { key: 'code', label: 'Código', sortable: true },
+  { key: 'name', label: 'Ativo', sortable: true },
+  { key: 'category', label: 'Categoria', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'value', label: 'Valor Atual', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
+const ASSET_COL_WIDTHS: Record<string, number> = { code: 110, name: 240, category: 140, status: 130, value: 150, actions: 60 };
+
+// Tabela "Reservas & Locação" — guia §1/§2
+const RESERVATION_COLUMNS: ColumnConfig[] = [
+  { key: 'asset', label: 'Ativo', sortable: true },
+  { key: 'project', label: 'Obra Solicitante', sortable: true },
+  { key: 'start_date', label: 'Início', sortable: true },
+  { key: 'end_date', label: 'Término', sortable: true },
+  { key: 'responsible', label: 'Responsável', sortable: true },
+  { key: 'requester', label: 'Solicitante', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
+const RESERVATION_COL_WIDTHS: Record<string, number> = { asset: 180, project: 170, start_date: 100, end_date: 100, responsible: 150, requester: 170, status: 110, actions: 190 };
+
+// Tabela "Manutenções" — guia §1/§2
+const MAINTENANCE_COLUMNS: ColumnConfig[] = [
+  { key: 'asset', label: 'Ativo', sortable: true },
+  { key: 'type', label: 'Tipo', sortable: true },
+  { key: 'description', label: 'Serviço / Descrição', sortable: true },
+  { key: 'scheduled_date', label: 'Data Programada', sortable: true },
+  { key: 'cost', label: 'Custo', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
+const MAINTENANCE_COL_WIDTHS: Record<string, number> = { asset: 190, type: 110, description: 260, scheduled_date: 140, cost: 120, status: 120, actions: 180 };
+
+// Tabela "Custos & Rateio" — sem coluna de ações (tela só de leitura/relatório)
+const RATEIO_COLUMNS: ColumnConfig[] = [
+  { key: 'project_name', label: 'Obra / Projeto', sortable: true },
+  { key: 'assets_count', label: 'Nº Ativos Usados', sortable: true },
+  { key: 'total_days', label: 'Dias Acumulados', sortable: true },
+  { key: 'allocated_cost', label: 'Custo Alocado (Depreciação)', sortable: true },
+  { key: 'percentage', label: 'Participação no Custo', sortable: true },
+];
+const RATEIO_COL_WIDTHS: Record<string, number> = { project_name: 220, assets_count: 150, total_days: 150, allocated_cost: 210, percentage: 200 };
+
+function sortRows<T>(rows: T[], sortColumn: string | null, sortDirection: 'asc' | 'desc', getValue: (row: T, key: string) => unknown): T[] {
+  if (!sortColumn) return rows;
+  const dir = sortDirection === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const av = getValue(a, sortColumn); const bv = getValue(b, sortColumn);
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+  });
 }
 
 export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
@@ -169,15 +228,28 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   });
 
   // Filtros de listagem
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('opuraAssets:search', '');
   const [filterCategory, setFilterCategory] = React.useState<string>('todos');
   const [filterStatus, setFilterStatus] = React.useState<string>('todos');
-  const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('opuraAssets:viewMode', 'grid');
 
   // Filtros de manutenção
-  const [maintSearchQuery, setMaintSearchQuery] = React.useState('');
+  const [maintSearchQuery, setMaintSearchQuery] = usePersistedState<string>('opuraAssets:maintSearch', '');
   const [filterMaintType, setFilterMaintType] = React.useState<string>('todos');
   const [filterMaintStatus, setFilterMaintStatus] = React.useState<string>('todos');
+  const [reservationSearch, setReservationSearch] = usePersistedState<string>('opuraAssets:reservationSearch', '');
+  const [rateioSearch, setRateioSearch] = usePersistedState<string>('opuraAssets:rateioSearch', '');
+
+  const confirm = useConfirm();
+
+  const assetTableColumns = useTableColumns(ASSET_COLUMNS, 'opuraAssetsColumns');
+  const assetCols = useResizableColumns(ASSET_COL_WIDTHS, 'opuraAssetsColWidths');
+  const reservationTableColumns = useTableColumns(RESERVATION_COLUMNS, 'opuraReservationsColumns');
+  const reservationCols = useResizableColumns(RESERVATION_COL_WIDTHS, 'opuraReservationsColWidths');
+  const maintenanceTableColumns = useTableColumns(MAINTENANCE_COLUMNS, 'opuraMaintenanceColumns');
+  const maintenanceCols = useResizableColumns(MAINTENANCE_COL_WIDTHS, 'opuraMaintenanceColWidths');
+  const rateioTableColumns = useTableColumns(RATEIO_COLUMNS, 'opuraRateioColumns');
+  const rateioCols = useResizableColumns(RATEIO_COL_WIDTHS, 'opuraRateioColWidths');
 
   // Carregar marcas de forma memorizada
   const loadBrands = React.useCallback(async () => {
@@ -263,7 +335,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   };
 
   const handleDeleteBrand = async (brandId: string) => {
-    if (!confirm('Deseja realmente excluir esta marca? Os ativos associados continuarão com o nome salvo, mas a marca não constará mais na lista.')) return;
+    if (!await confirm({ title: 'Excluir marca?', message: 'Os ativos associados continuarão com o nome salvo, mas a marca não constará mais na lista.', variant: 'danger', confirmLabel: 'Excluir' })) return;
     setActionLoading(true);
     try {
       await assetService.deleteBrand(brandId);
@@ -475,7 +547,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       return;
     }
     
-    if (!window.confirm(`Tem certeza que deseja excluir o ativo "${asset.name}"? Esta ação não pode ser desfeita.`)) {
+    if (!await confirm({ title: 'Excluir ativo?', message: `O ativo "${asset.name}" será excluído. Esta ação não pode ser desfeita.`, variant: 'danger', confirmLabel: 'Excluir' })) {
       return;
     }
 
@@ -494,7 +566,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Iniciar Reserva (Entregar ativo à obra)
   const handleStartReservation = async (reservation: OpuraAssetReservation) => {
-    if (!window.confirm('Confirmar o envio deste ativo para a obra solicitante? O status do ativo será alterado para "Em Uso".')) {
+    if (!await confirm({ title: 'Entregar ativo à obra?', message: 'O status do ativo será alterado para "Em Uso".', confirmLabel: 'Entregar' })) {
       return;
     }
     setActionLoading(true);
@@ -512,7 +584,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Finalizar Reserva (Devolução do ativo à sede)
   const handleFinalizeReservation = async (reservation: OpuraAssetReservation) => {
-    if (!window.confirm('Confirmar o retorno/devolução deste ativo para a sede? O status do ativo voltará a ser "Disponível".')) {
+    if (!await confirm({ title: 'Devolver ativo à sede?', message: 'O status do ativo voltará a ser "Disponível".', confirmLabel: 'Devolver' })) {
       return;
     }
     setActionLoading(true);
@@ -529,7 +601,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Cancelar Reserva
   const handleCancelReservation = async (reservationId: string) => {
-    if (!window.confirm('Tem certeza que deseja cancelar esta reserva?')) {
+    if (!await confirm({ title: 'Cancelar reserva?', message: 'Esta ação não pode ser desfeita.', variant: 'warning', confirmLabel: 'Cancelar reserva' })) {
       return;
     }
     setActionLoading(true);
@@ -589,7 +661,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Iniciar Manutenção (muda status para em_execucao e ativo para 'manutencao')
   const handleStartMaintenance = async (maint: OpuraAssetMaintenance) => {
-    if (!window.confirm('Confirmar o início desta manutenção? O ativo ficará indisponível e marcado como "Em Manutenção".')) {
+    if (!await confirm({ title: 'Iniciar manutenção?', message: 'O ativo ficará indisponível e marcado como "Em Manutenção".', confirmLabel: 'Iniciar' })) {
       return;
     }
     setActionLoading(true);
@@ -646,7 +718,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Cancelar Manutenção
   const handleCancelMaintenance = async (maintId: string) => {
-    if (!window.confirm('Tem certeza que deseja cancelar esta manutenção?')) {
+    if (!await confirm({ title: 'Cancelar manutenção?', message: 'Esta ação não pode ser desfeita.', variant: 'warning', confirmLabel: 'Cancelar manutenção' })) {
       return;
     }
     setActionLoading(true);
@@ -665,7 +737,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Excluir Manutenção
   const handleDeleteMaintenance = async (maintId: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta manutenção do histórico? Esta ação é irreversível.')) {
+    if (!await confirm({ title: 'Excluir manutenção do histórico?', message: 'Esta ação é irreversível.', variant: 'danger', confirmLabel: 'Excluir' })) {
       return;
     }
     setActionLoading(true);
@@ -731,7 +803,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Excluir Documento / Seguro
   const handleDeleteDocument = async (docId: string) => {
     if (!selectedAsset) return;
-    if (!window.confirm('Tem certeza que deseja excluir este documento?')) {
+    if (!await confirm({ title: 'Excluir documento?', message: 'Esta ação não pode ser desfeita.', variant: 'danger', confirmLabel: 'Excluir' })) {
       return;
     }
     setActionLoading(true);
@@ -777,6 +849,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     
     return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  const sortedAssets = sortRows(filteredAssets, assetTableColumns.sortColumn, assetTableColumns.sortDirection, (a, key) =>
+    key === 'value' ? calculateDepreciation(a).current : (a as unknown as Record<string, unknown>)[key]);
 
   // Métricas para o Dashboard
   const totalPatrimony = assets.reduce((acc, a) => acc + a.purchase_value, 0);
@@ -1025,6 +1100,27 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <option value="baixado">Baixado</option>
                     </select>
 
+                    {/* Colunas + autofit — só fazem sentido no modo Lista (§6.1.2) */}
+                    {viewMode === 'list' && (
+                      <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <ColumnConfigButton
+                          columns={ASSET_COLUMNS.filter(c => c.key !== 'actions')}
+                          visibleColumns={assetTableColumns.visibleColumns}
+                          showColumnConfig={assetTableColumns.showColumnConfig}
+                          onToggleShow={() => assetTableColumns.setShowColumnConfig(!assetTableColumns.showColumnConfig)}
+                          onToggleColumn={assetTableColumns.toggleColumn}
+                          onReset={assetTableColumns.resetColumns}
+                        />
+                        <button
+                          onClick={() => assetCols.autoFit()}
+                          className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                          title="Ajustar largura das colunas ao conteúdo"
+                        >
+                          <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Alternância de Visualização */}
                     <div className="flex items-center border border-gray-200 bg-white rounded-xl overflow-hidden p-0.5 shrink-0">
                       <button
@@ -1049,7 +1145,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 {/* Grid ou Lista de Ativos */}
                 {viewMode === 'grid' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {filteredAssets.map(asset => {
+                    {sortedAssets.map(asset => {
                       const Icon = categoryIcons[asset.category] || Package;
                       const depreciation = calculateDepreciation(asset);
                       return (
@@ -1102,71 +1198,114 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     )}
                   </div>
                 ) : (
-                  <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
-                            <th className="py-4 px-6">Código</th>
-                            <th className="py-4 px-6">Ativo</th>
-                            <th className="py-4 px-6">Categoria</th>
-                            <th className="py-4 px-6">Status</th>
-                            <th className="py-4 px-6">Valor Atual</th>
-                            <th className="py-4 px-6 text-center">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredAssets.map(asset => {
-                            const Icon = categoryIcons[asset.category] || Package;
-                            const depreciation = calculateDepreciation(asset);
-                            return (
-                              <tr
-                                key={asset.id}
-                                onClick={async () => {
-                                  setSelectedAsset(asset);
-                                  loadAssetMovements(asset.id);
-                                  loadAssetDocuments(asset.id);
-                                }}
-                                className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer
-                                  ${selectedAsset?.id === asset.id ? 'bg-blue-50/20' : ''}`}
-                              >
-                                <td className="py-4 px-6 font-bold text-gray-400">{asset.code}</td>
-                                <td className="py-4 px-6">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center
-                                      ${asset.status === 'disponivel' ? 'bg-emerald-50 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                                      <Icon className="w-4.5 h-4.5" />
-                                    </div>
-                                    <span className="font-bold text-gray-800 text-xs">{asset.name}</span>
-                                  </div>
-                                </td>
-                                <td className="py-4 px-6 uppercase text-gray-500 font-bold text-xs tracking-wider">{asset.category}</td>
-                                <td className="py-4 px-6">
-                                  <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded
-                                    ${asset.status === 'disponivel' ? 'bg-emerald-500/10 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                                    {asset.status === 'em_uso' ? 'Em Obra' : asset.status}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-6 font-bold text-gray-700">
-                                  R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                                </td>
-                                <td className="py-4 px-6 text-center">
-                                  <div className="flex items-center justify-center text-blue-500 font-bold hover:text-blue-600">
-                                    <ArrowRight className="w-4 h-4 transition-transform hover:translate-x-1" />
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    {filteredAssets.length === 0 && (
-                      <div className="bg-white py-16 text-center text-gray-400 rounded-b-[2rem]">
+                  <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    {sortedAssets.length === 0 ? (
+                      <div className="py-16 text-center text-gray-400">
                         <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                         <p className="font-semibold text-sm">Nenhum ativo encontrado com os filtros aplicados.</p>
                       </div>
-                    )}
+                    ) : (() => {
+                      const visible = ASSET_COLUMNS.filter(c => c.key !== 'actions' && assetTableColumns.visibleColumns.includes(c.key));
+                      const tableWidth = visible.reduce((s, c) => s + assetCols.getWidth(c.key), 0) + assetCols.getWidth('actions');
+                      return (
+                        <div className="overflow-x-auto">
+                          <table ref={assetCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                            <colgroup>
+                              {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${assetCols.getWidth(c.key)}px` }} />)}
+                              <col />
+                              <col data-col-key="actions" style={{ width: `${assetCols.getWidth('actions')}px` }} />
+                            </colgroup>
+                            <thead>
+                              <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                {assetTableColumns.visibleColumns.includes('code') && (
+                                  <SortableHeader colKey="code" label="Código" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <assetCols.ResizeHandle colKey="code" />
+                                  </SortableHeader>
+                                )}
+                                {assetTableColumns.visibleColumns.includes('name') && (
+                                  <SortableHeader colKey="name" label="Ativo" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <assetCols.ResizeHandle colKey="name" />
+                                  </SortableHeader>
+                                )}
+                                {assetTableColumns.visibleColumns.includes('category') && (
+                                  <SortableHeader colKey="category" label="Categoria" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <assetCols.ResizeHandle colKey="category" />
+                                  </SortableHeader>
+                                )}
+                                {assetTableColumns.visibleColumns.includes('status') && (
+                                  <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <assetCols.ResizeHandle colKey="status" />
+                                  </SortableHeader>
+                                )}
+                                {assetTableColumns.visibleColumns.includes('value') && (
+                                  <SortableHeader colKey="value" label="Valor Atual" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                    <assetCols.ResizeHandle colKey="value" />
+                                  </SortableHeader>
+                                )}
+                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                {assetTableColumns.visibleColumns.includes('actions') && (
+                                  <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {sortedAssets.map(asset => {
+                                const Icon = categoryIcons[asset.category] || Package;
+                                const depreciation = calculateDepreciation(asset);
+                                const statusColor = asset.status === 'disponivel' ? 'text-emerald-700' : asset.status === 'em_uso' ? 'text-blue-700' : asset.status === 'manutencao' ? 'text-amber-700' : asset.status === 'baixado' ? 'text-gray-400' : 'text-gray-600';
+                                return (
+                                  <tr
+                                    key={asset.id}
+                                    onClick={async () => {
+                                      setSelectedAsset(asset);
+                                      loadAssetMovements(asset.id);
+                                      loadAssetDocuments(asset.id);
+                                    }}
+                                    className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedAsset?.id === asset.id ? 'bg-blue-50/60' : ''}`}
+                                  >
+                                    {assetTableColumns.visibleColumns.includes('code') && (
+                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{asset.code}</td>
+                                    )}
+                                    {assetTableColumns.visibleColumns.includes('name') && (
+                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <div className={`w-7 h-7 rounded-[6px] flex items-center justify-center shrink-0
+                                            ${asset.status === 'disponivel' ? 'bg-emerald-50 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+                                            <Icon className="w-4 h-4" />
+                                          </div>
+                                          <span className="truncate">{asset.name}</span>
+                                        </div>
+                                      </td>
+                                    )}
+                                    {assetTableColumns.visibleColumns.includes('category') && (
+                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 capitalize">{asset.category}</td>
+                                    )}
+                                    {assetTableColumns.visibleColumns.includes('status') && (
+                                      <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${statusColor}`}>
+                                        {asset.status === 'em_uso' ? 'Em Obra' : asset.status}
+                                      </td>
+                                    )}
+                                    {assetTableColumns.visibleColumns.includes('value') && (
+                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
+                                        R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                                      </td>
+                                    )}
+                                    <td aria-hidden="true"></td>
+                                    {assetTableColumns.visibleColumns.includes('actions') && (
+                                      // §9.1 — a linha inteira já seleciona o ativo (ação dominante); a coluna só
+                                      // sinaliza visualmente que ela é clicável, sem duplicar como botão.
+                                      <td className="px-6 py-2.5 text-right">
+                                        <ArrowRight className="w-4 h-4 text-blue-400 ml-auto" />
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1457,93 +1596,160 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 <p className="text-gray-400 text-xs">Acompanhe e programe a reserva de ferramentas e máquinas para garantir dupla utilização bloqueada.</p>
               </div>
 
-              {reservations.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider">
-                        <th className="py-3 px-4">Ativo</th>
-                        <th className="py-3 px-4">Obra Solicitante</th>
-                        <th className="py-3 px-4">Início</th>
-                        <th className="py-3 px-4">Término</th>
-                        <th className="py-3 px-4">Responsável</th>
-                        <th className="py-3 px-4">Solicitante</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reservations.map(res => {
-                        const asset = assets.find(a => a.id === res.asset_id);
-                        const proj = projects.find(p => p.id === res.project_id);
-                        
-                        // Definição de cores sofisticadas por status
-                        const statusBadgeClass = 
-                          res.status === 'ativa' ? 'bg-emerald-500/10 text-emerald-600' :
-                          res.status === 'aprovada' ? 'bg-blue-500/10 text-blue-600' :
-                          res.status === 'pendente' ? 'bg-amber-500/10 text-amber-600' :
-                          res.status === 'finalizada' ? 'bg-gray-150 text-gray-500 bg-gray-100/80' :
-                          'bg-rose-500/10 text-rose-600';
-
-                        return (
-                          <tr key={res.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                            <td className="py-3 px-4 font-bold text-gray-800">{asset?.name || 'Ativo'}</td>
-                            <td className="py-3 px-4 font-medium text-gray-600">{proj?.name || 'Obra'}</td>
-                            <td className="py-3 px-4 text-gray-500">{new Date(res.start_date).toLocaleDateString('pt-BR')}</td>
-                            <td className="py-3 px-4 text-gray-500">{new Date(res.end_date).toLocaleDateString('pt-BR')}</td>
-                            <td className="py-3 px-4 text-gray-700 font-bold">{employees.find(e => e.id === res.responsible_employee_id)?.name || 'Central'}</td>
-                            <td className="py-3 px-4 text-gray-400 font-semibold">{res.requested_by_email}</td>
-                            <td className="py-3 px-4">
-                              <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs uppercase ${statusBadgeClass}`}>
-                                {res.status === 'ativa' ? 'Em Uso' : res.status}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <div className="flex justify-end gap-1.5">
-                                {(res.status === 'aprovada' || res.status === 'pendente') && (
-                                  <>
-                                    <button
-                                      onClick={() => handleStartReservation(res)}
-                                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md font-bold text-xs uppercase tracking-wider transition-colors"
-                                      title="Entregar equipamento à obra"
-                                    >
-                                      Entregar
-                                    </button>
-                                    <button
-                                      onClick={() => handleCancelReservation(res.id)}
-                                      className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-xs uppercase tracking-wider transition-colors"
-                                      title="Cancelar reserva"
-                                    >
-                                      Cancelar
-                                    </button>
-                                  </>
-                                )}
-                                {res.status === 'ativa' && (
-                                  <button
-                                    onClick={() => handleFinalizeReservation(res)}
-                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md font-bold text-xs uppercase tracking-wider transition-colors"
-                                    title="Devolver equipamento para a sede"
-                                  >
-                                    Devolver
-                                  </button>
-                                )}
-                                {res.status !== 'ativa' && res.status !== 'aprovada' && res.status !== 'pendente' && (
-                                  <span className="text-gray-300 font-semibold">-</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+              {reservations.length > 0 && (
+                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                  <div className="flex-1 relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      value={reservationSearch}
+                      onChange={(e) => setReservationSearch(e.target.value)}
+                      placeholder="Buscar por ativo, obra ou solicitante..."
+                      className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                    <ColumnConfigButton
+                      columns={RESERVATION_COLUMNS.filter(c => c.key !== 'actions')}
+                      visibleColumns={reservationTableColumns.visibleColumns}
+                      showColumnConfig={reservationTableColumns.showColumnConfig}
+                      onToggleShow={() => reservationTableColumns.setShowColumnConfig(!reservationTableColumns.showColumnConfig)}
+                      onToggleColumn={reservationTableColumns.toggleColumn}
+                      onReset={reservationTableColumns.resetColumns}
+                    />
+                    <button onClick={() => reservationCols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                      <MoveHorizontal className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {reservations.length === 0 ? (
                 <div className="py-20 text-center text-gray-400">
                   <Calendar className="w-12 h-12 text-gray-200 mx-auto mb-3" />
                   <p className="font-semibold text-sm">Nenhuma solicitação ou reserva ativa registrada.</p>
                 </div>
-              )}
+              ) : (() => {
+                const term = reservationSearch.trim().toLowerCase();
+                const filteredReservations = reservations.filter(res => {
+                  if (!term) return true;
+                  const asset = assets.find(a => a.id === res.asset_id);
+                  const proj = projects.find(p => p.id === res.project_id);
+                  return (asset?.name || '').toLowerCase().includes(term)
+                    || (proj?.name || '').toLowerCase().includes(term)
+                    || (res.requested_by_email || '').toLowerCase().includes(term);
+                });
+                const sortedReservations = sortRows(filteredReservations, reservationTableColumns.sortColumn, reservationTableColumns.sortDirection, (r, key) => {
+                  if (key === 'asset') return assets.find(a => a.id === r.asset_id)?.name || '';
+                  if (key === 'project') return projects.find(p => p.id === r.project_id)?.name || '';
+                  if (key === 'responsible') return employees.find(e => e.id === r.responsible_employee_id)?.name || 'Central';
+                  return (r as unknown as Record<string, unknown>)[key === 'requester' ? 'requested_by_email' : key];
+                });
+                const visible = RESERVATION_COLUMNS.filter(c => c.key !== 'actions' && reservationTableColumns.visibleColumns.includes(c.key));
+                const tableWidth = visible.reduce((s, c) => s + reservationCols.getWidth(c.key), 0) + reservationCols.getWidth('actions');
+                const statusColor: Record<string, string> = {
+                  ativa: 'text-emerald-700', aprovada: 'text-blue-700', pendente: 'text-amber-700',
+                  finalizada: 'text-gray-500', cancelada: 'text-rose-600',
+                };
+
+                if (sortedReservations.length === 0) {
+                  return (
+                    <div className="py-16 text-center text-gray-400">
+                      <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                      <p className="font-semibold text-sm">Nenhuma reserva encontrada com os filtros aplicados.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table ref={reservationCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                        <colgroup>
+                          {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${reservationCols.getWidth(c.key)}px` }} />)}
+                          <col />
+                          <col data-col-key="actions" style={{ width: `${reservationCols.getWidth('actions')}px` }} />
+                        </colgroup>
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            {RESERVATION_COLUMNS.filter(c => c.key !== 'actions').map(c => reservationTableColumns.visibleColumns.includes(c.key) && (
+                              <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
+                                sortColumn={reservationTableColumns.sortColumn} sortDirection={reservationTableColumns.sortDirection} onSort={reservationTableColumns.handleColumnSort}
+                                className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                <reservationCols.ResizeHandle colKey={c.key} />
+                              </SortableHeader>
+                            ))}
+                            <th aria-hidden="true" className="border-r border-gray-100" />
+                            {reservationTableColumns.visibleColumns.includes('actions') && (
+                              <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {sortedReservations.map(res => {
+                            const asset = assets.find(a => a.id === res.asset_id);
+                            const proj = projects.find(p => p.id === res.project_id);
+                            return (
+                              <tr key={res.id} className="hover:bg-blue-50/50 transition-colors">
+                                {reservationTableColumns.visibleColumns.includes('asset') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{asset?.name || 'Ativo'}</td>
+                                )}
+                                {reservationTableColumns.visibleColumns.includes('project') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{proj?.name || 'Obra'}</td>
+                                )}
+                                {reservationTableColumns.visibleColumns.includes('start_date') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{new Date(res.start_date).toLocaleDateString('pt-BR')}</td>
+                                )}
+                                {reservationTableColumns.visibleColumns.includes('end_date') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{new Date(res.end_date).toLocaleDateString('pt-BR')}</td>
+                                )}
+                                {reservationTableColumns.visibleColumns.includes('responsible') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{employees.find(e => e.id === res.responsible_employee_id)?.name || 'Central'}</td>
+                                )}
+                                {reservationTableColumns.visibleColumns.includes('requester') && (
+                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{res.requested_by_email}</td>
+                                )}
+                                {reservationTableColumns.visibleColumns.includes('status') && (
+                                  <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${statusColor[res.status] || 'text-gray-600'}`}>
+                                    {res.status === 'ativa' ? 'Em Uso' : res.status}
+                                  </td>
+                                )}
+                                <td aria-hidden="true"></td>
+                                {reservationTableColumns.visibleColumns.includes('actions') && (
+                                  <td className="px-6 py-2.5 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      {(res.status === 'aprovada' || res.status === 'pendente') && (
+                                        <>
+                                          <button onClick={() => handleStartReservation(res)} title="Entregar equipamento à obra"
+                                            className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
+                                            Entregar
+                                          </button>
+                                          <button onClick={() => handleCancelReservation(res.id)} title="Cancelar reserva"
+                                            className="text-red-600 hover:text-red-800 hover:bg-red-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
+                                            Cancelar
+                                          </button>
+                                        </>
+                                      )}
+                                      {res.status === 'ativa' && (
+                                        <button onClick={() => handleFinalizeReservation(res)} title="Devolver equipamento para a sede"
+                                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
+                                          Devolver
+                                        </button>
+                                      )}
+                                      {res.status !== 'ativa' && res.status !== 'aprovada' && res.status !== 'pendente' && (
+                                        <span className="text-gray-300 text-sm">—</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -1585,22 +1791,22 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               {/* Seção Filtros e Botão Agendar */}
               <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="relative flex-1 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-2">
-                    <Search className="w-4 h-4 text-gray-400" />
+                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                  <div className="flex-1 relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       value={maintSearchQuery}
                       onChange={(e) => setMaintSearchQuery(e.target.value)}
                       placeholder="Pesquisar descrição do serviço ou ativo..."
-                      className="bg-transparent border-none outline-none text-sm w-full font-medium"
+                      className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                   </div>
 
-                  <div className="flex gap-3 shrink-0">
+                  <div className="flex gap-2 shrink-0">
                     <select
                       value={filterMaintType}
                       onChange={(e) => setFilterMaintType(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
+                      className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                     >
                       <option value="todos">Todos Tipos</option>
                       <option value="preventiva">Preventiva</option>
@@ -1611,7 +1817,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     <select
                       value={filterMaintStatus}
                       onChange={(e) => setFilterMaintStatus(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
+                      className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                     >
                       <option value="todos">Todos Status</option>
                       <option value="agendada">Agendada</option>
@@ -1619,6 +1825,20 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <option value="concluida">Concluída</option>
                       <option value="cancelada">Cancelada</option>
                     </select>
+
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                      <ColumnConfigButton
+                        columns={MAINTENANCE_COLUMNS.filter(c => c.key !== 'actions')}
+                        visibleColumns={maintenanceTableColumns.visibleColumns}
+                        showColumnConfig={maintenanceTableColumns.showColumnConfig}
+                        onToggleShow={() => maintenanceTableColumns.setShowColumnConfig(!maintenanceTableColumns.showColumnConfig)}
+                        onToggleColumn={maintenanceTableColumns.toggleColumn}
+                        onReset={maintenanceTableColumns.resetColumns}
+                      />
+                      <button onClick={() => maintenanceCols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                        <MoveHorizontal className="w-4 h-4" />
+                      </button>
+                    </div>
 
                     <Button
                       size="sm"
@@ -1643,117 +1863,137 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
 
                 {/* Tabela de Manutenções */}
-                {maintenances.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider">
-                          <th className="py-3 px-4">Ativo</th>
-                          <th className="py-3 px-4">Tipo</th>
-                          <th className="py-3 px-4">Serviço / Descrição</th>
-                          <th className="py-3 px-4">Data Programada</th>
-                          <th className="py-3 px-4">Custo</th>
-                          <th className="py-3 px-4">Status</th>
-                          <th className="py-3 px-4 text-right">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {maintenances
-                          .filter(m => {
-                            const asset = assets.find(a => a.id === m.asset_id);
-                            const matchesSearch = m.description.toLowerCase().includes(maintSearchQuery.toLowerCase()) ||
-                              (asset && asset.name.toLowerCase().includes(maintSearchQuery.toLowerCase())) ||
-                              (asset && asset.code.toLowerCase().includes(maintSearchQuery.toLowerCase()));
-
-                            const matchesType = filterMaintType === 'todos' || m.type === filterMaintType;
-                            const matchesStatus = filterMaintStatus === 'todos' || m.status === filterMaintStatus;
-
-                            return matchesSearch && matchesType && matchesStatus;
-                          })
-                          .map(m => {
-                            const asset = assets.find(a => a.id === m.asset_id);
-                            
-                            const statusMaintBadgeClass = 
-                              m.status === 'concluida' ? 'bg-emerald-500/10 text-emerald-600' :
-                              m.status === 'em_execucao' ? 'bg-amber-500/10 text-amber-600' :
-                              m.status === 'agendada' ? 'bg-blue-500/10 text-blue-600' :
-                              m.status === 'cancelada' ? 'bg-rose-500/10 text-rose-600' :
-                              'bg-gray-150 text-gray-400 bg-gray-100/85';
-
-                            const typeLabel = 
-                              m.type === 'preventiva' ? 'Preventiva' :
-                              m.type === 'corretiva' ? 'Corretiva' : 'Calibração';
-
-                            return (
-                              <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                <td className="py-3 px-4 font-bold text-gray-800">
-                                  <div>
-                                    <p>{asset?.name || 'Ativo Desconhecido'}</p>
-                                    <p className="text-xs text-gray-400 font-semibold">{asset?.code || ''}</p>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-4 font-semibold uppercase text-xs text-gray-600">{typeLabel}</td>
-                                <td className="py-3 px-4 text-gray-600 font-medium max-w-[240px] truncate" title={m.description}>{m.description}</td>
-                                <td className="py-3 px-4 text-gray-500">{new Date(m.scheduled_date).toLocaleDateString('pt-BR')}</td>
-                                <td className="py-3 px-4 font-bold text-gray-700">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                <td className="py-3 px-4">
-                                  <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs uppercase ${statusMaintBadgeClass}`}>
-                                    {m.status === 'em_execucao' ? 'Em Oficina' : m.status}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 text-right">
-                                  <div className="flex justify-end items-center gap-1.5">
-                                    {m.status === 'agendada' && (
-                                      <>
-                                        <button
-                                          onClick={() => handleStartMaintenance(m)}
-                                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-md font-bold text-xs uppercase transition-colors"
-                                          title="Iniciar execução da manutenção"
-                                        >
-                                          Iniciar
-                                        </button>
-                                        <button
-                                          onClick={() => handleCancelMaintenance(m.id)}
-                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-xs uppercase transition-colors"
-                                          title="Cancelar manutenção agendada"
-                                        >
-                                          Cancelar
-                                        </button>
-                                      </>
-                                    )}
-                                    {m.status === 'em_execucao' && (
-                                      <>
-                                        <button
-                                          onClick={() => handleOpenFinishMaintModal(m)}
-                                          className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-md font-bold text-xs uppercase transition-colors"
-                                          title="Concluir manutenção e liberar ativo"
-                                        >
-                                          Concluir
-                                        </button>
-                                        <button
-                                          onClick={() => handleCancelMaintenance(m.id)}
-                                          className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md font-bold text-xs uppercase transition-colors"
-                                          title="Cancelar manutenção em andamento"
-                                        >
-                                          Cancelar
-                                        </button>
-                                      </>
-                                    )}
-                                    <ActionIconButton kind="delete" title="Excluir do histórico" onClick={() => handleDeleteMaintenance(m.id)} />
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
+                {maintenances.length === 0 ? (
                   <div className="py-20 text-center text-gray-400">
                     <Wrench className="w-12 h-12 text-gray-200 mx-auto mb-3" />
                     <p className="font-semibold text-sm">Nenhuma ordem de manutenção registrada.</p>
                   </div>
-                )}
+                ) : (() => {
+                  const term = maintSearchQuery.toLowerCase();
+                  const filteredMaint = maintenances.filter(m => {
+                    const asset = assets.find(a => a.id === m.asset_id);
+                    const matchesSearch = m.description.toLowerCase().includes(term) ||
+                      (asset && asset.name.toLowerCase().includes(term)) ||
+                      (asset && asset.code.toLowerCase().includes(term));
+                    const matchesType = filterMaintType === 'todos' || m.type === filterMaintType;
+                    const matchesStatus = filterMaintStatus === 'todos' || m.status === filterMaintStatus;
+                    return matchesSearch && matchesType && matchesStatus;
+                  });
+                  const sortedMaint = sortRows(filteredMaint, maintenanceTableColumns.sortColumn, maintenanceTableColumns.sortDirection, (m, key) => {
+                    if (key === 'asset') return assets.find(a => a.id === m.asset_id)?.name || '';
+                    return (m as unknown as Record<string, unknown>)[key];
+                  });
+                  const visible = MAINTENANCE_COLUMNS.filter(c => c.key !== 'actions' && maintenanceTableColumns.visibleColumns.includes(c.key));
+                  const tableWidth = visible.reduce((s, c) => s + maintenanceCols.getWidth(c.key), 0) + maintenanceCols.getWidth('actions');
+                  const statusColor: Record<string, string> = {
+                    concluida: 'text-emerald-700', em_execucao: 'text-amber-700', agendada: 'text-blue-700', cancelada: 'text-rose-600',
+                  };
+                  const typeLabels: Record<string, string> = { preventiva: 'Preventiva', corretiva: 'Corretiva', calibracao: 'Calibração' };
+
+                  if (sortedMaint.length === 0) {
+                    return (
+                      <div className="py-16 text-center text-gray-400">
+                        <Wrench className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                        <p className="font-semibold text-sm">Nenhuma ordem encontrada com os filtros aplicados.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table ref={maintenanceCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                          <colgroup>
+                            {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${maintenanceCols.getWidth(c.key)}px` }} />)}
+                            <col />
+                            <col data-col-key="actions" style={{ width: `${maintenanceCols.getWidth('actions')}px` }} />
+                          </colgroup>
+                          <thead>
+                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                              {MAINTENANCE_COLUMNS.filter(c => c.key !== 'actions').map(c => maintenanceTableColumns.visibleColumns.includes(c.key) && (
+                                <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
+                                  sortColumn={maintenanceTableColumns.sortColumn} sortDirection={maintenanceTableColumns.sortDirection} onSort={maintenanceTableColumns.handleColumnSort}
+                                  className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                  <maintenanceCols.ResizeHandle colKey={c.key} />
+                                </SortableHeader>
+                              ))}
+                              <th aria-hidden="true" className="border-r border-gray-100" />
+                              {maintenanceTableColumns.visibleColumns.includes('actions') && (
+                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {sortedMaint.map(m => {
+                              const asset = assets.find(a => a.id === m.asset_id);
+                              return (
+                                <tr key={m.id} className="hover:bg-blue-50/50 transition-colors">
+                                  {maintenanceTableColumns.visibleColumns.includes('asset') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                      <div>
+                                        <p className="truncate">{asset?.name || 'Ativo Desconhecido'}</p>
+                                        <p className="text-xs text-gray-400">{asset?.code || ''}</p>
+                                      </div>
+                                    </td>
+                                  )}
+                                  {maintenanceTableColumns.visibleColumns.includes('type') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{typeLabels[m.type] || m.type}</td>
+                                  )}
+                                  {maintenanceTableColumns.visibleColumns.includes('description') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate max-w-[240px]" title={m.description}>{m.description}</td>
+                                  )}
+                                  {maintenanceTableColumns.visibleColumns.includes('scheduled_date') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{new Date(m.scheduled_date).toLocaleDateString('pt-BR')}</td>
+                                  )}
+                                  {maintenanceTableColumns.visibleColumns.includes('cost') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                  )}
+                                  {maintenanceTableColumns.visibleColumns.includes('status') && (
+                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${statusColor[m.status] || 'text-gray-600'}`}>
+                                      {m.status === 'em_execucao' ? 'Em Oficina' : m.status}
+                                    </td>
+                                  )}
+                                  <td aria-hidden="true"></td>
+                                  {maintenanceTableColumns.visibleColumns.includes('actions') && (
+                                    <td className="px-6 py-2.5 text-right">
+                                      <div className="flex items-center justify-end gap-1">
+                                        {m.status === 'agendada' && (
+                                          <>
+                                            <button onClick={() => handleStartMaintenance(m)} title="Iniciar execução da manutenção"
+                                              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
+                                              Iniciar
+                                            </button>
+                                            <button onClick={() => handleCancelMaintenance(m.id)} title="Cancelar manutenção agendada"
+                                              className="text-red-600 hover:text-red-800 hover:bg-red-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
+                                              Cancelar
+                                            </button>
+                                          </>
+                                        )}
+                                        {m.status === 'em_execucao' && (
+                                          <>
+                                            <button onClick={() => handleOpenFinishMaintModal(m)} title="Concluir manutenção e liberar ativo"
+                                              className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
+                                              Concluir
+                                            </button>
+                                            <button onClick={() => handleCancelMaintenance(m.id)} title="Cancelar manutenção em andamento"
+                                              className="text-red-600 hover:text-red-800 hover:bg-red-50 text-sm font-medium px-1.5 py-1 rounded-lg transition-all">
+                                              Cancelar
+                                            </button>
+                                          </>
+                                        )}
+                                        <ActionIconButton kind="delete" title="Excluir do histórico" onClick={() => handleDeleteMaintenance(m.id)} />
+                                      </div>
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
@@ -1824,42 +2064,100 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   </div>
 
                   {/* Tabela de Rateio */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider">
-                          <th className="py-3 px-4">Obra / Projeto</th>
-                          <th className="py-3 px-4 text-center">Nº Ativos Usados</th>
-                          <th className="py-3 px-4 text-center">Dias Acumulados</th>
-                          <th className="py-3 px-4">Custo Alocado (Depreciação)</th>
-                          <th className="py-3 px-4">Participação no Custo</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {deprRateio.map(r => (
-                          <tr key={r.project_id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                            <td className="py-4 px-4 font-bold text-gray-800">{r.project_name}</td>
-                            <td className="py-4 px-4 text-center text-gray-600 font-semibold">{r.assets_count}</td>
-                            <td className="py-4 px-4 text-center text-gray-600 font-medium">{r.total_days} dias</td>
-                            <td className="py-4 px-4 font-bold text-gray-800">
-                              R$ {r.allocated_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-24 bg-gray-100 rounded-full h-2">
-                                  <div
-                                    className="bg-blue-600 h-2 rounded-full transition-all"
-                                    style={{ width: `${r.percentage}%` }}
-                                  />
-                                </div>
-                                <span className="font-bold text-gray-600">{r.percentage}%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                    <div className="flex-1 relative w-full">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        value={rateioSearch}
+                        onChange={(e) => setRateioSearch(e.target.value)}
+                        placeholder="Buscar por obra..."
+                        className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                      />
+                    </div>
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                      <ColumnConfigButton
+                        columns={RATEIO_COLUMNS}
+                        visibleColumns={rateioTableColumns.visibleColumns}
+                        showColumnConfig={rateioTableColumns.showColumnConfig}
+                        onToggleShow={() => rateioTableColumns.setShowColumnConfig(!rateioTableColumns.showColumnConfig)}
+                        onToggleColumn={rateioTableColumns.toggleColumn}
+                        onReset={rateioTableColumns.resetColumns}
+                      />
+                      <button onClick={() => rateioCols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
+                        <MoveHorizontal className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
+
+                  {(() => {
+                    const term = rateioSearch.trim().toLowerCase();
+                    const filteredRateio = deprRateio.filter(r => !term || r.project_name.toLowerCase().includes(term));
+                    const sortedRateio = sortRows(filteredRateio, rateioTableColumns.sortColumn, rateioTableColumns.sortDirection, (r, key) => (r as unknown as Record<string, unknown>)[key]);
+                    const visible = RATEIO_COLUMNS.filter(c => rateioTableColumns.visibleColumns.includes(c.key));
+                    const tableWidth = visible.reduce((s, c) => s + rateioCols.getWidth(c.key), 0);
+
+                    if (sortedRateio.length === 0) {
+                      return (
+                        <div className="py-16 text-center text-gray-400">
+                          <TrendingDown className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                          <p className="font-semibold text-sm">Nenhuma obra encontrada com o filtro aplicado.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table ref={rateioCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                            <colgroup>
+                              {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${rateioCols.getWidth(c.key)}px` }} />)}
+                            </colgroup>
+                            <thead>
+                              <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                {visible.map((c, i) => (
+                                  <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
+                                    sortColumn={rateioTableColumns.sortColumn} sortDirection={rateioTableColumns.sortDirection} onSort={rateioTableColumns.handleColumnSort}
+                                    className={`px-6 py-2 overflow-hidden ${i < visible.length - 1 ? 'border-r border-gray-100' : ''}`}>
+                                    <rateioCols.ResizeHandle colKey={c.key} />
+                                  </SortableHeader>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {sortedRateio.map(r => (
+                                <tr key={r.project_id} className="hover:bg-blue-50/50 transition-colors">
+                                  {rateioTableColumns.visibleColumns.includes('project_name') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{r.project_name}</td>
+                                  )}
+                                  {rateioTableColumns.visibleColumns.includes('assets_count') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{r.assets_count}</td>
+                                  )}
+                                  {rateioTableColumns.visibleColumns.includes('total_days') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{r.total_days} dias</td>
+                                  )}
+                                  {rateioTableColumns.visibleColumns.includes('allocated_cost') && (
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
+                                      R$ {r.allocated_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </td>
+                                  )}
+                                  {rateioTableColumns.visibleColumns.includes('percentage') && (
+                                    <td className="px-6 py-2.5 text-sm font-normal text-gray-600">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-24 bg-gray-100 rounded-full h-2">
+                                          <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${r.percentage}%` }} />
+                                        </div>
+                                        <span className="font-medium text-gray-700">{r.percentage}%</span>
+                                      </div>
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : !activeOrganizationId ? (
                 <div className="py-20 text-center text-gray-400 space-y-3">

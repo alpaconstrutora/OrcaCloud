@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, FolderGit2, Calendar, User, ChevronRight, PenTool, Edit2, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, FolderGit2, Calendar, User, ChevronRight, PenTool, Search, MoveHorizontal, AlertCircle } from 'lucide-react';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
+import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { OpuraElectricalProject } from '../../types/electrical';
 import { electricalProjectService } from '../../services/electricalProjectService';
 
@@ -14,36 +18,50 @@ interface ElectricalProjectsViewProps {
   onSelectProject: (id: string) => void;
 }
 
+const COLUMNS: ColumnConfig[] = [
+  { key: 'name', label: 'Nome do Projeto', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'technicalLead', label: 'Líder Técnico', sortable: true },
+  { key: 'createdAt', label: 'Data de Criação', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
+const COL_WIDTHS: Record<string, number> = { name: 260, status: 130, technicalLead: 200, createdAt: 150, actions: 130 };
+
 const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organizationId, projectId, obras, setProjectId, onChangeView, onSelectProject }) => {
   const [projects, setProjects] = useState<OpuraElectricalProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const confirm = useConfirm();
+  const { localToast, showToast } = useToast();
 
-  useEffect(() => {
-    loadProjects();
-  }, [organizationId, projectId]);
+  const [search, setSearch] = usePersistedState<string>('electricalProjects:search', '');
+  const tableColumns = useTableColumns(COLUMNS, 'electricalProjectsColumns');
+  const cols = useResizableColumns(COL_WIDTHS, 'electricalProjectsColWidths');
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     setLoading(true);
     try {
       const data = await electricalProjectService.listProjects(organizationId, projectId);
       setProjects(data);
     } catch (error) {
       console.error(error);
+      showToast('Erro ao carregar projetos elétricos', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [organizationId, projectId, showToast]);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
 
   const handleCreate = async () => {
     if (!organizationId) {
-      alert('Você precisa selecionar uma organização.');
+      showToast('Você precisa selecionar uma organização.', 'error');
       return;
     }
     if (!projectId) {
-      alert('Você precisa selecionar uma obra/projeto no topo da tela antes de criar um projeto elétrico.');
+      showToast('Você precisa selecionar uma obra/projeto no topo da tela antes de criar um projeto elétrico.', 'error');
       return;
     }
-    
+
     const name = prompt('Nome do projeto elétrico (ex: Elétrica Torre A):');
     if (!name) return;
 
@@ -62,11 +80,12 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
         status: 'draft',
         isLocked: false,
       });
-      
-      loadProjects();
+
+      setProjects(prev => [newProj, ...prev]);
+      showToast('Projeto elétrico criado', 'success');
     } catch (error: any) {
       console.error(error);
-      alert('Erro ao criar projeto elétrico: ' + (error.message || 'Desconhecido'));
+      showToast('Erro ao criar projeto elétrico: ' + (error.message || 'Desconhecido'), 'error');
     }
   };
 
@@ -80,25 +99,51 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
     const newName = prompt('Novo nome do projeto:', currentName);
     if (!newName || newName === currentName) return;
     try {
-      await electricalProjectService.updateProject(id, { name: newName });
-      loadProjects();
+      const updated = await electricalProjectService.updateProject(id, { name: newName });
+      setProjects(prev => prev.map(p => (p.id === id ? { ...p, ...updated, name: newName } : p)));
+      showToast('Projeto atualizado', 'success');
     } catch (error) {
       console.error(error);
-      alert('Erro ao atualizar projeto.');
+      showToast('Erro ao atualizar projeto.', 'error');
     }
   };
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm('Tem certeza que deseja excluir este projeto elétrico? Essa ação não pode ser desfeita.')) return;
+    if (!await confirm({
+      title: 'Excluir projeto elétrico?',
+      message: 'Essa ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    })) return;
     try {
       await electricalProjectService.deleteProject(id);
-      loadProjects();
+      setProjects(prev => prev.filter(p => p.id !== id));
+      showToast('Projeto excluído', 'success');
     } catch (error) {
       console.error(error);
-      alert('Erro ao excluir projeto.');
+      showToast('Erro ao excluir projeto.', 'error');
     }
   };
+
+  const filteredProjects = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const rows = !term ? projects : projects.filter(p =>
+      p.name.toLowerCase().includes(term) || (p.technicalLead || '').toLowerCase().includes(term));
+    const key = tableColumns.sortColumn;
+    if (!key) return rows;
+    const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[key];
+      const bv = (b as unknown as Record<string, unknown>)[key];
+      return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+    });
+  }, [projects, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+  const semLiderCount = projects.filter(p => !p.technicalLead).length;
+
+  const visible = COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
+  const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -115,7 +160,7 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
         <div className="flex items-center gap-3">
           {(obras && obras.length > 0) && (
             <select
-              className="h-10 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
               value={projectId || ''}
               onChange={(e) => setProjectId?.(e.target.value)}
             >
@@ -125,95 +170,184 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
               ))}
             </select>
           )}
-          <Button variant="primary" onClick={handleCreate} className="flex items-center gap-2 rounded-[1rem]">
-            <Plus className="w-4 h-4" />
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+          >
+            <Plus className="w-[15px] h-[15px]" />
             Novo Projeto Elétrico
-          </Button>
+          </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white border border-gray-100 rounded-[10px] px-4 py-2.5 flex items-center gap-5 shadow-sm">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Total de Projetos</p>
+            <p className="text-lg font-bold text-gray-900">{projects.length}</p>
+          </div>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-[10px] px-4 py-2.5 flex items-center gap-5 shadow-sm">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Sem Líder Técnico Atribuído</p>
+            <p className="text-lg font-bold text-gray-900">{semLiderCount}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
+          <div className="flex-1 relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome ou líder técnico..."
+              className="w-full h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-[6px] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            />
+          </div>
+          <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+            <ColumnConfigButton
+              columns={COLUMNS.filter(c => c.key !== 'actions')}
+              visibleColumns={tableColumns.visibleColumns}
+              showColumnConfig={tableColumns.showColumnConfig}
+              onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+              onToggleColumn={tableColumns.toggleColumn}
+              onReset={tableColumns.resetColumns}
+            />
+            <button
+              onClick={() => cols.autoFit()}
+              className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+              title="Ajustar largura das colunas ao conteúdo"
+            >
+              <MoveHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="p-12 text-center text-slate-400">Carregando...</div>
-        ) : projects.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+          </div>
+        ) : filteredProjects.length === 0 ? (
           <div className="p-12 flex flex-col items-center justify-center text-center">
             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
               <PenTool className="w-8 h-8 text-blue-500" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">Nenhum projeto elétrico</h3>
+            <h3 className="text-lg font-bold text-slate-800">
+              {projects.length === 0 ? 'Nenhum projeto elétrico' : 'Nenhum projeto encontrado'}
+            </h3>
             <p className="text-slate-500 max-w-sm mt-2 mb-6">
-              Você ainda não criou nenhum projeto elétrico para esta obra. Clique no botão acima para começar.
+              {projects.length === 0
+                ? 'Você ainda não criou nenhum projeto elétrico para esta obra. Clique no botão acima para começar.'
+                : 'Tente ajustar sua busca.'}
             </p>
-            <Button variant="secondary" onClick={handleCreate} className="rounded-xl">
-              Criar Primeiro Projeto
-            </Button>
+            {projects.length === 0 && (
+              <button onClick={handleCreate} className="h-9 px-3.5 rounded-[6px] border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all">
+                Criar Primeiro Projeto
+              </button>
+            )}
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-bold">
-                <th className="p-4">Nome do Projeto</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Líder Técnico</th>
-                <th className="p-4">Data de Criação</th>
-                <th className="p-4 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {projects.map((proj) => (
-                <tr key={proj.id} className="hover:bg-slate-50/50 transition-colors group cursor-pointer" onClick={() => openEditor(proj.id)}>
-                  <td className="p-4">
-                    <div className="font-bold text-slate-800">{proj.name}</div>
-                    <div className="text-xs text-slate-400">{proj.tensionType || 'Tensão não definida'}</div>
-                  </td>
-                  <td className="p-4">
-                    <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded-md text-xs font-bold border border-amber-100">
-                      {proj.status.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2 text-slate-600 text-sm">
-                      <User className="w-4 h-4 text-slate-400" />
-                      {proj.technicalLead || 'Não atribuído'}
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2 text-slate-600 text-sm">
-                      <Calendar className="w-4 h-4 text-slate-400" />
-                      {new Date(proj.createdAt).toLocaleDateString()}
-                    </div>
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={(e) => handleEdit(e, proj.id, proj.name)}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Editar Nome"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={(e) => handleDelete(e, proj.id)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Excluir Projeto"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); openEditor(proj.id); }}
-                        className="p-2 text-blue-600 hover:bg-blue-50 border border-transparent rounded-lg transition-colors ml-2"
-                        title="Abrir Editor"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+              <colgroup>
+                {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                <col />
+                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+              </colgroup>
+              <thead>
+                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                  {tableColumns.visibleColumns.includes('name') && (
+                    <SortableHeader colKey="name" label="Nome do Projeto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="name" />
+                    </SortableHeader>
+                  )}
+                  {tableColumns.visibleColumns.includes('status') && (
+                    <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="status" />
+                    </SortableHeader>
+                  )}
+                  {tableColumns.visibleColumns.includes('technicalLead') && (
+                    <SortableHeader colKey="technicalLead" label="Líder Técnico" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="technicalLead" />
+                    </SortableHeader>
+                  )}
+                  {tableColumns.visibleColumns.includes('createdAt') && (
+                    <SortableHeader colKey="createdAt" label="Data de Criação" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                      <cols.ResizeHandle colKey="createdAt" />
+                    </SortableHeader>
+                  )}
+                  <th aria-hidden="true" className="border-r border-gray-100" />
+                  {tableColumns.visibleColumns.includes('actions') && (
+                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                  )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredProjects.map((proj) => (
+                  <tr key={proj.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer" onClick={() => openEditor(proj.id)}>
+                    {tableColumns.visibleColumns.includes('name') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                        <div className="truncate">{proj.name}</div>
+                        <div className="text-xs text-gray-400">{proj.tensionType || 'Tensão não definida'}</div>
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('status') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-amber-700">
+                        {proj.status.toUpperCase()}
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('technicalLead') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <User className="w-4 h-4 text-gray-400 shrink-0" />
+                          <span className="truncate">{proj.technicalLead || 'Não atribuído'}</span>
+                        </div>
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('createdAt') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+                          {new Date(proj.createdAt).toLocaleDateString('pt-BR')}
+                        </div>
+                      </td>
+                    )}
+                    <td aria-hidden="true"></td>
+                    {tableColumns.visibleColumns.includes('actions') && (
+                      <td className="px-6 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openEditor(proj.id)}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1"
+                          >
+                            Abrir editor
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                          <ActionIconButton kind="edit" title="Editar Nome" onClick={(e) => handleEdit(e, proj.id, proj.name)} />
+                          <ActionIconButton kind="delete" title="Excluir Projeto" onClick={(e) => handleDelete(e, proj.id)} />
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
     </div>
   );
 };

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Building2, TrendingUp, BarChart, Calendar, ChevronRight, AlertCircle, RefreshCw, LayoutDashboard, Table2, Landmark, Percent } from 'lucide-react';
+import { Plus, Search, Building2, TrendingUp, BarChart, Calendar, ChevronRight, AlertCircle, RefreshCw, LayoutDashboard, Table2, Landmark, Percent, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import { formatMoney, formatDateBR, formatPercent, Money } from './ui/Format';
@@ -42,6 +42,13 @@ const IMOVIB_COLUMNS: ColumnConfig[] = [
 const DEFAULT_VISIBLE_KEYS = ['name', 'developer', 'phase', 'vgv', 'vpl', 'irr', 'margin', 'created_at'];
 const DEFAULT_COLUMNS = IMOVIB_COLUMNS.filter(c => DEFAULT_VISIBLE_KEYS.includes(c.key));
 
+// §6.1 — largura padrão por coluna (as 16, mesmo as ocultas por padrão).
+const IMOVIB_COL_WIDTHS: Record<string, number> = {
+    name: 220, developer: 180, segment: 140, phase: 130, development_modality: 150,
+    zoning: 140, version: 90, vgv: 140, netVgv: 140, cost: 140, vpl: 130, irr: 110,
+    margin: 110, exposure: 140, created_at: 130, updated_at: 130, actions: 60,
+};
+
 // Fase é texto livre; cores conhecidas mapeadas, resto cai no cinza. §8: texto colorido puro.
 const PHASE_COLORS: Record<string, string> = {
     'Estudo Inicial': 'text-gray-600',
@@ -73,6 +80,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
     const [searchTerm, setSearchTerm] = usePersistedState('imovibDashboardFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('imovibDashboardFilters:viewMode', 'list');
     const tableColumns = useTableColumns(DEFAULT_COLUMNS, 'imovibDashboardColumns');
+    const cols = useResizableColumns(IMOVIB_COL_WIDTHS, 'imovibDashboardColWidths');
     const confirm = useConfirm();
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -234,6 +242,13 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                             <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         </>
                     )}
@@ -288,13 +303,21 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                         </button>
                     )}
                 </div>
-            ) : viewMode === 'list' ? (
+            ) : viewMode === 'list' ? (() => {
+                const visibleCols = IMOVIB_COLUMNS.filter(c => visible.includes(c.key));
+                const tableWidth = visibleCols.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+                return (
                 <div className="overflow-auto max-h-[70vh]">
-                    <table className="w-full text-left border-collapse">
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
+                            <colgroup>
+                                {visibleCols.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             {/* thead sentence case (§6.2) — sticky (§6.5), uppercase={false} nos SortableHeader */}
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {IMOVIB_COLUMNS.filter(c => visible.includes(c.key)).map(col => (
+                                    {visibleCols.map(col => (
                                         <SortableHeader
                                             key={col.key}
                                             colKey={col.key}
@@ -304,9 +327,12 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                                             sortColumn={tableColumns.sortColumn}
                                             sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                        />
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
+                                        >
+                                            <cols.ResizeHandle colKey={col.key} />
+                                        </SortableHeader>
                                     ))}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
@@ -398,6 +424,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                                             </td>
                                         )}
                                         {/* Ações — abrir estudo é a ação dominante (clique na linha); kebab só isola Excluir (§9.1) */}
+                                        <td aria-hidden="true"></td>
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
                                                 <InlineDisclosureMenu showDelete onDelete={() => handleDeleteStudy(study.id, study.name)} />
@@ -408,7 +435,8 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                             </tbody>
                         </table>
                     </div>
-            ) : (
+                );
+            })() : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                     {filteredRows.map(({ study, m }) => (
                         <div

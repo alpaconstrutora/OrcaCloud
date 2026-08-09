@@ -10,6 +10,13 @@ import {
   wallLength,
 } from '../../utils/blueprintKernel';
 import {
+  DIMENSAO_POR_TIPO,
+  medir,
+  pontosMinimos,
+  type FormaMedida,
+  type TipoMedida,
+} from '../../utils/blueprintMedicoes';
+import {
   modeloParaPixel,
   pixelParaModelo,
   type PontoPx,
@@ -107,6 +114,13 @@ interface Props {
   fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number } | null;
   /** Em calibração: recebe os dois pontos clicados, em PIXEL DA IMAGEM. */
   onCalibrar?: (p1: PontoPx, p2: PontoPx) => void;
+  /** Formas MEDIDAS já gravadas, para desenhar. */
+  medicoes?: FormaMedida[];
+  /** Conclui uma forma medida. `null` em `pontos` cancela. */
+  onMedicaoPronta?: (tipo: TipoMedida, pontos: Point[]) => void;
+  /** Id da medição selecionada, para destacar. */
+  medicaoSelecionada?: string | null;
+  onSelecionarMedicao?: (id: string | null) => void;
   /** Move a ponta de uma parede. Sem isto, a alça é desenhada e não faz nada. */
   onMoveVertex?: (wallId: string, end: 'a' | 'b', to: Point) => void;
 }
@@ -141,6 +155,10 @@ export default function BlueprintCanvas({
   fundo = null,
   onMoveVertex,
   onCalibrar,
+  medicoes = [],
+  onMedicaoPronta,
+  medicaoSelecionada = null,
+  onSelecionarMedicao,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -156,6 +174,8 @@ export default function BlueprintCanvas({
   const [destinoPonta, setDestinoPonta] = useState<Point | null>(null);
   /** Primeiro ponto da aferição, em milímetro do modelo. */
   const [calibP1, setCalibP1] = useState<Point | null>(null);
+  /** Vértices da forma medida em curso. */
+  const [medindo, setMedindo] = useState<Point[]>([]);
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
   // automatico. E o MESMO valor usado para desenhar e para encaixar — a grade
@@ -593,6 +613,77 @@ export default function BlueprintCanvas({
       );
     }
 
+    // ── Formas MEDIDAS ───────────────────────────────────────────────────────
+    //
+    // Desenhadas com traço TRACEJADO e preenchimento fraco, para não se
+    // confundirem com a geometria derivada. A distinção não é estética: uma é
+    // recalculável e a outra é a afirmação de uma pessoa, e quem olha a tela
+    // precisa saber qual está vendo.
+    for (const f of medicoes) {
+      const pts = f.pontos.map(paraTela);
+      if (pts.length === 0) continue;
+
+      const selecionada = f.id === medicaoSelecionada;
+      ctx.strokeStyle = f.cor;
+      ctx.lineWidth = selecionada ? 2.5 : 1.5;
+      ctx.setLineDash([6, 4]);
+
+      if (f.tipo === 'PONTO') {
+        for (const t of pts) {
+          ctx.beginPath();
+          ctx.arc(t.x, t.y, selecionada ? 7 : 5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+        if (f.tipo === 'POLIGONO') {
+          ctx.closePath();
+          ctx.fillStyle = `${f.cor}22`;
+          ctx.fill();
+        }
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // O valor medido, no próprio desenho: conferir na lista lateral obriga a
+      // procurar qual forma é qual.
+      const m = medir(f);
+      const cx = pts.reduce((soma, t) => soma + t.x, 0) / pts.length;
+      const cy = pts.reduce((soma, t) => soma + t.y, 0) / pts.length;
+      ctx.fillStyle = f.cor;
+      ctx.font = `${selecionada ? '600 12px' : '11px'} system-ui, sans-serif`;
+      const rotulo =
+        DIMENSAO_POR_TIPO[f.tipo] === 'UN'
+          ? `${m.valor} un`
+          : `${m.valor.toFixed(2).replace('.', ',')} ${DIMENSAO_POR_TIPO[f.tipo] === 'M2' ? 'm²' : 'm'}`;
+      ctx.fillText(f.nome ? `${f.nome}: ${rotulo}` : rotulo, cx + 6, cy - 6);
+    }
+
+    // Forma medida em curso.
+    if (medindo.length > 0) {
+      const pts = medindo.map(paraTela);
+      ctx.strokeStyle = COR_ALERTA;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+      if (cursor) {
+        const c = paraTela(cursor);
+        ctx.lineTo(c.x, c.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // O primeiro vértice fica marcado: é onde se clica para FECHAR.
+      ctx.fillStyle = COR_ALERTA;
+      ctx.beginPath();
+      ctx.arc(pts[0].x, pts[0].y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // Alças da parede selecionada.
     //
     // Desenhá-las é o que torna o arraste DESCOBRÍVEL. Uma ponta arrastável sem
@@ -752,6 +843,9 @@ export default function BlueprintCanvas({
     pontasSoltas,
     fundo,
     calibP1,
+    medicoes,
+    medicaoSelecionada,
+    medindo,
     movendo,
     destinoPonta,
     passoEfetivo,
@@ -807,7 +901,12 @@ export default function BlueprintCanvas({
     }
     setPreviaAbertura(null);
 
-    if (tool === 'calibrar') {
+    if (
+      tool === 'calibrar' ||
+      tool === 'medir-area' ||
+      tool === 'medir-linha' ||
+      tool === 'contar'
+    ) {
       setCursor(paraMundo(px, py) as Point);
       return;
     }
@@ -835,6 +934,36 @@ export default function BlueprintCanvas({
 
     const { px, py } = posicao(e);
     const mundo = paraMundo(px, py);
+
+    if (tool === 'medir-area' || tool === 'medir-linha' || tool === 'contar') {
+      // SEM encaixe na grade: a pessoa está apontando um canto no DESENHO de
+      // fundo, não construindo geometria. Encaixar deslocaria o vértice para o
+      // ponto mais próximo da grade e a área medida sairia errada.
+      const p = { x: mundo.x, y: mundo.y } as Point;
+
+      if (tool === 'contar') {
+        // Contagem fecha a cada clique: cada ponto é uma unidade.
+        onMedicaoPronta?.('PONTO', [p]);
+        return;
+      }
+
+      const tipo: TipoMedida = tool === 'medir-area' ? 'POLIGONO' : 'LINHA';
+      const novos = [...medindo, p];
+
+      // Clicar de novo no primeiro vértice FECHA a forma — é como se fecha
+      // polilinha em qualquer CAD, e evita depender de um botão fora do desenho.
+      const fechou =
+        medindo.length >= pontosMinimos(tipo) &&
+        Math.hypot(medindo[0].x - p.x, medindo[0].y - p.y) < SNAP_PX / vista.escala;
+
+      if (fechou) {
+        onMedicaoPronta?.(tipo, medindo);
+        setMedindo([]);
+        return;
+      }
+      setMedindo(novos);
+      return;
+    }
 
     if (tool === 'calibrar') {
       // SEM encaixe na grade, de propósito: aqui o usuário está apontando um
@@ -907,6 +1036,14 @@ export default function BlueprintCanvas({
     }
   }
 
+  /** Duplo clique encerra a forma em curso — a saída para quem não quer fechar. */
+  function aoDuploClique() {
+    if (medindo.length === 0) return;
+    const tipo: TipoMedida = tool === 'medir-area' ? 'POLIGONO' : 'LINHA';
+    if (medindo.length >= pontosMinimos(tipo)) onMedicaoPronta?.(tipo, medindo);
+    setMedindo([]);
+  }
+
   function aoSoltar(e: React.PointerEvent) {
     if (arrastando) {
       setArrastando(false);
@@ -952,6 +1089,7 @@ export default function BlueprintCanvas({
       setMovendo(null);
       setDestinoPonta(null);
       setCalibP1(null);
+      setMedindo([]);
       onSelect(null);
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
@@ -971,12 +1109,13 @@ export default function BlueprintCanvas({
         style={{
           cursor: arrastando || movendo
             ? 'grabbing'
-            : tool === 'parede' || tool === 'calibrar'
+            : tool !== 'selecionar' && tool !== 'abertura'
               ? 'crosshair'
               : 'default',
         }}
         onPointerMove={aoMover}
         onPointerDown={aoApertar}
+        onDoubleClick={aoDuploClique}
         onPointerUp={aoSoltar}
         onWheel={aoRolar}
         onKeyDown={aoTeclar}

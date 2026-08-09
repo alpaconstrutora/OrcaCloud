@@ -19,6 +19,10 @@ import {
   Pencil,
   History,
   Grid3x3,
+  Square,
+  Spline,
+  Hash,
+  Ruler as RulerIcon,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -26,6 +30,8 @@ import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
 import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
+import PainelMedicoes from './PainelMedicoes';
+import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
 import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
@@ -68,9 +74,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
-  const [aba, setAba] = useState<'ambientes' | 'quantitativos' | 'orcamento' | 'versoes'>(
-    'ambientes',
-  );
+  const [aba, setAba] = useState<
+    'ambientes' | 'medicoes' | 'quantitativos' | 'orcamento' | 'versoes'
+  >('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [ortogonal, setOrtogonal] = useState(true);
   /** Aferição em curso: os dois pontos já clicados, esperando a distância. */
@@ -84,6 +90,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const levelId = editor.model.levels[0]?.id ?? null;
 
   const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
+  const medicoes = useBlueprintMedicoes(study.id, study.organization_id, levelId);
 
   // Atalhos de desfazer/refazer. Ctrl+Z / Ctrl+Shift+Z, como todo editor.
   useEffect(() => {
@@ -368,12 +375,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const metros = Number(distanciaDigitada);
     if (!afericao || !(metros > 0)) return;
 
-    void fundo.aplicarCalibracao(
-      afericao.p1,
-      afericao.p2,
-      Math.round(metros * 1000),
-      alinharNaAfericao,
-    );
+    // A escala ANTERIOR precisa ser capturada antes de aplicar a nova: é dela
+    // que as medições já traçadas são transformadas. Sem isso, corrigir a
+    // escala deixaria cada contorno flutuando fora do que foi traçado.
+    const escalaAnterior = fundo.underlay;
+
+    void fundo
+      .aplicarCalibracao(afericao.p1, afericao.p2, Math.round(metros * 1000), alinharNaAfericao)
+      .then((nova) => {
+        // `nova` VEM DA CHAMADA, não do estado: ler `fundo.underlay` aqui
+        // devolveria o valor velho, porque o React só atualiza o closure na
+        // renderização seguinte — e as medições seriam transformadas de uma
+        // escala para ela mesma, ou seja, não seriam transformadas.
+        if (escalaAnterior && nova) void medicoes.reposicionar(escalaAnterior, nova);
+      });
     setAfericao(null);
     setDistanciaDigitada('');
     editor.setTool('selecionar');
@@ -474,6 +489,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           valor="abertura"
           icone={DoorOpen}
           rotulo="Abertura"
+          onClick={editor.setTool}
+        />
+
+        {/* MEDIR ≠ DESENHAR. Estas três não produzem geometria: produzem uma
+            AFIRMAÇÃO sobre a planta de fundo. O separador existe para isso — na
+            barra, a fronteira entre derivar e afirmar precisa ser visível. */}
+        <span className="h-5 w-px bg-slate-200" aria-hidden />
+
+        <Ferramenta
+          atual={editor.tool}
+          valor="medir-area"
+          icone={Square}
+          rotulo="Área"
+          onClick={editor.setTool}
+        />
+        <Ferramenta
+          atual={editor.tool}
+          valor="medir-linha"
+          icone={Spline}
+          rotulo="Linha"
+          onClick={editor.setTool}
+        />
+        <Ferramenta
+          atual={editor.tool}
+          valor="contar"
+          icone={Hash}
+          rotulo="Contar"
           onClick={editor.setTool}
         />
 
@@ -744,6 +786,10 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   : null
               }
               onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
+              medicoes={medicoes.formas}
+              medicaoSelecionada={medicoes.selecionada}
+              onSelecionarMedicao={medicoes.setSelecionada}
+              onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
             />
           )}
         </div>
@@ -769,6 +815,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onClick={() => setAba('ambientes')}
             />
             <BotaoAba
+              ativo={aba === 'medicoes'}
+              icone={RulerIcon}
+              rotulo="Medições"
+              onClick={() => setAba('medicoes')}
+            />
+            <BotaoAba
               ativo={aba === 'quantitativos'}
               icone={Calculator}
               rotulo="Quantitativos"
@@ -788,7 +840,28 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             />
           </div>
 
-          {aba === 'versoes' ? (
+          {aba === 'medicoes' ? (
+            <PainelMedicoes
+              formas={medicoes.formas}
+              selecionada={medicoes.selecionada}
+              temFundo={!!fundo.linha}
+              ocupado={medicoes.ocupado}
+              onSelecionar={medicoes.setSelecionada}
+              onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
+              onLigarItem={(id, itemCode) => void medicoes.atualizar(id, { itemCode })}
+              onRemover={(id) => void medicoes.remover(id)}
+              onEnviarOrcamento={() =>
+                void medicoes.enviarAoOrcamento(
+                  study.project_id,
+                  study.name,
+                  fundo.linha?.file_sha256 ?? null,
+                  fundo.underlay?.mmPorPixel ?? null,
+                )
+              }
+              aviso={medicoes.aviso}
+              erro={medicoes.erro}
+            />
+          ) : aba === 'versoes' ? (
             <PainelVersoes study={study} />
           ) : aba === 'orcamento' ? (
             <PainelOrcamento

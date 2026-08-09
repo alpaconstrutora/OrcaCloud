@@ -134,10 +134,22 @@ export function useBlueprintUnderlay(
     [studyId, organizationId, levelId, linha, opacidade, carregarImagem],
   );
 
-  /** Aplica a aferição, pivotando no primeiro ponto para não arrastar o traçado. */
+  /**
+   * Aplica a aferição, pivotando no primeiro ponto para não arrastar o traçado.
+   *
+   * DEVOLVE a escala nova. Quem chama precisa dela imediatamente — as medições
+   * já traçadas têm de ser transformadas da antiga para a nova — e ler
+   * `underlay` do estado logo depois entregaria o valor VELHO: o React só
+   * atualiza o closure na próxima renderização.
+   */
   const aplicarCalibracao = useCallback(
-    async (p1: PontoPx, p2: PontoPx, distanciaMm: number, alinhar: boolean) => {
-      if (!linha) return;
+    async (
+      p1: PontoPx,
+      p2: PontoPx,
+      distanciaMm: number,
+      alinhar: boolean,
+    ): Promise<Underlay | null> => {
+      if (!linha) return null;
       setOcupado(true);
       setErro(null);
       try {
@@ -162,8 +174,10 @@ export function useBlueprintUnderlay(
           opacidade,
         });
         setLinha(salvo);
+        return novo;
       } catch (e) {
         setErro(e instanceof Error ? e.message : String(e));
+        return null;
       } finally {
         setOcupado(false);
       }

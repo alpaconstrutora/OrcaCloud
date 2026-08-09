@@ -36,7 +36,7 @@ import { BlueprintRevisionConflict } from '../types/blueprint';
 /** Intervalo do autosave. RNF-004 exige reconhecimento em até 2 s. */
 const AUTOSAVE_MS = 1500;
 
-export type BlueprintTool = 'selecionar' | 'parede' | 'abertura';
+export type BlueprintTool = 'selecionar' | 'parede' | 'abertura' | 'calibrar';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

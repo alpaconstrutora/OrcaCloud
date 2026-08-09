@@ -9,6 +9,12 @@ import {
   point,
   wallLength,
 } from '../../utils/blueprintKernel';
+import {
+  modeloParaPixel,
+  pixelParaModelo,
+  type PontoPx,
+  type Underlay,
+} from '../../utils/blueprintUnderlay';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
 /**
@@ -97,6 +103,10 @@ interface Props {
   pontasSoltas?: Point[];
   /** Trava ortogonal ligada. Shift INVERTE o estado, como em todo CAD. */
   ortogonal?: boolean;
+  /** Planta de fundo já carregada, com o posicionamento aferido. */
+  fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number } | null;
+  /** Em calibração: recebe os dois pontos clicados, em PIXEL DA IMAGEM. */
+  onCalibrar?: (p1: PontoPx, p2: PontoPx) => void;
   /** Move a ponta de uma parede. Sem isto, a alça é desenhada e não faz nada. */
   onMoveVertex?: (wallId: string, end: 'a' | 'b', to: Point) => void;
 }
@@ -128,7 +138,9 @@ export default function BlueprintCanvas({
   vaos = [],
   pontasSoltas = [],
   ortogonal = false,
+  fundo = null,
   onMoveVertex,
+  onCalibrar,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,6 +154,8 @@ export default function BlueprintCanvas({
   /** Ponta em arraste, e para onde ela iria se soltasse agora. */
   const [movendo, setMovendo] = useState<{ wallId: string; end: 'a' | 'b' } | null>(null);
   const [destinoPonta, setDestinoPonta] = useState<Point | null>(null);
+  /** Primeiro ponto da aferição, em milímetro do modelo. */
+  const [calibP1, setCalibP1] = useState<Point | null>(null);
 
   // Passo em vigor: o escolhido pelo usuario, ou o adaptativo se ele deixou em
   // automatico. E o MESMO valor usado para desenhar e para encaixar — a grade
@@ -274,6 +288,40 @@ export default function BlueprintCanvas({
     ctx.clearRect(0, 0, tamanho.w, tamanho.h);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, tamanho.w, tamanho.h);
+
+    // ── Planta de fundo ──────────────────────────────────────────────────────
+    //
+    // ANTES de tudo, inclusive da grade. Geometria nunca pode ficar atrás da
+    // imagem: o que se está desenhando sumiria sob o que se está copiando.
+    //
+    // A matriz sai da composição de duas transformações que já existem —
+    // pixel da imagem → milímetro do modelo (a aferição) e milímetro → tela (a
+    // vista). Compor evita reimplementar escala e deslocamento aqui, que é como
+    // o fundo e o desenho saem de sincronia ao dar zoom.
+    if (fundo) {
+      // Os vetores da matriz saem de três pontos: onde cai a origem da imagem e
+      // para onde apontam um pixel em x e um em y. Compor assim, em vez de
+      // reconstruir escala e deslocamento à mão, é o que mantém o fundo colado
+      // no desenho ao dar zoom — reimplementar a conta aqui é como os dois saem
+      // de sincronia.
+      const o = paraTela(pixelParaModelo(fundo.underlay, { px: 0, py: 0 }));
+      const ex = paraTela(pixelParaModelo(fundo.underlay, { px: 1, py: 0 }));
+      const ey = paraTela(pixelParaModelo(fundo.underlay, { px: 0, py: 1 }));
+
+      ctx.save();
+      ctx.globalAlpha = fundo.opacidade;
+      ctx.setTransform(
+        (ex.x - o.x) * dpr,
+        (ex.y - o.y) * dpr,
+        (ey.x - o.x) * dpr,
+        (ey.y - o.y) * dpr,
+        o.x * dpr,
+        o.y * dpr,
+      );
+      ctx.drawImage(fundo.imagem, 0, 0);
+      ctx.restore();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
 
     // Grade. Duas granularidades: fina no passo em vigor, forte a cada 5 —
     // a forte dá a referência de leitura sem que a fina precise ser densa.
@@ -602,6 +650,27 @@ export default function BlueprintCanvas({
       }
     }
 
+    // Linha de aferição em curso.
+    if (tool === 'calibrar' && calibP1) {
+      const a = paraTela(calibP1);
+      ctx.strokeStyle = COR_ALERTA;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      if (cursor) {
+        const b = paraTela(cursor);
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = COR_ALERTA;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // Pontas soltas e vãos candidatos.
     //
     // Desenhados por último, por cima de tudo: são o que impede o ambiente de
@@ -681,6 +750,8 @@ export default function BlueprintCanvas({
     previaAbertura,
     vaos,
     pontasSoltas,
+    fundo,
+    calibP1,
     movendo,
     destinoPonta,
     passoEfetivo,
@@ -736,6 +807,11 @@ export default function BlueprintCanvas({
     }
     setPreviaAbertura(null);
 
+    if (tool === 'calibrar') {
+      setCursor(paraMundo(px, py) as Point);
+      return;
+    }
+
     if (tool !== 'parede') {
       setCursor(null);
       return;
@@ -759,6 +835,25 @@ export default function BlueprintCanvas({
 
     const { px, py } = posicao(e);
     const mundo = paraMundo(px, py);
+
+    if (tool === 'calibrar') {
+      // SEM encaixe na grade, de propósito: aqui o usuário está apontando um
+      // pixel da imagem, não desenhando. Encaixar deslocaria o ponto da cota e
+      // a aferição sairia errada — justamente o número que tudo depois usa.
+      if (!fundo) return;
+      const p = { x: mundo.x, y: mundo.y };
+
+      if (!calibP1) {
+        setCalibP1(p);
+        return;
+      }
+      onCalibrar?.(
+        modeloParaPixel(fundo.underlay, calibP1.x, calibP1.y),
+        modeloParaPixel(fundo.underlay, p.x, p.y),
+      );
+      setCalibP1(null);
+      return;
+    }
 
     if (tool === 'abertura') {
       const w = paredeSob(mundo);
@@ -856,6 +951,7 @@ export default function BlueprintCanvas({
       setInicio(null);
       setMovendo(null);
       setDestinoPonta(null);
+      setCalibP1(null);
       onSelect(null);
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
@@ -875,7 +971,7 @@ export default function BlueprintCanvas({
         style={{
           cursor: arrastando || movendo
             ? 'grabbing'
-            : tool === 'parede'
+            : tool === 'parede' || tool === 'calibrar'
               ? 'crosshair'
               : 'default',
         }}

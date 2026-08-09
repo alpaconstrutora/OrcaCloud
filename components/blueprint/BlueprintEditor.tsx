@@ -25,6 +25,9 @@ import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprint
 import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
 import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
+import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
+import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
+import type { PontoPx } from '../../utils/blueprintUnderlay';
 import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
 import {
   computeAndStoreQuantities,
@@ -70,11 +73,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   );
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [ortogonal, setOrtogonal] = useState(true);
+  /** Aferição em curso: os dois pontos já clicados, esperando a distância. */
+  const [afericao, setAfericao] = useState<{ p1: PontoPx; p2: PontoPx } | null>(null);
+  const [distanciaDigitada, setDistanciaDigitada] = useState('');
+  const [alinharNaAfericao, setAlinharNaAfericao] = useState(false);
   const [qtdOficial, setQtdOficial] = useState<BlueprintQuantitySnapshot | null>(null);
   const [gerando, setGerando] = useState(false);
   const [tipoAbertura, setTipoAbertura] = useState<'door' | 'window'>('door');
 
   const levelId = editor.model.levels[0]?.id ?? null;
+
+  const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
 
   // Atalhos de desfazer/refazer. Ctrl+Z / Ctrl+Shift+Z, como todo editor.
   useEffect(() => {
@@ -349,6 +358,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * ambientes — e nenhuma parte da tela o acionava. Consertar uma parede torta
    * exigia apagar e redesenhar, e redesenhar é justamente onde o erro nasce.
    */
+  /**
+   * Fecha a aferição com a distância digitada.
+   *
+   * O valor entra em METROS porque é assim que a cota vem escrita na planta, e
+   * vai para o serviço em milímetros — a conversão fica num lugar só, aqui.
+   */
+  function aplicarAfericao() {
+    const metros = Number(distanciaDigitada);
+    if (!afericao || !(metros > 0)) return;
+
+    void fundo.aplicarCalibracao(
+      afericao.p1,
+      afericao.p2,
+      Math.round(metros * 1000),
+      alinharNaAfericao,
+    );
+    setAfericao(null);
+    setDistanciaDigitada('');
+    editor.setTool('selecionar');
+  }
+
   function moverPonta(wallId: string, end: 'a' | 'b', to: Point) {
     editor.run({ type: 'MoveVertex', wallId, end, to });
   }
@@ -489,6 +519,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         </label>
         )}
 
+        <ControlesDeFundo
+          linha={fundo.linha}
+          underlay={fundo.underlay}
+          opacidade={fundo.opacidade}
+          calibrando={editor.tool === 'calibrar'}
+          ocupado={fundo.ocupado}
+          totalPaginas={fundo.totalPaginas}
+          onImportar={(arquivo, pagina) => void fundo.importar(arquivo, pagina)}
+          onCalibrar={() => {
+            setAfericao(null);
+            editor.setTool(editor.tool === 'calibrar' ? 'selecionar' : 'calibrar');
+          }}
+          onOpacidade={fundo.setOpacidade}
+          onRemover={() => void fundo.remover()}
+        />
+
+        <span className="h-5 w-px bg-slate-200" aria-hidden />
+
         {/* ORTO. Encaixar na grade NÃO impede parede torta: impede só que a
             ponta pare fora da grade. Um desvio de um passo é invisível na escala
             da tela e só aparece no CAD — ou na obra. Foi assim que uma parede
@@ -589,8 +637,76 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       )}
 
       {/* Corpo */}
+      {fundo.linha && fundo.underlay && (
+        <ResumoDaAfericao linha={fundo.linha} underlay={fundo.underlay} />
+      )}
+      {fundo.erro && (
+        <p className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+          {fundo.erro}
+        </p>
+      )}
+
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
+          {/* Aferição: os dois pontos já foram clicados, falta a distância real.
+              O diálogo aparece SOBRE o desenho, junto de onde o usuário acabou
+              de clicar — mandá-lo procurar um campo na lateral quebraria o
+              gesto no meio. */}
+          {afericao && (
+            <div className="absolute left-1/2 top-4 z-10 w-80 -translate-x-1/2 rounded-lg border border-amber-300 bg-white p-3 shadow-lg">
+              <p className="text-xs font-semibold text-slate-800">
+                Qual a distância real entre os dois pontos?
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Use uma cota escrita na planta. Quanto mais longa, melhor a aferição.
+              </p>
+
+              <div className="mt-2 flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={distanciaDigitada}
+                  onChange={(e) => setDistanciaDigitada(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') aplicarAfericao();
+                    if (e.key === 'Escape') setAfericao(null);
+                  }}
+                  aria-label="Distância real em metros"
+                  placeholder="0,00"
+                  className="w-24 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                />
+                <span className="text-xs text-slate-600">metros</span>
+
+                <button
+                  type="button"
+                  onClick={aplicarAfericao}
+                  disabled={!(Number(distanciaDigitada) > 0)}
+                  className="ml-auto rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+                >
+                  Aferir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAfericao(null)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              <label className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={alinharNaAfericao}
+                  onChange={(e) => setAlinharNaAfericao(e.target.checked)}
+                />
+                Estes dois pontos são horizontais (endireita a planta torta)
+              </label>
+            </div>
+          )}
+
           {editor.loading ? (
             <div className="flex h-full items-center justify-center text-sm text-slate-500">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando planta…
@@ -613,6 +729,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               pontasSoltas={vaosCandidatos.soltas}
               ortogonal={ortogonal}
               onMoveVertex={moverPonta}
+              fundo={
+                fundo.imagem && fundo.underlay
+                  ? {
+                      imagem: fundo.imagem,
+                      underlay: fundo.underlay,
+                      opacidade: fundo.opacidade,
+                    }
+                  : null
+              }
+              onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
             />
           )}
         </div>

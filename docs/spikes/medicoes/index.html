@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Harness — planta de fundo e medições</title>
+<style>
+  html, body { margin: 0; background: #f1f5f9; font-family: system-ui, sans-serif; }
+  /* O Tailwind não é carregado no harness, então o `h-full w-full` do
+     BlueprintCanvas não resolve em nada: o ResizeObserver mediria um container
+     sem altura, o canvas cresceria sobre a própria medida e a tela viraria uma
+     tira de 18 mil pixels. A altura vai aqui, em CSS puro. */
+  #raiz, #raiz > div { width: 800px; height: 600px; }
+  /* A cena do painel tem largura própria — ela mede a barra e o painel nas
+     larguras reais do editor, não nos 800px do canvas. */
+  body[data-cena="painel"] #raiz, body[data-cena="painel"] #raiz > div {
+    width: auto; height: auto;
+  }
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<script type="module" src="./main.tsx"></script>
+</body>
+</html>

@@ -92,7 +92,11 @@ export function useBlueprintMedicoes(
         setOcupado(false);
       }
     },
-    [studyId, organizationId, levelId, linhas.length],
+    // `underlayId` e `camada` PRECISAM estar aqui: são lidos dentro do callback,
+    // e sem eles trocar de prancha ou de camada deixaria o closure com o valor
+    // velho — a forma nasceria presa à prancha anterior, invisível na que está
+    // na tela, e ninguém ligaria uma coisa à outra.
+    [studyId, organizationId, levelId, linhas.length, underlayId, camada],
   );
 
   const atualizar = useCallback(

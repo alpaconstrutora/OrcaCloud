@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AlertTriangle, Image as ImageIcon, Ruler, Trash2 } from 'lucide-react';
+import { AlertTriangle, Image as ImageIcon, Layers, Ruler, Trash2 } from 'lucide-react';
 import {
   AVISO_RASTER,
   distanciaMedidaMm,
@@ -17,23 +17,27 @@ import type { UnderlayRow } from '../../services/blueprintUnderlayService';
  * disso vai confiar no traçado mais do que deve.
  */
 export default function ControlesDeFundo({
+  linhas,
   linha,
   underlay,
   opacidade,
   calibrando,
   ocupado,
   totalPaginas,
+  onSelecionar,
   onImportar,
   onCalibrar,
   onOpacidade,
   onRemover,
 }: {
+  linhas: UnderlayRow[];
   linha: UnderlayRow | null;
   underlay: Underlay | null;
   opacidade: number;
   calibrando: boolean;
   ocupado: boolean;
   totalPaginas: number;
+  onSelecionar: (id: string) => void;
   onImportar: (arquivo: File, pagina: number) => void;
   onCalibrar: () => void;
   onOpacidade: (v: number) => void;
@@ -57,15 +61,36 @@ export default function ControlesDeFundo({
         }}
       />
 
+      {/* Só aparece a partir da segunda: com uma prancha o seletor seria um
+          controle de escolha única, que não escolhe nada. */}
+      {linhas.length > 1 && (
+        <label className="flex items-center gap-1.5 text-xs text-slate-600">
+          <Layers className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+          <select
+            value={linha?.id ?? ''}
+            onChange={(e) => onSelecionar(e.target.value)}
+            aria-label="Prancha ativa"
+            title="Cada prancha tem a própria aferição, e mostra só as medições traçadas nela"
+            className="max-w-44 rounded-md border border-slate-300 px-2 py-1 text-xs"
+          >
+            {linhas.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.nome || l.nome_arquivo}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={ocupado}
-        title="Importa uma imagem ou PDF para traçar por cima"
+        title="Acrescenta uma prancha. As que já existem continuam, com a aferição delas."
         className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
       >
         <ImageIcon className="h-3.5 w-3.5" />
-        {linha ? 'Trocar fundo' : 'Planta de fundo'}
+        {linha ? 'Acrescentar prancha' : 'Planta de fundo'}
       </button>
 
       {totalPaginas > 1 && (
@@ -122,8 +147,8 @@ export default function ControlesDeFundo({
             type="button"
             onClick={onRemover}
             disabled={ocupado}
-            aria-label="Remover planta de fundo"
-            title="Remover a planta de fundo"
+            aria-label="Remover esta prancha"
+            title="Remove esta prancha. As medições traçadas nela continuam, sem o documento por baixo."
             className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
           >
             <Trash2 className="h-3.5 w-3.5" />

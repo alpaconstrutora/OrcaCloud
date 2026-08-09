@@ -14,15 +14,11 @@ import {
   CheckCircle2,
   Loader2,
   Calculator,
-  PencilRuler,
-  Coins,
   Pencil,
-  History,
   Grid3x3,
   Square,
   Spline,
   Hash,
-  Ruler as RulerIcon,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -30,6 +26,7 @@ import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
 import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
+import AbasDoPainel from './AbasDoPainel';
 import PainelMedicoes from './PainelMedicoes';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
@@ -61,6 +58,16 @@ import {
 const ESPESSURA_PADRAO_MM = 150;
 const ALTURA_PADRAO_MM = 2800;
 
+const ABAS = [
+  { id: 'ambientes', rotulo: 'Ambientes' },
+  { id: 'medicoes', rotulo: 'Medições' },
+  { id: 'quantitativos', rotulo: 'Quantitativos' },
+  { id: 'orcamento', rotulo: 'Orçamento' },
+  { id: 'versoes', rotulo: 'Versões' },
+] as const;
+
+type AbaDoPainel = (typeof ABAS)[number]['id'];
+
 interface Props {
   study: BlueprintStudy;
   branchId: string;
@@ -74,9 +81,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
-  const [aba, setAba] = useState<
-    'ambientes' | 'medicoes' | 'quantitativos' | 'orcamento' | 'versoes'
-  >('ambientes');
+  const [aba, setAba] = useState<AbaDoPainel>('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [ortogonal, setOrtogonal] = useState(true);
   /** Aferição em curso: os dois pontos já clicados, esperando a distância. */
@@ -91,13 +96,46 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
   const [camadaAtiva, setCamadaAtiva] = useState('Geral');
+  /** Camadas desligadas. Estado de TELA — preferência de quem olha, não do dado. */
+  const [camadasOcultas, setCamadasOcultas] = useState<Set<string>>(new Set());
   const medicoes = useBlueprintMedicoes(
     study.id,
     study.organization_id,
     levelId,
-    fundo.linha?.id ?? null,
+    fundo.ativaId,
     camadaAtiva,
   );
+
+  /**
+   * O que aparece na tela: a prancha ativa, menos as camadas desligadas.
+   *
+   * O recorte por prancha não é cosmético. As coordenadas de uma forma só fazem
+   * sentido sob a aferição da prancha em que foi traçada; mostrar as do térreo
+   * sobre a cobertura desenharia contornos no lugar errado, com o número certo
+   * ao lado — que é o pior jeito de errar.
+   *
+   * A FORMA SEM PRANCHA aparece em TODAS. Ela foi traçada sem fundo nenhum, então
+   * não há aferição de outra prancha que a contradiga — e escondê-la a deixaria
+   * inalcançável: some da lista, e não sobra nenhum controle para religá-la a
+   * coisa alguma. O banco tem duas assim (`orfas=2` na conferência da 000014).
+   */
+  const medicoesVisiveis = useMemo(
+    () =>
+      medicoes.formas.filter(
+        (f) =>
+          (f.underlayId === null || f.underlayId === fundo.ativaId) &&
+          !camadasOcultas.has(f.camada || 'Geral'),
+      ),
+    [medicoes.formas, fundo.ativaId, camadasOcultas],
+  );
+
+  const alternarCamada = (camada: string) =>
+    setCamadasOcultas((atual) => {
+      const nova = new Set(atual);
+      if (nova.has(camada)) nova.delete(camada);
+      else nova.add(camada);
+      return nova;
+    });
 
   // Atalhos de desfazer/refazer. Ctrl+Z / Ctrl+Shift+Z, como todo editor.
   useEffect(() => {
@@ -395,7 +433,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         // renderização seguinte — e as medições seriam transformadas de uma
         // escala para ela mesma, ou seja, não seriam transformadas.
         if (escalaAnterior && nova)
-          void medicoes.reposicionar(escalaAnterior, nova, fundo.linha?.id ?? null);
+          void medicoes.reposicionar(escalaAnterior, nova, fundo.ativaId);
       });
     setAfericao(null);
     setDistanciaDigitada('');
@@ -575,12 +613,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         )}
 
         <ControlesDeFundo
+          linhas={fundo.linhas}
           linha={fundo.linha}
           underlay={fundo.underlay}
           opacidade={fundo.opacidade}
           calibrando={editor.tool === 'calibrar'}
           ocupado={fundo.ocupado}
           totalPaginas={fundo.totalPaginas}
+          onSelecionar={fundo.selecionar}
           onImportar={(arquivo, pagina) => void fundo.importar(arquivo, pagina)}
           onCalibrar={() => {
             setAfericao(null);
@@ -794,7 +834,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
                   : null
               }
               onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
-              medicoes={medicoes.formas}
+              medicoes={medicoesVisiveis}
               medicaoSelecionada={medicoes.selecionada}
               onSelecionarMedicao={medicoes.setSelecionada}
               onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
@@ -807,56 +847,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           className="flex w-96 shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white"
           aria-label="Ambientes derivados"
         >
-          {/* GRADE, não flex. Com `flex-1` o conteúdo de cada aba não encolhe
-              abaixo do próprio tamanho (min-width: auto), a barra transborda os
-              320 px do painel e o `overflow-hidden` do <aside> RECORTA a última
-              aba — foi exatamente o que sumiu com a quarta. Coluna de grade tem
-              largura fixa de 1/4 e o rótulo trunca dentro dela. */}
-          <div
-            className="grid shrink-0 grid-cols-4 border-b border-slate-200"
-            role="tablist"
-          >
-            <BotaoAba
-              ativo={aba === 'ambientes'}
-              icone={PencilRuler}
-              rotulo="Ambientes"
-              onClick={() => setAba('ambientes')}
-            />
-            <BotaoAba
-              ativo={aba === 'medicoes'}
-              icone={RulerIcon}
-              rotulo="Medições"
-              onClick={() => setAba('medicoes')}
-            />
-            <BotaoAba
-              ativo={aba === 'quantitativos'}
-              icone={Calculator}
-              rotulo="Quantitativos"
-              onClick={() => setAba('quantitativos')}
-            />
-            <BotaoAba
-              ativo={aba === 'orcamento'}
-              icone={Coins}
-              rotulo="Orçamento"
-              onClick={() => setAba('orcamento')}
-            />
-            <BotaoAba
-              ativo={aba === 'versoes'}
-              icone={History}
-              rotulo="Versões"
-              onClick={() => setAba('versoes')}
-            />
-          </div>
+          <AbasDoPainel abas={ABAS} ativa={aba} onEscolher={setAba} />
 
           {aba === 'medicoes' ? (
             <PainelMedicoes
-              formas={medicoes.formas}
+              formas={medicoesVisiveis}
+              todas={medicoes.formas}
               selecionada={medicoes.selecionada}
               temFundo={!!fundo.linha}
               ocupado={medicoes.ocupado}
+              camadasOcultas={camadasOcultas}
+              camadaAtiva={camadaAtiva}
+              onAlternarCamada={alternarCamada}
+              onCamadaAtiva={setCamadaAtiva}
               onSelecionar={medicoes.setSelecionada}
               onRenomear={(id, nome) => void medicoes.atualizar(id, { nome })}
-              onLigarItem={(id, itemCode) => void medicoes.atualizar(id, { itemCode })}
+              onEditarItem={(id, campos) => void medicoes.atualizar(id, campos)}
               onRemover={(id) => void medicoes.remover(id)}
               onEnviarOrcamento={() =>
                 void medicoes.enviarAoOrcamento(
@@ -1115,36 +1121,6 @@ function BotaoBarra({
       className="rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-40"
     >
       <Icone className="h-4 w-4" />
-    </button>
-  );
-}
-
-function BotaoAba({
-  ativo,
-  icone: Icone,
-  rotulo,
-  onClick,
-}: {
-  ativo: boolean;
-  icone: React.ElementType;
-  rotulo: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={ativo}
-      onClick={onClick}
-      title={rotulo}
-      className={`flex min-w-0 flex-col items-center justify-center gap-0.5 border-b-2 px-1 py-1.5 text-[11px] font-medium transition-colors ${
-        ativo
-          ? 'border-blue-600 text-blue-700'
-          : 'border-transparent text-slate-500 hover:bg-slate-50'
-      }`}
-    >
-      <Icone className="h-3.5 w-3.5 shrink-0" />
-      <span className="w-full truncate text-center">{rotulo}</span>
     </button>
   );
 }

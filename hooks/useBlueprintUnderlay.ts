@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   contarPaginasPdf,
-  getUnderlay,
+  listarUnderlays,
   rasterizarPdf,
   removerUnderlay,
   salvarUnderlay,
@@ -18,24 +18,34 @@ import {
 } from '../utils/blueprintUnderlay';
 
 /**
- * Estado da planta de fundo de um nível.
+ * Estado das plantas de fundo de um nível.
  *
  * Separado do `useBlueprintEditor` de propósito: o fundo NÃO é geometria e não
  * entra no histórico de desfazer. Misturar os dois faria "Desfazer" remover a
  * planta de referência — que o usuário nunca pediu para desenhar.
+ *
+ * SÃO VÁRIAS, e uma está ativa. Um levantamento percorre térreo, cobertura,
+ * corte e fachada; cada prancha tem a própria aferição, e é por isso que a
+ * medição aponta para a prancha e não só para o nível — recalibrar a cobertura
+ * não pode mexer no que foi traçado no térreo.
  */
 export function useBlueprintUnderlay(
   studyId: string,
   organizationId: string,
   levelId: string | null,
 ) {
-  const [linha, setLinha] = useState<UnderlayRow | null>(null);
+  const [linhas, setLinhas] = useState<UnderlayRow[]>([]);
+  const [ativaId, setAtivaId] = useState<string | null>(null);
   const [imagem, setImagem] = useState<HTMLImageElement | null>(null);
   const [opacidade, setOpacidade] = useState(0.55);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
+  const linha = useMemo(
+    () => linhas.find((l) => l.id === ativaId) ?? null,
+    [linhas, ativaId],
+  );
   const underlay: Underlay | null = linha ? underlayDaLinha(linha) : null;
 
   const carregarImagem = useCallback(async (path: string) => {
@@ -56,26 +66,39 @@ export function useBlueprintUnderlay(
     let cancelado = false;
     if (!studyId) return;
 
-    getUnderlay(studyId, levelId)
-      .then(async (r) => {
+    listarUnderlays(studyId, levelId)
+      .then((rs) => {
         if (cancelado) return;
-        setLinha(r);
-        if (!r) {
-          setImagem(null);
-          return;
-        }
-        setOpacidade(r.opacidade);
-        await carregarImagem(r.storage_path);
+        setLinhas(rs);
+        setAtivaId(rs[0]?.id ?? null);
       })
       .catch((e) => !cancelado && setErro(e instanceof Error ? e.message : String(e)));
 
     return () => {
       cancelado = true;
     };
-  }, [studyId, levelId, carregarImagem]);
+  }, [studyId, levelId]);
+
+  // A imagem acompanha a prancha ativa. Fica num efeito próprio, e não dentro
+  // de quem troca a seleção, porque são três os caminhos que trocam a ativa
+  // (carregar, importar, remover) e cada um teria de lembrar de recarregar.
+  useEffect(() => {
+    let cancelado = false;
+    if (!linha) {
+      setImagem(null);
+      return;
+    }
+    setOpacidade(linha.opacidade);
+    carregarImagem(linha.storage_path).catch(
+      (e) => !cancelado && setErro(e instanceof Error ? e.message : String(e)),
+    );
+    return () => {
+      cancelado = true;
+    };
+  }, [linha, carregarImagem]);
 
   /**
-   * Importa imagem ou PDF.
+   * ACRESCENTA uma prancha — importar nunca substitui.
    *
    * O PDF é rasterizado ANTES de subir: guardar o PDF e rasterizar a cada
    * abertura deixaria a página escolhida fora do registro, e duas pessoas
@@ -94,9 +117,10 @@ export function useBlueprintUnderlay(
         if (ehPdf) {
           const total = await contarPaginasPdf(arquivo);
           setTotalPaginas(total);
-          const r = await rasterizarPdf(arquivo, Math.min(Math.max(1, pagina), total));
+          const p = Math.min(Math.max(1, pagina), total);
+          const r = await rasterizarPdf(arquivo, p);
           blob = r.blob;
-          paginaGravada = Math.min(Math.max(1, pagina), total);
+          paginaGravada = p;
         } else {
           setTotalPaginas(1);
         }
@@ -117,25 +141,31 @@ export function useBlueprintUnderlay(
           level_id: levelId,
           storage_path: storagePath,
           nome_arquivo: arquivo.name,
+          // A página entra no nome: um PDF de quatro pranchas geraria quatro
+          // linhas chamadas "planta.pdf", e a lista não distinguiria nenhuma.
+          nome: paginaGravada ? `${arquivo.name} · p.${paginaGravada}` : arquivo.name,
+          ordem: linhas.length,
           file_sha256: sha256,
           pdf_pagina: paginaGravada,
-          underlay: linha ? underlayDaLinha(linha) : UNDERLAY_NEUTRO,
+          underlay: UNDERLAY_NEUTRO,
           opacidade,
         });
 
-        setLinha(salvo);
-        await carregarImagem(storagePath);
+        // §22 do guia: acrescenta ao array local em vez de recarregar a lista.
+        setLinhas((atual) => [...atual, salvo]);
+        setAtivaId(salvo.id);
       } catch (e) {
         setErro(e instanceof Error ? e.message : String(e));
       } finally {
         setOcupado(false);
       }
     },
-    [studyId, organizationId, levelId, linha, opacidade, carregarImagem],
+    [studyId, organizationId, levelId, linhas.length, opacidade],
   );
 
   /**
-   * Aplica a aferição, pivotando no primeiro ponto para não arrastar o traçado.
+   * Aplica a aferição na prancha ativa, pivotando no primeiro ponto para não
+   * arrastar o traçado.
    *
    * DEVOLVE a escala nova. Quem chama precisa dela imediatamente — as medições
    * já traçadas têm de ser transformadas da antiga para a nova — e ler
@@ -162,18 +192,21 @@ export function useBlueprintUnderlay(
         });
 
         const salvo = await salvarUnderlay({
+          id: linha.id,
           study_id: linha.study_id,
           organization_id: linha.organization_id,
           level_id: linha.level_id,
           storage_path: linha.storage_path,
           nome_arquivo: linha.nome_arquivo,
+          nome: linha.nome,
+          ordem: linha.ordem,
           file_sha256: linha.file_sha256 ?? '',
           pdf_pagina: linha.pdf_pagina,
           underlay: novo,
           calibracao: { p1, p2, distanciaMm, alinhado: alinhar },
           opacidade,
         });
-        setLinha(salvo);
+        setLinhas((atual) => atual.map((l) => (l.id === salvo.id ? salvo : l)));
         return novo;
       } catch (e) {
         setErro(e instanceof Error ? e.message : String(e));
@@ -190,17 +223,21 @@ export function useBlueprintUnderlay(
     setOcupado(true);
     try {
       await removerUnderlay(linha.id);
-      setLinha(null);
-      setImagem(null);
+      const restantes = linhas.filter((l) => l.id !== linha.id);
+      setLinhas(restantes);
+      setAtivaId(restantes[0]?.id ?? null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : String(e));
     } finally {
       setOcupado(false);
     }
-  }, [linha]);
+  }, [linha, linhas]);
 
   return {
+    linhas,
     linha,
+    ativaId,
+    selecionar: setAtivaId,
     imagem,
     underlay,
     opacidade,

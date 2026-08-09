@@ -27,6 +27,8 @@ function linha(over: Partial<UnderlayRow> = {}): UnderlayRow {
     level_id: 'lvl_0001',
     storage_path: 'org_1/std_1/abc.png',
     nome_arquivo: 'planta.pdf',
+    nome: 'planta.pdf · p.2',
+    ordem: 0,
     file_sha256: 'abc123',
     pdf_pagina: 2,
     origem_x_mm: UNDERLAY.origemXMm,
@@ -48,12 +50,16 @@ function linha(over: Partial<UnderlayRow> = {}): UnderlayRow {
 
 function montar(over: Partial<React.ComponentProps<typeof ControlesDeFundo>> = {}) {
   const props = {
+    // `linhas` acompanha `linha` por padrão: quem não está exercitando o seletor
+    // de prancha não deveria ter de montar a lista à mão.
+    linhas: over.linha ? [over.linha] : [],
     linha: null,
     underlay: null,
     opacidade: 0.55,
     calibrando: false,
     ocupado: false,
     totalPaginas: 1,
+    onSelecionar: vi.fn(),
     onImportar: vi.fn(),
     onCalibrar: vi.fn(),
     onOpacidade: vi.fn(),
@@ -77,9 +83,17 @@ describe('ControlesDeFundo · o que aparece quando', () => {
     montar({ linha: linha(), underlay: UNDERLAY });
     expect(screen.getByRole('button', { name: /aferir escala/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/opacidade/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /remover planta de fundo/i })).toBeInTheDocument();
-    // E o botão de importar muda de rótulo: importar de novo é TROCAR.
-    expect(screen.getByRole('button', { name: /trocar fundo/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remover esta prancha/i })).toBeInTheDocument();
+    // E o botão de importar muda de rótulo: importar de novo ACRESCENTA.
+    expect(screen.getByRole('button', { name: /acrescentar prancha/i })).toBeInTheDocument();
+  });
+
+  it('IMPORTAR ACRESCENTA, e não substitui', () => {
+    // O rótulo é a única coisa na tela que diz o que o botão faz com a prancha
+    // que já existe. Enquanto ele dizia "Trocar fundo", a promessa era a de
+    // SUBSTITUIR — e a aferição da primeira, que é trabalho manual, ia junto.
+    montar({ linha: linha(), underlay: UNDERLAY });
+    expect(screen.queryByRole('button', { name: /trocar fundo/i })).not.toBeInTheDocument();
   });
 
   it('a escolha de página só aparece em PDF de mais de uma página', () => {
@@ -114,6 +128,34 @@ describe('ControlesDeFundo · o que aparece quando', () => {
 
     fireEvent.change(campo, { target: { value: '80' } });
     expect(props.onOpacidade).toHaveBeenCalledWith(0.8);
+  });
+});
+
+describe('ControlesDeFundo · seletor de prancha', () => {
+  const A = linha({ id: 'und_1', nome: 'Térreo', ordem: 0 });
+  const B = linha({ id: 'und_2', nome: 'Cobertura', ordem: 1 });
+
+  it('COM UMA SÓ PRANCHA NÃO OFERECE ESCOLHA', () => {
+    // Um seletor de opção única é um controle que não controla nada: ocupa a
+    // barra e sugere que existe outra prancha para escolher.
+    montar({ linhas: [A], linha: A, underlay: UNDERLAY });
+    expect(screen.queryByLabelText(/prancha ativa/i)).not.toBeInTheDocument();
+  });
+
+  it('a partir da segunda, lista as pranchas pelo nome', () => {
+    montar({ linhas: [A, B], linha: A, underlay: UNDERLAY });
+    const seletor = screen.getByLabelText(/prancha ativa/i);
+    expect(seletor).toHaveValue('und_1');
+    expect(screen.getByRole('option', { name: 'Térreo' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Cobertura' })).toBeInTheDocument();
+  });
+
+  it('trocar de prancha chega ao pai', () => {
+    const props = montar({ linhas: [A, B], linha: A, underlay: UNDERLAY });
+    fireEvent.change(screen.getByLabelText(/prancha ativa/i), {
+      target: { value: 'und_2' },
+    });
+    expect(props.onSelecionar).toHaveBeenCalledWith('und_2');
   });
 });
 

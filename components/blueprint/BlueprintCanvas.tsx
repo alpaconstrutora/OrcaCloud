@@ -136,6 +136,9 @@ interface Vista {
 /** Distância de clique para pegar a alça de uma ponta, em pixels de tela. */
 const ALCA_PX = 9;
 
+/** Folga entre a origem do modelo e a borda da área de desenho, em pixels. */
+const MARGEM_INICIAL_PX = 60;
+
 export default function BlueprintCanvas({
   model,
   tool,
@@ -163,7 +166,13 @@ export default function BlueprintCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [vista, setVista] = useState<Vista>({ escala: 0.05, dx: 60, dy: 60 });
+  const [vista, setVista] = useState<Vista>({
+    escala: 0.05,
+    dx: MARGEM_INICIAL_PX,
+    dy: MARGEM_INICIAL_PX,
+  });
+  /** A origem já foi levada para o rodapé? Só na primeira medida do container. */
+  const enquadrado = useRef(false);
   const [tamanho, setTamanho] = useState({ w: 800, h: 600 });
   const [inicio, setInicio] = useState<Point | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null);
@@ -190,15 +199,29 @@ export default function BlueprintCanvas({
   const ambientesDoNivel = model.spaces.filter((s) => !levelId || s.levelId === levelId);
 
   // ── Conversões ────────────────────────────────────────────────────────────
+  //
+  // O Y DO MODELO CRESCE PARA CIMA; o da tela, para baixo. A inversão vive
+  // AQUI, nestas duas funções, e em nenhum outro lugar.
+  //
+  // Ela faltava. O modelo é Y para cima em todo o resto do sistema — a
+  // exportação em PDF inverte explicitamente, o DXF grava Y cru porque DXF
+  // também é Y para cima, e `blueprintUnderlay` converte pixel de imagem para
+  // milímetro invertendo o sinal. Só a tela somava Y direto, e o resultado era
+  // desenhar tudo espelhado na vertical em relação ao que sai no papel.
+  //
+  // Numa planta retangular isso não salta aos olhos: o retângulo virado de
+  // cabeça para baixo é o mesmo retângulo. O que denunciou foi a planta de
+  // fundo, que tem conteúdo assimétrico — a marca do canto superior da imagem
+  // aparecia embaixo. Ver `docs/spikes/medicoes/passeio.mjs`.
   const paraTela = useCallback(
-    (p: Point) => ({ x: p.x * vista.escala + vista.dx, y: p.y * vista.escala + vista.dy }),
+    (p: Point) => ({ x: p.x * vista.escala + vista.dx, y: -p.y * vista.escala + vista.dy }),
     [vista],
   );
 
   const paraMundo = useCallback(
     (px: number, py: number) => ({
       x: (px - vista.dx) / vista.escala,
-      y: (py - vista.dy) / vista.escala,
+      y: -(py - vista.dy) / vista.escala,
     }),
     [vista],
   );
@@ -282,11 +305,25 @@ export default function BlueprintCanvas({
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setTamanho({ w: el.clientWidth, h: el.clientHeight });
-    });
+
+    // Com Y para cima, a origem do modelo tem de nascer PERTO DO RODAPÉ da
+    // área de desenho — é a convenção de CAD, e é o que mantém visível tanto o
+    // que já foi desenhado (que vive em Y positivo) quanto o que se desenha
+    // agora. Deixar a origem no topo daria uma faixa de 60 px de área útil e o
+    // resto da planta acima da borda, invisível sem arrastar.
+    const medir = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setTamanho({ w, h });
+      if (!enquadrado.current && h > 0) {
+        enquadrado.current = true;
+        setVista((v) => ({ ...v, dy: h - MARGEM_INICIAL_PX }));
+      }
+    };
+
+    const ro = new ResizeObserver(medir);
     ro.observe(el);
-    setTamanho({ w: el.clientWidth, h: el.clientHeight });
+    medir();
     return () => ro.disconnect();
   }, []);
 
@@ -576,8 +613,12 @@ export default function BlueprintCanvas({
         // Porta: folha aberta a 90 graus mais o arco de giro, como em planta.
         const piv = paraTela({ x: ini.x + nx * meia, y: ini.y + ny * meia } as Point);
         const raio = larguraTela;
-        const angEixo = Math.atan2(uy, ux);
-        const angNormal = Math.atan2(ny, nx);
+        // Os ângulos são de TELA, e `ux/uy` e `nx/ny` são de modelo: o Y entra
+        // negado, como em `paraTela`. E como negar o Y inverte o sentido de
+        // giro, o arco passa a ser anti-horário — senão a folha da porta e o
+        // arco apontariam para lados opostos.
+        const angEixo = Math.atan2(-uy, ux);
+        const angNormal = Math.atan2(-ny, nx);
 
         ctx.beginPath();
         ctx.moveTo(piv.x, piv.y);
@@ -585,7 +626,7 @@ export default function BlueprintCanvas({
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.arc(piv.x, piv.y, raio, angEixo, angNormal, false);
+        ctx.arc(piv.x, piv.y, raio, angEixo, angNormal, true);
         ctx.stroke();
       }
     }
@@ -1076,10 +1117,11 @@ export default function BlueprintCanvas({
     const escala = Math.max(0.002, Math.min(2, vista.escala * fator));
 
     // Mantém sob o cursor o mesmo ponto do mundo — zoom "para onde se olha".
+    // O sinal do Y acompanha `paraTela`: resolver `-antes.y * escala + dy = py`.
     setVista({
       escala,
       dx: px - antes.x * escala,
-      dy: py - antes.y * escala,
+      dy: py + antes.y * escala,
     });
   }
 

@@ -26,8 +26,8 @@ não.
 | E5 parcial — quantitativos | ✅ verificado |
 | RF-122 — de-para para o orçamento | ✅ confirmado no navegador |
 | E4 — exportação, diff, DXF, IFC, cotas | ✅ PDF e DXF confirmados |
-| Planta de fundo calibrada | ✅ código pronto, **não visto no navegador** |
-| Medições (formas traçadas) | ⚠️ núcleo pronto, **falta UI** |
+| Planta de fundo calibrada | ✅ **verificada no navegador** — e um espelhamento vertical foi corrigido ali |
+| Medições (formas traçadas) | ✅ núcleo + UI; **falta aplicar a migration 000014** |
 | E1/E2 — Digitalizador automático | ✖ travado no bloqueio semântico do Spike C |
 | E6 — Gerador | ✖ não existe em lugar nenhum como o PRD define |
 
@@ -42,33 +42,135 @@ de plantas antes**, senão dá `40P01`.
 
 Conferência esperada: `sem_unico=1 · colunas=5 · fk_prancha=1 · orfas=0`
 
-### 2.2 Construir a UI das lacunas (é o que falta para poder excluir o Medição)
+✅ **APLICADA em 09/08/2026**, com `sem_unico=1 · colunas=5 · fk_prancha=1 ·
+orfas=2`.
 
-O banco e a lógica já suportam; falta a tela:
+As **2 órfãs** são medições que não acharam prancha — permitido (forma traçada
+sem fundo), mas elas expuseram um buraco na UI da mesma sessão: com o filtro
+`f.underlayId === ativaId`, uma órfã ficava invisível assim que houvesse uma
+prancha, **e sem nenhum controle para religá-la**. Corrigido: forma sem prancha
+aparece em TODAS, marcada como "sem prancha" na linha — do contrário pareceria
+que a mesma medição foi traçada uma vez por prancha.
 
-- **Seletor de prancha** na barra do editor. Importar hoje SUBSTITUI; precisa
-  passar a ACRESCENTAR, e a barra precisa deixar escolher qual está ativa.
-  Ver `useBlueprintUnderlay` — ele ainda busca **uma** prancha
-  (`getUnderlay(studyId, levelId)`); precisa listar e ter uma ativa.
-- **Filtro de camada** no `PainelMedicoes`, com visibilidade em estado de tela.
-  `camadas(formas)` já devolve a lista.
-- **Campos do item avulso** (`itemNome`, `itemPreco`) no `PainelMedicoes`, ao
-  lado do código de catálogo.
+Para saber o que são as duas:
 
-### 2.3 Verificar no navegador
+```sql
+SELECT m.id, m.nome, m.tipo, m.level_id, m.created_at,
+       (SELECT count(*) FROM public.blueprint_underlays u
+         WHERE u.study_id = m.study_id) AS pranchas_do_estudo
+  FROM public.blueprint_measurements m
+ WHERE m.underlay_id IS NULL;
+```
 
-Nada disto foi visto funcionando:
+### 2.1.1 `aplicar_20270905000015` — policies de storage do fundo · ✅ APLICADA
 
-| | |
-|---|---|
-| Planta de fundo | a imagem aparece no lugar certo? acompanha o zoom colada no desenho? |
-| Medições | o traçado segue o cursor? a forma fecha ao clicar no primeiro ponto? |
-| **Recalibrar** | as formas se reposicionam sobre o que foi traçado? **é o teste que mais importa** |
-| Cotas no PDF | a cadeia soma o total? |
-| IFC | abre num visualizador? o `.txt` de cobertura acompanha? |
+Aplicada em 09/08/2026: `policies=4 · cegas=0 · com_update=1`.
+
+A conferência de 09/08 mostrou **1 estudo, 0 pranchas, 2 medições**: prancha
+nunca foi importada, e o bucket `blueprint_underlays` está vazio. Foi por isso
+que dois defeitos do bloco 5 da `000009` nunca apareceram.
+
+1. **Não há policy de UPDATE**, e `uploadUnderlay` sobe com `upsert: true`. O
+   caminho vem do sha256 do arquivo, então reimportar o MESMO documento cai no
+   mesmo objeto e precisa de UPDATE. Sem ela, dá 403 num ponto em que ninguém
+   suspeitaria de permissão de storage.
+2. **As três policies são cegas à organização** — `USING (bucket_id = …)` deixa
+   qualquer usuário autenticado do SaaS ler, gravar e apagar a planta de fundo de
+   qualquer cliente. A TABELA está recortada por `is_org_member`; o OBJETO, que é
+   onde o desenho mora, não. O caminho é `{organization_id}/{study_id}/{sha}.png`,
+   então o recorte sai do primeiro segmento.
+
+Conferência esperada: `policies=4 · cegas=0 · com_update=1`.
+
+`cegas` é o número que importa: conferir só que a policy boa existe não bastaria,
+porque a antiga poderia estar viva ao lado dela valendo em OR — foi assim que o
+`TEMP_BYPASS` vazou `internal_transactions` para `anon`.
+
+### 2.1.2 Conferir com dado real — o roteiro
+
+**Não é reteste.** A conferência de 09/08 mostrou 1 estudo, 0 pranchas, 2
+medições: prancha e medição **nunca coexistiram** no banco. O caminho importar →
+aferir → traçar roda pela primeira vez, e o harness não alcança nada disto —
+ele prova geometria, não ida e volta ao Supabase.
+
+Cada passo abaixo existe porque prova uma coisa que nenhum teste prova:
+
+| # | Fazer | O que só isto prova |
+|---|---|---|
+| 1 | Importar uma prancha | o upload chega ao bucket e a URL assinada volta — o par de policies da `000015` |
+| 2 | Aferir com uma cota conhecida | o `calibrar` grava a ENTRADA, e o resumo confere a distância de volta |
+| 3 | Traçar uma área sobre a planta | a forma nasce com `underlay_id` e `camada` — as colunas da `000014` |
+| 4 | **Importar uma segunda prancha** | importar ACRESCENTA. Se a primeira sumir, o `upsert` sobreviveu em algum lugar |
+| 5 | Aferir a segunda com outra cota | duas aferições coexistem — era o que a chave única proibia |
+| 6 | Traçar uma forma na segunda | idem, ligada à prancha certa |
+| 7 | Alternar entre as duas no seletor | cada prancha mostra só o que foi traçado nela |
+| 8 | **Recalibrar SÓ a segunda** | **o que motivou a `000014`**: a forma da segunda se reposiciona, a da primeira NÃO se mexe |
+| 9 | Item avulso com nome e preço, e enviar ao orçamento | o código determinístico chega na linha; reenviar não duplica |
+
+O passo 8 é o único que não tem como ser conferido por inspeção — os dois
+desenhos precisam estar na tela ao mesmo tempo, e o erro aparece como contorno
+no lugar errado com o número certo ao lado.
+
+Se algo falhar, a primeira suspeita é a policy do bucket (403 no upload ou
+imagem que não carrega) e a segunda é coluna faltando (erro citando
+`underlay_id`, `camada`, `nome` ou `ordem`).
+
+### 2.2 Construir a UI das lacunas — ✅ FEITO em 09/08
+
+- **Seletor de prancha** — `useBlueprintUnderlay` lista (`listarUnderlays`),
+  guarda a ativa e ACRESCENTA ao importar. O rótulo do botão mudou de "Trocar
+  fundo" para "Acrescentar prancha", e o seletor só aparece a partir da segunda.
+  A prancha nasce com o nome do arquivo mais a página (`planta.pdf · p.3`).
+- **Filtro de camada** — `PainelMedicoes` lista as camadas em uso com olho de
+  visibilidade e contagem; `camadasOcultas` é `Set` no `BlueprintEditor`, estado
+  de tela. **Esconder não é apagar:** o painel recebe `formas` (visíveis) e
+  `todas`, e o total e o envio ao orçamento contam as duas.
+- **Campos do item avulso** — nome e preço aparecem SÓ sem código de catálogo, e
+  a linha mostra o código determinístico que sairá (`MED-…`).
+- O canvas passou a desenhar só as formas da prancha ativa. Não é cosmético: as
+  coordenadas de uma forma só valem sob a aferição da prancha em que foi traçada.
+
+### 2.3 Verificar no navegador — ✅ FEITO, com um defeito encontrado
+
+`docs/spikes/medicoes/` — harness com o `BlueprintCanvas` de produção e uma
+imagem de fundo fabricada com um retângulo em pixels conhecidos. A forma medida
+é traçada exatamente sobre esse retângulo: se o fundo está no lugar, as duas
+caixas coincidem na tela.
+
+```bash
+npx vite --port 3103                       # numa aba
+PLAYWRIGHT_CORE=/caminho/node_modules/playwright-core \
+  node docs/spikes/medicoes/passeio.mjs http://127.0.0.1:3103
+```
+
+**9/9**, e cada conferência tem a versão com o defeito reintroduzido, que TEM de
+reprovar:
+
+| Conferência | Certo | Defeito |
+|---|---|---|
+| fundo no lugar, colado no zoom | 2 px | 36–42 px |
+| orientação (marca do topo no topo) | no topo | — |
+| traçado segue o cursor / fecha só no 1º ponto | fecha com 4 vértices | clique longe não fecha |
+| barra e painel não recortados | nada ultrapassa | painel a 256 px recorta |
+| **recalibrar reposiciona** | 2 px | 72 px |
+
+**O defeito:** a planta de fundo saía **espelhada na vertical**.
+`BlueprintCanvas.paraTela` somava o Y direto, enquanto o modelo é Y para cima em
+todo o resto — a exportação PDF inverte explicitamente, o DXF grava Y cru porque
+DXF também é Y para cima, e `blueprintUnderlay` inverte ao converter pixel para
+milímetro. Corrigido em `paraTela`/`paraMundo`, mais o sentido do arco da porta e
+o enquadramento inicial (a origem agora nasce no rodapé, convenção de CAD).
+
+Só apareceu porque a imagem do harness leva uma marca assimétrica: com o
+retângulo simétrico que veio antes, a conferência APROVAVA o código espelhado.
+
+Ainda não visto: **cotas no PDF** (a cadeia soma o total?) e **IFC** (abre num
+visualizador? o `.txt` de cobertura acompanha?).
 
 Já confirmados pelo usuário: exportação PDF (com o canto fechado), DXF no
 AutoCAD, orto + arrastar ponta, de-para do orçamento, vínculo com a obra.
+⚠️ Essas duas confirmações são anteriores à correção do espelho — vale reabrir
+uma exportação e conferir a orientação contra a tela.
 
 ### 2.4 Só então: excluir o Medição Inteligente
 
@@ -102,7 +204,8 @@ Prefixo `aplicar_*` = rodada à mão pelo SQL Editor, fora do `schema_migrations
 | `000011` `organization_id` no Medição | ✅ |
 | `000012` policy só por organização | ✅ |
 | `000013` formas medidas | ✅ |
-| `000014` pranchas, camadas, item avulso | ⚠️ **PENDENTE** |
+| `000014` pranchas, camadas, item avulso | ✅ 09/08/2026 — `orfas=2`, ver 2.1 |
+| `000015` policies de storage do fundo | ✅ 09/08/2026 — `policies=4 · cegas=0 · com_update=1` |
 
 ---
 
@@ -124,10 +227,23 @@ de ser valor a valor, nunca por `JSON.stringify`.
 
 **`flex-1` não encolhe abaixo do conteúdo** (`min-width: auto`). Foi assim que
 duas abas sumiram: existiam no DOM, achá­veis por `getByRole`, e não apareciam.
-Barra com muitos itens precisa de grade ou `flex-wrap`.
+
+A primeira correção foi `grid grid-cols-4`, que resolve o recorte fixando a
+largura da coluna — e envelheceu mal: as abas viraram cinco, e a quinta passou a
+ficar sozinha numa segunda linha ocupando um quarto da largura. **`flex-wrap` é
+a resposta certa**, e é a que o §19.1 do guia de UI já pedia. A barra saiu para
+`components/blueprint/AbasDoPainel.tsx`, na anatomia do guia (card, trilho
+`bg-gray-50`, aba ativa em `bg-white text-blue-600`), e entrou na conferência de
+recorte do `passeio.mjs`.
 
 **jsdom não faz layout.** Recorte, arraste e posição de imagem só se verificam em
 navegador de verdade — harnesses em `docs/spikes/`.
+
+**Figura simétrica não denuncia espelhamento.** O harness da planta de fundo
+usava um retângulo, e um retângulo virado de cabeça para baixo é o mesmo
+retângulo: a conferência aprovava o código espelhado. Uma marca num canto só
+resolveu. Vale para toda medição por caixa envolvente — ela prova
+ENQUADRAMENTO, nunca ORIENTAÇÃO.
 
 **Medição que não reprova o caso errado não mede nada.** Aconteceu quatro vezes
 hoje: teste que aprovava o código defeituoso, harness que aprovava os dois
@@ -188,8 +304,21 @@ o E6 do PRD.
 Frase sugerida para abrir a sessão nova:
 
 > Continue o módulo Planta Inteligente a partir de
-> `docs/planos/2026-08-09-estado-e-continuacao.md`. Próximo passo: a UI das
-> lacunas (seletor de prancha, filtro de camada, item avulso), item 2.2.
+> `docs/planos/2026-08-09-estado-e-continuacao.md`. Próximo passo: aplicar a
+> migration 000014 e conferir no navegador com dado real, item 2.1.
 
-O código está todo em `main`, último commit `87d61f0`. CI: **1106 testes**,
-`tsc` limpo, build ~15 s.
+CI: **1119 testes**, `tsc` limpo.
+
+**O que fica pendente, em ordem:**
+
+1. ~~Aplicar a `aplicar_20270905000015`~~ — ✅ feita em 09/08/2026.
+2. **Conferir com dado real no navegador.** Não é reteste: a conferência de
+   09/08 mostrou que **prancha e medição nunca coexistiram no banco**, então o
+   caminho importar → aferir → traçar roda pela PRIMEIRA vez. Roteiro: duas
+   pranchas no mesmo nível, uma cota diferente em cada, uma forma em cada,
+   alternar entre elas e **recalibrar só uma** — é essa última que prova que a
+   aferição de uma não mexe no traçado da outra, que é a razão de a `000014`
+   existir. O harness prova a geometria; ele não prova a ida e volta ao banco.
+3. **Reabrir uma exportação** e conferir a orientação depois da correção do
+   espelho vertical.
+4. Só então o item 2.4 — excluir o Medição Inteligente.

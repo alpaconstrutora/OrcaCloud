@@ -15,10 +15,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 const BUCKET = 'blueprint_underlays';
 
 const COLS =
-  'id, study_id, organization_id, level_id, storage_path, nome_arquivo, file_sha256, ' +
-  'pdf_pagina, origem_x_mm, origem_y_mm, mm_por_pixel, rotacao_mrad, calib_p1_px, ' +
-  'calib_p1_py, calib_p2_px, calib_p2_py, calib_distancia_mm, calib_alinhado, ' +
-  'opacidade, created_at, updated_at';
+  'id, study_id, organization_id, level_id, storage_path, nome_arquivo, nome, ordem, ' +
+  'file_sha256, pdf_pagina, origem_x_mm, origem_y_mm, mm_por_pixel, rotacao_mrad, ' +
+  'calib_p1_px, calib_p1_py, calib_p2_px, calib_p2_py, calib_distancia_mm, ' +
+  'calib_alinhado, opacidade, created_at, updated_at';
 
 export interface UnderlayRow {
   id: string;
@@ -27,6 +27,9 @@ export interface UnderlayRow {
   level_id: string | null;
   storage_path: string;
   nome_arquivo: string;
+  /** Como a prancha aparece na lista. Sem ele a barra vira "planta.pdf" três vezes. */
+  nome: string;
+  ordem: number;
   file_sha256: string | null;
   pdf_pagina: number | null;
   origem_x_mm: number;
@@ -168,25 +171,42 @@ export async function urlAssinada(storagePath: string): Promise<string> {
   return data.signedUrl;
 }
 
-export async function getUnderlay(
+/**
+ * As pranchas do nível, em ordem.
+ *
+ * Substituiu um `getUnderlay` que fazia `maybeSingle`. Não foi só conveniência:
+ * removida a chave única, `maybeSingle` passaria a ERRAR assim que houvesse a
+ * segunda prancha — e o levantamento com térreo, cobertura, corte e fachada é o
+ * caso comum, não a exceção.
+ */
+export async function listarUnderlays(
   studyId: string,
   levelId: string | null,
-): Promise<UnderlayRow | null> {
-  let query = supabase.from('blueprint_underlays').select(COLS).eq('study_id', studyId);
+): Promise<UnderlayRow[]> {
+  let query = supabase
+    .from('blueprint_underlays')
+    .select(COLS)
+    .eq('study_id', studyId)
+    .order('ordem', { ascending: true })
+    .order('created_at', { ascending: true });
+
   query = levelId === null ? query.is('level_id', null) : query.eq('level_id', levelId);
 
-  const { data, error } = await query.maybeSingle();
-  if (error) fail('getUnderlay', error);
-  return (data as unknown as UnderlayRow) ?? null;
+  const { data, error } = await query;
+  if (error) fail('listarUnderlays', error);
+  return (data ?? []) as unknown as UnderlayRow[];
 }
 
 export interface SalvarUnderlay {
+  /** Presente = atualiza a prancha. Ausente = ACRESCENTA uma nova. */
   id?: string;
   study_id: string;
   organization_id: string;
   level_id: string | null;
   storage_path: string;
   nome_arquivo: string;
+  nome: string;
+  ordem: number;
   file_sha256: string;
   pdf_pagina: number | null;
   underlay: Underlay;
@@ -206,6 +226,8 @@ export async function salvarUnderlay(e: SalvarUnderlay): Promise<UnderlayRow> {
     level_id: e.level_id,
     storage_path: e.storage_path,
     nome_arquivo: e.nome_arquivo,
+    nome: e.nome,
+    ordem: e.ordem,
     file_sha256: e.file_sha256,
     pdf_pagina: e.pdf_pagina,
     origem_x_mm: e.underlay.origemXMm,
@@ -223,14 +245,16 @@ export async function salvarUnderlay(e: SalvarUnderlay): Promise<UnderlayRow> {
     updated_at: new Date().toISOString(),
   };
 
-  // `onConflict` no par (estudo, nível): trocar a planta do térreo SUBSTITUI,
-  // não acumula. Sem isto, cada importação deixaria um fundo órfão no bucket e
-  // a consulta por nível passaria a devolver mais de uma linha.
-  const { data, error } = await supabase
-    .from('blueprint_underlays')
-    .upsert(linha, { onConflict: 'study_id,level_id' })
-    .select(COLS)
-    .single();
+  // IMPORTAR ACRESCENTA. Antes havia um `upsert` no par (estudo, nível), que
+  // fazia a segunda importação SUBSTITUIR a primeira — e junto com ela a
+  // aferição, que é o trabalho manual que não se recupera. Com a chave única
+  // removida (migration 000014), quem decide entre inserir e atualizar é a
+  // presença do `id`: aferir de novo é atualizar, importar é acrescentar.
+  const query = e.id
+    ? supabase.from('blueprint_underlays').update(linha).eq('id', e.id)
+    : supabase.from('blueprint_underlays').insert(linha);
+
+  const { data, error } = await query.select(COLS).single();
 
   if (error) fail('salvarUnderlay', error);
   return data as unknown as UnderlayRow;

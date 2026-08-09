@@ -741,6 +741,10 @@ export interface Payable {
     party_type?: string;
     /** Fallback de contraparte: alguns produtores preenchem só entity_name. */
     entity_name?: string;
+    /** Fornecedor cadastrado em Meus Fornecedores, quando o lançamento foi
+     *  vinculado a um. Presente quando é vazio, e nem todo lançamento tem um
+     *  (ex.: pedido antigo que só gravou o nome em texto livre). */
+    supplier_id?: string;
     project_id?: string;
     project_name?: string;
     cost_center_id?: string;
@@ -749,6 +753,11 @@ export interface Payable {
      *  vw_payables — a view só expõe os UUIDs. */
     cost_center_name?: string;
     plano_de_contas_name?: string;
+    /** Nome do credor pronto para exibição — resolvido no client a partir de
+     *  `supplier_id` respeitando razão social/apelido de Meus Fornecedores
+     *  (`appSettingsService.supplierNameDisplay`). Cai para `payableParty()`
+     *  quando não há fornecedor cadastrado vinculado. */
+    credor_display?: string;
     /** Imóvel apropriado, resolvido no client a partir de
      *  `property_expense_allocations` — NÃO de `vw_payables.property_id`, que
      *  a RPC de rateio nunca preenche. Ver propertyExpenseService.allocationSummary. */

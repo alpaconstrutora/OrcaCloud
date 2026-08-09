@@ -118,18 +118,20 @@ function podeFaturarContratoComercial(contract: {
 
 /**
  * Resolve a contraparte cadastrada de um contrato para popular party_type/party_name
- * (e party_id) nos lançamentos internos.
+ * (e party_id/supplier_id) nos lançamentos internos.
  * Recebível → cliente; pagável → fornecedor (ver isReceivableContract).
  * IMPORTANTE: internal_transactions.party_id tem FK só para clients
  * (internal_txs_party_id_fkey). Por isso party_id só é setado para CLIENTE;
- * para fornecedor, gravamos party_type/party_name mas party_id fica null.
+ * para fornecedor, gravamos party_type/party_name e o `supplier_id` — coluna
+ * própria, com FK para `suppliers`, que Contas a Pagar usa para resolver o
+ * Credor pelo cadastro vivo (razão social/apelido) em vez do texto congelado.
  */
 async function resolveContractParty(
     contract: Contract,
     fallbackName: string,
-): Promise<{ party_id: string | null; party_type: 'SUPPLIER' | 'CLIENT' | null; party_name: string | null }> {
+): Promise<{ party_id: string | null; party_type: 'SUPPLIER' | 'CLIENT' | null; party_name: string | null; supplier_id: string | null }> {
     const cAny = contract as unknown as { domain?: string; direction?: string; client_id?: string; supplier_id?: string };
-    if (!cAny.client_id && !cAny.supplier_id) return { party_id: null, party_type: null, party_name: null };
+    if (!cAny.client_id && !cAny.supplier_id) return { party_id: null, party_type: null, party_name: null, supplier_id: null };
 
     // Rótulo segue a direção de caixa (recebível = cliente; pagável = fornecedor),
     // mas o NOME é resolvido de qualquer id que exista (a contraparte às vezes está em supplier_id).
@@ -147,7 +149,9 @@ async function resolveContractParty(
 
     // party_id tem FK só p/ clients → só preenche quando há cliente real
     const partyId = isIncoming && cAny.client_id ? cAny.client_id : null;
-    return { party_id: partyId, party_type: partyType, party_name: name };
+    // supplier_id tem FK própria p/ suppliers → só preenche no lado pagável
+    const supplierId = !isIncoming && cAny.supplier_id ? cAny.supplier_id : null;
+    return { party_id: partyId, party_type: partyType, party_name: name, supplier_id: supplierId };
 }
 
 // Find the "Gestão Comercial" vault for an org
@@ -544,6 +548,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
                 entity_name: party.party_name ?? supplierName,
+                supplier_id: party.supplier_id,
                 party_id: party.party_id,
                 party_type: party.party_type,
                 party_name: party.party_name,
@@ -748,6 +753,7 @@ async function syncRecurringToFinance(contract: Contract) {
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
                 entity_name: party.party_name ?? supplierName,
+                supplier_id: party.supplier_id,
                 party_id: party.party_id,
                 party_type: party.party_type,
                 party_name: party.party_name,
@@ -944,6 +950,7 @@ export async function generateRecurringInstallmentsForPeriod(
         description: `${label} — parcela ${i + 1}/${novos.length} (${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)})`,
         category: 'Mão de Obra / Serviço',
         entity_name: party.party_name ?? supplierName,
+        supplier_id: party.supplier_id,
         party_id: party.party_id,
         party_type: party.party_type,
         party_name: party.party_name,
@@ -1031,6 +1038,7 @@ async function syncAVistaToFinance(contract: Contract) {
                 description: tx.description,
                 category: 'Mão de Obra / Serviço',
                 entity_name: party.party_name ?? supplierName,
+                supplier_id: party.supplier_id,
                 party_id: party.party_id,
                 party_type: party.party_type,
                 party_name: party.party_name,

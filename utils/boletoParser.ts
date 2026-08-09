@@ -33,6 +33,14 @@ const LINHA_DIGITAVEL_REGEX =
  * Tenta extrair a linha digitável de um texto.
  * Retorna a primeira ocorrência válida (44, 47 ou 48 dígitos), ou null.
  */
+/**
+ * Rótulos de coluna da ficha de compensação que às vezes ficam colados ao
+ * rótulo "Beneficiário"/"Cedente" na extração de texto do PDF — nunca são o
+ * nome do credor.
+ */
+const BENEFICIARIO_STOPWORDS =
+    /^(vencimento|valor|data|nosso n[uú]mero|ag[eê]ncia|c[oó]digo|carteira|esp[eé]cie|aceite|processamento|documento|sacado|pagador|local de pagamento|instru[cç][oõ]es|\(-\)|\(\+\)|\(=\))/i;
+
 export function findLinhaDigitavelInText(text: string, referenceDate = new Date()): string | null {
     const matches = text.match(LINHA_DIGITAVEL_REGEX) || [];
     for (const m of matches) {
@@ -297,10 +305,18 @@ export async function extractFromPdfFile(file: File, referenceDate = new Date())
         base.campos.beneficiario_cnpj = { valor: cnpjMatch[1], confidence: 70 };
     }
 
-    // Heurística: beneficiário — procura por "Beneficiário" ou "Cedente"
+    // Heurística: beneficiário — procura por "Beneficiário" ou "Cedente".
+    // pdf.js extrai o texto na ordem do fluxo interno do PDF, não na ordem
+    // visual — em muitos layouts de ficha de compensação o que fica "colado"
+    // depois do rótulo não é o nome, é o cabeçalho da tabela de valores
+    // ("Vencimento Valor do Documento (-) Desconto..."). Por isso o match só
+    // é aceito se não começar com um desses rótulos conhecidos.
     const benefMatch = text.match(/(?:Benefici[áa]rio|Cedente)\s*[:\-]?\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][^\n\r]{3,80})/i);
     if (benefMatch) {
-        base.campos.beneficiario_nome = { valor: benefMatch[1].trim(), confidence: 60 };
+        const candidato = benefMatch[1].trim();
+        if (!BENEFICIARIO_STOPWORDS.test(candidato)) {
+            base.campos.beneficiario_nome = { valor: candidato, confidence: 60 };
+        }
     }
 
     // Heurística: multa e juros — texto livre do boleto

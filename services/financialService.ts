@@ -9,11 +9,15 @@ import { isSystemProject } from '../utils/systemProjects';
  * Não expõe partyId de propósito: internal_transactions.party_id tem FK só
  * para `clients` (internal_txs_party_id_fkey), e tudo que passa por aqui é
  * despesa com fornecedor — gravar o supplier_id ali viola a FK.
+ * `supplierId` é outra coluna, com FK própria para `suppliers` — é o que
+ * Contas a Pagar usa para resolver o Credor pelo cadastro vivo (razão
+ * social/apelido), em vez do texto congelado de `party_name`/`entity_name`.
  */
 type InternalTxSyncOptions = {
     sourceSystem?: string;
     partyType?: 'SUPPLIER' | 'CLIENT' | null;
     partyName?: string | null;
+    supplierId?: string | null;
 };
 
 export const financialService = {
@@ -73,6 +77,7 @@ export const financialService = {
                 entity_name: sync?.partyName || newTx.supplier || null,
                 party_type: sync?.partyType ?? null,
                 party_name: sync?.partyName || newTx.supplier || null,
+                supplier_id: sync?.supplierId ?? null,
                 status: newTx.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
                 business_status: newTx.status === 'PAID' ? 'PAGO' : 'PREVISTO'
             });
@@ -290,7 +295,8 @@ export const financialService = {
             }, {
                 sourceSystem: 'PURCHASE_ORDER',
                 partyType: 'SUPPLIER',
-                partyName: supplierName
+                partyName: supplierName,
+                supplierId: order.supplier_id ?? null,
             });
         }
 
@@ -382,7 +388,8 @@ export const financialService = {
                     notes: `Gerado da medição. Método: ${paymentMethod}.`
                 }, {
                     partyType: 'SUPPLIER',
-                    partyName: supplierName
+                    partyName: supplierName,
+                    supplierId: contract.supplier_id ?? null,
                 });
             }
             console.log(`[FINANCIAL] Generated ${paymentSchedule.length} forecast(s) from schedule for Measurement ${measurement.number}`);
@@ -417,7 +424,8 @@ export const financialService = {
                 notes: `Gerado da medição. Método: ${paymentMethod}.`
             }, {
                 partyType: 'SUPPLIER',
-                partyName: supplierName
+                partyName: supplierName,
+                supplierId: contract.supplier_id ?? null,
             });
         }
 

@@ -475,7 +475,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
         if (visao === 'parcelas') {
             exportService.generatePayablesPDF(
                 payablesVisible.map(p => ({
-                    credor: payableParty(p),
+                    credor: p.credor_display || payableParty(p),
                     descricao: p.description ?? '',
                     origem: payableOrigemLabel(p.source_system),
                     obra: p.project_name ?? '',
@@ -504,7 +504,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
         if (visao === 'parcelas') {
             exportService.generatePayablesExcel(
                 payablesVisible.map(p => ({
-                    credor: payableParty(p),
+                    credor: p.credor_display || payableParty(p),
                     descricao: p.description ?? '',
                     origem: payableOrigemLabel(p.source_system),
                     obra: p.project_name ?? '',

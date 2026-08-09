@@ -6,6 +6,8 @@ import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financ
 import { payableService, payableParty } from '../services/payableService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { propertyExpenseService } from '../services/propertyExpenseService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
@@ -126,7 +128,7 @@ function renderParcelaCell(
 ): React.ReactNode {
     switch (key) {
         case 'credor':
-            return <span className="text-sm font-normal text-gray-700 truncate">{payableParty(row)}</span>;
+            return <span className="text-sm font-normal text-gray-700 truncate">{row.credor_display || payableParty(row)}</span>;
         case 'descricao':
             return <span className="text-sm font-normal text-gray-600 truncate">{row.description || '—'}</span>;
         case 'origem':
@@ -222,24 +224,39 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     // vez para resolver os UUIDs de vw_payables em nome.
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
+    // Fornecedores cadastrados — resolve o Credor pelo cadastro vivo (razão
+    // social/apelido conforme Meus Fornecedores), não pelo texto congelado
+    // que o produtor gravou em party_name/entity_name na hora da criação.
+    const [suppliers, setSuppliers] = useState<{ id: string; name: string; nickname?: string | null }[]>([]);
 
     useEffect(() => {
         let ativo = true;
         Promise.all([
             financialRegistryService.listCostCenters(organizationId),
             financialRegistryService.listPlanoContas(organizationId),
+            supplierService.listSuppliers(organizationId),
         ])
-            .then(([cc, pc]) => {
+            .then(([cc, pc, sups]) => {
                 if (!ativo) return;
                 setCostCenters(cc);
                 setPlanoContas(pc);
+                setSuppliers(sups);
             })
-            .catch(err => console.error('[ContasPagarParcelas] Erro ao carregar Centro de Custo / Plano de Contas:', err));
+            .catch(err => console.error('[ContasPagarParcelas] Erro ao carregar Centro de Custo / Plano de Contas / Fornecedores:', err));
         return () => { ativo = false; };
     }, [organizationId]);
 
     const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
     const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
+    const supplierById = useMemo(() => new Map(suppliers.map(s => [s.id, s])), [suppliers]);
+
+    /** Credor pronto para exibição: cadastro vivo quando há `supplier_id`
+     *  reconhecido; senão o texto congelado de sempre (`payableParty`). */
+    const credorDisplay = React.useCallback((row: Payable): string => {
+        const supplier = row.supplier_id ? supplierById.get(row.supplier_id) : undefined;
+        if (supplier) return getSupplierDisplayName(supplier, appSettingsService.get().supplierNameDisplay);
+        return payableParty(row);
+    }, [supplierById]);
 
     /**
      * Apropriação por imóvel das linhas carregadas. `null` = migration ainda não
@@ -275,7 +292,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         cost_center_name: r.cost_center_id ? (costCenterNameById.get(r.cost_center_id) ?? '') : '',
         plano_de_contas_name: r.plano_de_contas_id ? (planoContasNameById.get(r.plano_de_contas_id) ?? '') : '',
         imovel_label: imovelLabel(r.id),
-    })), [rows, costCenterNameById, planoContasNameById, imovelLabel]);
+        credor_display: credorDisplay(r),
+    })), [rows, costCenterNameById, planoContasNameById, imovelLabel, credorDisplay]);
 
     const tableColumns = useTableColumns(PARCELAS_COLUMNS, 'contasPagarParcelasColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarParcelasColWidths');
@@ -295,7 +313,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             if (vencAte && r.due_date && r.due_date > vencAte) return false;
             if (search) {
                 const termo = search.toLowerCase();
-                const hit = payableParty(r).toLowerCase().includes(termo)
+                const hit = (r.credor_display || payableParty(r)).toLowerCase().includes(termo)
                     || (r.description ?? '').toLowerCase().includes(termo)
                     || (r.project_name ?? '').toLowerCase().includes(termo)
                     || (r.cost_center_name ?? '').toLowerCase().includes(termo)
@@ -310,7 +328,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
             const valor = (r: Payable): string | number => {
                 switch (tableColumns.sortColumn) {
-                    case 'credor':       return payableParty(r).toLowerCase();
+                    case 'credor':       return (r.credor_display || payableParty(r)).toLowerCase();
                     case 'descricao':    return (r.description ?? '').toLowerCase();
                     case 'origem':       return origemLabel(r.source_system).toLowerCase();
                     case 'obra':         return (r.project_name ?? '').toLowerCase();

@@ -27,7 +27,7 @@ export const payableService = {
     async list(organizationId?: string | null, filters?: PayableFilters): Promise<Payable[]> {
         let q = supabase
             .from('vw_payables')
-            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,project_id,project_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
+            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
             .order('due_date', { ascending: true, nullsFirst: false });
 
         if (organizationId)      q = q.eq('organization_id', organizationId);

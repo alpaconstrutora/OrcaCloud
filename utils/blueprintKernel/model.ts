@@ -62,11 +62,32 @@ export interface Space {
   name?: string;
 }
 
+/**
+ * Nome de ambiente ancorado num PONTO, não no id do ambiente.
+ *
+ * Ambiente é derivado: mover uma parede recria todos os `Space`, com ids novos.
+ * Um nome guardado por `spaceId` sobreviveria a zero edições — ou pior,
+ * reapareceria colado no ambiente errado quando a ordem de derivação mudasse.
+ *
+ * Ancorar num ponto é o que os CAD fazem com etiqueta de ambiente: o nome fica
+ * onde o usuário clicou e, a cada rederivação, vai para o ambiente que contém
+ * aquele ponto. Se uma reforma engolir o ambiente, a etiqueta fica órfã e
+ * visível — que é melhor do que sumir em silêncio.
+ */
+export interface SpaceLabel {
+  id: ObjectId;
+  levelId: ObjectId;
+  at: Point;
+  name: string;
+}
+
 export interface BlueprintModel {
   levels: Level[];
   walls: Wall[];
   openings: Opening[];
   boundaries: Boundary[];
+  /** Etiquetas de ambiente. Persistidas; o `Space.name` é que é derivado delas. */
+  labels: SpaceLabel[];
   /** Derivado. Recalculado por `recomputeSpaces`, jamais editado à mão. */
   spaces: Space[];
   /** Contador determinístico de IDs, por prefixo. */
@@ -74,7 +95,15 @@ export interface BlueprintModel {
 }
 
 export function emptyModel(): BlueprintModel {
-  return { levels: [], walls: [], openings: [], boundaries: [], spaces: [], seq: {} };
+  return {
+    levels: [],
+    walls: [],
+    openings: [],
+    boundaries: [],
+    labels: [],
+    spaces: [],
+    seq: {},
+  };
 }
 
 /**
@@ -93,6 +122,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     walls: model.walls.map((w) => ({ ...w, a: { ...w.a }, b: { ...w.b } })),
     openings: model.openings.map((o) => ({ ...o })),
     boundaries: model.boundaries.map((b) => ({ ...b, a: { ...b.a }, b: { ...b.b } })),
+    labels: (model.labels ?? []).map((l) => ({ ...l, at: { ...l.at } })),
     spaces: model.spaces.map((s) => ({
       ...s,
       ring: s.ring.map((p) => ({ ...p })),

@@ -23,8 +23,10 @@ import {
   buildArrangement,
   canonicalPayload,
   emptyModel,
+  interiorPoint,
   modelFromCanonicalPayload,
   parseCanonicalPayload,
+  pointInPolygon,
   intersectSegments,
   point,
   sha256,
@@ -708,5 +710,155 @@ describe('Spike A · critério de saída', () => {
 
     expect(payload).not.toContain('wal_');
     expect(payload).not.toContain('seq');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Nome de ambiente (etiqueta ancorada)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('nome de ambiente', () => {
+  function salaNomeada(nome = 'Cozinha') {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    return {
+      levelId,
+      built,
+      nomeada: applyCommand(built, {
+        type: 'NameSpace',
+        spaceId: built.spaces[0].id,
+        name: nome,
+      }).model,
+    };
+  }
+
+  it('o nome aparece no ambiente', () => {
+    const { nomeada } = salaNomeada();
+    expect(nomeada.spaces[0].name).toBe('Cozinha');
+  });
+
+  it('O QUE ESTE RECURSO EXISTE PARA FAZER: o nome sobrevive a mudar a geometria', () => {
+    // Ambiente é DERIVADO: a cada rederivação os `Space` são recriados, e o id
+    // deles é posicional. Um nome guardado por `spaceId` não some — faz coisa
+    // pior: reaparece colado no ambiente ERRADO quando a ordem muda.
+    //
+    // Este caso passa por um estado INTERMEDIÁRIO em que a sala está aberta e
+    // não existe ambiente nenhum. A etiqueta é persistente, não derivada, então
+    // atravessa o buraco e volta a colar quando a sala fecha de novo.
+    const { nomeada } = salaNomeada();
+    const direita = nomeada.walls.find((w) => w.a.x === 4000 && w.b.x === 4000)!;
+    const topo = nomeada.walls.find((w) => w.a.y === 3000 && w.b.y === 3000)!;
+
+    const aberta = applyCommand(nomeada, {
+      type: 'MoveVertex',
+      wallId: direita.id,
+      end: 'b',
+      to: point(6000, 3000),
+    }).model;
+    expect(aberta.spaces, 'a sala precisa ficar aberta no meio do caminho').toHaveLength(0);
+    expect(aberta.labels, 'a etiqueta não pode sumir com o ambiente').toHaveLength(1);
+
+    const maior = applyCommand(aberta, {
+      type: 'MoveVertex',
+      wallId: topo.id,
+      end: 'a',
+      to: point(6000, 3000),
+    }).model;
+
+    expect(maior.spaces).toHaveLength(1);
+    expect(maior.spaces[0].name, 'o nome tinha que ter voltado').toBe('Cozinha');
+    // E é outra sala: virou trapézio, base 4,00 e topo 6,00 com 3,00 de altura.
+    //   (4,00 + 6,00) / 2 × 3,00 = 15,00 m²
+    expect(maior.spaces[0].areaMm2).toBe(15_000_000);
+  });
+
+  it('renomear substitui a etiqueta, não empilha outra', () => {
+    const { nomeada } = salaNomeada();
+    const rebatizada = applyCommand(nomeada, {
+      type: 'NameSpace',
+      spaceId: nomeada.spaces[0].id,
+      name: 'Sala de jantar',
+    }).model;
+
+    expect(rebatizada.labels).toHaveLength(1);
+    expect(rebatizada.spaces[0].name).toBe('Sala de jantar');
+  });
+
+  it('nome vazio remove a etiqueta', () => {
+    const { nomeada } = salaNomeada();
+    const limpa = applyCommand(nomeada, {
+      type: 'NameSpace',
+      spaceId: nomeada.spaces[0].id,
+      name: '   ',
+    }).model;
+
+    expect(limpa.labels).toHaveLength(0);
+    expect(limpa.spaces[0].name).toBeUndefined();
+  });
+
+  it('o nome é CONTEÚDO: renomear muda o hash', () => {
+    // Se não mudasse, publicar depois de renomear seria idempotente pela regra
+    // (ramo, revisão, hash) e o nome nunca chegaria ao snapshot.
+    const { built, nomeada } = salaNomeada();
+    expect(snapshotHash(nomeada)).not.toBe(snapshotHash(built));
+  });
+
+  it('o nome atravessa o ciclo canônico de ida e volta', () => {
+    const { nomeada } = salaNomeada();
+    const voltou = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(nomeada)));
+
+    expect(voltou.spaces[0].name).toBe('Cozinha');
+    expect(snapshotHash(voltou)).toBe(snapshotHash(nomeada));
+  });
+
+  it('etiqueta não vaza para o ambiente vizinho', () => {
+    const { model, levelId } = withLevel();
+    const duas = applyBatch(model, [
+      ...room(levelId, 0, 0, 6000, 3000),
+      wall(levelId, 3000, 0, 3000, 3000),
+    ]).model;
+
+    const nomeada = applyCommand(duas, {
+      type: 'NameSpace',
+      spaceId: duas.spaces[0].id,
+      name: 'Banheiro',
+    }).model;
+
+    expect(nomeada.spaces.filter((s) => s.name === 'Banheiro')).toHaveLength(1);
+    expect(nomeada.spaces.filter((s) => s.name === undefined)).toHaveLength(1);
+  });
+
+  it('a âncora cai dentro mesmo num ambiente em "L"', () => {
+    // O centroide de um "L" cai FORA dele. Se a âncora fosse o centroide, o nome
+    // sumiria na primeira rederivação — e sem aviso.
+    const emL = [
+      { x: 0, y: 0 },
+      { x: 6000, y: 0 },
+      { x: 6000, y: 2000 },
+      { x: 2000, y: 2000 },
+      { x: 2000, y: 6000 },
+      { x: 0, y: 6000 },
+    ];
+    const p = interiorPoint(emL);
+    expect(pointInPolygon(emL, p), `âncora ${p.x},${p.y} caiu fora do L`).toBe(true);
+  });
+
+  it('a âncora não cai dentro de um buraco', () => {
+    const anel = [
+      { x: 0, y: 0 },
+      { x: 10000, y: 0 },
+      { x: 10000, y: 10000 },
+      { x: 0, y: 10000 },
+    ];
+    const buraco = [
+      { x: 2000, y: 2000 },
+      { x: 8000, y: 2000 },
+      { x: 8000, y: 8000 },
+      { x: 2000, y: 8000 },
+    ];
+    const p = interiorPoint(anel, [buraco]);
+
+    expect(pointInPolygon(anel, p)).toBe(true);
+    expect(pointInPolygon(buraco, p), 'a âncora caiu no vazio central').toBe(false);
   });
 });

@@ -516,7 +516,37 @@ export function recomputeSpaces(
     spaces.push(...buildArrangement(model, level, tolerance).spaces);
   }
   model.spaces = spaces;
+  aplicarEtiquetas(model);
   return model;
+}
+
+/**
+ * Religa as etiquetas aos ambientes, por conter o ponto.
+ *
+ * Roda depois de TODA rederivação, e é o que faz o nome sobreviver a mover uma
+ * parede: o ambiente é outro objeto, com id novo, mas continua contendo o ponto
+ * onde o usuário escreveu o nome.
+ *
+ * Etiqueta dentro de um buraco (ilha) não conta — ali não há piso, e o ambiente
+ * que a "contém" pelo anel externo não é o que está embaixo dela.
+ *
+ * Duas etiquetas no mesmo ambiente: vence a de id menor, que é a mais antiga.
+ * Determinístico de propósito — se dependesse da ordem de derivação, o mesmo
+ * desenho poderia sair com nomes diferentes.
+ */
+function aplicarEtiquetas(model: BlueprintModel): void {
+  const labels = [...(model.labels ?? [])].sort((a, b) => a.id.localeCompare(b.id));
+  if (labels.length === 0) return;
+
+  for (const space of model.spaces) {
+    for (const label of labels) {
+      if (label.levelId !== space.levelId) continue;
+      if (!pointInPolygon(space.ring, label.at)) continue;
+      if (space.holes.some((h) => pointInPolygon(h, label.at))) continue;
+      space.name = label.name;
+      break;
+    }
+  }
 }
 
 /** Exposto para os testes de junção: quantas arestas incidem em cada vértice. */

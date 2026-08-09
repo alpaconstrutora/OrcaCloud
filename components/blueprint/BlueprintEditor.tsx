@@ -15,10 +15,13 @@ import {
   Loader2,
   Calculator,
   PencilRuler,
+  Coins,
+  Pencil,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
 import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
+import PainelOrcamento from './PainelOrcamento';
 import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
 import {
   computeAndStoreQuantities,
@@ -59,7 +62,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [passoGrade, setPassoGrade] = useState<number | null>(null);
   const [passoEmVigor, setPassoEmVigor] = useState(100);
   const [larguraAbertura, setLarguraAbertura] = useState(900);
-  const [aba, setAba] = useState<'ambientes' | 'quantitativos'>('ambientes');
+  const [aba, setAba] = useState<'ambientes' | 'quantitativos' | 'orcamento'>('ambientes');
+  const [renomeando, setRenomeando] = useState<string | null>(null);
   const [qtdOficial, setQtdOficial] = useState<BlueprintQuantitySnapshot | null>(null);
   const [gerando, setGerando] = useState(false);
   const [tipoAbertura, setTipoAbertura] = useState<'door' | 'window'>('door');
@@ -85,6 +89,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
         .filter((s) => !levelId || s.levelId === levelId)
         .map((s, i) => ({
           id: s.id,
+          nome: s.name ?? '',
           rotulo: s.name ?? `Ambiente ${i + 1}`,
           areaM2: s.areaMm2 / 1_000_000,
           perimetroM: s.perimeterMm / 1000,
@@ -581,9 +586,21 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               rotulo="Quantitativos"
               onClick={() => setAba('quantitativos')}
             />
+            <BotaoAba
+              ativo={aba === 'orcamento'}
+              icone={Coins}
+              rotulo="Orçamento"
+              onClick={() => setAba('orcamento')}
+            />
           </div>
 
-          {aba === 'quantitativos' ? (
+          {aba === 'orcamento' ? (
+            <PainelOrcamento
+              study={study}
+              revisao={editor.baseRevision}
+              dirty={editor.dirtySincePublish}
+            />
+          ) : aba === 'quantitativos' ? (
             <PainelQuantitativos
               quant={quant}
               fmt={fmt}
@@ -730,8 +747,40 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               <li key={a.id}>
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    <span className="text-sm font-medium text-slate-700">{a.rotulo}</span>
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    {renomeando === a.id ? (
+                      // O nome é ancorado num PONTO dentro do ambiente, não no id
+                      // dele: ambiente é derivado e o id muda a cada rederivação.
+                      <input
+                        autoFocus
+                        defaultValue={a.nome}
+                        aria-label={`Nome do ambiente ${a.rotulo}`}
+                        onBlur={(e) => {
+                          editor.run({ type: 'NameSpace', spaceId: a.id, name: e.target.value });
+                          setRenomeando(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                          if (e.key === 'Escape') setRenomeando(null);
+                        }}
+                        className="w-full rounded border border-blue-400 px-1.5 py-0.5 text-sm"
+                      />
+                    ) : (
+                      <>
+                        <span className="truncate text-sm font-medium text-slate-700">
+                          {a.rotulo}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setRenomeando(a.id)}
+                          title="Renomear ambiente"
+                          aria-label={`Renomear ${a.rotulo}`}
+                          className="ml-auto shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
                   </div>
                   <dl className="mt-1 flex gap-4 text-xs text-slate-500">
                     <div>

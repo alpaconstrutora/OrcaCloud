@@ -23,7 +23,7 @@
  * hash anterior é incompatível por construção. Snapshot gravado com 0.1.0 continua
  * legível pelo `kernel_version` que carrega — é para isso que ele existe.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.2.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.3.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -1,12 +1,18 @@
 /**
  * Golden files do kernel geométrico (PRD §20.1).
  *
- * ⚠️ Hashes revisados uma vez, em 08/08/2026, na virada do kernel 0.1.0 → 0.2.0. A
- * GEOMETRIA não mudou — as contagens de ambientes de todos os seis casos seguiram
- * idênticas. O que mudou foi a serialização: o payload passou a referenciar nível e
- * parede por índice em vez de `levelId`/`wallId`, para parar de vazar identificador
- * volátil. Foi a única revisão legítima até hoje, e ela veio acompanhada de bump de
- * `KERNEL_VERSION`.
+ * ⚠️ Hashes revisados DUAS vezes, e as duas por mudança de FORMATO, nunca de
+ * geometria. Nas duas, a contagem de ambientes dos seis casos seguiu idêntica — é
+ * essa asserção, e não o hash, que prova que o desenho não mudou. As duas vieram
+ * acompanhadas de bump de `KERNEL_VERSION`.
+ *
+ *   0.1.0 → 0.2.0 (08/08/2026): o payload passou a referenciar nível e parede por
+ *   índice em vez de `levelId`/`wallId`, para parar de vazar identificador volátil.
+ *
+ *   0.2.0 → 0.3.0 (09/08/2026): entraram as etiquetas de ambiente (`labels`). São
+ *   conteúdo, não decoração — renomear um ambiente muda o desenho de forma
+ *   observável e precisa mudar o hash, senão publicar depois de renomear seria
+ *   idempotente e o nome nunca chegaria ao snapshot.
  *
  * Trava o payload canônico de seis geometrias. Serve a um propósito específico: o
  * arranjo planar é otimizável de muitas formas — índice espacial, união-busca,
@@ -50,6 +56,7 @@ function model(walls: Wall[]): BlueprintModel {
     walls: walls.map((w, i) => ({ ...w, id: `wal_${String(i + 1).padStart(5, '0')}` })),
     openings: [],
     boundaries: [],
+    labels: [],
     spaces: [],
     seq: {},
   };
@@ -70,17 +77,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'b3d98d36a816fbe9b5be08acce7568d1514476165dc926797ad077f5b32a714a',
+    hash: 'e207714dd479df85310adaf81a8263dff719318adc2fc8dde4e201235253c06d',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '7b5bc20492998797669fe7ae0856ca53e8d0a3d5fb775e9e79c6b71ed69e34cd',
+    hash: 'a9e3d13793e4794e3f5ba03f8ad0ae38097e27d5ad5e5c073391f047879df34c',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '05cf1b0a82b755a247fee63265dd2edc3ee4ff42e54a949509ffe05064ceb18b',
+    hash: 'aa86f76c5f299e5fc67c72a1ba8128d7bbc5c21458cbf80a05a448a5d9e626c9',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -88,7 +95,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '138185a02d034e322ac86d0ed62f92b6c09bc5b61d8554ab10772e8acaeda120',
+    hash: '16203ab4161ca7097c3d4edb682d4ee874befcc1a75089357ff9d3129846fef6',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -98,7 +105,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '708d3ca49da608dba8333cd7ca31f2d48c1104252d71e1d5c69056d1257e65f8',
+    hash: 'db2d7a0f2b4d3acba8ed3ec265d6c8fd564d63997644663d57a148a7dafdc5ad',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -109,7 +116,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '99e82eeb0503f2f1d800f65ee458f5713bc6787f53c0263df58e8d79453f4194',
+    hash: 'a7ec9297c06bee707e56e9e7527037d548ecb2107ead91f21fbc3b036fa9ec1d',
   },
 };
 

@@ -20,7 +20,7 @@ import {
   nextId,
   wallLength,
 } from './model';
-import { type Point, areCollinear, pointsEqual } from './geom';
+import { type Point, areCollinear, interiorPoint, pointInPolygon, pointsEqual } from './geom';
 import { recomputeSpaces } from './arrangement';
 import { snapshotHash } from './canonical';
 
@@ -49,7 +49,9 @@ export type Command =
   | { type: 'SplitWall'; wallId: ObjectId; at: Point }
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
   | { type: 'DeleteWall'; wallId: ObjectId }
-  | { type: 'DeleteOpening'; openingId: ObjectId };
+  | { type: 'DeleteOpening'; openingId: ObjectId }
+  /** Nome vazio remove a etiqueta. */
+  | { type: 'NameSpace'; spaceId: ObjectId; name: string };
 
 export interface Diff {
   created: ObjectId[];
@@ -301,6 +303,48 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       const orphans = next.openings.filter((o) => o.wallId === wall.id);
       next.openings = next.openings.filter((o) => o.wallId !== wall.id);
       diff.deleted.push(wall.id, ...orphans.map((o) => o.id));
+      break;
+    }
+
+    case 'NameSpace': {
+      const space = next.spaces.find((s) => s.id === command.spaceId);
+      if (!space) {
+        throw new KernelError('SPACE_NOT_FOUND', `Ambiente inexistente: ${command.spaceId}`);
+      }
+
+      // O nome é ancorado num PONTO dentro do ambiente, não no id dele. Ambiente
+      // é derivado: mover uma parede recria todos com ids novos, e um nome
+      // guardado por id não sobreviveria a nenhuma edição.
+      const ancora = interiorPoint(space.ring, space.holes);
+
+      // Renomear o mesmo ambiente substitui a etiqueta, não empilha outra.
+      const existente = next.labels.find(
+        (l) =>
+          l.levelId === space.levelId &&
+          pointInPolygon(space.ring, l.at) &&
+          !space.holes.some((h) => pointInPolygon(h, l.at)),
+      );
+
+      const nome = command.name.trim();
+
+      if (!nome) {
+        if (existente) {
+          next.labels = next.labels.filter((l) => l.id !== existente.id);
+          diff.deleted.push(existente.id);
+        }
+        break;
+      }
+
+      if (existente) {
+        next.labels = next.labels.map((l) =>
+          l.id === existente.id ? { ...l, name: nome } : l,
+        );
+        diff.updated.push(existente.id);
+      } else {
+        const id = nextId(next, 'lbl');
+        next.labels.push({ id, levelId: space.levelId, at: ancora, name: nome });
+        diff.created.push(id);
+      }
       break;
     }
 

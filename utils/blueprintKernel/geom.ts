@@ -270,6 +270,71 @@ export function pointInPolygon(ring: Point[], p: Point): boolean {
   return inside;
 }
 
+/**
+ * Um ponto garantidamente DENTRO do polígono, respeitando os buracos.
+ *
+ * Serve de âncora para a etiqueta de ambiente. O centroide resolve o caso comum
+ * e falha justamente nos que interessam: num "L" ele cai fora, e num ambiente
+ * com vazio central ele cai dentro do vazio. Nos dois casos a etiqueta ficaria
+ * ancorada onde o ambiente não está, e o nome sumiria na próxima rederivação.
+ *
+ * O plano B varre uma linha horizontal e escolhe o MEIO do maior trecho
+ * interno — que é onde a etiqueta cabe, e não por acaso onde um projetista a
+ * colocaria.
+ */
+export function interiorPoint(ring: Point[], holes: Point[][] = []): Point {
+  const dentro = (p: Point) =>
+    pointInPolygon(ring, p) && !holes.some((h) => pointInPolygon(h, p));
+
+  // Plano A: centroide de área.
+  let duasVezes = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    const f = a.x * b.y - b.x * a.y;
+    duasVezes += f;
+    cx += (a.x + b.x) * f;
+    cy += (a.y + b.y) * f;
+  }
+  if (duasVezes !== 0) {
+    const centroide = point(Math.round(cx / (3 * duasVezes)), Math.round(cy / (3 * duasVezes)));
+    if (dentro(centroide)) return centroide;
+  }
+
+  // Plano B: varredura horizontal, no meio do maior trecho interno.
+  const ys = [...new Set([...ring, ...holes.flat()].map((p) => p.y))].sort((a, b) => a - b);
+  let melhor: Point | null = null;
+  let maiorVao = -1;
+
+  for (let i = 0; i + 1 < ys.length; i++) {
+    const y = Math.round((ys[i] + ys[i + 1]) / 2);
+    const xs: number[] = [];
+    for (const anel of [ring, ...holes]) {
+      for (let j = 0; j < anel.length; j++) {
+        const a = anel[j];
+        const b = anel[(j + 1) % anel.length];
+        if (a.y > y === b.y > y) continue;
+        xs.push(((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    for (let k = 0; k + 1 < xs.length; k += 2) {
+      const vao = xs[k + 1] - xs[k];
+      if (vao <= maiorVao) continue;
+      const candidato = point(Math.round((xs[k] + xs[k + 1]) / 2), y);
+      if (!dentro(candidato)) continue;
+      maiorVao = vao;
+      melhor = candidato;
+    }
+  }
+
+  // Degenerado (anel com menos de 3 pontos, área nula): devolve o primeiro
+  // vértice em vez de mentir com um ponto inventado.
+  return melhor ?? ring[0] ?? point(0, 0);
+}
+
 /** Auto-interseção: qualquer par de arestas não adjacentes que se cruzam. */
 export function isSimplePolygon(ring: Point[]): boolean {
   const n = ring.length;

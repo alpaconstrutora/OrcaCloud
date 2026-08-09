@@ -95,10 +95,107 @@ gerou o evento de auditoria. Trilha append-only que perde o ator quando a pessoa
 sai da empresa não é trilha — UUID órfão que diz "foi este id" vale mais que
 NULL.
 
+---
+
+# Parte 2 — RF-122: de-para para o orçamento
+
+## Pedido original
+
+> corrigir as Duas coisas que continuam abertas: A suíte de integração não rodou
+> e RF-122
+
+## A decisão de catálogo que se dissolveu
+
+O RF-122 estava parado por uma dúvida: SINAPI ou composição própria? Ao olhar o
+código, a dúvida sumiu — **não existe fork**. `custom_items` sobrepõe
+`sinapi_items` pelo MESMO código, e é assim que a busca do orçamento já resolve
+preço. O de-para guarda um código; quem escolhe o catálogo é o próprio código.
+Divergir disso faria a planta orçar com um preço que a tela do orçamento não
+mostra.
+
+## A trava que justifica o módulo: a unidade
+
+O erro perigoso aqui não é o de-para vazio — esse aparece na hora. É o de-para
+ERRADO: apontar área de piso (m²) para um item cotado por metro linear. Nada
+quebra, nenhuma tela reclama, e sai uma linha com número plausível e errado por
+um fator de 4 ou 5. Só se descobre na obra.
+
+Por isso cada medida declara a DIMENSÃO que produz e um mapeamento com unidade
+incompatível é **recusado**, não gerado com aviso — aviso se ignora, linha que
+não existe não. A normalização aceita `M2`/`M²`/`m2` porque reprovar grafia
+correta empurraria o usuário a desligar a trava, e trava desligada é pior que
+trava nenhuma: dá a impressão de que alguém conferiu.
+
+## O que faltava e não estava no plano: NOMEAR AMBIENTE
+
+`Space.name` estava declarado no kernel e **nada no sistema o definia**. Sem
+isso, o filtro por ambiente (revestimento é de área molhada, não da casa
+inteira) e o `location.room` da linha de orçamento nasceriam mortos — a classe
+exata de defeito que os testes de componente existem para pegar.
+
+Ambiente é DERIVADO: a cada rederivação os `Space` são recriados e o id deles é
+posicional. Nome guardado por `spaceId` não sumiria — faria coisa pior:
+reapareceria colado no ambiente errado quando a ordem mudasse. A solução é a dos
+CAD: **etiqueta ancorada num ponto**. A cada rederivação o nome vai para o
+ambiente que contém aquele ponto.
+
+O centroide não serve de âncora: num "L" cai fora, e num ambiente com vazio
+central cai dentro do vazio. `interiorPoint` tem o plano B por varredura
+horizontal, que escolhe o meio do maior trecho interno.
+
+## Itens
+
+| # | Item | Critério de pronto |
+|---|---|---|
+| 1 | `utils/blueprintBudget.ts` — catálogo de 12 medidas, cada uma com dimensão | função pura, sem Supabase |
+| 2 | Trava de unidade | mapeamento incompatível **recusado**, com motivo legível |
+| 3 | Agrupamento `TOTAL` × `POR_ELEMENTO` | por elemento preserva `location.room` |
+| 4 | Filtro por ambiente | revestimento só nas áreas molhadas |
+| 5 | Procedência na linha | `calculationMemory` com fórmula, variáveis, resultado e hash da versão |
+| 6 | Reenviar não duplica | id determinístico prefixado por estudo; regerar SUBSTITUI |
+| 7 | Linha digitada à mão intocada | só o prefixo `bp:{studyId}:` é removido |
+| 8 | `NameSpace` + etiqueta ancorada | nome sobrevive a mudar a geometria |
+| 9 | `blueprint_budget_mappings` | configuração (CRUD completo), não snapshot |
+| 10 | Painel Orçamento no editor | prever antes de aplicar; divergência com o mesmo destaque das linhas |
+
+## Testes
+
+- `__tests__/blueprintBudget.test.ts` — 20 casos, valores à mão no comentário.
+- `__tests__/blueprintKernel.test.ts` — 9 casos novos de nome de ambiente,
+  incluindo o que passa por um estado intermediário com a sala ABERTA (zero
+  ambientes) e prova que o nome volta a colar quando ela fecha de novo.
+- `__tests__/components/PainelOrcamento.test.tsx` — 8 casos da classe "ação
+  oferecida que não funciona": Aplicar sem obra vinculada, divergência que não
+  aparece, prévia que sobrevive a mudança no de-para.
+
+## Kernel 0.2.0 → 0.3.0
+
+As etiquetas entraram no payload canônico, então os 6 goldens foram recapturados
+**pela segunda vez**. Como na primeira, a GEOMETRIA não mudou: a contagem de
+ambientes dos seis casos seguiu idêntica — é essa asserção, e não o hash, que
+prova isso.
+
+Etiqueta é conteúdo, não decoração: renomear um ambiente muda o desenho de forma
+observável e **tem** que mudar o hash. Se não mudasse, publicar depois de
+renomear seria idempotente pela regra (ramo, revisão, hash) e o nome nunca
+chegaria ao snapshot.
+
+`modelFromCanonicalPayload` lê `payload.labels ?? []` porque snapshot é imutável:
+os publicados antes disso vão continuar sem o campo para sempre, e quebrar ao
+reabrir uma versão publicada seria perder o acervo por uma vírgula.
+
+## Migration
+
+`aplicar_20270905000005_blueprint_budget_mappings.sql` — 4 blocos, `lock_timeout`,
+sem FK para `auth.users`. Diferente dos snapshots, esta tabela é CONFIGURAÇÃO:
+tem as quatro policies (SELECT/INSERT/UPDATE/DELETE). O que precisa ser imutável
+é o quantitativo gravado, não a regra que o produziu — e por isso a linha de
+orçamento carrega a política e o hash dentro dela, em vez de depender desta
+tabela para se explicar depois.
+
 ## Fica de fora
 
-**RF-122 — mapear tipo geométrico para composição de orçamento.** É o último
-passo para o número sair da planta e chegar ao orçamento. O motor já entrega
-área, volume e comprimento por elemento; falta a tabela de-para. Não entrou aqui
-porque depende de decisão sobre catálogo (SINAPI × composição própria), que é
-assunto do módulo de Orçamento, não da planta.
+- **Busca de item por descrição** no de-para. Hoje se digita o código. Ligar o
+  buscador do orçamento aqui é ergonomia, não correção.
+- **Verificação contra o banco real do RF-122.** As funções de `listMappings` a
+  `aplicarNoProjeto` só têm cobertura de unidade com dublê.

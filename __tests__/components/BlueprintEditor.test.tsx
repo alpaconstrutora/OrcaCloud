@@ -47,6 +47,15 @@ vi.mock('../../services/blueprintService', () => ({
   computeAndStoreQuantities: vi.fn(async () => null),
 }));
 
+// O painel de Orçamento vive numa aba do editor e consulta o de-para ao montar.
+vi.mock('../../services/blueprintBudgetService', () => ({
+  listMappings: vi.fn(async () => []),
+  saveMapping: vi.fn(async () => ({})),
+  deleteMapping: vi.fn(async () => {}),
+  preverLancamentos: vi.fn(async () => null),
+  aplicarNoProjeto: vi.fn(async () => ({ removidas: 0, adicionadas: 0, total: 0 })),
+}));
+
 // jsdom não implementa ResizeObserver, e o canvas o usa para acompanhar o
 // tamanho do container.
 beforeEach(() => {
@@ -210,5 +219,31 @@ describe('BlueprintEditor · painel do selecionado', () => {
     await montar();
     // Planta vazia não tem ponta solta — o aviso âmbar só existe quando há.
     expect(screen.queryByText(/ponta\(s\) solta\(s\)/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
+  it('a aba Orçamento existe e alterna com as outras', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    const abaOrc = screen.getByRole('tab', { name: /orçamento/i });
+    expect(abaOrc).toHaveAttribute('aria-selected', 'false');
+
+    await user.click(abaOrc);
+    expect(abaOrc).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /ambientes/i })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+  });
+
+  it('estudo sem obra vinculada avisa antes de o usuário montar o de-para', async () => {
+    await montar();
+    await userEvent.setup().click(screen.getByRole('tab', { name: /orçamento/i }));
+
+    expect(
+      await screen.findByText(/não está vinculado a uma obra/i),
+    ).toBeInTheDocument();
   });
 });

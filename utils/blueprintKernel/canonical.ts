@@ -213,6 +213,23 @@ export function canonicalPayload(model: BlueprintModel): string {
         a: { x: b.a.x, y: b.a.y },
         b: { x: b.b.x, y: b.b.y },
       })),
+    // Etiquetas de ambiente. Entram no canônico porque são CONTEÚDO: renomear um
+    // ambiente muda o desenho de forma observável e tem que mudar o hash — senão
+    // publicar depois de renomear seria idempotente e o nome nunca chegaria ao
+    // snapshot. Ordenadas por posição, como todo o resto.
+    labels: [...(model.labels ?? [])]
+      .sort(
+        (x, y) =>
+          (levelIndex.get(x.levelId) ?? 0) - (levelIndex.get(y.levelId) ?? 0) ||
+          x.at.x - y.at.x ||
+          x.at.y - y.at.y ||
+          (x.name < y.name ? -1 : x.name > y.name ? 1 : 0),
+      )
+      .map((l) => ({
+        level: levelIndex.get(l.levelId) ?? 0,
+        at: { x: l.at.x, y: l.at.y },
+        name: l.name,
+      })),
     spaces: [...model.spaces]
       .sort(
         (x, y) =>
@@ -258,6 +275,7 @@ export interface CanonicalPayload {
     sillMm: number;
   }[];
   boundaries: { level: number; a: { x: number; y: number }; b: { x: number; y: number } }[];
+  labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
     level: number;
     ring: { x: number; y: number }[];
@@ -327,6 +345,18 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       levelId: levelIds[b.level],
       a: { x: b.a.x, y: b.a.y },
       b: { x: b.b.x, y: b.b.y },
+    });
+  }
+
+  // `?? []` porque payload gravado antes das etiquetas existirem não tem o campo.
+  // Snapshot é imutável: os antigos vão continuar sem ele para sempre, e quebrar
+  // ao reabrir uma versão publicada seria perder o acervo por uma vírgula.
+  for (const l of payload.labels ?? []) {
+    model.labels.push({
+      id: nextId(model, 'lbl'),
+      levelId: levelIds[l.level],
+      at: { x: l.at.x, y: l.at.y },
+      name: l.name,
     });
   }
 

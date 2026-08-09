@@ -71,35 +71,35 @@ Cada item: **arquivo** — critério de pronto = `tsc --noEmit` limpo no arquivo
 - [x] BrokerList.tsx — commit `17a4b13`, deployado
 - [x] broker/BrokerDevelopments.tsx — commit `17a4b13`, deployado
 - [x] InvestorList.tsx — commit `17a4b13`, deployado
-- [ ] RentalsModule.tsx — PARCIAL: tabela de unidades convertida; deals/brokers têm
-      headers/renderCell já criados mas ainda não ligados ao JSX (código morto por ora)
-- [ ] rentals/RentalRenewals.tsx — PARCIAL: headers/renderCell criados, JSX ainda não ligado
-- [ ] SalesModule.tsx — PARCIAL: headers/renderCell das 3 tabelas (inventário/deals/brokers)
-      criados, JSX ainda não ligado
+- [x] RentalsModule.tsx — commit `ae841e2`, deployado (3 tabelas: unidades/deals/brokers)
+- [x] rentals/RentalRenewals.tsx — commit `ae841e2`, deployado
+- [x] SalesModule.tsx — commit `ae841e2`, deployado (3 tabelas: inventário/deals/brokers)
 - [x] DealModal.tsx — commit `17a4b13`, deployado (tabela de Parcelas)
-- [ ] WarrantyModule.tsx — não iniciado
-- [ ] partner/PartnerWorkspaceManager.tsx — não iniciado
-- [ ] supplier/SupplierPortalManager.tsx — não iniciado
-- [ ] PriceTableManager.tsx — não iniciado
+- [x] WarrantyModule.tsx — commit a seguir, deployado
+- [x] partner/PartnerWorkspaceManager.tsx — commit a seguir, deployado (3 tabelas: parceiros/docs/usuários)
+- [x] supplier/SupplierPortalManager.tsx — commit a seguir, deployado
+- [x] PriceTableManager.tsx — commit a seguir, deployado
 
-⚠️ 2026-08-09: dois lotes de agentes caíram por limite de sessão de API (resets
-12:20 e 13:10 America/Sao_Paulo) no meio do trabalho. Nenhum arquivo ficou com
-erro de sintaxe além de um caso em RentalsModule.tsx, já corrigido manualmente
-(`.tbody` sem fechar chave do `.map`). Os arquivos marcados PARCIAL acima
-compilam limpo (`tsc`) mas têm funções auxiliares (`XXX_COLUMN_HEADERS`/
-`renderXCell`) já criadas e não usadas ainda — retomar ligando o JSX ao invés
-de recriar essas funções.
+**Fase 2 concluída — 11 de 11.**
+
+⚠️ 2026-08-09: três lotes de agentes caíram por limite de sessão de API (resets
+12:20, 13:10 e 17:20 America/Sao_Paulo) no meio do trabalho, mas nenhum ficou
+definitivamente perdido — cada novo lote retomou de onde o anterior parou
+(funções auxiliares já criadas + JSX por ligar), exceto um caso de sintaxe em
+RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 
 ### Fase 3 — Suprimentos / Fornecedores
-- [ ] SupplierList.tsx
-- [ ] SupplyChainOrderList.tsx
-- [ ] SupplyChainContractList.tsx
-- [ ] SupplyChainReceiptManager.tsx
-- [ ] SupplyChainQuotationList.tsx
-- [ ] SupplierCategoriesSettings.tsx
-- [ ] ContractTypesSettings.tsx
-- [ ] ContractIndexManager.tsx
-- [ ] ContractTemplateManager.tsx
+- [x] SupplierList.tsx — commit a seguir, deployado
+- [x] SupplyChainOrderList.tsx — commit a seguir, deployado
+- [x] SupplyChainContractList.tsx — commit a seguir, deployado
+- [x] SupplyChainReceiptManager.tsx — commit a seguir, deployado
+- [x] SupplyChainQuotationList.tsx — commit a seguir, deployado
+- [x] SupplierCategoriesSettings.tsx — commit a seguir, deployado
+- [x] ContractTypesSettings.tsx — commit a seguir, deployado
+- [x] ContractIndexManager.tsx — commit a seguir, deployado
+- [x] ContractTemplateManager.tsx — commit a seguir, deployado
+
+**Fase 3 concluída — 9 de 9.**
 
 ### Fase 4 — Fiscal / Impostos / Folha
 - [ ] fiscal/FiscalJobs.tsx
@@ -158,8 +158,8 @@ de recriar essas funções.
 - [x] Mecanismo central (`useTableColumns`/`SortableHeader` com drag) — commit `700065c`
 - [x] Piloto `ClientList.tsx` — commit `700065c`, deployado
 - [x] Fase 1 (10 arquivos) — commit a seguir
-- [ ] Fase 2 (11 arquivos)
-- [ ] Fase 3 (9 arquivos)
+- [x] Fase 2 (11 arquivos)
+- [x] Fase 3 (9 arquivos)
 - [ ] Fase 4 (9 arquivos)
 - [ ] Fase 5 (9 arquivos)
 - [ ] Fase 6 (10 arquivos)

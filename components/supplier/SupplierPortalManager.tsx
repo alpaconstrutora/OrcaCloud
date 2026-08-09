@@ -44,6 +44,54 @@ const SUPPLIER_PORTAL_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX.
+const SUPPLIER_PORTAL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  supplier: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100' },
+  organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  orders: { label: 'Pedidos', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  quotations: { label: 'Cotações', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  documents: { label: 'Documentos', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderSupplierPortalCell(
+  key: string,
+  s: Supplier,
+  ctx: { stats: { orders: number; quotations: number; documents: number }; hasAccess: boolean },
+): React.ReactNode {
+  switch (key) {
+    case 'supplier':
+      return (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
+            <Building2 className="w-4 h-4" />
+          </div>
+          <span className="text-sm font-normal text-gray-900">
+            {getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}
+          </span>
+        </div>
+      );
+    case 'organization':
+      return <span className="text-sm font-normal text-gray-700">{s.organization_id ? (s.organization_name || '-') : 'Todas as Organizações'}</span>;
+    case 'orders':
+      return <span className="text-sm font-normal text-gray-600">{ctx.stats.orders}</span>;
+    case 'quotations':
+      return <span className="text-sm font-normal text-gray-600">{ctx.stats.quotations}</span>;
+    case 'documents':
+      return <span className="text-sm font-normal text-gray-600">{ctx.stats.documents}</span>;
+    case 'status':
+      // StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (§8)
+      return <span className={`text-sm font-normal ${ctx.hasAccess ? 'text-emerald-700' : 'text-gray-500'}`}>{ctx.hasAccess ? 'Habilitado' : 'Sem acesso'}</span>;
+    default:
+      return null;
+  }
+}
+
 export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ organizationId, profile, onNavigate }) => {
   const confirm = useConfirm();
   const { localToast, showToast } = useToast();
@@ -427,42 +475,17 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                        {tableColumns.visibleColumns.includes('supplier') && (
-                          <SortableHeader colKey="supplier" label="Fornecedor" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100" />
-                        )}
-                        {tableColumns.visibleColumns.includes('organization') && (
-                          <SortableHeader colKey="organization" label="Organização" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('orders') && (
-                          <SortableHeader colKey="orders" label="Pedidos" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('quotations') && (
-                          <SortableHeader colKey="quotations" label="Cotações" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('documents') && (
-                          <SortableHeader colKey="documents" label="Documentos" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('status') && (
-                          <SortableHeader colKey="status" label="Status" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
+                        {tableColumns.orderedVisibleColumns.map(key => {
+                          const def = SUPPLIER_PORTAL_COLUMN_HEADERS[key];
+                          if (!def) return null;
+                          return (
+                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                              sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                              onSort={tableColumns.handleColumnSort}
+                              onMoveColumn={tableColumns.moveColumn}
+                              className={def.className} />
+                          );
+                        })}
                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                       </tr>
                     </thead>
@@ -476,46 +499,11 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                             onClick={() => setSelectedSupplier(s)}
                             className="hover:bg-orange-50/50 transition-colors cursor-pointer group"
                           >
-                            {tableColumns.visibleColumns.includes('supplier') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
-                                    <Building2 className="w-4 h-4" />
-                                  </div>
-                                  <span className="text-sm font-normal text-gray-900">
-                                    {getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}
-                                  </span>
-                                </div>
+                            {tableColumns.orderedVisibleColumns.map(key => (
+                              <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                {renderSupplierPortalCell(key, s, { stats, hasAccess })}
                               </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('organization') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                {s.organization_id ? (s.organization_name || '-') : 'Todas as Organizações'}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('orders') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {stats.orders}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('quotations') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {stats.quotations}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('documents') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {stats.documents}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('status') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                {/* StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
-                                <span className={`text-sm font-normal ${hasAccess ? 'text-emerald-700' : 'text-gray-500'}`}>
-                                  {hasAccess ? 'Habilitado' : 'Sem acesso'}
-                                </span>
-                              </td>
-                            )}
+                            ))}
                             <td className="px-6 py-2.5 text-right">
                               {/* Gerenciar = clique na linha (ação dominante, §9.1). Ações aqui são só o que sobra. */}
                               <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

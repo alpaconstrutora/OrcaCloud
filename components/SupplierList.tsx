@@ -60,6 +60,69 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     ] },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'contact' não tem valor único pra ordenar (§6.3).
+const SUPPLIER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    name: { label: 'Fornecedor', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    nickname: { label: 'Apelido', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    type: { label: 'Tipo', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    category: { label: 'Categoria', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    portal: { label: 'Portais', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    contact: { label: 'Contato', sortable: false, className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+    document: { label: 'Documento', className: 'px-6 py-5 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderSupplierCell(key: string, supplier: Supplier): React.ReactNode {
+    switch (key) {
+        case 'code':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{supplier.code || '-'}</span>;
+        case 'name':
+            // Sempre razão social aqui — a coluna "Apelido" ao lado já cobre a exibição curta; o toggle abaixo só controla a preferência nas outras telas.
+            return <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors truncate">{supplier.name}</p>;
+        case 'nickname':
+            return <span className="text-sm font-normal text-gray-700 truncate block">{supplier.nickname || '-'}</span>;
+        case 'type':
+            return <span className="text-sm font-normal text-gray-700">{supplier.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</span>;
+        case 'category':
+            return <span className="text-sm font-normal text-gray-700">{supplier.category}</span>;
+        case 'organization':
+            return <span className="text-sm font-normal text-gray-700">{supplier.organization_name}</span>;
+        case 'portal':
+            return (
+                <span className={`text-sm font-normal ${supplier.portal && supplier.portal !== 'Nenhum' ? 'text-gray-700' : 'text-gray-400'}`}>
+                    {supplier.portal || 'Nenhum'}
+                </span>
+            );
+        case 'contact':
+            return (
+                <div className="space-y-1.5">
+                    {supplier.email && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                            <Mail className="w-3.5 h-3.5 text-gray-400" />
+                            {supplier.email}
+                        </div>
+                    )}
+                    {supplier.phone && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                            <Phone className="w-3.5 h-3.5 text-gray-400" />
+                            {supplier.phone}
+                        </div>
+                    )}
+                </div>
+            );
+        case 'document':
+            return <span className="text-sm font-normal text-gray-600">{supplier.document || '---'}</span>;
+        default:
+            return null;
+    }
+}
+
 function getAdvancedFilterValue(supplier: Supplier, key: string): unknown {
     switch (key) {
         case 'name': return supplier.name;
@@ -440,15 +503,9 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 <col style={{ width: '40px' }} />
-                                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
-                                {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
-                                {tableColumns.visibleColumns.includes('nickname') && <col data-col-key="nickname" style={{ width: `${cols.getWidth('nickname')}px` }} />}
-                                {tableColumns.visibleColumns.includes('type') && <col data-col-key="type" style={{ width: `${cols.getWidth('type')}px` }} />}
-                                {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
-                                {tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
-                                {tableColumns.visibleColumns.includes('portal') && <col data-col-key="portal" style={{ width: `${cols.getWidth('portal')}px` }} />}
-                                {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
-                                {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
+                                {tableColumns.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* coluna "espaçadora" sem largura fixa — absorve o espaço sobrando quando
                                     a tabela é mais estreita que o container, em vez do navegador redistribuir
                                     esse espaço entre as colunas de dado (ver §6.1 do guia de UI).
@@ -470,51 +527,19 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             onChange={toggleAllVisible}
                                         />
                                     </th>
-                                    {tableColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="code" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Fornecedor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('nickname') && (
-                                        <SortableHeader label="Apelido" colKey="nickname" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="nickname" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('type') && (
-                                        <SortableHeader label="Tipo" colKey="type" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="type" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader label="Categoria" colKey="category" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="category" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="organization" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('portal') && (
-                                        <SortableHeader label="Portais" colKey="portal" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="portal" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('contact') && (
-                                        <SortableHeader label="Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="contact" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="document" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = SUPPLIER_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-5 text-center relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -540,69 +565,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     onChange={(e) => handleRowCheck(supplier.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey, filteredSuppliers)}
                                                 />
                                             </td>
-                                            {tableColumns.visibleColumns.includes('code') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                    {supplier.code || '-'}
+                                            {tableColumns.orderedVisibleColumns.map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100">
+                                                    {renderSupplierCell(key, supplier)}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    {/* Sempre razão social aqui — a coluna "Apelido" ao lado já cobre a exibição curta; o toggle abaixo só controla a preferência nas outras telas. */}
-                                                    <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors truncate">{supplier.name}</p>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('nickname') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className="text-sm font-normal text-gray-700 truncate block">{supplier.nickname || '-'}</span>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('type') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className="text-sm font-normal text-gray-700">{supplier.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</span>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('category') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className="text-sm font-normal text-gray-700">{supplier.category}</span>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('organization') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className="text-sm font-normal text-gray-700">{supplier.organization_name}</span>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('portal') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className={`text-sm font-normal ${supplier.portal && supplier.portal !== 'Nenhum' ? 'text-gray-700' : 'text-gray-400'}`}>
-                                                        {supplier.portal || 'Nenhum'}
-                                                    </span>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('contact') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <div className="space-y-1.5">
-                                                        {supplier.email && (
-                                                            <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
-                                                                <Mail className="w-3.5 h-3.5 text-gray-400" />
-                                                                {supplier.email}
-                                                            </div>
-                                                        )}
-                                                        {supplier.phone && (
-                                                            <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
-                                                                <Phone className="w-3.5 h-3.5 text-gray-400" />
-                                                                {supplier.phone}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('document') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className="text-sm font-normal text-gray-600">
-                                                        {supplier.document || '---'}
-                                                    </span>
-                                                </td>
-                                            )}
+                                            ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5 text-right">

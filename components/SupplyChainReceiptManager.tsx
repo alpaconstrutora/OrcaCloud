@@ -23,6 +23,69 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     number: 123, obra: 180, orcamento: 160, supplier: 200, status: 178, date: 150, actions: 180,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é renderizada fixa fora do drag.
+const RECEIPT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    number: { label: 'Número', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    orcamento: { label: 'Orçamento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    supplier: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status Logístico', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    date: { label: 'Previsão', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Badge de status — sem estado próprio, movida para escopo de módulo para poder
+// ser usada dentro de renderReceiptCell (função pura, fora do componente).
+const ReceiptStatusBadge = ({ status }: { status: string }) => {
+    const colors: Record<string, string> = {
+        'Confirmado': 'text-gray-800',
+        'Separação': 'text-blue-700',
+        'Em Trânsito': 'text-indigo-800',
+        'Entregue': 'text-amber-800',
+        'Recebido': 'text-green-800',
+        'Divergência': 'text-red-600',
+    };
+    return (
+        <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
+            {status}
+        </span>
+    );
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderReceiptCell(key: string, order: PurchaseOrder): React.ReactNode {
+    switch (key) {
+        case 'number':
+            return <span className="text-sm font-normal text-gray-600">#{order.number || order.id.slice(0, 8)}</span>;
+        case 'obra':
+            return (
+                <span className="text-sm font-normal text-gray-700">
+                    {order.projectClassification === 'ORCAMENTO' ? (order.linkedProjectName || '-') : order.projectName}
+                </span>
+            );
+        case 'orcamento':
+            return <span className="text-sm font-normal text-blue-600">{order.projectClassification === 'ORCAMENTO' ? order.projectName : '-'}</span>;
+        case 'supplier':
+            return <span className="text-gray-700 text-sm font-normal">{order.supplierName}</span>;
+        case 'status':
+            return <ReceiptStatusBadge status={order.status} />;
+        case 'date':
+            return (
+                <div className="flex items-center gap-2">
+                    <Clock className="w-3.5 h-3.5 text-gray-300" />
+                    <span className="text-sm font-normal text-gray-600">
+                        {order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : '-'}
+                    </span>
+                </div>
+            );
+        default:
+            return null;
+    }
+}
+
 interface SupplyChainReceiptManagerProps {
     onViewOrder: (id: string) => void;
 }
@@ -120,22 +183,6 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             });
     }, [orders, searchTerm, filterStatus, tableColumns.sortColumn, tableColumns.sortDirection]);
 
-    const StatusBadge = ({ status }: { status: string }) => {
-        const colors: Record<string, string> = {
-            'Confirmado': 'text-gray-800',
-            'Separação': 'text-blue-700',
-            'Em Trânsito': 'text-indigo-800',
-            'Entregue': 'text-amber-800',
-            'Recebido': 'text-green-800',
-            'Divergência': 'text-red-600',
-        };
-        return (
-            <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
-                {status}
-            </span>
-        );
-    };
-
     return (
         <div className="space-y-6">
             <div>
@@ -228,12 +275,9 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     <div className="overflow-x-auto">
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                         <colgroup>
-                            {tableColumns.visibleColumns.includes('number') && <col data-col-key="number" style={{ width: `${cols.getWidth('number')}px` }} />}
-                            {tableColumns.visibleColumns.includes('obra') && <col data-col-key="obra" style={{ width: `${cols.getWidth('obra')}px` }} />}
-                            {tableColumns.visibleColumns.includes('orcamento') && <col data-col-key="orcamento" style={{ width: `${cols.getWidth('orcamento')}px` }} />}
-                            {tableColumns.visibleColumns.includes('supplier') && <col data-col-key="supplier" style={{ width: `${cols.getWidth('supplier')}px` }} />}
-                            {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
-                            {tableColumns.visibleColumns.includes('date') && <col data-col-key="date" style={{ width: `${cols.getWidth('date')}px` }} />}
+                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                            ))}
                             {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                 borda de "Ações" não andar a cada redimensionamento. */}
                             <col />
@@ -243,36 +287,19 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                             SortableHeader força uppercase internamente por padrão. */}
                         <thead>
                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                {tableColumns.visibleColumns.includes('number') && (
-                                    <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="number" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('obra') && (
-                                    <SortableHeader colKey="obra" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                        <cols.ResizeHandle colKey="obra" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('orcamento') && (
-                                    <SortableHeader colKey="orcamento" label="Orçamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                        <cols.ResizeHandle colKey="orcamento" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('supplier') && (
-                                    <SortableHeader colKey="supplier" label="Fornecedor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="supplier" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('status') && (
-                                    <SortableHeader colKey="status" label="Status Logístico" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="status" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('date') && (
-                                    <SortableHeader colKey="date" label="Previsão" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="date" />
-                                    </SortableHeader>
-                                )}
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                    const def = RECEIPT_COLUMN_HEADERS[key];
+                                    if (!def) return null;
+                                    return (
+                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort}
+                                            onMoveColumn={tableColumns.moveColumn}
+                                            className={def.className}>
+                                            <cols.ResizeHandle colKey={key} />
+                                        </SortableHeader>
+                                    );
+                                })}
                                 {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                 <th aria-hidden="true" className="border-r border-gray-100" />
                                 {tableColumns.visibleColumns.includes('actions') && (
@@ -290,43 +317,11 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                     className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                     onClick={() => onViewOrder(order.id)}
                                 >
-                                    {tableColumns.visibleColumns.includes('number') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                            #{order.number || order.id.slice(0, 8)}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                            {renderReceiptCell(key, order)}
                                         </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('obra') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                            {order.projectClassification === 'ORCAMENTO'
-                                                ? (order.linkedProjectName || '-')
-                                                : order.projectName}
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('orcamento') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
-                                            {order.projectClassification === 'ORCAMENTO' ? order.projectName : '-'}
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('supplier') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-gray-700 text-sm font-normal">
-                                            {order.supplierName}
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <StatusBadge status={order.status} />
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('date') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <div className="flex items-center gap-2">
-                                                <Clock className="w-3.5 h-3.5 text-gray-300" />
-                                                <span className="text-sm font-normal text-gray-600">
-                                                    {order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : '-'}
-                                                </span>
-                                            </div>
-                                        </td>
-                                    )}
+                                    ))}
                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                     <td aria-hidden="true" className="border-r border-gray-100"></td>
                                     {tableColumns.visibleColumns.includes('actions') && (

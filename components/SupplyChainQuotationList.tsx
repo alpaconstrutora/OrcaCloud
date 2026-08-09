@@ -45,6 +45,61 @@ function getAdvancedFilterValue(req: QuotationRequest, key: string): unknown {
     }
 }
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é renderizada fixa fora do drag.
+const QUOTATION_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    number: { label: 'Número', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    title: { label: 'Título / Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    deadline: { label: 'Prazo Final', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Badge de status — sem estado próprio, movida para escopo de módulo para poder
+// ser usada dentro de renderQuotationCell (função pura, fora do componente) e
+// também na visão em blocos.
+const QuotationStatusBadge = ({ status }: { status: string }) => {
+    const colors: Record<string, string> = {
+        'Aberta': 'text-blue-700',
+        'Em Análise': 'text-amber-700',
+        'Concluída': 'text-emerald-700',
+        'Cancelada': 'text-gray-700',
+    };
+    return (
+        <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
+            {status}
+        </span>
+    );
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderQuotationCell(key: string, req: QuotationRequest): React.ReactNode {
+    switch (key) {
+        case 'number':
+            return <span className="text-sm font-normal text-gray-600">{req.number || req.id.slice(0, 8)}</span>;
+        case 'title':
+            return (
+                <div className="flex flex-col">
+                    <span className="text-sm font-normal text-gray-700">{req.title}</span>
+                    <span className="text-xs font-normal text-gray-400">{req.projectName}</span>
+                </div>
+            );
+        case 'deadline':
+            return (
+                <div className="flex items-center gap-2 text-sm font-normal text-gray-600">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    {new Date(req.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </div>
+            );
+        case 'status':
+            return <QuotationStatusBadge status={req.status} />;
+        default:
+            return null;
+    }
+}
+
 interface SupplyChainQuotationListProps {
     onCreateNew: () => void;
     onViewDetails: (id: string) => void;
@@ -113,20 +168,6 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             console.error('Error deleting quotation:', err);
             notify(`Erro ao excluir cotação: ${err.message || 'Erro desconhecido'}`, 'error');
         }
-    };
-
-    const StatusBadge = ({ status }: { status: string }) => {
-        const colors: Record<string, string> = {
-            'Aberta': 'text-blue-700',
-            'Em Análise': 'text-amber-700',
-            'Concluída': 'text-emerald-700',
-            'Cancelada': 'text-gray-700',
-        };
-        return (
-            <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
-                {status}
-            </span>
-        );
     };
 
     const filteredRequests = React.useMemo(() => {
@@ -265,10 +306,9 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                         <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                {tableColumns.visibleColumns.includes('number') && <col data-col-key="number" style={{ width: `${cols.getWidth('number')}px` }} />}
-                                {tableColumns.visibleColumns.includes('title') && <col data-col-key="title" style={{ width: `${cols.getWidth('title')}px` }} />}
-                                {tableColumns.visibleColumns.includes('deadline') && <col data-col-key="deadline" style={{ width: `${cols.getWidth('deadline')}px` }} />}
-                                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                     borda de "Ações" não andar a cada redimensionamento. */}
                                 <col />
@@ -278,26 +318,19 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                 SortableHeader força uppercase internamente por padrão. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('number') && (
-                                        <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="number" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('title') && (
-                                        <SortableHeader colKey="title" label="Título / Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="title" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('deadline') && (
-                                        <SortableHeader colKey="deadline" label="Prazo Final" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="deadline" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="status" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = QUOTATION_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
@@ -315,32 +348,11 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                         onClick={() => onViewDetails(req.id)}
                                     >
-                                        {tableColumns.visibleColumns.includes('number') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {req.number || req.id.slice(0, 8)}
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderQuotationCell(key, req)}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('title') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-normal text-gray-700">{req.title}</span>
-                                                    <span className="text-xs font-normal text-gray-400">{req.projectName}</span>
-                                                </div>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('deadline') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                                                    {new Date(req.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                                </div>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <StatusBadge status={req.status} />
-                                            </td>
-                                        )}
+                                        ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         {tableColumns.visibleColumns.includes('actions') && (
@@ -390,7 +402,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                     <div className="p-2.5 bg-blue-50 text-blue-600 rounded-[6px] group-hover:bg-blue-600 group-hover:text-white transition-all">
                                         <FileText className="w-5 h-5" />
                                     </div>
-                                    <StatusBadge status={req.status} />
+                                    <QuotationStatusBadge status={req.status} />
                                 </div>
 
                                 <h3 className="text-sm font-bold text-gray-900 mb-1">

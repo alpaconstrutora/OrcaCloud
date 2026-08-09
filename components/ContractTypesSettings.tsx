@@ -19,6 +19,62 @@ const TYPE_COLUMNS: ColumnConfig[] = [
     { key: 'actions',  label: 'Ações',     sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa, não entra no arraste.
+const TYPE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name:     { label: 'Nome',      className: 'px-6 py-2 border-r border-gray-100' },
+    category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderTypeCell(
+    key: string,
+    type: ContractTypeRecord,
+    opts: {
+        editingId: string | null; editName: string; setEditName: (v: string) => void; handleUpdate: (id: string) => void;
+        editCategory: ContractTypeCategory; setEditCategory: (v: ContractTypeCategory) => void;
+    },
+): React.ReactNode {
+    const { editingId, editName, setEditName, handleUpdate, editCategory, setEditCategory } = opts;
+    switch (key) {
+        case 'name':
+            return editingId === type.id ? (
+                <input
+                    autoFocus
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className="w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                    onKeyDown={e => e.key === 'Enter' && handleUpdate(type.id)}
+                />
+            ) : (
+                <div className="flex items-center gap-2">
+                    {type.name}
+                    {isDefault(type) && (
+                        <span className="text-xs font-normal text-gray-400">
+                            Global
+                        </span>
+                    )}
+                </div>
+            );
+        case 'category':
+            return editingId === type.id ? (
+                <select
+                    value={editCategory}
+                    onChange={e => setEditCategory(e.target.value as ContractTypeCategory)}
+                    className="h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                >
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+            ) : type.category;
+        default:
+            return null;
+    }
+}
+
 const ContractTypesSettings: React.FC = () => {
     // Organização do seletor do topo, já com a herança de empresa/obra.
     const { orgId: activeOrganizationId } = useOrgContext();
@@ -275,28 +331,24 @@ const ContractTypesSettings: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <tr>
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader
-                                            colKey="name"
-                                            label="Nome"
-                                            uppercase={false}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100"
-                                        />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader
-                                            colKey="category"
-                                            label="Categoria"
-                                            uppercase={false}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                        />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = TYPE_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                sortable={def.sortable !== false}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            />
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                     )}
@@ -305,42 +357,11 @@ const ContractTypesSettings: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                                 {filteredTypes.map(type => (
                                     <tr key={type.id} className="hover:bg-blue-50/50 transition-colors group">
-                                        {tableColumns.visibleColumns.includes('name') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {editingId === type.id ? (
-                                                    <input
-                                                        autoFocus
-                                                        type="text"
-                                                        value={editName}
-                                                        onChange={e => setEditName(e.target.value)}
-                                                        className="w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                        onKeyDown={e => e.key === 'Enter' && handleUpdate(type.id)}
-                                                    />
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        {type.name}
-                                                        {isDefault(type) && (
-                                                            <span className="text-xs font-normal text-gray-400">
-                                                                Global
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${key === 'category' ? 'text-gray-600' : 'text-gray-700'}`}>
+                                                {renderTypeCell(key, type, { editingId, editName, setEditName, handleUpdate, editCategory, setEditCategory })}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('category') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {editingId === type.id ? (
-                                                    <select
-                                                        value={editCategory}
-                                                        onChange={e => setEditCategory(e.target.value as ContractTypeCategory)}
-                                                        className="h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                    >
-                                                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                                    </select>
-                                                ) : type.category}
-                                            </td>
-                                        )}
+                                        ))}
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

@@ -19,6 +19,51 @@ const CONTRACT_TEMPLATE_COLUMNS: ColumnConfig[] = [
     { key: 'version', label: 'Versão', sortable: true },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. A célula de ações (kebab de editar/desativar) fica
+// de fora: é fixa (th w-24), não entra no arraste — igual ao padrão de ClientList.tsx.
+const CONTRACT_TEMPLATE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name:      { label: 'Nome',      className: 'text-left px-4 py-3' },
+    type:      { label: 'Tipo',      className: 'text-left px-4 py-3' },
+    variables: { label: 'Variáveis', sortable: false, className: 'text-left px-4 py-3' },
+    version:   { label: 'Versão',    className: 'text-left px-4 py-3' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderTemplateCell(key: string, t: ContractTemplate): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return (
+                <>
+                    <p className="font-medium text-gray-900">{t.name}</p>
+                    {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
+                </>
+            );
+        case 'type':
+            return t.contract_type || '—';
+        case 'variables':
+            return (
+                <div className="flex flex-wrap gap-1">
+                    {(t.variables ?? []).slice(0, 4).map(v => (
+                        <span key={v} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+                            {`{{${v}}}`}
+                        </span>
+                    ))}
+                    {(t.variables ?? []).length > 4 && (
+                        <span className="text-xs text-gray-400">+{(t.variables ?? []).length - 4}</span>
+                    )}
+                </div>
+            );
+        case 'version':
+            return <>v{t.version}</>;
+        default:
+            return null;
+    }
+}
+
 interface Props {
     organizationId: string;
     open: boolean;
@@ -287,50 +332,32 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId, open, onClos
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-100">
-                                {tableColumns.visibleColumns.includes('name') && (
-                                    <SortableHeader label="Nome" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
-                                )}
-                                {tableColumns.visibleColumns.includes('type') && (
-                                    <SortableHeader label="Tipo" colKey="type" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
-                                )}
-                                {tableColumns.visibleColumns.includes('variables') && (
-                                    <SortableHeader label="Variáveis" colKey="variables" sortable={false} className="text-left px-4 py-3" />
-                                )}
-                                {tableColumns.visibleColumns.includes('version') && (
-                                    <SortableHeader label="Versão" colKey="version" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
-                                )}
+                                {tableColumns.orderedVisibleColumns.map(key => {
+                                    const def = CONTRACT_TEMPLATE_COLUMN_HEADERS[key];
+                                    if (!def) return null;
+                                    return (
+                                        <SortableHeader key={key} label={def.label} colKey={key} sortable={def.sortable !== false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort}
+                                            onMoveColumn={tableColumns.moveColumn}
+                                            className={def.className} />
+                                    );
+                                })}
                                 <th className="w-24" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {sortedTemplates.map(t => (
                                 <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <td className="px-4 py-3">
-                                            <p className="font-medium text-gray-900">{t.name}</p>
-                                            {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
+                                    {tableColumns.orderedVisibleColumns.map(key => (
+                                        <td key={key} className={`px-4 py-3 ${
+                                            key === 'type' ? 'text-gray-500 text-table-body' :
+                                            key === 'version' ? 'text-table-body text-gray-400' :
+                                            ''
+                                        }`}>
+                                            {renderTemplateCell(key, t)}
                                         </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('type') && (
-                                        <td className="px-4 py-3 text-gray-500 text-table-body">{t.contract_type || '—'}</td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('variables') && (
-                                        <td className="px-4 py-3">
-                                            <div className="flex flex-wrap gap-1">
-                                                {(t.variables ?? []).slice(0, 4).map(v => (
-                                                    <span key={v} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
-                                                        {`{{${v}}}`}
-                                                    </span>
-                                                ))}
-                                                {(t.variables ?? []).length > 4 && (
-                                                    <span className="text-xs text-gray-400">+{(t.variables ?? []).length - 4}</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('version') && (
-                                        <td className="px-4 py-3 text-table-body text-gray-400">v{t.version}</td>
-                                    )}
+                                    ))}
                                     <td className="px-4 py-3">
                                         <div className="flex gap-1.5 justify-end">
                                             <ActionIconButton kind="edit" size="sm" onClick={() => openEdit(t)} />

@@ -176,9 +176,118 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     visibleToBroker: 192, showPrice: 150,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. currentLabel/versionLabel dependem do modo (venda x
+// locação) — resolvidos em runtime, na hora de montar o thead (ver `cfg`).
+const PRICE_TABLE_COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+    photo: { label: 'Foto', className: 'px-6 py-2 border-r border-gray-100 relative overflow-hidden' },
+    unit: { label: 'Unidade', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    privArea: { label: 'Área privativa', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    bedrooms: { label: 'Dormitórios', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    parking: { label: 'Vagas', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    bathrooms: { label: 'Banheiros', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    floor: { label: 'Pavimento', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    position: { label: 'Posição', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    current: { label: 'Preço vigente', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    price: { label: 'Preço nesta versão', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    delta: { label: 'Δ', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    visibleToBroker: { label: 'Visível p/ Corretor', className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden' },
+    showPrice: { label: 'Exibir Preço', className: 'px-6 py-2 text-center whitespace-nowrap overflow-hidden' },
+};
+
 const fmtBRL = formatMoney;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderPriceTableCell(
+    key: string,
+    item: CommercialPriceTableItem,
+    ctx: {
+        isDraft: boolean;
+        uploadingPhotoId: string | null;
+        onSelectPhoto: (item: CommercialPriceTableItem, file: File) => void;
+        onCommitPrice: (itemId: string, v: number) => void;
+        onToggleVisibility: (item: CommercialPriceTableItem) => void;
+        onToggleShowPrice: (item: CommercialPriceTableItem) => void;
+    },
+): React.ReactNode {
+    switch (key) {
+        case 'photo':
+            return (
+                <PhotoCell
+                    url={item.photo_url}
+                    uploading={ctx.uploadingPhotoId === item.id}
+                    onSelect={file => ctx.onSelectPhoto(item, file)}
+                />
+            );
+        case 'unit':
+            return <span className="text-sm font-normal text-gray-700">{item.property_name || '—'}</span>;
+        case 'status':
+            return <UnitStatusBadge status={item.property_status} />;
+        case 'privArea':
+            return <span className="text-right text-sm font-normal text-gray-600 whitespace-nowrap block">{areaFmt(item.private_area)}</span>;
+        case 'bedrooms':
+            return <span className="text-right text-sm font-normal text-gray-600 block">{num(item.bedrooms)}</span>;
+        case 'parking':
+            return <span className="text-right text-sm font-normal text-gray-600 block">{num(item.parking_spaces)}</span>;
+        case 'bathrooms':
+            return <span className="text-right text-sm font-normal text-gray-600 block">{num(item.bathrooms)}</span>;
+        case 'floor':
+            return <span className="text-right text-sm font-normal text-gray-600 block">{num(item.floor)}</span>;
+        case 'position':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : '—'}</span>;
+        case 'current': {
+            const cur = item.current_price ?? item.price;
+            return <span className="text-right text-sm font-medium text-gray-800 block">{formatMoney(cur)}</span>;
+        }
+        case 'price':
+            return ctx.isDraft ? (
+                <div className="text-right"><PriceInput value={item.price} onCommit={v => ctx.onCommitPrice(item.id, v)} /></div>
+            ) : (
+                <span className="text-right text-sm font-medium text-gray-800 block">{formatMoney(item.price)}</span>
+            );
+        case 'delta': {
+            const cur = item.current_price ?? item.price;
+            const diff = cur > 0 ? ((item.price - cur) / cur) * 100 : 0;
+            return (
+                <span className={`text-right text-sm font-normal block ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+                    {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
+                </span>
+            );
+        }
+        case 'visibleToBroker':
+            return (
+                <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={item.visible_to_broker ?? true}
+                        onChange={() => ctx.onToggleVisibility(item)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            );
+        case 'showPrice':
+            return (
+                <label className="relative inline-flex items-center cursor-pointer" title="Ligado: o corretor vê o preço desta unidade. Desligado: a unidade continua listada, sem o valor.">
+                    <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={item.show_price_to_broker ?? true}
+                        onChange={() => ctx.onToggleShowPrice(item)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            );
+        default:
+            return null;
+    }
+}
 
 export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId, buildingName, mode = 'sale' }) => {
     const cfg = MODE_CONFIG[mode];
@@ -660,10 +769,8 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                     <colgroup>
                                         {/* checkbox de seleção — largura fixa, sem data-col-key (não é redimensionável). */}
                                         <col style={{ width: '40px' }} />
-                                        {COLUMNS.map(c => (
-                                            tableColumns.visibleColumns.includes(c.key)
-                                                ? <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
-                                                : null
+                                        {tableColumns.orderedVisibleColumns.map(key => (
+                                            <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
                                         ))}
                                     </colgroup>
                                     <thead>
@@ -678,122 +785,24 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                         : setSelectedIds(new Set(visibleItems.map(i => i.id)))}
                                                 />
                                             </th>
-                                            {tableColumns.visibleColumns.includes('photo') && (
-                                                <th className="px-6 py-2 border-r border-gray-100 relative overflow-hidden">
-                                                    Foto
-                                                    <cols.ResizeHandle colKey="photo" />
-                                                </th>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('unit') && (
-                                                <SortableHeader colKey="unit" label="Unidade" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                    <cols.ResizeHandle colKey="unit" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <SortableHeader colKey="status" label="Status" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                    <cols.ResizeHandle colKey="status" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('privArea') && (
-                                                <SortableHeader colKey="privArea" label="Área privativa" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="privArea" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('bedrooms') && (
-                                                <SortableHeader colKey="bedrooms" label="Dormitórios" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="bedrooms" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('parking') && (
-                                                <SortableHeader colKey="parking" label="Vagas" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="parking" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('bathrooms') && (
-                                                <SortableHeader colKey="bathrooms" label="Banheiros" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="bathrooms" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('floor') && (
-                                                <SortableHeader colKey="floor" label="Pavimento" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="floor" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('position') && (
-                                                <SortableHeader colKey="position" label="Posição" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="position" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('current') && (
-                                                <SortableHeader colKey="current" label={cfg.currentLabel} uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
-                                                    <cols.ResizeHandle colKey="current" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('price') && (
-                                                <SortableHeader colKey="price" label={cfg.versionLabel} uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
-                                                    <cols.ResizeHandle colKey="price" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('delta') && (
-                                                <SortableHeader colKey="delta" label="Δ" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
-                                                    <cols.ResizeHandle colKey="delta" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('visibleToBroker') && (
-                                                <SortableHeader colKey="visibleToBroker" label="Visível p/ Corretor" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="visibleToBroker" />
-                                                </SortableHeader>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('showPrice') && (
-                                                <SortableHeader colKey="showPrice" label="Exibir Preço" uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                                    onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 text-center whitespace-nowrap overflow-hidden">
-                                                    <cols.ResizeHandle colKey="showPrice" />
-                                                </SortableHeader>
-                                            )}
+                                            {tableColumns.orderedVisibleColumns.map(key => {
+                                                const def = PRICE_TABLE_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                const label = key === 'current' ? cfg.currentLabel : key === 'price' ? cfg.versionLabel : def.label;
+                                                return (
+                                                    <SortableHeader key={key} colKey={key} label={label} sortable={key !== 'photo'} uppercase={false}
+                                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                        onSort={tableColumns.handleColumnSort}
+                                                        onMoveColumn={tableColumns.moveColumn}
+                                                        className={def.className}>
+                                                        <cols.ResizeHandle colKey={key} />
+                                                    </SortableHeader>
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
                                         {visibleItems.map((item, rowIndex) => {
-                                            const cur = item.current_price ?? item.price;
-                                            const diff = itemDelta(item);
                                             return (
                                                 <tr key={item.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(item.id) ? 'bg-blue-50/60' : ''}`}>
                                                     <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
@@ -805,100 +814,18 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                             onChange={e => handleRowCheck(item.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey)}
                                                         />
                                                     </td>
-                                                    {tableColumns.visibleColumns.includes('photo') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <PhotoCell
-                                                                url={item.photo_url}
-                                                                uploading={uploadingPhotoId === item.id}
-                                                                onSelect={file => handleUpdateItemPhoto(item, file)}
-                                                            />
+                                                    {tableColumns.orderedVisibleColumns.map(key => (
+                                                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            {renderPriceTableCell(key, item, {
+                                                                isDraft,
+                                                                uploadingPhotoId,
+                                                                onSelectPhoto: handleUpdateItemPhoto,
+                                                                onCommitPrice: handleUpdateItemPrice,
+                                                                onToggleVisibility: handleToggleVisibility,
+                                                                onToggleShowPrice: handleToggleShowPrice,
+                                                            })}
                                                         </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('unit') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                            {item.property_name || '—'}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('status') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <UnitStatusBadge status={item.property_status} />
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('privArea') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                            {areaFmt(item.private_area)}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('bedrooms') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                            {num(item.bedrooms)}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('parking') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                            {num(item.parking_spaces)}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('bathrooms') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                            {num(item.bathrooms)}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('floor') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                                            {num(item.floor)}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('position') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                            {item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : '—'}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('current') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
-                                                            {fmtBRL(cur)}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('price') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                                            {isDraft ? (
-                                                                <PriceInput value={item.price} onCommit={v => handleUpdateItemPrice(item.id, v)} />
-                                                            ) : (
-                                                                <span className="text-sm font-medium text-gray-800">{fmtBRL(item.price)}</span>
-                                                            )}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('delta') && (
-                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
-                                                            {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('visibleToBroker') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="sr-only peer"
-                                                                    checked={item.visible_to_broker ?? true}
-                                                                    onChange={() => handleToggleVisibility(item)}
-                                                                />
-                                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                                            </label>
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('showPrice') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                            <label className="relative inline-flex items-center cursor-pointer" title="Ligado: o corretor vê o preço desta unidade. Desligado: a unidade continua listada, sem o valor.">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="sr-only peer"
-                                                                    checked={item.show_price_to_broker ?? true}
-                                                                    onChange={() => handleToggleShowPrice(item)}
-                                                                />
-                                                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                                            </label>
-                                                        </td>
-                                                    )}
+                                                    ))}
                                                 </tr>
                                             );
                                         })}

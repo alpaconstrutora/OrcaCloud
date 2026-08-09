@@ -73,52 +73,71 @@ const CLAIM_COLUMNS: ColumnConfig[] = [
 ];
 const CLAIM_COL_WIDTHS: Record<string, number> = { chamado: 300, state: 140, severity: 120, sla_deadline: 140, created_at: 130, actions: 60 };
 
-function ClaimRow({ claim, onSelect, projects, visibleColumns }: { claim: WarrantyClaim; onSelect: (c: WarrantyClaim) => void; projects: ProjectOption[]; visibleColumns: string[] }) {
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (estrutural, fixa à direita).
+const CLAIM_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    chamado: { label: 'Chamado', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    state: { label: 'Estado', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    severity: { label: 'Severidade', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    sla_deadline: { label: 'SLA', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    created_at: { label: 'Abertura', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderClaimCell(key: string, claim: WarrantyClaim, ctx: { obraName?: string | null; slaVencido?: boolean }): React.ReactNode {
+    switch (key) {
+        case 'chamado':
+            return (
+                <div className="text-sm font-normal text-gray-700">
+                    <p className="truncate max-w-[260px]">{claim.sistema_descricao}</p>
+                    <p className="text-xs text-gray-400 truncate max-w-[260px]">
+                        {ctx.obraName && <span className="text-blue-500 font-medium">{ctx.obraName} · </span>}
+                        {claim.client_name || '—'} · {claim.unidade_ref || '—'}
+                    </p>
+                </div>
+            );
+        case 'state':
+            return <span className={`text-sm font-normal ${STATE_COLORS[claim.state]}`}>{STATE_LABELS[claim.state]}</span>;
+        case 'severity':
+            return <span className={`text-sm font-normal capitalize ${SEVERITY_COLORS[claim.severity]}`}>{claim.severity}</span>;
+        case 'sla_deadline':
+            return (
+                <span className="text-sm font-normal text-gray-600">
+                    {claim.sla_deadline ? (
+                        <span className={ctx.slaVencido ? 'text-red-600 font-medium' : ''}>
+                            {new Date(claim.sla_deadline + 'T00:00:00').toLocaleDateString('pt-BR')}
+                            {ctx.slaVencido && ' ⚠'}
+                        </span>
+                    ) : '—'}
+                </span>
+            );
+        case 'created_at':
+            return <span className="text-sm font-normal text-gray-600">{new Date(claim.created_at).toLocaleDateString('pt-BR')}</span>;
+        default:
+            return null;
+    }
+}
+
+function ClaimRow({ claim, onSelect, projects, orderedVisibleColumns, showActions }: { claim: WarrantyClaim; onSelect: (c: WarrantyClaim) => void; projects: ProjectOption[]; orderedVisibleColumns: string[]; showActions: boolean }) {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
     const today = new Date().toISOString().slice(0, 10);
-    const slaVencido = claim.sla_deadline && claim.sla_deadline < today && !['ENCERRADO', 'FORA_GARANTIA'].includes(claim.state);
+    const slaVencido = !!(claim.sla_deadline && claim.sla_deadline < today && !['ENCERRADO', 'FORA_GARANTIA'].includes(claim.state));
 
     return (
         <tr
             className="hover:bg-blue-50/50 cursor-pointer transition-colors"
             onClick={() => onSelect(claim)}
         >
-            {visibleColumns.includes('chamado') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                    <p className="truncate max-w-[260px]">{claim.sistema_descricao}</p>
-                    <p className="text-xs text-gray-400 truncate max-w-[260px]">
-                        {obraName && <span className="text-blue-500 font-medium">{obraName} · </span>}
-                        {claim.client_name || '—'} · {claim.unidade_ref || '—'}
-                    </p>
+            {orderedVisibleColumns.map(key => (
+                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                    {renderClaimCell(key, claim, { obraName, slaVencido })}
                 </td>
-            )}
-            {visibleColumns.includes('state') && (
-                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${STATE_COLORS[claim.state]}`}>
-                    {STATE_LABELS[claim.state]}
-                </td>
-            )}
-            {visibleColumns.includes('severity') && (
-                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal capitalize ${SEVERITY_COLORS[claim.severity]}`}>
-                    {claim.severity}
-                </td>
-            )}
-            {visibleColumns.includes('sla_deadline') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                    {claim.sla_deadline ? (
-                        <span className={slaVencido ? 'text-red-600 font-medium' : ''}>
-                            {new Date(claim.sla_deadline + 'T00:00:00').toLocaleDateString('pt-BR')}
-                            {slaVencido && ' ⚠'}
-                        </span>
-                    ) : '—'}
-                </td>
-            )}
-            {visibleColumns.includes('created_at') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                    {new Date(claim.created_at).toLocaleDateString('pt-BR')}
-                </td>
-            )}
+            ))}
             <td aria-hidden="true"></td>
-            {visibleColumns.includes('actions') && (
+            {showActions && (
                 // §9.1 — a linha já abre o detalhe (ação dominante); sem duplicar como botão.
                 <td className="px-6 py-2.5 text-right">
                     <ChevronRight className="w-4 h-4 text-blue-400 ml-auto" />
@@ -280,8 +299,8 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                         if (sortKey === 'created_at') return a.created_at.localeCompare(b.created_at) * dir;
                         return 0;
                     });
-                    const visible = CLAIM_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
-                    const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+                    const orderedVisible = tableColumns.orderedVisibleColumns.filter(k => k !== 'actions');
+                    const tableWidth = orderedVisible.reduce((s, k) => s + cols.getWidth(k), 0) + cols.getWidth('actions');
 
                     if (loading) {
                         return <div className="flex items-center justify-center h-32 text-sm text-gray-400">Carregando...</div>;
@@ -312,19 +331,25 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                         <div className="overflow-x-auto">
                             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                                 <colgroup>
-                                    {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                                    {orderedVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                                     <col />
                                     <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                                 </colgroup>
                                 <thead>
                                     <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        {CLAIM_COLUMNS.filter(c => c.key !== 'actions').map(c => tableColumns.visibleColumns.includes(c.key) && (
-                                            <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
-                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                <cols.ResizeHandle colKey={c.key} />
-                                            </SortableHeader>
-                                        ))}
+                                        {orderedVisible.map(key => {
+                                            const def = CLAIM_COLUMN_HEADERS[key];
+                                            if (!def) return null;
+                                            return (
+                                                <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    onMoveColumn={tableColumns.moveColumn}
+                                                    className={def.className}>
+                                                    <cols.ResizeHandle colKey={key} />
+                                                </SortableHeader>
+                                            );
+                                        })}
                                         <th aria-hidden="true" className="border-r border-gray-100" />
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -333,7 +358,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {sortedClaims.map(c => (
-                                        <ClaimRow key={c.id} claim={c} onSelect={setSelected} projects={projects} visibleColumns={tableColumns.visibleColumns} />
+                                        <ClaimRow key={c.id} claim={c} onSelect={setSelected} projects={projects} orderedVisibleColumns={orderedVisible} showActions={tableColumns.visibleColumns.includes('actions')} />
                                     ))}
                                 </tbody>
                             </table>

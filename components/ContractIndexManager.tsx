@@ -13,6 +13,40 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: '', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa (largura w-10),
+// não entra no arraste.
+const INDEX_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    reference: { label: 'Referência', className: 'px-6 py-2 border-r border-gray-100' },
+    value:     { label: 'Valor',      className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    variation: { label: 'Variação',   sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    source:    { label: 'Fonte',      className: 'px-6 py-2 border-r border-gray-100' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderIndexCell(key: string, v: ContractIndexValue, varPct: number | null): React.ReactNode {
+    switch (key) {
+        case 'reference':
+            return fmtDate(v.reference_month);
+        case 'value':
+            return fmtVal(v.value);
+        case 'variation':
+            return varPct !== null ? (
+                <span className={`inline-flex items-center gap-0.5 text-sm font-normal ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {varPct >= 0 ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    {Math.abs(varPct).toFixed(2)}%
+                </span>
+            ) : '—';
+        case 'source':
+            return v.source ?? '—';
+        default:
+            return null;
+    }
+}
+
 const INDEX_NAMES: IndexName[] = ['INCC-M', 'INCC', 'IPCA', 'IGP-M', 'CUB', 'OUTROS'];
 
 const fmtDate = (d: string) => {
@@ -177,18 +211,17 @@ const ContractIndexManager: React.FC = () => {
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                             <tr>
-                                {tableColumns.visibleColumns.includes('reference') && (
-                                    <SortableHeader colKey="reference" label="Referência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                )}
-                                {tableColumns.visibleColumns.includes('value') && (
-                                    <SortableHeader colKey="value" label="Valor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
-                                )}
-                                {tableColumns.visibleColumns.includes('variation') && (
-                                    <SortableHeader colKey="variation" label="Variação" uppercase={false} sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
-                                )}
-                                {tableColumns.visibleColumns.includes('source') && (
-                                    <SortableHeader colKey="source" label="Fonte" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                )}
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                    const def = INDEX_COLUMN_HEADERS[key];
+                                    if (!def) return null;
+                                    return (
+                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort}
+                                            onMoveColumn={tableColumns.moveColumn}
+                                            className={def.className} />
+                                    );
+                                })}
                                 {tableColumns.visibleColumns.includes('actions') && <th className="w-10" />}
                             </tr>
                         </thead>
@@ -199,25 +232,16 @@ const ContractIndexManager: React.FC = () => {
                                 const varPct = prev ? ((v.value - prev.value) / prev.value) * 100 : null;
                                 return (
                                     <tr key={v.id} className="hover:bg-blue-50/50 transition-colors">
-                                        {tableColumns.visibleColumns.includes('reference') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{fmtDate(v.reference_month)}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('value') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">{fmtVal(v.value)}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('variation') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                                {varPct !== null ? (
-                                                    <span className={`inline-flex items-center gap-0.5 text-sm font-normal ${varPct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                        {varPct >= 0 ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                                                        {Math.abs(varPct).toFixed(2)}%
-                                                    </span>
-                                                ) : '—'}
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                key === 'value' ? 'text-right font-medium text-gray-800' :
+                                                key === 'variation' ? 'text-right' :
+                                                key === 'source' ? 'font-normal text-gray-600' :
+                                                'font-normal text-gray-700'
+                                            }`}>
+                                                {renderIndexCell(key, v, varPct)}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('source') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{v.source ?? '—'}</td>
-                                        )}
+                                        ))}
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 {v.organization_id && (

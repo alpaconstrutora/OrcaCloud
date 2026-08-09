@@ -93,6 +93,85 @@ const WS_USER_COLUMNS: ColumnConfig[] = [
 ];
 const WS_USER_COL_WIDTHS: Record<string, number> = { name: 180, email: 220, phone: 130, role: 140, status: 100, actions: 90 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (estrutural, fixa à direita).
+const PARTNER_COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+  supplier: { label: 'Parceiro', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  users: { label: 'Usuários', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  documents: { label: 'Documentos', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  requests: { label: 'Solicitações', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
+
+const WS_USER_COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+  name: { label: 'Nome', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  email: { label: 'E-mail', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  phone: { label: 'Telefone', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  role: { label: 'Papel/Função', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna da tabela de parceiros (lista principal) —
+// função pura para o <tbody> mapear `tableColumns.orderedVisibleColumns`.
+function renderPartnerCell(
+  key: string,
+  ws: PartnerWorkspace,
+  ctx: { stats: { users: number; documents: number; requestsOpen: number }; orgNames: Record<string, string> },
+): React.ReactNode {
+  switch (key) {
+    case 'supplier':
+      return (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
+            <Building2 className="w-4 h-4" />
+          </div>
+          <span className="text-sm font-normal text-gray-900">{ws.supplier_name}</span>
+        </div>
+      );
+    case 'organization':
+      return <span className="text-sm font-normal text-gray-700">{ws.organization_id ? (ctx.orgNames[ws.organization_id] || '-') : 'Todas as Organizações'}</span>;
+    case 'users':
+      return <span className="text-sm font-normal text-gray-600">{ctx.stats.users}</span>;
+    case 'documents':
+      return <span className="text-sm font-normal text-gray-600">{ctx.stats.documents}</span>;
+    case 'requests':
+      return <span className="text-sm font-normal text-gray-600">{ctx.stats.requestsOpen}</span>;
+    case 'status':
+      // StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (§8)
+      return <span className={`text-sm font-normal ${ws.is_active ? 'text-emerald-700' : 'text-gray-500'}`}>{ws.is_active ? 'Ativo' : 'Suspenso'}</span>;
+    default:
+      return null;
+  }
+}
+
+// Conteúdo de cada <td> por coluna da tabela de usuários do parceiro (dentro do
+// workspace selecionado).
+function renderWsUserCell(key: string, user: PartnerUser, ctx: { onToggleActive: (user: PartnerUser) => void }): React.ReactNode {
+  switch (key) {
+    case 'name':
+      return <span className="text-sm font-normal text-gray-900">{user.name}</span>;
+    case 'email':
+      return <span className="text-sm font-normal text-gray-500">{user.email}</span>;
+    case 'phone':
+      return <span className="text-sm font-normal text-gray-500">{user.phone || '-'}</span>;
+    case 'role':
+      return <span className="text-sm font-normal text-gray-600">{user.role}</span>;
+    case 'status':
+      return (
+        <button
+          onClick={() => ctx.onToggleActive(user)}
+          className={`text-sm font-normal ${user.is_active ? 'text-emerald-700' : 'text-gray-500'}`}
+        >
+          {user.is_active ? 'Ativo' : 'Inativo'}
+        </button>
+      );
+    default:
+      return null;
+  }
+}
+
 const CATEGORIA_LABELS: Record<string, string> = {
   engenharia: 'Projetos',
   juridico: 'Contratos',
@@ -960,26 +1039,31 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                     const bv = (b as unknown as Record<string, unknown>)[key];
                     return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
                   });
-                  const visible = WS_USER_COLUMNS.filter(c => c.key !== 'actions' && wsUserColumns.visibleColumns.includes(c.key));
-                  const tableWidth = visible.reduce((s, c) => s + wsUserCols.getWidth(c.key), 0) + wsUserCols.getWidth('actions');
+                  const orderedVisible = wsUserColumns.orderedVisibleColumns.filter(k => k !== 'actions');
+                  const tableWidth = orderedVisible.reduce((s, k) => s + wsUserCols.getWidth(k), 0) + wsUserCols.getWidth('actions');
                   return (
                     <div className="border border-gray-200 rounded-[10px] overflow-hidden shadow-sm bg-white">
                       <div className="overflow-x-auto">
                         <table ref={wsUserCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                           <colgroup>
-                            {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${wsUserCols.getWidth(c.key)}px` }} />)}
+                            {orderedVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${wsUserCols.getWidth(key)}px` }} />)}
                             <col />
                             <col data-col-key="actions" style={{ width: `${wsUserCols.getWidth('actions')}px` }} />
                           </colgroup>
                           <thead>
                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                              {WS_USER_COLUMNS.filter(c => c.key !== 'actions').map(c => wsUserColumns.visibleColumns.includes(c.key) && (
-                                <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
-                                  sortColumn={wsUserColumns.sortColumn} sortDirection={wsUserColumns.sortDirection} onSort={wsUserColumns.handleColumnSort}
-                                  className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                  <wsUserCols.ResizeHandle colKey={c.key} />
-                                </SortableHeader>
-                              ))}
+                              {orderedVisible.map(key => {
+                                const def = WS_USER_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                  <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                                    sortColumn={wsUserColumns.sortColumn} sortDirection={wsUserColumns.sortDirection} onSort={wsUserColumns.handleColumnSort}
+                                    onMoveColumn={wsUserColumns.moveColumn}
+                                    className={def.className}>
+                                    <wsUserCols.ResizeHandle colKey={key} />
+                                  </SortableHeader>
+                                );
+                              })}
                               <th aria-hidden="true" className="border-r border-gray-100" />
                               {wsUserColumns.visibleColumns.includes('actions') && (
                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -989,28 +1073,11 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           <tbody className="divide-y divide-gray-100">
                             {sortedUsers.map((user) => (
                               <tr key={user.id} className="hover:bg-blue-50/50 transition-colors">
-                                {wsUserColumns.visibleColumns.includes('name') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">{user.name}</td>
-                                )}
-                                {wsUserColumns.visibleColumns.includes('email') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{user.email}</td>
-                                )}
-                                {wsUserColumns.visibleColumns.includes('phone') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{user.phone || '-'}</td>
-                                )}
-                                {wsUserColumns.visibleColumns.includes('role') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{user.role}</td>
-                                )}
-                                {wsUserColumns.visibleColumns.includes('status') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                    <button
-                                      onClick={() => handleToggleUserActive(user)}
-                                      className={`text-sm font-normal ${user.is_active ? 'text-emerald-700' : 'text-gray-500'}`}
-                                    >
-                                      {user.is_active ? 'Ativo' : 'Inativo'}
-                                    </button>
+                                {orderedVisible.map(key => (
+                                  <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                    {renderWsUserCell(key, user, { onToggleActive: handleToggleUserActive })}
                                   </td>
-                                )}
+                                ))}
                                 <td aria-hidden="true"></td>
                                 {wsUserColumns.visibleColumns.includes('actions') && (
                                   <td className="px-6 py-2.5 text-right">
@@ -1021,7 +1088,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                             ))}
                             {sortedUsers.length === 0 && (
                               <tr>
-                                <td colSpan={visible.length + 2} className="text-center py-10 text-sm text-gray-400 bg-white">
+                                <td colSpan={orderedVisible.length + 2} className="text-center py-10 text-sm text-gray-400 bg-white">
                                   Nenhum usuário convidado para este parceiro.
                                 </td>
                               </tr>
@@ -1356,65 +1423,30 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <div className="overflow-x-auto">
                   <table ref={partnerCols.tableRef} className="text-left border-collapse" style={{
                     tableLayout: 'fixed',
-                    width: PARTNER_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).reduce((s, c) => s + partnerCols.getWidth(c.key), 0) + partnerCols.getWidth('actions'),
+                    width: tableColumns.orderedVisibleColumns.reduce((s, k) => s + partnerCols.getWidth(k), 0) + partnerCols.getWidth('actions'),
                   }}>
                     <colgroup>
-                      {PARTNER_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key)).map(c => (
-                        <col key={c.key} data-col-key={c.key} style={{ width: `${partnerCols.getWidth(c.key)}px` }} />
+                      {tableColumns.orderedVisibleColumns.map(key => (
+                        <col key={key} data-col-key={key} style={{ width: `${partnerCols.getWidth(key)}px` }} />
                       ))}
                       <col />
                       <col data-col-key="actions" style={{ width: `${partnerCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
                       <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                        {tableColumns.visibleColumns.includes('supplier') && (
-                          <SortableHeader colKey="supplier" label="Parceiro" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                            <partnerCols.ResizeHandle colKey="supplier" />
-                          </SortableHeader>
-                        )}
-                        {tableColumns.visibleColumns.includes('organization') && (
-                          <SortableHeader colKey="organization" label="Organização" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                            <partnerCols.ResizeHandle colKey="organization" />
-                          </SortableHeader>
-                        )}
-                        {tableColumns.visibleColumns.includes('users') && (
-                          <SortableHeader colKey="users" label="Usuários" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                            <partnerCols.ResizeHandle colKey="users" />
-                          </SortableHeader>
-                        )}
-                        {tableColumns.visibleColumns.includes('documents') && (
-                          <SortableHeader colKey="documents" label="Documentos" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                            <partnerCols.ResizeHandle colKey="documents" />
-                          </SortableHeader>
-                        )}
-                        {tableColumns.visibleColumns.includes('requests') && (
-                          <SortableHeader colKey="requests" label="Solicitações" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                            <partnerCols.ResizeHandle colKey="requests" />
-                          </SortableHeader>
-                        )}
-                        {tableColumns.visibleColumns.includes('status') && (
-                          <SortableHeader colKey="status" label="Status" uppercase={false}
-                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                            <partnerCols.ResizeHandle colKey="status" />
-                          </SortableHeader>
-                        )}
+                        {tableColumns.orderedVisibleColumns.map(key => {
+                          const def = PARTNER_COLUMN_HEADERS[key];
+                          if (!def) return null;
+                          return (
+                            <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                              sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                              onSort={tableColumns.handleColumnSort}
+                              onMoveColumn={tableColumns.moveColumn}
+                              className={def.className}>
+                              <partnerCols.ResizeHandle colKey={key} />
+                            </SortableHeader>
+                          );
+                        })}
                         <th aria-hidden="true" className="border-r border-gray-100" />
                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                       </tr>
@@ -1428,44 +1460,11 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                             onClick={() => setSelectedWorkspace(ws)}
                             className="hover:bg-orange-50/50 transition-colors cursor-pointer group"
                           >
-                            {tableColumns.visibleColumns.includes('supplier') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
-                                    <Building2 className="w-4 h-4" />
-                                  </div>
-                                  <span className="text-sm font-normal text-gray-900">{ws.supplier_name}</span>
-                                </div>
+                            {tableColumns.orderedVisibleColumns.map(key => (
+                              <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                {renderPartnerCell(key, ws, { stats, orgNames })}
                               </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('organization') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                {ws.organization_id ? (orgNames[ws.organization_id] || '-') : 'Todas as Organizações'}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('users') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {stats.users}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('documents') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {stats.documents}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('requests') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                {stats.requestsOpen}
-                              </td>
-                            )}
-                            {tableColumns.visibleColumns.includes('status') && (
-                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                {/* StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
-                                <span className={`text-sm font-normal ${ws.is_active ? 'text-emerald-700' : 'text-gray-500'}`}>
-                                  {ws.is_active ? 'Ativo' : 'Suspenso'}
-                                </span>
-                              </td>
-                            )}
+                            ))}
                             <td aria-hidden="true"></td>
                             <td className="px-6 py-2.5 text-right">
                               {/* Editar/gerenciar = clique na linha (ação dominante, §9.1). Ações aqui são só o que sobra. */}

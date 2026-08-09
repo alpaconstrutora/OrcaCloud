@@ -34,6 +34,81 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é renderizada fixa fora do
+// drag. Label de 'supplier' é sobrescrito no render conforme `direction`
+// (Cliente/Fornecedor) — aqui fica só o default.
+const CONTRACT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    number: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    title: { label: 'Contrato', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    project: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    supplier: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    date: { label: 'Vigência', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    value: { label: 'Valor Atual', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+};
+
+// Badge de status — sem estado próprio, movida para escopo de módulo para poder
+// ser usada dentro de renderContractCell (função pura, fora do componente).
+const ContractStatusBadge = ({ status }: { status: string }) => {
+    const colors: Record<string, string> = {
+        'Ativo': 'text-green-600',
+        'Rascunho': 'text-gray-600',
+        'Minuta': 'text-purple-600',
+        'Suspenso': 'text-amber-600',
+        'Encerrado': 'text-blue-600',
+        'Cancelado': 'text-red-600',
+    };
+    return (
+        <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
+            {status}
+        </span>
+    );
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderContractCell(
+    key: string,
+    contract: Contract,
+    ctx: { direction: 'INCOMING' | 'OUTGOING'; projectMap: Record<string, string>; supplierMap: Record<string, string>; clientMap: Record<string, string> },
+): React.ReactNode {
+    switch (key) {
+        case 'number':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{contract.number || '—'}</span>;
+        case 'title':
+            return <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{contract.title}</span>;
+        case 'project':
+            return <span className="text-sm font-normal text-gray-700">{contract.project_id ? (ctx.projectMap[contract.project_id] ?? '—') : '—'}</span>;
+        case 'supplier':
+            return (
+                <span className="text-sm font-normal text-gray-700">
+                    {ctx.direction === 'OUTGOING'
+                        ? (contract.client_id ? (ctx.clientMap[contract.client_id] ?? '—') : '—')
+                        : (contract.supplier_id ? (ctx.supplierMap[contract.supplier_id] ?? '—') : '—')}
+                </span>
+            );
+        case 'date':
+            return (
+                <span className="text-sm font-normal text-gray-600">
+                    {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}
+                </span>
+            );
+        case 'status':
+            return <ContractStatusBadge status={contract.status} />;
+        case 'value':
+            return (
+                <span className="text-sm font-medium text-gray-800 text-right block">
+                    R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
 interface SupplyChainContractListProps {
     projectId: string;
     onCreateNew: () => void;
@@ -118,22 +193,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         } finally {
             setLoading(false);
         }
-    };
-
-    const StatusBadge = ({ status }: { status: string }) => {
-        const colors: Record<string, string> = {
-            'Ativo': 'text-green-600',
-            'Rascunho': 'text-gray-600',
-            'Minuta': 'text-purple-600',
-            'Suspenso': 'text-amber-600',
-            'Encerrado': 'text-blue-600',
-            'Cancelado': 'text-red-600',
-        };
-        return (
-            <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
-                {status}
-            </span>
-        );
     };
 
     // Excluir direto (sem diálogo) — usado pelo InlineDisclosureMenu, que já tem
@@ -394,7 +453,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <ActionIconButton kind="delete" size="sm" title="Excluir Contrato" onClick={(e) => handleDelete(e, contract.id)} />
                                     </div>
                                 </div>
-                                <StatusBadge status={contract.status} />
+                                <ContractStatusBadge status={contract.status} />
                             </div>
 
                             {/* §16/§6.2: sentence case — o `uppercase tracking-widest`
@@ -441,13 +500,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
                             <colgroup>
-                                {tableColumns.visibleColumns.includes('number') && <col data-col-key="number" style={{ width: `${cols.getWidth('number')}px` }} />}
-                                {tableColumns.visibleColumns.includes('title') && <col data-col-key="title" style={{ width: `${cols.getWidth('title')}px` }} />}
-                                {tableColumns.visibleColumns.includes('project') && <col data-col-key="project" style={{ width: `${cols.getWidth('project')}px` }} />}
-                                {tableColumns.visibleColumns.includes('supplier') && <col data-col-key="supplier" style={{ width: `${cols.getWidth('supplier')}px` }} />}
-                                {tableColumns.visibleColumns.includes('date') && <col data-col-key="date" style={{ width: `${cols.getWidth('date')}px` }} />}
-                                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
-                                {tableColumns.visibleColumns.includes('value') && <col data-col-key="value" style={{ width: `${cols.getWidth('value')}px` }} />}
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                     borda de "Ações" não andar a cada redimensionamento. */}
                                 <col />
@@ -457,13 +512,20 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                 SortableHeader força uppercase internamente por padrão. */}
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('number') && <SortableHeader colKey="number" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="number" /></SortableHeader>}
-                                    {tableColumns.visibleColumns.includes('title') && <SortableHeader colKey="title" label="Contrato" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="title" /></SortableHeader>}
-                                    {tableColumns.visibleColumns.includes('project') && <SortableHeader colKey="project" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="project" /></SortableHeader>}
-                                    {tableColumns.visibleColumns.includes('supplier') && <SortableHeader colKey="supplier" label={direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="supplier" /></SortableHeader>}
-                                    {tableColumns.visibleColumns.includes('date') && <SortableHeader colKey="date" label="Vigência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><cols.ResizeHandle colKey="date" /></SortableHeader>}
-                                    {tableColumns.visibleColumns.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><cols.ResizeHandle colKey="status" /></SortableHeader>}
-                                    {tableColumns.visibleColumns.includes('value') && <SortableHeader colKey="value" label="Valor Atual" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"><cols.ResizeHandle colKey="value" /></SortableHeader>}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = CONTRACT_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        const label = key === 'supplier' ? (direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor') : def.label;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -479,43 +541,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                         onClick={() => onViewDetails(contract.id)}
                                     >
-                                        {tableColumns.visibleColumns.includes('number') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {contract.number || '—'}
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderContractCell(key, contract, { direction, projectMap, supplierMap, clientMap })}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('title') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
-                                                {contract.title}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('project') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('supplier') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {direction === 'OUTGOING'
-                                                    ? (contract.client_id ? (clientMap[contract.client_id] ?? '—') : '—')
-                                                    : (contract.supplier_id ? (supplierMap[contract.supplier_id] ?? '—') : '—')}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('date') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <StatusBadge status={contract.status} />
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('value') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
-                                                R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </td>
-                                        )}
+                                        ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">

@@ -311,6 +311,57 @@ export async function verifySnapshotIntegrity(snapshotId: string): Promise<{
   };
 }
 
+/**
+ * Vincula (ou desvincula) o estudo a uma obra.
+ *
+ * Sem isto o `project_id` nascia nulo e NUNCA mudava: `createStudy` aceitava o
+ * parâmetro e nenhuma tela o passava. O resultado era o pior tipo de defeito —
+ * o botão "Aplicar no orçamento" existia, ficava permanentemente desabilitado, e
+ * a explicação ("não está vinculado a uma obra") apontava para uma ação que não
+ * havia onde executar.
+ */
+export async function setStudyProject(
+  studyId: string,
+  projectId: string | null,
+): Promise<BlueprintStudy> {
+  const { data, error } = await supabase
+    .from('blueprint_studies')
+    .update({ project_id: projectId })
+    .eq('id', studyId)
+    .select(STUDY_COLS)
+    .single();
+
+  // ATENÇÃO: UPDATE barrado por RLS devolve SUCESSO com zero linhas, e o
+  // `.single()` é o que transforma isso em erro aqui. Sem ele, vincular a obra
+  // de outra organização "funcionaria" em silêncio.
+  if (error) fail('setStudyProject', error);
+
+  await recordAudit({
+    organizationId: (data as BlueprintStudy).organization_id,
+    studyId,
+    action: projectId ? 'ESTUDO_VINCULADO_A_OBRA' : 'ESTUDO_DESVINCULADO',
+    targetType: 'PROJECT',
+    targetId: projectId ?? undefined,
+  });
+
+  return data as BlueprintStudy;
+}
+
+/** Obras da organização, para o seletor de vínculo. Só id e nome. */
+export async function listObrasDaOrganizacao(
+  organizationId: string,
+): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, name')
+    .eq('organization_id', organizationId)
+    .order('name', { ascending: true })
+    .limit(500);
+
+  if (error) fail('listObrasDaOrganizacao', error);
+  return (data ?? []) as { id: string; name: string }[];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Quantitativos
 // ─────────────────────────────────────────────────────────────────────────────

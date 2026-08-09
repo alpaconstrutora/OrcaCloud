@@ -20,6 +20,8 @@ const aplicarNoProjeto = vi.fn();
 const saveMapping = vi.fn(async () => ({}) as never);
 const deleteMapping = vi.fn(async () => {});
 const listSnapshots = vi.fn();
+const listObrasDaOrganizacao = vi.fn();
+const setStudyProject = vi.fn();
 
 vi.mock('../../services/blueprintBudgetService', () => ({
   listMappings: (...a: unknown[]) => listMappings(...a),
@@ -31,6 +33,8 @@ vi.mock('../../services/blueprintBudgetService', () => ({
 
 vi.mock('../../services/blueprintService', () => ({
   listSnapshots: (...a: unknown[]) => listSnapshots(...a),
+  listObrasDaOrganizacao: (...a: unknown[]) => listObrasDaOrganizacao(...a),
+  setStudyProject: (...a: unknown[]) => setStudyProject(...a),
 }));
 
 const study: BlueprintStudy = {
@@ -70,6 +74,8 @@ beforeEach(() => {
   listMappings.mockResolvedValue([MAPEAMENTO]);
   listSnapshots.mockResolvedValue([{ id: 'snap_1' }]);
   aplicarNoProjeto.mockResolvedValue({ removidas: 0, adicionadas: 1, total: 1 });
+  listObrasDaOrganizacao.mockResolvedValue([{ id: 'prj_1', name: 'Residencial Alfa' }]);
+  setStudyProject.mockResolvedValue({ ...study, project_id: 'prj_1' });
 });
 
 async function montar(over: Partial<BlueprintStudy> = {}) {
@@ -148,7 +154,7 @@ describe('PainelOrcamento · o que o painel oferece', () => {
 
     const aplicar = await screen.findByRole('button', { name: /aplicar no orçamento/i });
     expect(aplicar).toBeDisabled();
-    expect(screen.getByText(/não está vinculado a uma obra/i)).toBeInTheDocument();
+    expect(screen.getByText(/não está vinculada a uma obra/i)).toBeInTheDocument();
   });
 
   it('com obra vinculada, Aplicar chama o serviço e relata a substituição', async () => {
@@ -222,5 +228,69 @@ describe('PainelOrcamento · o que o painel oferece', () => {
     await montar();
     expect(screen.getByRole('option', { name: /Área de piso \(M2\)/i })).toBeInTheDocument();
     expect(screen.getByText(/NÃO é a área de eixo/i)).toBeInTheDocument();
+  });
+});
+
+describe('PainelOrcamento · vincular a obra', () => {
+  it('SEM VÍNCULO, A TELA OFERECE ONDE VINCULAR', async () => {
+    // Regressão de desenho: `createStudy` aceitava `projectId` e NENHUMA tela o
+    // passava, então `project_id` nascia nulo e nunca mudava. O botão "Aplicar"
+    // existia, ficava permanentemente desabilitado, e a explicação apontava para
+    // uma ação que não havia onde executar.
+    await montar();
+
+    const seletor = await screen.findByLabelText(/obra a vincular/i);
+    expect(seletor).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Residencial Alfa' })).toBeInTheDocument();
+  });
+
+  it('vincular habilita o caminho e não recarrega a tela inteira', async () => {
+    preverLancamentos.mockResolvedValue({
+      entries: [
+        {
+          id: 'bp:std_1:map_1:total',
+          sinapiItem: { code: '87251', description: 'Piso', unit: 'M2', price: 50 },
+          quantity: 10.97,
+          phase: '',
+          group: 'Planta Inteligente',
+        },
+      ],
+      divergencias: [],
+      contexto: CONTEXTO,
+      totalEstimado: 548.5,
+    });
+
+    await montar();
+    const user = userEvent.setup();
+
+    await user.selectOptions(await screen.findByLabelText(/obra a vincular/i), 'prj_1');
+    await user.click(screen.getByRole('button', { name: /^vincular$/i }));
+
+    await waitFor(() => expect(setStudyProject).toHaveBeenCalledWith('std_1', 'prj_1'));
+    // O aviso some sem o módulo pai precisar recarregar a lista de estudos (§22).
+    await waitFor(() =>
+      expect(screen.queryByLabelText(/obra a vincular/i)).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: /prévia/i }));
+    expect(await screen.findByRole('button', { name: /aplicar no orçamento/i })).toBeEnabled();
+  });
+
+  it('sem obra na organização, diz o que fazer em vez de só listar vazio', async () => {
+    listObrasDaOrganizacao.mockResolvedValue([]);
+    await montar();
+    expect(await screen.findByText(/Crie a obra primeiro/i)).toBeInTheDocument();
+  });
+
+  it('REVISÃO 0 NÃO É "A VERSÃO 0" — é a ausência de versão', async () => {
+    // Dizer "a prévia usa a versão 0" manda o usuário procurar um snapshot que
+    // nunca existiu.
+    const { default: PainelOrcamento } = await import(
+      '../../components/blueprint/PainelOrcamento'
+    );
+    render(<PainelOrcamento study={study} revisao={0} dirty />);
+
+    expect(await screen.findByText(/Nenhuma versão publicada ainda/i)).toBeInTheDocument();
+    expect(screen.queryByText(/usa a versão 0/i)).not.toBeInTheDocument();
   });
 });

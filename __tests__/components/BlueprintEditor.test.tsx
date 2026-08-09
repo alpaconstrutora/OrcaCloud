@@ -45,6 +45,8 @@ vi.mock('../../services/blueprintService', () => ({
   listSnapshots: vi.fn(async () => []),
   getQuantitySnapshot: vi.fn(async () => null),
   computeAndStoreQuantities: vi.fn(async () => null),
+  listObrasDaOrganizacao: vi.fn(async () => [{ id: 'prj_1', name: 'Residencial Alfa' }]),
+  setStudyProject: vi.fn(async () => ({})),
 }));
 
 // O painel de Orçamento vive numa aba do editor e consulta o de-para ao montar.
@@ -242,8 +244,7 @@ describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
     await montar();
     await userEvent.setup().click(screen.getByRole('tab', { name: /orçamento/i }));
 
-    expect(
-      await screen.findByText(/não está vinculado a uma obra/i),
-    ).toBeInTheDocument();
+    // A tela não só avisa: oferece onde vincular. Aviso sem ação é beco sem saída.
+    expect(await screen.findByLabelText(/obra a vincular/i)).toBeInTheDocument();
   });
 });

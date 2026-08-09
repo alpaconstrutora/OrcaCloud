@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { BlueprintStudy } from '../../types/blueprint';
 import { MEDIDAS, MEDIDA_POR_ID, type MapeamentoOrcamento } from '../../utils/blueprintBudget';
-import { listSnapshots } from '../../services/blueprintService';
+import {
+  listObrasDaOrganizacao,
+  listSnapshots,
+  setStudyProject,
+} from '../../services/blueprintService';
 import {
   aplicarNoProjeto,
   deleteMapping,
@@ -38,6 +42,12 @@ export default function PainelOrcamento({
   const [aviso, setAviso] = useState<string | null>(null);
   const [novaMedida, setNovaMedida] = useState(MEDIDAS[0].id);
   const [novoCodigo, setNovoCodigo] = useState('');
+  // A obra vinculada vive em estado local porque vincular acontece AQUI: o
+  // `study` chega por prop do módulo e não seria reatualizado sem recarregar a
+  // lista inteira, contra o §22 do guia.
+  const [obraId, setObraId] = useState<string | null>(study.project_id);
+  const [obras, setObras] = useState<{ id: string; name: string }[]>([]);
+  const [escolhida, setEscolhida] = useState('');
 
   const recarregar = useCallback(async () => {
     setCarregando(true);
@@ -54,6 +64,30 @@ export default function PainelOrcamento({
   useEffect(() => {
     void recarregar();
   }, [recarregar]);
+
+  // As obras só são buscadas quando faltam — o caso comum é o estudo já
+  // vinculado, e aí a lista não serve para nada.
+  useEffect(() => {
+    if (obraId) return;
+    listObrasDaOrganizacao(study.organization_id)
+      .then(setObras)
+      .catch((e) => setErro(e instanceof Error ? e.message : 'falha ao listar obras'));
+  }, [obraId, study.organization_id]);
+
+  async function vincular() {
+    if (!escolhida) return;
+    setOcupado(true);
+    setErro(null);
+    try {
+      const atualizado = await setStudyProject(study.id, escolhida);
+      setObraId(atualizado.project_id);
+      setAviso(`Planta vinculada a "${obras.find((o) => o.id === escolhida)?.name ?? 'obra'}".`);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'falha ao vincular');
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   async function adicionar() {
     if (!novoCodigo.trim()) return;
@@ -112,11 +146,11 @@ export default function PainelOrcamento({
   }
 
   async function aplicar() {
-    if (!previa || !study.project_id) return;
+    if (!previa || !obraId) return;
     setOcupado(true);
     setErro(null);
     try {
-      const r = await aplicarNoProjeto(study.project_id, previa.entries, previa.contexto);
+      const r = await aplicarNoProjeto(obraId, previa.entries, previa.contexto);
       setAviso(
         `${r.adicionadas} linha(s) no orçamento` +
           (r.removidas > 0
@@ -142,18 +176,59 @@ export default function PainelOrcamento({
         </p>
       </div>
 
-      {!study.project_id && (
-        <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          Este estudo não está vinculado a uma obra. Dá para montar o de-para e ver a
-          prévia, mas não há orçamento onde aplicar.
-        </p>
+      {!obraId && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-xs text-amber-800">
+            Esta planta não está vinculada a uma obra — não há orçamento onde aplicar.
+            Escolha a obra:
+          </p>
+          <div className="mt-2 flex gap-1.5">
+            <select
+              value={escolhida}
+              onChange={(e) => setEscolhida(e.target.value)}
+              aria-label="Obra a vincular"
+              className="min-w-0 flex-1 rounded-md border border-amber-300 px-2 py-1 text-xs"
+            >
+              <option value="">Selecione…</option>
+              {obras.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void vincular()}
+              disabled={ocupado || !escolhida}
+              className="shrink-0 rounded-md border border-amber-400 bg-white px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+            >
+              Vincular
+            </button>
+          </div>
+          {obras.length === 0 && (
+            <p className="mt-1 text-[11px] text-amber-700">
+              Nenhuma obra nesta organização. Crie a obra primeiro, no módulo de
+              Orçamento.
+            </p>
+          )}
+        </div>
       )}
 
-      {dirty && (
+      {/* Revisão 0 não é "a versão 0": é a ausência de qualquer versão. Dizer
+          "a prévia usa a versão 0" mandaria o usuário procurar um snapshot que
+          nunca existiu. */}
+      {revisao === 0 ? (
         <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          Há alterações não publicadas. A prévia usa a versão {revisao} — não o que está
-          na tela.
+          Nenhuma versão publicada ainda. O quantitativo nunca sai de rascunho —
+          publique antes de gerar a prévia.
         </p>
+      ) : (
+        dirty && (
+          <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+            Há alterações não publicadas. A prévia usa a versão {revisao} — não o que
+            está na tela.
+          </p>
+        )
       )}
 
       {/* ── De-para ────────────────────────────────────────────────────────── */}
@@ -310,11 +385,11 @@ export default function PainelOrcamento({
                 <button
                   type="button"
                   onClick={() => void aplicar()}
-                  disabled={ocupado || !study.project_id}
+                  disabled={ocupado || !obraId}
                   title={
-                    study.project_id
+                    obraId
                       ? 'Substitui as linhas que esta planta já havia gerado'
-                      : 'O estudo precisa estar vinculado a uma obra'
+                      : 'A planta precisa estar vinculada a uma obra'
                   }
                   className="mt-2 w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40"
                 >

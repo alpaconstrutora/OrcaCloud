@@ -101,6 +101,43 @@ const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'actions',      label: 'Ações',              sortable: false },
 ];
 
+// Campo de bankSortField que cada coluna ordena (state próprio da toolbar, não o
+// sortColumn genérico de useTableColumns — ver bankSortField/bankSortOrder no
+// componente). Ausente = não ordenável (ex: status mistura dado com ação inline).
+type BankSortField = 'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter';
+type InternalSortField = 'date' | 'amount' | 'description' | 'category' | 'entity';
+
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa no fim,
+// nunca arrastável — ver renderização da tabela).
+const STATEMENT_COLUMN_HEADERS: Record<string, { label: string; className: string; sortField?: BankSortField }> = {
+    description: { label: 'Descrição',       sortField: 'description',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    client:      { label: 'Cliente',         sortField: 'counterparty', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    creditor:    { label: 'Credor',          sortField: 'counterparty', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    category:    { label: 'Categoria',       sortField: 'category',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    project:     { label: 'Obra',            sortField: 'project',      className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    costCenter:  { label: 'Centro de Custo', sortField: 'costCenter',   className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    date:        { label: 'Data',            sortField: 'date',         className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    amount:      { label: 'Valor',           sortField: 'amount',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    status:      { label: 'Status',                                     className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+};
+
+// Classes específicas por coluna do <td> (além da base comum, aplicada na renderização
+// da linha) — extraídas 1:1 das classes que já estavam hardcoded em cada <td>. Cor
+// dinâmica de 'amount' (verde/vermelho por direção) fica dentro da célula (span), não aqui.
+const STATEMENT_TD_CLASS: Record<string, string> = {
+    description: 'text-sm font-normal text-gray-700 overflow-hidden',
+    client:      'text-sm font-normal text-gray-700 overflow-hidden',
+    creditor:    'text-sm font-normal text-gray-700 overflow-hidden',
+    category:    'text-sm font-normal text-gray-700 overflow-hidden',
+    project:     'text-sm font-normal text-gray-700 overflow-hidden',
+    costCenter:  'text-sm font-normal text-gray-700 overflow-hidden',
+    date:        'text-sm font-normal text-gray-600 text-center whitespace-nowrap',
+    amount:      'text-sm font-medium text-right whitespace-nowrap',
+    status:      'text-center',
+};
+
 // Filtro avançado do Extrato (guia §5.1 / paridade com SupplierList.tsx). Cobre
 // campos que os chips de categoria/contraparte/fluxo/data não cobrem (descrição,
 // valor) — permite regras tipo "valor > 1000" ou "descrição contém PIX".
@@ -150,6 +187,31 @@ const DEFAULT_PENDING_BANK_COL_WIDTHS: Record<string, number> = {
     actions: 160,
 };
 
+// Header por coluna (ver STATEMENT_COLUMN_HEADERS acima) — 'actions' fica fora, é
+// coluna estrutural fixa no fim. sortField ausente = sortable={false} (project/costCenter
+// não têm campo de ordenação próprio nesta tabela, igual ao original).
+const PENDING_BANK_COLUMN_HEADERS: Record<string, { label: string; className: string; sortField?: BankSortField }> = {
+    counterparty: { label: 'Contraparte',     sortField: 'counterparty', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    category:     { label: 'Categoria',       sortField: 'category',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    project:      { label: 'Obra',                                       className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    costCenter:   { label: 'Centro de Custo',                            className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    date:         { label: 'Data',            sortField: 'date',         className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    amount:       { label: 'Valor',           sortField: 'amount',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+};
+
+// Classes específicas por coluna do <td> (a parte comum "px-6 {cellPad} border-r
+// border-gray-100" é montada na renderização da linha, junto com o onClick de
+// stopPropagation que só as colunas com <LazySelect> têm). Cor dinâmica de 'amount'
+// fica dentro da célula (span), não aqui.
+const PENDING_BANK_TD_META: Record<string, { className: string; stopPropagation?: boolean }> = {
+    counterparty: { className: '',                                                         stopPropagation: true },
+    category:     { className: '',                                                         stopPropagation: true },
+    project:      { className: '',                                                         stopPropagation: true },
+    costCenter:   { className: '',                                                         stopPropagation: true },
+    date:         { className: 'text-center text-sm font-normal text-gray-500 whitespace-nowrap' },
+    amount:       { className: 'text-right text-sm font-medium whitespace-nowrap' },
+};
+
 // Colunas da tabela de Lançamentos Internos na aba Pendentes (visualização em linha).
 // sortable:true só nas colunas que o campo de ordenação da toolbar (internalSortField) suporta.
 const PENDING_INTERNAL_COLUMNS: ColumnConfig[] = [
@@ -174,6 +236,34 @@ const DEFAULT_PENDING_INTERNAL_COL_WIDTHS: Record<string, number> = {
     date: 100,
     amount: 130,
     actions: 160,
+};
+
+// Header por coluna — 'client'/'creditor' não levam sortField aqui porque a coluna
+// ordena por um campo composto ('entity' → 'party', ver internalSortField no
+// componente) tratado à parte na renderização do <thead>, não pelo mapeamento
+// genérico das demais colunas.
+const PENDING_INTERNAL_COLUMN_HEADERS: Record<string, { label: string; className: string; sortField?: InternalSortField }> = {
+    description: { label: 'Descrição',       sortField: 'description', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    client:      { label: 'Cliente',                                    className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    creditor:    { label: 'Credor',                                     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    category:    { label: 'Categoria',       sortField: 'category',     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    project:     { label: 'Obra',                                       className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    costCenter:  { label: 'Centro de Custo',                            className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    date:        { label: 'Data',            sortField: 'date',         className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    amount:      { label: 'Valor',           sortField: 'amount',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+};
+
+// Classes específicas por coluna do <td> — base comum "px-6 {cellPad} border-r
+// border-gray-100" é montada na renderização da linha.
+const PENDING_INTERNAL_TD_CLASS: Record<string, string> = {
+    description: '',
+    client:      'text-sm font-normal text-gray-700 truncate max-w-[160px]',
+    creditor:    'text-sm font-normal text-gray-700 truncate max-w-[160px]',
+    category:    '',
+    project:     'text-sm font-normal text-sky-700 truncate max-w-[110px]',
+    costCenter:  'text-sm font-normal text-violet-700 truncate max-w-[130px]',
+    date:        'text-center text-sm font-normal text-gray-500 whitespace-nowrap',
+    amount:      'text-right text-sm font-medium text-gray-900 whitespace-nowrap',
 };
 
 // Larguras de coluna da tabela de Extrato — ajustáveis pelo usuário (arraste a borda
@@ -248,6 +338,312 @@ const LazySelect: React.FC<{
         </select>
     );
 };
+
+// Conteúdo de cada <td> da tabela de Extrato (aba "Extrato Bancário"), por coluna —
+// extraído para função pura para que o <tbody> possa mapear
+// `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de repetir um
+// bloco condicional fixo por coluna. `ctx` reúne o que a célula precisa e que só
+// existe dentro do componente (opções de <select>, handlers, resolução de nome).
+interface StatementRowCtx {
+    cpRegistered: boolean;
+    clienteOptions: LazyOption[];
+    credorOptions: LazyOption[];
+    categoryOptions: LazyOption[];
+    projectOptions: LazyOption[];
+    costCenterOptions: LazyOption[];
+    projectName: (id?: string | null) => string | null;
+    costCenterName: (id?: string | null) => string | null;
+    onUpdateCounterparty: (id: string, v: string) => void;
+    onUpdateCategory: (id: string, v: string) => void;
+    onUpdateProject: (id: string, v: string) => void;
+    onUpdateCostCenter: (id: string, v: string) => void;
+    onRegisterEntity: (tx: BankTransaction) => void;
+    onRejectRule: (id: string) => void;
+    onConfirmMatch: (bankTxId: string, internalTxId?: string) => void;
+}
+
+function renderStatementCell(key: string, tx: BankTransaction, ctx: StatementRowCtx): React.ReactNode {
+    switch (key) {
+        case 'description':
+            return (
+                <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                        {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                    </div>
+                    <p className="truncate" title={tx.description_normalized || tx.description_raw}>{tx.description_normalized || tx.description_raw}</p>
+                </div>
+            );
+        case 'client':
+            return tx.direction === 'CREDIT' ? (
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <LazySelect
+                        value={tx.counterparty_name || ''}
+                        currentLabel={tx.counterparty_name || ''}
+                        onChange={(v) => ctx.onUpdateCounterparty(tx.id, v)}
+                        options={ctx.clienteOptions}
+                        placeholder="— selecionar"
+                        className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+                    />
+                    {!ctx.cpRegistered && (
+                        <button
+                            onClick={() => ctx.onRegisterEntity(tx)}
+                            className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
+                            title="Cadastrar cliente a partir do extrato"
+                        >
+                            <UserPlus className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <span className="text-gray-300">—</span>
+            );
+        case 'creditor':
+            return tx.direction === 'DEBIT' ? (
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <LazySelect
+                        value={tx.counterparty_name || ''}
+                        currentLabel={tx.counterparty_name || ''}
+                        onChange={(v) => ctx.onUpdateCounterparty(tx.id, v)}
+                        options={ctx.credorOptions}
+                        placeholder="— selecionar"
+                        className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+                    />
+                    {!ctx.cpRegistered && (
+                        <button
+                            onClick={() => ctx.onRegisterEntity(tx)}
+                            className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
+                            title="Cadastrar credor a partir do extrato"
+                        >
+                            <UserPlus className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <span className="text-gray-300">—</span>
+            );
+        case 'category':
+            return (
+                <LazySelect
+                    value={tx.category || ''}
+                    currentLabel={tx.category || ''}
+                    onChange={(v) => ctx.onUpdateCategory(tx.id, v)}
+                    options={ctx.categoryOptions}
+                    placeholder="Categoria"
+                    className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.category ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                />
+            );
+        case 'project':
+            return (
+                <LazySelect
+                    value={tx.project_id || ''}
+                    currentLabel={ctx.projectName(tx.project_id) || ''}
+                    onChange={(v) => ctx.onUpdateProject(tx.id, v)}
+                    options={ctx.projectOptions}
+                    placeholder="Obra"
+                    className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.project_id ? 'text-gray-900 bg-blue-50 border-blue-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                />
+            );
+        case 'costCenter':
+            return (
+                <LazySelect
+                    value={tx.cost_center_id || ''}
+                    currentLabel={ctx.costCenterName(tx.cost_center_id) || ''}
+                    onChange={(v) => ctx.onUpdateCostCenter(tx.id, v)}
+                    options={ctx.costCenterOptions}
+                    placeholder="Centro de Custo"
+                    className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                />
+            );
+        case 'date':
+            return formatDateBR(tx.transaction_date);
+        case 'amount':
+            return (
+                <span className={tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}>
+                    {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
+                </span>
+            );
+        case 'status':
+            return tx.status === 'RULE_APPLIED' ? (
+                <div className="flex items-center justify-center gap-1.5">
+                    <button
+                        onClick={() => ctx.onRejectRule(tx.id)}
+                        className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg transition-all"
+                        title="Rejeitar Automático"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                    <button
+                        onClick={() => ctx.onConfirmMatch(tx.id)}
+                        className="text-xs font-semibold text-white bg-purple-600 px-3 py-1 rounded-lg hover:bg-purple-700 transition-all"
+                    >
+                        Aceitar
+                    </button>
+                </div>
+            ) : (
+                <span className={`text-sm font-normal ${STATEMENT_STATUS_COLORS[tx.status] || 'text-gray-600'}`}>
+                    {STATEMENT_STATUS_LABELS[tx.status] || tx.status}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
+// Conteúdo de cada <td> da tabela de Pendentes › Extrato Bancário, por coluna —
+// mesmo motivo de renderStatementCell acima.
+interface PendingBankRowCtx {
+    clienteOptions: LazyOption[];
+    credorOptions: LazyOption[];
+    categoryOptions: LazyOption[];
+    projectOptions: LazyOption[];
+    costCenterOptions: LazyOption[];
+    projectName: (id?: string | null) => string | null;
+    costCenterName: (id?: string | null) => string | null;
+    onUpdateCounterparty: (id: string, v: string) => void;
+    onUpdateCategory: (id: string, v: string) => void;
+    onUpdateProject: (id: string, v: string) => void;
+    onUpdateCostCenter: (id: string, v: string) => void;
+}
+
+function renderPendingBankCell(key: string, tx: BankTransaction, ctx: PendingBankRowCtx): React.ReactNode {
+    switch (key) {
+        case 'counterparty':
+            return (
+                <LazySelect
+                    value={tx.counterparty_name || ''}
+                    currentLabel={tx.counterparty_name || ''}
+                    onChange={(v) => ctx.onUpdateCounterparty(tx.id, v)}
+                    options={tx.direction === 'DEBIT' ? ctx.credorOptions : ctx.clienteOptions}
+                    placeholder={tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
+                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.counterparty_name ? 'text-gray-700' : 'text-gray-400'}`}
+                />
+            );
+        case 'category':
+            return (
+                <LazySelect
+                    value={tx.category || ''}
+                    currentLabel={tx.category || ''}
+                    onChange={(v) => ctx.onUpdateCategory(tx.id, v)}
+                    options={ctx.categoryOptions}
+                    placeholder="—"
+                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
+                />
+            );
+        case 'project':
+            return (
+                <LazySelect
+                    value={tx.project_id || ''}
+                    currentLabel={ctx.projectName(tx.project_id) || ''}
+                    onChange={(v) => ctx.onUpdateProject(tx.id, v)}
+                    options={ctx.projectOptions}
+                    placeholder="—"
+                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.project_id ? 'text-gray-700' : 'text-gray-400'}`}
+                />
+            );
+        case 'costCenter':
+            return (
+                <LazySelect
+                    value={tx.cost_center_id || ''}
+                    currentLabel={ctx.costCenterName(tx.cost_center_id) || ''}
+                    onChange={(v) => ctx.onUpdateCostCenter(tx.id, v)}
+                    options={ctx.costCenterOptions}
+                    placeholder="—"
+                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.cost_center_id ? 'text-gray-700' : 'text-gray-400'}`}
+                />
+            );
+        case 'date':
+            return formatDateBR(tx.transaction_date);
+        case 'amount':
+            return (
+                <span className={tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}>
+                    {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
+// Conteúdo de cada <td> da tabela de Pendentes › Lançamentos Internos, por coluna —
+// mesmo motivo de renderStatementCell acima.
+interface PendingInternalRowCtx {
+    getSourceMeta: (ss?: string) => { label: string; color: string } | null;
+    getOriginLink: (tx: InternalTransaction) => { view: string; ref: string } | null;
+    goToOrigin: (tx: InternalTransaction) => void;
+    txCode: (tx: InternalTransaction) => string | null;
+    displayTitle: (tx: InternalTransaction) => string;
+    displayPartyName: (tx: InternalTransaction) => string | null;
+    displayDate: (tx: InternalTransaction) => string;
+    projectName: (id?: string | null) => string | null;
+    costCenterName: (id?: string | null) => string | null;
+    categoryOptions: LazyOption[];
+    onUpdateCategory: (id: string, v: string) => void;
+}
+
+function renderPendingInternalCell(key: string, tx: InternalTransaction, ctx: PendingInternalRowCtx): React.ReactNode {
+    switch (key) {
+        case 'description': {
+            const originMeta = ctx.getSourceMeta(tx.source_system);
+            const originLink = ctx.getOriginLink(tx);
+            const originTextColor = originMeta?.color.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
+            return (
+                <div className="flex items-center gap-2 min-w-0">
+                    <p className="text-sm font-normal text-gray-900 truncate" title={ctx.displayTitle(tx)}>
+                        {ctx.displayTitle(tx)}
+                    </p>
+                    {ctx.txCode(tx) && (
+                        <span title="Código de origem" className="shrink-0 text-xs font-normal text-gray-400">
+                            Nº {ctx.txCode(tx)}
+                        </span>
+                    )}
+                    {originMeta && (
+                        originLink ? (
+                            <button
+                                onClick={() => ctx.goToOrigin(tx)}
+                                title={`Abrir em ${originMeta.label}`}
+                                className={`shrink-0 flex items-center gap-1 text-xs font-normal hover:underline cursor-pointer ${originTextColor}`}
+                            >
+                                {originMeta.label}
+                                <ExternalLink className="w-3 h-3" />
+                            </button>
+                        ) : (
+                            <span className={`shrink-0 text-xs font-normal ${originTextColor}`}>{originMeta.label}</span>
+                        )
+                    )}
+                </div>
+            );
+        }
+        case 'client':
+            return tx.party_type === 'CLIENT' || tx.direction === 'CREDIT'
+                ? (ctx.displayPartyName(tx) || ctx.getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
+                : <span className="text-gray-300">—</span>;
+        case 'creditor':
+            return !(tx.party_type === 'CLIENT' || tx.direction === 'CREDIT')
+                ? (ctx.displayPartyName(tx) || ctx.getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
+                : <span className="text-gray-300">—</span>;
+        case 'category':
+            return (
+                <LazySelect
+                    value={tx.category || ''}
+                    currentLabel={tx.category || ''}
+                    onChange={(v) => ctx.onUpdateCategory(tx.id, v)}
+                    options={ctx.categoryOptions}
+                    placeholder="—"
+                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
+                />
+            );
+        case 'project':
+            return ctx.projectName(tx.project_id) || <span className="text-gray-300">—</span>;
+        case 'costCenter':
+            return ctx.costCenterName(tx.cost_center_id) || <span className="text-gray-300">—</span>;
+        case 'date':
+            return formatDateBR(ctx.displayDate(tx));
+        case 'amount':
+            return formatMoney(tx.amount);
+        default:
+            return null;
+    }
+}
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
     const confirm = useConfirm();
@@ -452,6 +848,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [bankSortField, setBankSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter'>('date');
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
     const [internalSortField, setInternalSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'entity'>('date');
+    // Clique no header ordena pelo campo `field` (mesmo toggle asc/desc de sempre); usado
+    // pelos <thead> das tabelas de Extrato e Pendentes › Extrato Bancário, que
+    // compartilham bankSortField/bankSortOrder. Extraído para não repetir a mesma
+    // expressão por coluna (era hardcoded 1:1 em cada SortableHeader antes do rollout
+    // de reordenação por arraste).
+    const sortBankBy = (field: BankSortField) => () =>
+        bankSortField === field ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField(field), setBankSortOrder('asc'));
+    // Idem para a tabela de Pendentes › Lançamentos Internos (internalSortField/internalSortOrder).
+    const sortInternalBy = (field: InternalSortField) => () =>
+        internalSortField === field ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField(field), setInternalSortOrder('asc'));
     const [matchSortOrder, setMatchSortOrder] = useState<'desc' | 'asc'>('desc');
     const [flowFilter, setFlowFilter] = usePersistedState<'ALL' | 'INCOME' | 'EXPENSE'>('extratoBancario:flowFilter', 'ALL');
     // Paginação do Extrato: a busca traz o período inteiro (sem teto), a tabela
@@ -4369,10 +4775,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <table ref={statementResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: statementTableTotalWidth, minWidth: '100%' }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
-                                                {STATEMENT_COLUMNS.filter(c => c.key !== 'actions').map(c => (
-                                                    tableColumns.visibleColumns.includes(c.key) && (
-                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${statementResize.getWidth(c.key)}px` }} />
-                                                    )
+                                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                    <col key={key} data-col-key={key} style={{ width: `${statementResize.getWidth(key)}px` }} />
                                                 ))}
                                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                                     borda de "Ações" não andar a cada redimensionamento. */}
@@ -4399,91 +4803,28 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             }}
                                                         />
                                                     </th>
-                                                    {tableColumns.visibleColumns.includes('description') && (
-                                                        <SortableHeader
-                                                            colKey="description" label="Descrição" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'description' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('description'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="description" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('client') && (
-                                                        <SortableHeader
-                                                            colKey="counterparty" label="Cliente" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="client" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('creditor') && (
-                                                        <SortableHeader
-                                                            colKey="counterparty" label="Credor" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="creditor" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('category') && (
-                                                        <SortableHeader
-                                                            colKey="category" label="Categoria" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="category" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader
-                                                            colKey="project" label="Obra" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'project' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('project'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="project" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader
-                                                            colKey="costCenter" label="Centro de Custo" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'costCenter' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('costCenter'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="costCenter" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('date') && (
-                                                        <SortableHeader
-                                                            colKey="date" label="Data" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="date" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('amount') && (
-                                                        <SortableHeader
-                                                            colKey="amount" label="Valor" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
-                                                        >
-                                                            <statementResize.ResizeHandle colKey="amount" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('status') && (
-                                                        <SortableHeader colKey="status" label="Status" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
-                                                            <statementResize.ResizeHandle colKey="status" />
-                                                        </SortableHeader>
-                                                    )}
+                                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                                        const def = STATEMENT_COLUMN_HEADERS[key];
+                                                        if (!def) return null;
+                                                        // colKey precisa ser a chave REAL da coluna (bate com orderedVisibleColumns) —
+                                                        // é o que moveColumn usa para identificar origem/destino do arraste. 'client'
+                                                        // e 'creditor' ordenam pelo mesmo campo ('counterparty'), então o destaque de
+                                                        // "coluna ativa" é simulado comparando bankSortField ao sortField da própria
+                                                        // coluna e reaproveitando `key` como sortColumn quando bate (mesmo efeito
+                                                        // visual do colKey="counterparty" compartilhado que existia antes do drag).
+                                                        return (
+                                                            <SortableHeader
+                                                                key={key} colKey={key} label={def.label} sortable={!!def.sortField} uppercase={false}
+                                                                sortColumn={def.sortField && bankSortField === def.sortField ? key : null}
+                                                                sortDirection={bankSortOrder}
+                                                                onSort={def.sortField ? sortBankBy(def.sortField) : undefined}
+                                                                onMoveColumn={tableColumns.moveColumn}
+                                                                className={def.className}
+                                                            >
+                                                                <statementResize.ResizeHandle colKey={key} />
+                                                            </SortableHeader>
+                                                        );
+                                                    })}
                                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {tableColumns.visibleColumns.includes('actions') && (
@@ -4501,6 +4842,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     const rowIndex = statementPageStart + pageRowIndex;
                                                     const cpKey = (tx.counterparty_name || '').trim().toLowerCase();
                                                     const cpRegistered = tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey);
+                                                    const statementCtx: StatementRowCtx = {
+                                                        cpRegistered,
+                                                        clienteOptions, credorOptions, categoryOptions, projectOptions, costCenterOptions,
+                                                        projectName, costCenterName,
+                                                        onUpdateCounterparty: handleUpdateBankCounterparty,
+                                                        onUpdateCategory: handleUpdateBankCategory,
+                                                        onUpdateProject: handleUpdateBankProject,
+                                                        onUpdateCostCenter: handleUpdateBankCostCenter,
+                                                        onRegisterEntity: openRegisterEntity,
+                                                        onRejectRule: handleRejectRule,
+                                                        onConfirmMatch: handleConfirmMatch,
+                                                    };
                                                     return (
                                                         <tr key={tx.id} className="hover:bg-blue-50/50 transition-colors">
                                                             <td className="px-4 py-2.5 border-r border-gray-100 text-center">
@@ -4512,141 +4865,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     onChange={(e) => handleStatementRowCheck(tx.id, rowIndex, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
                                                                 />
                                                             </td>
-                                                            {tableColumns.visibleColumns.includes('description') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
-                                                                    <div className="flex items-center gap-2 min-w-0">
-                                                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                                                                        </div>
-                                                                        <p className="truncate" title={tx.description_normalized || tx.description_raw}>{tx.description_normalized || tx.description_raw}</p>
-                                                                    </div>
+                                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                                <td key={key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${STATEMENT_TD_CLASS[key] || ''}`}>
+                                                                    {renderStatementCell(key, tx, statementCtx)}
                                                                 </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('client') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
-                                                                    {tx.direction === 'CREDIT' ? (
-                                                                        <div className="flex items-center gap-1.5 min-w-0">
-                                                                            <LazySelect
-                                                                                value={tx.counterparty_name || ''}
-                                                                                currentLabel={tx.counterparty_name || ''}
-                                                                                onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
-                                                                                options={clienteOptions}
-                                                                                placeholder="— selecionar"
-                                                                                className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
-                                                                            />
-                                                                            {!cpRegistered && (
-                                                                                <button
-                                                                                    onClick={() => openRegisterEntity(tx)}
-                                                                                    className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
-                                                                                    title="Cadastrar cliente a partir do extrato"
-                                                                                >
-                                                                                    <UserPlus className="w-3.5 h-3.5" />
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-gray-300">—</span>
-                                                                    )}
-                                                                </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('creditor') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
-                                                                    {tx.direction === 'DEBIT' ? (
-                                                                        <div className="flex items-center gap-1.5 min-w-0">
-                                                                            <LazySelect
-                                                                                value={tx.counterparty_name || ''}
-                                                                                currentLabel={tx.counterparty_name || ''}
-                                                                                onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
-                                                                                options={credorOptions}
-                                                                                placeholder="— selecionar"
-                                                                                className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
-                                                                            />
-                                                                            {!cpRegistered && (
-                                                                                <button
-                                                                                    onClick={() => openRegisterEntity(tx)}
-                                                                                    className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
-                                                                                    title="Cadastrar credor a partir do extrato"
-                                                                                >
-                                                                                    <UserPlus className="w-3.5 h-3.5" />
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-gray-300">—</span>
-                                                                    )}
-                                                                </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('category') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
-                                                                    <LazySelect
-                                                                        value={tx.category || ''}
-                                                                        currentLabel={tx.category || ''}
-                                                                        onChange={(v) => handleUpdateBankCategory(tx.id, v)}
-                                                                        options={categoryOptions}
-                                                                        placeholder="Categoria"
-                                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.category ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
-                                                                    />
-                                                                </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('project') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
-                                                                    <LazySelect
-                                                                        value={tx.project_id || ''}
-                                                                        currentLabel={projectName(tx.project_id) || ''}
-                                                                        onChange={(v) => handleUpdateBankProject(tx.id, v)}
-                                                                        options={projectOptions}
-                                                                        placeholder="Obra"
-                                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.project_id ? 'text-gray-900 bg-blue-50 border-blue-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
-                                                                    />
-                                                                </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('costCenter') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
-                                                                    <LazySelect
-                                                                        value={tx.cost_center_id || ''}
-                                                                        currentLabel={costCenterName(tx.cost_center_id) || ''}
-                                                                        onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
-                                                                        options={costCenterOptions}
-                                                                        placeholder="Centro de Custo"
-                                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
-                                                                    />
-                                                                </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('date') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center whitespace-nowrap">
-                                                                    {formatDateBR(tx.transaction_date)}
-                                                                </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('amount') && (
-                                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-right whitespace-nowrap ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                    {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
-                                                                </td>
-                                                            )}
-                                                            {tableColumns.visibleColumns.includes('status') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                                    {tx.status === 'RULE_APPLIED' ? (
-                                                                        <div className="flex items-center justify-center gap-1.5">
-                                                                            <button
-                                                                                onClick={() => handleRejectRule(tx.id)}
-                                                                                className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg transition-all"
-                                                                                title="Rejeitar Automático"
-                                                                            >
-                                                                                <X className="w-3 h-3" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleConfirmMatch(tx.id)}
-                                                                                className="text-xs font-semibold text-white bg-purple-600 px-3 py-1 rounded-lg hover:bg-purple-700 transition-all"
-                                                                            >
-                                                                                Aceitar
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className={`text-sm font-normal ${STATEMENT_STATUS_COLORS[tx.status] || 'text-gray-600'}`}>
-                                                                            {STATEMENT_STATUS_LABELS[tx.status] || tx.status}
-                                                                        </span>
-                                                                    )}
-                                                                </td>
-                                                            )}
+                                                            ))}
                                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {tableColumns.visibleColumns.includes('actions') && (
@@ -4854,10 +5077,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <table ref={pendingBankResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: pendingBankTableTotalWidth, minWidth: '100%' }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
-                                                {PENDING_BANK_COLUMNS.filter(c => c.key !== 'actions').map(c => (
-                                                    pendingBankColumns.visibleColumns.includes(c.key) && (
-                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${pendingBankResize.getWidth(c.key)}px` }} />
-                                                    )
+                                                {pendingBankColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                    <col key={key} data-col-key={key} style={{ width: `${pendingBankResize.getWidth(key)}px` }} />
                                                 ))}
                                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                                     borda de "Ações" não andar a cada redimensionamento. */}
@@ -4882,56 +5103,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             }}
                                                         />
                                                     </th>
-                                                    {pendingBankColumns.visibleColumns.includes('counterparty') && (
-                                                        <SortableHeader
-                                                            colKey="counterparty" label="Contraparte" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <pendingBankResize.ResizeHandle colKey="counterparty" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingBankColumns.visibleColumns.includes('category') && (
-                                                        <SortableHeader
-                                                            colKey="category" label="Categoria" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <pendingBankResize.ResizeHandle colKey="category" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingBankColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                            <pendingBankResize.ResizeHandle colKey="project" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingBankColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                            <pendingBankResize.ResizeHandle colKey="costCenter" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingBankColumns.visibleColumns.includes('date') && (
-                                                        <SortableHeader
-                                                            colKey="date" label="Data" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
-                                                        >
-                                                            <pendingBankResize.ResizeHandle colKey="date" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingBankColumns.visibleColumns.includes('amount') && (
-                                                        <SortableHeader
-                                                            colKey="amount" label="Valor" uppercase={false}
-                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
-                                                            onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
-                                                        >
-                                                            <pendingBankResize.ResizeHandle colKey="amount" />
-                                                        </SortableHeader>
-                                                    )}
+                                                    {pendingBankColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                                        const def = PENDING_BANK_COLUMN_HEADERS[key];
+                                                        if (!def) return null;
+                                                        return (
+                                                            <SortableHeader
+                                                                key={key} colKey={key} label={def.label} sortable={!!def.sortField} uppercase={false}
+                                                                sortColumn={def.sortField && bankSortField === def.sortField ? key : null}
+                                                                sortDirection={bankSortOrder}
+                                                                onSort={def.sortField ? sortBankBy(def.sortField) : undefined}
+                                                                onMoveColumn={pendingBankColumns.moveColumn}
+                                                                className={def.className}
+                                                            >
+                                                                <pendingBankResize.ResizeHandle colKey={key} />
+                                                            </SortableHeader>
+                                                        );
+                                                    })}
                                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingBankColumns.visibleColumns.includes('actions') && (
@@ -4949,6 +5136,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
                                                     // +2: checkbox + espaçador (não estão em visibleColumns)
                                                     const visibleColCount = 2 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
+                                                    const pendingBankCtx: PendingBankRowCtx = {
+                                                        clienteOptions, credorOptions, categoryOptions, projectOptions, costCenterOptions,
+                                                        projectName, costCenterName,
+                                                        onUpdateCounterparty: handleUpdateBankCounterparty,
+                                                        onUpdateCategory: handleUpdateBankCategory,
+                                                        onUpdateProject: handleUpdateBankProject,
+                                                        onUpdateCostCenter: handleUpdateBankCostCenter,
+                                                    };
                                                     return (
                                                         <React.Fragment key={tx.id}>
                                                             <tr
@@ -4968,64 +5163,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         }}
                                                                     />
                                                                 </td>
-                                                                {pendingBankColumns.visibleColumns.includes('counterparty') && (
-                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
-                                                                    <LazySelect
-                                                                        value={tx.counterparty_name || ''}
-                                                                        currentLabel={tx.counterparty_name || ''}
-                                                                        onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
-                                                                        options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
-                                                                        placeholder={tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
-                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.counterparty_name ? 'text-gray-700' : 'text-gray-400'}`}
-                                                                    />
-                                                                </td>
-                                                                )}
-                                                                {pendingBankColumns.visibleColumns.includes('category') && (
-                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
-                                                                    <LazySelect
-                                                                        value={tx.category || ''}
-                                                                        currentLabel={tx.category || ''}
-                                                                        onChange={(v) => handleUpdateBankCategory(tx.id, v)}
-                                                                        options={categoryOptions}
-                                                                        placeholder="—"
-                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
-                                                                    />
-                                                                </td>
-                                                                )}
-                                                                {pendingBankColumns.visibleColumns.includes('project') && (
-                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
-                                                                    <LazySelect
-                                                                        value={tx.project_id || ''}
-                                                                        currentLabel={projectName(tx.project_id) || ''}
-                                                                        onChange={(v) => handleUpdateBankProject(tx.id, v)}
-                                                                        options={projectOptions}
-                                                                        placeholder="—"
-                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.project_id ? 'text-gray-700' : 'text-gray-400'}`}
-                                                                    />
-                                                                </td>
-                                                                )}
-                                                                {pendingBankColumns.visibleColumns.includes('costCenter') && (
-                                                                <td className={`px-6 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
-                                                                    <LazySelect
-                                                                        value={tx.cost_center_id || ''}
-                                                                        currentLabel={costCenterName(tx.cost_center_id) || ''}
-                                                                        onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
-                                                                        options={costCenterOptions}
-                                                                        placeholder="—"
-                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.cost_center_id ? 'text-gray-700' : 'text-gray-400'}`}
-                                                                    />
-                                                                </td>
-                                                                )}
-                                                                {pendingBankColumns.visibleColumns.includes('date') && (
-                                                                <td className={`px-6 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
-                                                                    {formatDateBR(tx.transaction_date)}
-                                                                </td>
-                                                                )}
-                                                                {pendingBankColumns.visibleColumns.includes('amount') && (
-                                                                <td className={`px-6 ${cellPad} border-r border-gray-100 text-right text-sm font-medium whitespace-nowrap ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                    {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
-                                                                </td>
-                                                                )}
+                                                                {pendingBankColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                                                    const meta = PENDING_BANK_TD_META[key];
+                                                                    if (!meta) return null;
+                                                                    return (
+                                                                        <td
+                                                                            key={key}
+                                                                            className={`px-6 ${cellPad} border-r border-gray-100 ${meta.className}`}
+                                                                            onClick={meta.stopPropagation ? (e) => e.stopPropagation() : undefined}
+                                                                        >
+                                                                            {renderPendingBankCell(key, tx, pendingBankCtx)}
+                                                                        </td>
+                                                                    );
+                                                                })}
                                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                                 {pendingBankColumns.visibleColumns.includes('actions') && (
@@ -5387,10 +5537,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <table ref={pendingInternalResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: pendingInternalTableTotalWidth, minWidth: '100%' }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
-                                                {PENDING_INTERNAL_COLUMNS.filter(c => c.key !== 'actions').map(c => (
-                                                    pendingInternalColumns.visibleColumns.includes(c.key) && (
-                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${pendingInternalResize.getWidth(c.key)}px` }} />
-                                                    )
+                                                {pendingInternalColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                    <col key={key} data-col-key={key} style={{ width: `${pendingInternalResize.getWidth(key)}px` }} />
                                                 ))}
                                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                                     borda de "Ações" não andar a cada redimensionamento. */}
@@ -5415,76 +5563,41 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             }}
                                                         />
                                                     </th>
-                                                    {pendingInternalColumns.visibleColumns.includes('description') && (
-                                                        <SortableHeader
-                                                            colKey="description" label="Descrição" uppercase={false}
-                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
-                                                            onSort={() => internalSortField === 'description' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('description'), setInternalSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <pendingInternalResize.ResizeHandle colKey="description" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingInternalColumns.visibleColumns.includes('client') && (
-                                                        <SortableHeader
-                                                            colKey="party" label="Cliente" uppercase={false}
-                                                            sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
-                                                            onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <pendingInternalResize.ResizeHandle colKey="client" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingInternalColumns.visibleColumns.includes('creditor') && (
-                                                        <SortableHeader
-                                                            colKey="party" label="Credor" uppercase={false}
-                                                            sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
-                                                            onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <pendingInternalResize.ResizeHandle colKey="creditor" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingInternalColumns.visibleColumns.includes('category') && (
-                                                        <SortableHeader
-                                                            colKey="category" label="Categoria" uppercase={false}
-                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
-                                                            onSort={() => internalSortField === 'category' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('category'), setInternalSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                                        >
-                                                            <pendingInternalResize.ResizeHandle colKey="category" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingInternalColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader colKey="project" label="Obra" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                            <pendingInternalResize.ResizeHandle colKey="project" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingInternalColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                            <pendingInternalResize.ResizeHandle colKey="costCenter" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingInternalColumns.visibleColumns.includes('date') && (
-                                                        <SortableHeader
-                                                            colKey="date" label="Data" uppercase={false}
-                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
-                                                            onSort={() => internalSortField === 'date' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('date'), setInternalSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
-                                                        >
-                                                            <pendingInternalResize.ResizeHandle colKey="date" />
-                                                        </SortableHeader>
-                                                    )}
-                                                    {pendingInternalColumns.visibleColumns.includes('amount') && (
-                                                        <SortableHeader
-                                                            colKey="amount" label="Valor" uppercase={false}
-                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
-                                                            onSort={() => internalSortField === 'amount' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('amount'), setInternalSortOrder('asc'))}
-                                                            className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
-                                                        >
-                                                            <pendingInternalResize.ResizeHandle colKey="amount" />
-                                                        </SortableHeader>
-                                                    )}
+                                                    {pendingInternalColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                                        const def = PENDING_INTERNAL_COLUMN_HEADERS[key];
+                                                        if (!def) return null;
+                                                        // colKey precisa ser a chave REAL da coluna (bate com orderedVisibleColumns) —
+                                                        // é o que moveColumn usa para identificar origem/destino do arraste.
+                                                        // 'client'/'creditor' ordenam por um campo composto ('entity' → 'party');
+                                                        // o destaque de "coluna ativa" é simulado comparando internalSortField a
+                                                        // 'entity' e reaproveitando `key` como sortColumn quando bate (mesmo efeito
+                                                        // visual do colKey="party" compartilhado que existia antes do drag).
+                                                        if (key === 'client' || key === 'creditor') {
+                                                            return (
+                                                                <SortableHeader
+                                                                    key={key} colKey={key} label={def.label} uppercase={false}
+                                                                    sortColumn={internalSortField === 'entity' ? key : null} sortDirection={internalSortOrder}
+                                                                    onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
+                                                                    onMoveColumn={pendingInternalColumns.moveColumn}
+                                                                    className={def.className}
+                                                                >
+                                                                    <pendingInternalResize.ResizeHandle colKey={key} />
+                                                                </SortableHeader>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <SortableHeader
+                                                                key={key} colKey={key} label={def.label} sortable={!!def.sortField} uppercase={false}
+                                                                sortColumn={def.sortField && internalSortField === def.sortField ? key : null}
+                                                                sortDirection={internalSortOrder}
+                                                                onSort={def.sortField ? sortInternalBy(def.sortField) : undefined}
+                                                                onMoveColumn={pendingInternalColumns.moveColumn}
+                                                                className={def.className}
+                                                            >
+                                                                <pendingInternalResize.ResizeHandle colKey={key} />
+                                                            </SortableHeader>
+                                                        );
+                                                    })}
                                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                                     {pendingInternalColumns.visibleColumns.includes('actions') && (
@@ -5498,9 +5611,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             <tbody className="divide-y divide-gray-100">
                                                 {sortedInternalTransactions.map(tx => {
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
-                                                    const originMeta = getSourceMeta(tx.source_system);
-                                                    const originLink = getOriginLink(tx);
-                                                    const originTextColor = originMeta?.color.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
+                                                    const pendingInternalCtx: PendingInternalRowCtx = {
+                                                        getSourceMeta, getOriginLink, goToOrigin, txCode, displayTitle, displayPartyName, displayDate,
+                                                        projectName, costCenterName, categoryOptions,
+                                                        onUpdateCategory: handleUpdateInternalCategory,
+                                                    };
                                                     return (
                                                         <tr key={tx.id} className={`transition-colors ${selectedInternalTxIds.has(tx.id) ? 'bg-emerald-50/40' : 'hover:bg-gray-50'}`}>
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100 text-center`}>
@@ -5516,80 +5631,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     }}
                                                                 />
                                                             </td>
-                                                            {pendingInternalColumns.visibleColumns.includes('description') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100`}>
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    <p className="text-sm font-normal text-gray-900 truncate" title={displayTitle(tx)}>
-                                                                        {displayTitle(tx)}
-                                                                    </p>
-                                                                    {txCode(tx) && (
-                                                                        <span title="Código de origem" className="shrink-0 text-xs font-normal text-gray-400">
-                                                                            Nº {txCode(tx)}
-                                                                        </span>
-                                                                    )}
-                                                                    {originMeta && (
-                                                                        originLink ? (
-                                                                            <button
-                                                                                onClick={() => goToOrigin(tx)}
-                                                                                title={`Abrir em ${originMeta.label}`}
-                                                                                className={`shrink-0 flex items-center gap-1 text-xs font-normal hover:underline cursor-pointer ${originTextColor}`}
-                                                                            >
-                                                                                {originMeta.label}
-                                                                                <ExternalLink className="w-3 h-3" />
-                                                                            </button>
-                                                                        ) : (
-                                                                            <span className={`shrink-0 text-xs font-normal ${originTextColor}`}>{originMeta.label}</span>
-                                                                        )
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            )}
-                                                            {pendingInternalColumns.visibleColumns.includes('client') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
-                                                                {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT'
-                                                                    ? (displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
-                                                                    : <span className="text-gray-300">—</span>}
-                                                            </td>
-                                                            )}
-                                                            {pendingInternalColumns.visibleColumns.includes('creditor') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
-                                                                {!(tx.party_type === 'CLIENT' || tx.direction === 'CREDIT')
-                                                                    ? (displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>)
-                                                                    : <span className="text-gray-300">—</span>}
-                                                            </td>
-                                                            )}
-                                                            {pendingInternalColumns.visibleColumns.includes('category') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100`}>
-                                                                <LazySelect
-                                                                    value={tx.category || ''}
-                                                                    currentLabel={tx.category || ''}
-                                                                    onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
-                                                                    options={categoryOptions}
-                                                                    placeholder="—"
-                                                                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
-                                                                />
-                                                            </td>
-                                                            )}
-                                                            {pendingInternalColumns.visibleColumns.includes('project') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-sky-700 truncate max-w-[110px]`}>
-                                                                {projectName(tx.project_id) || <span className="text-gray-300">—</span>}
-                                                            </td>
-                                                            )}
-                                                            {pendingInternalColumns.visibleColumns.includes('costCenter') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-sm font-normal text-violet-700 truncate max-w-[130px]`}>
-                                                                {costCenterName(tx.cost_center_id) || <span className="text-gray-300">—</span>}
-                                                            </td>
-                                                            )}
-                                                            {pendingInternalColumns.visibleColumns.includes('date') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
-                                                                {formatDateBR(displayDate(tx))}
-                                                            </td>
-                                                            )}
-                                                            {pendingInternalColumns.visibleColumns.includes('amount') && (
-                                                            <td className={`px-6 ${cellPad} border-r border-gray-100 text-right text-sm font-medium text-gray-900 whitespace-nowrap`}>
-                                                                {formatMoney(tx.amount)}
-                                                            </td>
-                                                            )}
+                                                            {pendingInternalColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                                <td key={key} className={`px-6 ${cellPad} border-r border-gray-100 ${PENDING_INTERNAL_TD_CLASS[key] || ''}`}>
+                                                                    {renderPendingInternalCell(key, tx, pendingInternalCtx)}
+                                                                </td>
+                                                            ))}
                                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {pendingInternalColumns.visibleColumns.includes('actions') && (

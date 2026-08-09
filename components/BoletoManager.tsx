@@ -74,6 +74,23 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (padrão ClientList.tsx). 'actions' não tem
+// ordenação própria (sortable: false) mas participa do arraste igual às demais.
+const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; uppercase?: boolean; className: string }> = {
+    numero: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    beneficiario: { label: 'Beneficiário', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    centro_custo: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    valor: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    vencimento: { label: 'Vencimento', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    capturado_em: { label: 'Capturado em', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    capturado_por: { label: 'Capturado por', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    actions: { label: 'Ações', sortable: false, uppercase: true, className: 'px-6 py-2 text-right' },
+};
+
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     numero: 118, beneficiario: 220, obra: 160, centro_custo: 179, valor: 130,
@@ -98,6 +115,107 @@ function getAdvancedFilterValue(b: Boleto, key: string): unknown {
         case 'vencimento': return b.vencimento ?? null;
         case 'banco': return b.banco_nome ?? '';
         default: return null;
+    }
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `orderedVisibleColumns` (ordem arrastável) em vez de repetir um
+// bloco condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
+function renderBoletoCell(
+    key: string,
+    b: Boleto,
+    ctx: {
+        atrasado: boolean;
+        supplierMap: Record<string, string>;
+        projectMap: Record<string, string>;
+        ccMap: Record<string, string>;
+        onDelete: (b: Boleto) => void;
+    },
+): React.ReactNode {
+    const { atrasado, supplierMap, projectMap, ccMap, onDelete } = ctx;
+    switch (key) {
+        case 'numero':
+            return (
+                <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
+                    {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
+                </span>
+            );
+        case 'beneficiario':
+            return (
+                <div className="text-sm font-normal text-gray-700 max-w-[200px]">
+                    <p className="truncate">
+                        {b.supplier_id
+                            ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                            : (b.beneficiario_nome ?? b.documento_nome)}
+                    </p>
+                    {b.beneficiario_cnpj && !b.supplier_id && (
+                        <p className="text-xs text-gray-400 font-normal truncate">{b.beneficiario_cnpj}</p>
+                    )}
+                </div>
+            );
+        case 'obra':
+            return (
+                <p className="truncate text-sm font-normal text-gray-600 max-w-[160px]">
+                    {b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}
+                </p>
+            );
+        case 'centro_custo':
+            return (
+                <p className="truncate text-sm font-normal text-gray-600 max-w-[140px]">
+                    {b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}
+                </p>
+            );
+        case 'valor':
+            return (
+                <div className="text-sm font-medium text-gray-800 text-right whitespace-nowrap">
+                    {formatBRL(b.valor)}
+                </div>
+            );
+        case 'vencimento':
+            return (
+                <div className={`text-sm font-normal whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-600'}`}>
+                    {formatDateBR(b.vencimento)}
+                    {atrasado && <div className="text-xs text-red-400 font-normal">Atrasado</div>}
+                </div>
+            );
+        case 'status':
+            return (
+                <>
+                    <span className={`text-sm font-normal ${STATUS_TEXT_COLORS[b.status]}`}>
+                        {STATUS_LABELS[b.status]}
+                    </span>
+                    {b.confidence_score !== undefined && b.confidence_score < 80 && (
+                        <div className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal text-amber-600">
+                            <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
+                        </div>
+                    )}
+                </>
+            );
+        case 'capturado_em':
+            return (
+                <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
+                    {formatDateTimeBR(b.created_at)}
+                </span>
+            );
+        case 'capturado_por':
+            return (
+                <p className="truncate text-sm font-normal text-gray-600 max-w-[160px]">
+                    {b.created_by_email ?? '—'}
+                </p>
+            );
+        case 'actions':
+            return (
+                <div className="flex items-center justify-end">
+                    <ActionIconButton
+                        kind="delete"
+                        disabled={b.status !== 'rascunho'}
+                        title={b.status === 'rascunho' ? 'Excluir' : 'Apenas rascunhos podem ser excluídos'}
+                        onClick={() => onDelete(b)}
+                    />
+                </div>
+            );
+        default:
+            return null;
     }
 }
 
@@ -206,13 +324,13 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
 
 interface BoletoRowItemProps extends BoletoItemBaseProps {
     isHighlighted: boolean;
-    visibleColumns: string[];
+    orderedVisibleColumns: string[];
     projectMap: Record<string, string>;
     ccMap: Record<string, string>;
 }
 
 const BoletoRowItem = React.memo(function BoletoRowItem({
-    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, visibleColumns, projectMap, ccMap,
+    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, orderedVisibleColumns, projectMap, ccMap,
     onOpen, onCheckboxMouseDown, onCheckboxChange, onDelete,
 }: BoletoRowItemProps) {
     return (
@@ -232,78 +350,15 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                 />
             </td>
-            {visibleColumns.includes('numero') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                    {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
+            {orderedVisibleColumns.map(key => (
+                <td
+                    key={key}
+                    className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"
+                    onClick={key === 'actions' ? (e) => e.stopPropagation() : undefined}
+                >
+                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, onDelete })}
                 </td>
-            )}
-            {visibleColumns.includes('beneficiario') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 max-w-[200px]">
-                    <p className="truncate">
-                        {b.supplier_id
-                            ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                            : (b.beneficiario_nome ?? b.documento_nome)}
-                    </p>
-                    {b.beneficiario_cnpj && !b.supplier_id && (
-                        <p className="text-xs text-gray-400 font-normal truncate">{b.beneficiario_cnpj}</p>
-                    )}
-                </td>
-            )}
-            {visibleColumns.includes('obra') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[160px]">
-                    <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
-                </td>
-            )}
-            {visibleColumns.includes('centro_custo') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[140px]">
-                    <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
-                </td>
-            )}
-            {visibleColumns.includes('valor') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right whitespace-nowrap">
-                    {formatBRL(b.valor)}
-                </td>
-            )}
-            {visibleColumns.includes('vencimento') && (
-                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-600'}`}>
-                    {formatDateBR(b.vencimento)}
-                    {atrasado && <div className="text-xs text-red-400 font-normal">Atrasado</div>}
-                </td>
-            )}
-            {visibleColumns.includes('status') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                    <span className={`text-sm font-normal ${STATUS_TEXT_COLORS[b.status]}`}>
-                        {STATUS_LABELS[b.status]}
-                    </span>
-                    {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                        <div className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal text-amber-600">
-                            <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
-                        </div>
-                    )}
-                </td>
-            )}
-            {visibleColumns.includes('capturado_em') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                    {formatDateTimeBR(b.created_at)}
-                </td>
-            )}
-            {visibleColumns.includes('capturado_por') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[160px]">
-                    <p className="truncate">{b.created_by_email ?? '—'}</p>
-                </td>
-            )}
-            {visibleColumns.includes('actions') && (
-                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-end">
-                        <ActionIconButton
-                            kind="delete"
-                            disabled={b.status !== 'rascunho'}
-                            title={b.status === 'rascunho' ? 'Excluir' : 'Apenas rascunhos podem ser excluídos'}
-                            onClick={() => onDelete(b)}
-                        />
-                    </div>
-                </td>
-            )}
+            ))}
             {/* espaçador — casa com o <col /> sem largura, no final (ver colgroup) */}
             <td aria-hidden="true"></td>
         </tr>
@@ -1076,23 +1131,18 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                         <colgroup>
                             <col style={{ width: '40px' }} /> {/* checkbox */}
-                            {tableColumns.visibleColumns.includes('numero') && <col data-col-key="numero" style={{ width: `${cols.getWidth('numero')}px` }} />}
-                            {tableColumns.visibleColumns.includes('beneficiario') && <col data-col-key="beneficiario" style={{ width: `${cols.getWidth('beneficiario')}px` }} />}
-                            {tableColumns.visibleColumns.includes('obra') && <col data-col-key="obra" style={{ width: `${cols.getWidth('obra')}px` }} />}
-                            {tableColumns.visibleColumns.includes('centro_custo') && <col data-col-key="centro_custo" style={{ width: `${cols.getWidth('centro_custo')}px` }} />}
-                            {tableColumns.visibleColumns.includes('valor') && <col data-col-key="valor" style={{ width: `${cols.getWidth('valor')}px` }} />}
-                            {tableColumns.visibleColumns.includes('vencimento') && <col data-col-key="vencimento" style={{ width: `${cols.getWidth('vencimento')}px` }} />}
-                            {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
-                            {tableColumns.visibleColumns.includes('capturado_em') && <col data-col-key="capturado_em" style={{ width: `${cols.getWidth('capturado_em')}px` }} />}
-                            {tableColumns.visibleColumns.includes('capturado_por') && <col data-col-key="capturado_por" style={{ width: `${cols.getWidth('capturado_por')}px` }} />}
-                            {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                            {tableColumns.orderedVisibleColumns.map(key => (
+                                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                            ))}
                             {/* espaçador NO FINAL (§6.1.1 não se aplica: sem coluna "Ações" fixa
                                 pra ancorar — §9.1, o clique na linha já é a ação). Absorve a folga
                                 quando a soma das colunas é menor que o container. */}
                             <col />
                         </colgroup>
                         {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
-                            força uppercase internamente por padrão; classes de estilo no <tr>. */}
+                            força uppercase internamente por padrão; classes de estilo no <tr>. Ordem
+                            vem de orderedVisibleColumns — arrastar um header (onMoveColumn) reordena
+                            e persiste, estilo ClickUp (mesmo padrão de ClientList.tsx). */}
                         <thead>
                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -1104,135 +1154,20 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         title="Selecionar todos"
                                     />
                                 </th>
-                                {tableColumns.visibleColumns.includes('numero') && (
-                                    <SortableHeader
-                                        label="Código"
-                                        colKey="numero"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="numero" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('beneficiario') && (
-                                    <SortableHeader
-                                        label="Beneficiário"
-                                        colKey="beneficiario"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="beneficiario" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('obra') && (
-                                    <SortableHeader
-                                        label="Obra"
-                                        colKey="obra"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="obra" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('centro_custo') && (
-                                    <SortableHeader
-                                        label="Centro de Custo"
-                                        colKey="centro_custo"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="centro_custo" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('valor') && (
-                                    <SortableHeader
-                                        label="Valor"
-                                        colKey="valor"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="valor" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('vencimento') && (
-                                    <SortableHeader
-                                        label="Vencimento"
-                                        colKey="vencimento"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="vencimento" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('status') && (
-                                    <SortableHeader
-                                        label="Status"
-                                        colKey="status"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="status" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('capturado_em') && (
-                                    <SortableHeader
-                                        label="Capturado em"
-                                        colKey="capturado_em"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="capturado_em" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('capturado_por') && (
-                                    <SortableHeader
-                                        label="Capturado por"
-                                        colKey="capturado_por"
-                                        sortable={true}
-                                        uppercase={false}
-                                        sortColumn={tableColumns.sortColumn}
-                                        sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort}
-                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                    >
-                                        <cols.ResizeHandle colKey="capturado_por" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('actions') && (
-                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
-                                )}
+                                {tableColumns.orderedVisibleColumns.map(key => {
+                                    const def = BOLETO_COLUMN_HEADERS[key];
+                                    if (!def) return null;
+                                    return (
+                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false}
+                                            uppercase={def.uppercase ?? false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort}
+                                            onMoveColumn={tableColumns.moveColumn}
+                                            className={def.className}>
+                                            <cols.ResizeHandle colKey={key} />
+                                        </SortableHeader>
+                                    );
+                                })}
                                 {/* espaçador — casa com o <col /> sem largura, no final */}
                                 <th aria-hidden="true" />
                             </tr>
@@ -1252,7 +1187,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         supplierMap={supplierMap}
                                         projectMap={projectMap}
                                         ccMap={ccMap}
-                                        visibleColumns={tableColumns.visibleColumns}
+                                        orderedVisibleColumns={tableColumns.orderedVisibleColumns}
                                         onOpen={abrirEdicao}
                                         onCheckboxMouseDown={handleCheckboxMouseDown}
                                         onCheckboxChange={handleCheckboxChange}

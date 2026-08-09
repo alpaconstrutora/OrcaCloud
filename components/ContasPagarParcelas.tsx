@@ -73,6 +73,23 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'imovel', label: 'Imóvel', sortable: true },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (mesmo padrão de ClientList.tsx). O alinhamento por
+// coluna reproduz exatamente o `align` que já existia no JSX condicional antigo.
+const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    credor: { label: 'Credor', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    descricao: { label: 'Descrição', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    origem: { label: 'Origem', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    obra: { label: 'Obra', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    valor: { label: 'Valor', className: 'text-right px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    vencimento: { label: 'Vencimento', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    centro_custo: { label: 'Centro de Custo', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    plano_contas: { label: 'Plano de Contas', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    imovel: { label: 'Imóvel', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, status: 120,
     centro_custo: 180, plano_contas: 180, imovel: 190, actions: 200,
@@ -90,6 +107,74 @@ const hoje = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 /** Dias de atraso — a data vem 'YYYY-MM-DD', então parseia com hora fixa (bug de fuso). */
 function diasAtraso(dueDate: string): number {
     return Math.floor((hoje().getTime() - new Date(dueDate + 'T00:00:00').getTime()) / 86400000);
+}
+
+/** Linha com os nomes já resolvidos (Centro de Custo/Plano de Contas/Imóvel) —
+ *  ver `rowsWithNames` no componente, que injeta esses três campos a partir
+ *  dos UUIDs que `vw_payables` expõe. */
+type ParcelaRow = Payable & { cost_center_name: string; plano_de_contas_name: string; imovel_label: string };
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna (mesmo padrão de ClientList.tsx).
+// `alocacoes === null` distingue "apropriação indisponível nesta sessão" de
+// "nenhuma linha apropriada" — por isso entra como parâmetro à parte da linha.
+function renderParcelaCell(
+    key: string,
+    row: ParcelaRow,
+    alocacoes: Map<string, { propertyIds: string[]; names: string[] }> | null,
+): React.ReactNode {
+    switch (key) {
+        case 'credor':
+            return <span className="text-sm font-normal text-gray-700 truncate">{payableParty(row)}</span>;
+        case 'descricao':
+            return <span className="text-sm font-normal text-gray-600 truncate">{row.description || '—'}</span>;
+        case 'origem':
+            return <span className="text-sm font-normal text-gray-600">{origemLabel(row.source_system)}</span>;
+        case 'obra':
+            return <span className="text-sm font-normal text-gray-700 truncate">{row.project_name ?? '—'}</span>;
+        case 'valor':
+            return (
+                <div className="text-right text-sm font-medium text-gray-800">
+                    <Money value={row.amount} />
+                </div>
+            );
+        case 'vencimento': {
+            const vencido = row.effective_status === 'VENCIDO';
+            return (
+                <div className={`text-center text-sm font-normal ${vencido ? 'text-red-600' : 'text-gray-600'}`}>
+                    {formatDateBR(row.due_date)}
+                    {vencido && row.due_date && (
+                        <div className="text-xs text-red-500">{diasAtraso(row.due_date)}d atraso</div>
+                    )}
+                </div>
+            );
+        }
+        case 'status':
+            return (
+                <div className="text-center">
+                    <StatusBadge status={row.effective_status} />
+                </div>
+            );
+        case 'centro_custo':
+            return <span className="text-sm font-normal text-gray-700 truncate">{row.cost_center_name || '—'}</span>;
+        case 'plano_contas':
+            return <span className="text-sm font-normal text-gray-700 truncate">{row.plano_de_contas_name || '—'}</span>;
+        case 'imovel':
+            return (
+                <span className="text-sm font-normal text-gray-700 truncate">
+                    {alocacoes === null ? (
+                        <span className="text-gray-400" title="Apropriação por imóvel indisponível nesta sessão — não é o mesmo que 'não apropriado'.">n/d</span>
+                    ) : row.imovel_label ? (
+                        row.imovel_label
+                    ) : (
+                        <span className="text-gray-400" title="Ainda não apropriada — esta despesa não entra em NOI nenhum.">—</span>
+                    )}
+                </span>
+            );
+        default:
+            return null;
+    }
 }
 
 interface Props {
@@ -465,10 +550,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                     fica ACIMA do <col>: na mesma linha ele vira nó de texto dentro
                                     do <colgroup> e o React reclama. */}
                                 <col style={{ width: '40px' }} />
-                                {PARCELAS_COLUMNS.map(c => (
-                                    tableColumns.visibleColumns.includes(c.key)
-                                        ? <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
-                                        : null
+                                {tableColumns.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
                                 ))}
                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio,
                                     para a borda de "Ações" não andar a cada redimensionamento. */}
@@ -489,22 +572,23 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                             title="Selecionar todas as parcelas visíveis"
                                         />
                                     </th>
-                                    {PARCELAS_COLUMNS.map(c => {
-                                        if (!tableColumns.visibleColumns.includes(c.key)) return null;
-                                        const align = c.key === 'valor' ? 'text-right' : (c.key === 'vencimento' || c.key === 'status') ? 'text-center' : 'text-left';
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = PARCELAS_COLUMN_HEADERS[key];
+                                        if (!def) return null;
                                         return (
                                             <SortableHeader
-                                                key={c.key}
-                                                label={c.label}
-                                                colKey={c.key}
-                                                sortable
+                                                key={key}
+                                                label={def.label}
+                                                colKey={key}
+                                                sortable={def.sortable !== false}
                                                 uppercase={false}
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className={`${align} px-6 py-2 border-r border-gray-100 overflow-hidden`}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
                                             >
-                                                <cols.ResizeHandle colKey={c.key} />
+                                                <cols.ResizeHandle colKey={key} />
                                             </SortableHeader>
                                         );
                                     })}
@@ -534,65 +618,11 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                     />
                                                 )}
                                             </td>
-                                            {tableColumns.visibleColumns.includes('credor') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
-                                                    {payableParty(row)}
+                                            {tableColumns.orderedVisibleColumns.map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderParcelaCell(key, row, alocacoes)}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('descricao') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">
-                                                    {row.description || '—'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('origem') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                    {origemLabel(row.source_system)}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('obra') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
-                                                    {row.project_name ?? '—'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('valor') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
-                                                    <Money value={row.amount} />
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('vencimento') && (
-                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal ${vencido ? 'text-red-600' : 'text-gray-600'}`}>
-                                                    {formatDateBR(row.due_date)}
-                                                    {vencido && row.due_date && (
-                                                        <div className="text-xs text-red-500">{diasAtraso(row.due_date)}d atraso</div>
-                                                    )}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                    <StatusBadge status={row.effective_status} />
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('centro_custo') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
-                                                    {row.cost_center_name || '—'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('plano_contas') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
-                                                    {row.plano_de_contas_name || '—'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('imovel') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
-                                                    {alocacoes === null ? (
-                                                        <span className="text-gray-400" title="Apropriação por imóvel indisponível nesta sessão — não é o mesmo que 'não apropriado'.">n/d</span>
-                                                    ) : row.imovel_label ? (
-                                                        row.imovel_label
-                                                    ) : (
-                                                        <span className="text-gray-400" title="Ainda não apropriada — esta despesa não entra em NOI nenhum.">—</span>
-                                                    )}
-                                                </td>
-                                            )}
+                                            ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5">

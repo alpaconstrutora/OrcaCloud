@@ -81,6 +81,40 @@ const CATEGORY_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa, não entra no
+// arraste (mesmo padrão de ClientChargesModule.tsx).
+const CATEGORY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Nome', className: 'px-6 py-2 border-r border-gray-100' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderCategoryCell(
+    key: string,
+    cat: FinancialCategory,
+    opts: { editingId: string | null; editingName: string; setEditingName: (v: string) => void; handleRenameKeyDown: (e: React.KeyboardEvent) => void },
+): React.ReactNode {
+    const { editingId, editingName, setEditingName, handleRenameKeyDown } = opts;
+    switch (key) {
+        case 'name':
+            return editingId === cat.id ? (
+                <input
+                    autoFocus
+                    type="text"
+                    value={editingName}
+                    onChange={e => setEditingName(e.target.value)}
+                    onKeyDown={handleRenameKeyDown}
+                    className="w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                />
+            ) : cat.name;
+        default:
+            return null;
+    }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const FinancialCategoriesManager: React.FC = () => {
@@ -277,17 +311,24 @@ const FinancialCategoriesManager: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <tr>
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader
-                                            colKey="name"
-                                            label="Nome"
-                                            uppercase={false}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100"
-                                        />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = CATEGORY_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                sortable={def.sortable !== false}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            />
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                     )}
@@ -296,20 +337,11 @@ const FinancialCategoriesManager: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                                 {filteredCategories.map(cat => (
                                     <tr key={cat.id} className="hover:bg-blue-50/50 transition-colors group">
-                                        {tableColumns.visibleColumns.includes('name') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {editingId === cat.id ? (
-                                                    <input
-                                                        autoFocus
-                                                        type="text"
-                                                        value={editingName}
-                                                        onChange={e => setEditingName(e.target.value)}
-                                                        onKeyDown={handleRenameKeyDown}
-                                                        className="w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                    />
-                                                ) : cat.name}
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                {renderCategoryCell(key, cat, { editingId, editingName, setEditingName, handleRenameKeyDown })}
                                             </td>
-                                        )}
+                                        ))}
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

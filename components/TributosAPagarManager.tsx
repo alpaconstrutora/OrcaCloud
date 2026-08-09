@@ -51,6 +51,21 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     description: 200, due_date: 150, amount: 130, status: 130, actions: 220,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa, não entra no
+// arraste (mesmo padrão de ClientChargesModule.tsx).
+const TRIBUTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    party_name: { label: 'Tributo', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    category: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    client_name: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    empreendimento_name: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    due_date: { label: 'Vencimento', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    amount: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+};
+
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'party_name', label: 'Tributo', type: 'text' },
     { key: 'category', label: 'Origem', type: 'text' },
@@ -86,6 +101,44 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean): React.ReactNode {
+    switch (key) {
+        case 'party_name':
+            return (
+                <span className="text-sm font-normal text-gray-900 max-w-[160px] truncate block">
+                    {r.party_name ?? <span className="text-gray-400 italic">—</span>}
+                </span>
+            );
+        case 'category':
+            return <span className="text-sm font-normal text-gray-600 max-w-[140px] truncate block">{r.category ?? '—'}</span>;
+        case 'client_name':
+            return (
+                <span className="text-sm font-normal text-gray-600 max-w-[180px] truncate block" title={r.client_name ?? undefined}>
+                    {r.client_name ?? <span className="text-gray-400 italic">—</span>}
+                </span>
+            );
+        case 'empreendimento_name':
+            return (
+                <span className="text-sm font-normal text-gray-600 max-w-[180px] truncate block" title={r.empreendimento_name ?? undefined}>
+                    {r.empreendimento_name ?? <span className="text-gray-400 italic">—</span>}
+                </span>
+            );
+        case 'description':
+            return <span className="text-sm font-normal text-gray-700 max-w-[200px] truncate block">{r.description ?? '—'}</span>;
+        case 'due_date':
+            return <span className={`text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>{fmtDate(r.due_date)}</span>;
+        case 'amount':
+            return <span className="text-sm font-medium text-gray-900 whitespace-nowrap">{fmt(r.amount)}</span>;
+        case 'status':
+            return <StatusBadge status={r.effective_status} />;
+        default:
+            return null;
+    }
+}
 
 // ─── types ──────────────────────────────────────────────────
 
@@ -797,14 +850,12 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                         <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 <col style={{ width: '40px' }} /> {/* checkbox */}
-                                {tableColumns.visibleColumns.includes('party_name') && <col data-col-key="party_name" style={{ width: `${cols.getWidth('party_name')}px` }} />}
-                                {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
-                                {tableColumns.visibleColumns.includes('client_name') && <col data-col-key="client_name" style={{ width: `${cols.getWidth('client_name')}px` }} />}
-                                {tableColumns.visibleColumns.includes('empreendimento_name') && <col data-col-key="empreendimento_name" style={{ width: `${cols.getWidth('empreendimento_name')}px` }} />}
-                                {tableColumns.visibleColumns.includes('description') && <col data-col-key="description" style={{ width: `${cols.getWidth('description')}px` }} />}
-                                {tableColumns.visibleColumns.includes('due_date') && <col data-col-key="due_date" style={{ width: `${cols.getWidth('due_date')}px` }} />}
-                                {tableColumns.visibleColumns.includes('amount') && <col data-col-key="amount" style={{ width: `${cols.getWidth('amount')}px` }} />}
-                                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                {/* 'actions' está em TRIBUTO_COLUMNS só para reservar a chave no
+                                    ColumnConfigButton/useTableColumns — a célula em si é fixa (fora do
+                                    map), então é excluída aqui da lista arrastável/dinâmica. */}
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                     borda de "Ações" não andar a cada redimensionamento. */}
                                 <col />
@@ -822,62 +873,19 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                             title="Selecionar todos (não pagos)"
                                         />
                                     </th>
-                                    {tableColumns.visibleColumns.includes('party_name') && (
-                                        <SortableHeader label="Tributo" colKey="party_name" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="party_name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader label="Origem" colKey="category" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="category" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('client_name') && (
-                                        <SortableHeader label="Cliente" colKey="client_name" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="client_name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('empreendimento_name') && (
-                                        <SortableHeader label="Empreendimento" colKey="empreendimento_name" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="empreendimento_name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('description') && (
-                                        <SortableHeader label="Descrição" colKey="description" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="description" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('due_date') && (
-                                        <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="due_date" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('amount') && (
-                                        <SortableHeader label="Valor" colKey="amount" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="amount" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader label="Status" colKey="status" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="status" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = TRIBUTO_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
@@ -908,46 +916,11 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                                     />
                                                 ) : null}
                                             </td>
-                                            {tableColumns.visibleColumns.includes('party_name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 max-w-[160px] truncate">
-                                                    {r.party_name ?? <span className="text-gray-400 italic">—</span>}
+                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderTributoCell(key, r, isVencido)}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('category') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[140px] truncate">
-                                                    {r.category ?? '—'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('client_name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[180px] truncate" title={r.client_name ?? undefined}>
-                                                    {r.client_name ?? <span className="text-gray-400 italic">—</span>}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('empreendimento_name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[180px] truncate" title={r.empreendimento_name ?? undefined}>
-                                                    {r.empreendimento_name ?? <span className="text-gray-400 italic">—</span>}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('description') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 max-w-[200px] truncate">
-                                                    {r.description ?? '—'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('due_date') && (
-                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
-                                                    {fmtDate(r.due_date)}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('amount') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-900 whitespace-nowrap">
-                                                    {fmt(r.amount)}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <StatusBadge status={r.effective_status} />
-                                                </td>
-                                            )}
+                                            ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             {tableColumns.visibleColumns.includes('actions') && (

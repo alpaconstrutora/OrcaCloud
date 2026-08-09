@@ -27,6 +27,17 @@ const INVOICE_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa, não entra no
+// arraste (mesmo padrão de ClientChargesModule.tsx).
+const INVOICE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    fileName: { label: 'Arquivo', className: 'px-6 py-2 border-r border-gray-100' },
+    createdAt: { label: 'Data', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    order: { label: 'Pedido vinculado', sortable: false, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+};
+
 // StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8)
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
     paid: { label: 'Pago', color: 'text-emerald-700' },
@@ -37,6 +48,48 @@ const StatusLabel: React.FC<{ status: string }> = ({ status }) => {
     const s = STATUS_LABELS[status] || { label: 'Pendente', color: 'text-gray-500' };
     return <span className={`text-sm font-normal ${s.color}`}>{s.label}</span>;
 };
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderInvoiceCell(
+    key: string,
+    invoice: Invoice,
+    opts: { orders: PurchaseOrder[]; linkedOrder: PurchaseOrder | undefined; handleLinkOrder: (invoiceId: string, orderId: string) => void },
+): React.ReactNode {
+    const { orders, linkedOrder, handleLinkOrder } = opts;
+    switch (key) {
+        case 'fileName':
+            return (
+                <div className="flex items-center gap-2.5">
+                    <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                    <span className="text-sm font-normal text-gray-700 truncate max-w-[220px]">{invoice.fileName}</span>
+                </div>
+            );
+        case 'createdAt':
+            return <span className="text-sm font-normal text-gray-600">{new Date(invoice.createdAt).toLocaleDateString()}</span>;
+        case 'status':
+            return <StatusLabel status={invoice.status} />;
+        case 'order':
+            return (
+                // Select inline — mesma tipografia da célula de texto (§7.1)
+                <select
+                    value={invoice.orderId || ""}
+                    onChange={(e) => handleLinkOrder(invoice.id, e.target.value)}
+                    className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${
+                        linkedOrder ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'
+                    }`}
+                >
+                    <option value="">Sem vínculo</option>
+                    {orders.map(order => (
+                        <option key={order.id} value={order.id}>{order.number}</option>
+                    ))}
+                </select>
+            );
+        default:
+            return null;
+    }
+}
 
 interface InvoiceManagerProps {
     supplier: Supplier;
@@ -346,18 +399,17 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier, portalToken }
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('fileName') && (
-                                        <SortableHeader colKey="fileName" label="Arquivo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('createdAt') && (
-                                        <SortableHeader colKey="createdAt" label="Data" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('order') && (
-                                        <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap text-sm font-semibold text-gray-500">Pedido vinculado</th>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = INVOICE_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className} />
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                     )}
@@ -368,41 +420,11 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier, portalToken }
                                     const linkedOrder = orders.find(o => o.id === invoice.orderId);
                                     return (
                                         <tr key={invoice.id} className="hover:bg-blue-50/50 transition-colors group">
-                                            {tableColumns.visibleColumns.includes('fileName') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <FileText className="w-4 h-4 text-gray-400 shrink-0" />
-                                                        <span className="text-sm font-normal text-gray-700 truncate max-w-[220px]">{invoice.fileName}</span>
-                                                    </div>
+                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderInvoiceCell(key, invoice, { orders, linkedOrder, handleLinkOrder })}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('createdAt') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                    {new Date(invoice.createdAt).toLocaleDateString()}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <StatusLabel status={invoice.status} />
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('order') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {/* Select inline — mesma tipografia da célula de texto (§7.1) */}
-                                                    <select
-                                                        value={invoice.orderId || ""}
-                                                        onChange={(e) => handleLinkOrder(invoice.id, e.target.value)}
-                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${
-                                                            linkedOrder ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                        }`}
-                                                    >
-                                                        <option value="">Sem vínculo</option>
-                                                        {orders.map(order => (
-                                                            <option key={order.id} value={order.id}>{order.number}</option>
-                                                        ))}
-                                                    </select>
-                                                </td>
-                                            )}
+                                            ))}
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5">

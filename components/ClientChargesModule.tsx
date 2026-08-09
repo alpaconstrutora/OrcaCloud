@@ -56,6 +56,40 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     party_name: 180, description: 220, billing_type: 120, due_date: 150, value: 140, status: 140, actions: 180,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX.
+const CHARGES_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    party_name:   { label: 'Cliente',    className: 'px-6 py-2 border-r border-gray-100 text-left overflow-hidden' },
+    description:  { label: 'Descrição',  className: 'px-6 py-2 border-r border-gray-100 text-left overflow-hidden' },
+    billing_type: { label: 'Tipo',       className: 'px-6 py-2 border-r border-gray-100 text-left overflow-hidden' },
+    due_date:     { label: 'Vencimento', className: 'px-6 py-2 border-r border-gray-100 text-left overflow-hidden' },
+    value:        { label: 'Valor',      className: 'px-6 py-2 border-r border-gray-100 text-left overflow-hidden' },
+    status:       { label: 'Status',     className: 'px-6 py-2 border-r border-gray-100 text-left overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderChargeCell(key: string, c: ClientCharge, isOverdue: boolean): React.ReactNode {
+    switch (key) {
+        case 'party_name':
+            return <span className="text-sm font-normal text-gray-900 max-w-[160px] truncate block">{c.party_name ?? '—'}</span>;
+        case 'description':
+            return <span className="text-sm font-normal text-gray-700 max-w-[200px] truncate block">{c.description ?? '—'}</span>;
+        case 'billing_type':
+            return <span className="text-sm font-normal text-gray-600">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</span>;
+        case 'due_date':
+            return <span className={`text-sm font-normal whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>{fmtDate(c.due_date)}</span>;
+        case 'value':
+            return <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{fmt(c.value)}</span>;
+        case 'status':
+            return <StatusBadge status={c.status} />;
+        default:
+            return null;
+    }
+}
+
 // ─── main ────────────────────────────────────────────────────
 
 interface Props {
@@ -403,12 +437,12 @@ export default function ClientChargesModule({ organizationId }: Props) {
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 <col style={{ width: '40px' }} /> {/* checkbox */}
-                                {tableColumns.visibleColumns.includes('party_name') && <col data-col-key="party_name" style={{ width: `${cols.getWidth('party_name')}px` }} />}
-                                {tableColumns.visibleColumns.includes('description') && <col data-col-key="description" style={{ width: `${cols.getWidth('description')}px` }} />}
-                                {tableColumns.visibleColumns.includes('billing_type') && <col data-col-key="billing_type" style={{ width: `${cols.getWidth('billing_type')}px` }} />}
-                                {tableColumns.visibleColumns.includes('due_date') && <col data-col-key="due_date" style={{ width: `${cols.getWidth('due_date')}px` }} />}
-                                {tableColumns.visibleColumns.includes('value') && <col data-col-key="value" style={{ width: `${cols.getWidth('value')}px` }} />}
-                                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                {/* 'actions' está em CHARGES_COLUMNS só para reservar a chave no
+                                    ColumnConfigButton/useTableColumns — a célula em si é fixa (fora do
+                                    map), então é excluída aqui da lista arrastável/dinâmica. */}
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                     borda de "Ações" não andar a cada redimensionamento. */}
                                 <col />
@@ -427,48 +461,19 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                             title="Selecionar todas (canceláveis)"
                                         />
                                     </th>
-                                    {tableColumns.visibleColumns.includes('party_name') && (
-                                        <SortableHeader label="Cliente" colKey="party_name" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left overflow-hidden">
-                                            <cols.ResizeHandle colKey="party_name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('description') && (
-                                        <SortableHeader label="Descrição" colKey="description" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left overflow-hidden">
-                                            <cols.ResizeHandle colKey="description" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('billing_type') && (
-                                        <SortableHeader label="Tipo" colKey="billing_type" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left overflow-hidden">
-                                            <cols.ResizeHandle colKey="billing_type" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('due_date') && (
-                                        <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left overflow-hidden">
-                                            <cols.ResizeHandle colKey="due_date" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('value') && (
-                                        <SortableHeader label="Valor" colKey="value" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left overflow-hidden">
-                                            <cols.ResizeHandle colKey="value" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader label="Status" colKey="status" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left overflow-hidden">
-                                            <cols.ResizeHandle colKey="status" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = CHARGES_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
@@ -498,26 +503,11 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                         />
                                                     ) : null}
                                                 </td>
-                                                {tableColumns.visibleColumns.includes('party_name') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 max-w-[160px] truncate">{c.party_name ?? '—'}</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('description') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-[200px] truncate">{c.description ?? '—'}</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('billing_type') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('due_date') && (
-                                                    <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>{fmtDate(c.due_date)}</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('value') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap">{fmt(c.value)}</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('status') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100">
-                                                        <StatusBadge status={c.status} />
+                                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100">
+                                                        {renderChargeCell(key, c, isOverdue)}
                                                     </td>
-                                                )}
+                                                ))}
                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 {tableColumns.visibleColumns.includes('actions') && (

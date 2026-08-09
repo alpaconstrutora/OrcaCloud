@@ -41,6 +41,17 @@ const CONTAS_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (mesmo padrão de ClientList.tsx).
+const CONTAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    supplier: { label: 'Fornecedor / Documento', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    origem: { label: 'Origem', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    valor: { label: 'Valor', className: 'text-right px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    vencimento: { label: 'Vencimento', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     supplier: 260, origem: 120, valor: 140, vencimento: 150, status: 140, actions: 220,
@@ -94,6 +105,54 @@ function StatusBadge({ inv }: { inv: InvoiceRow }) {
             {STATUS_PT[inv.status] ?? inv.status}
         </span>
     );
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna. Alinhamento/cor que antes viviam
+// na classe do <td> (text-right/text-center, cor condicional de vencimento) foram
+// movidos para dentro do conteúdo — o <td> em si usa uma classe base comum.
+function renderContaCell(key: string, inv: InvoiceRow, fromBoleto: boolean, overdue: boolean, dueDate: Date | null): React.ReactNode {
+    switch (key) {
+        case 'supplier':
+            return (
+                <>
+                    <p className="text-sm font-normal text-gray-700 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
+                    <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
+                </>
+            );
+        case 'origem':
+            return (
+                <span className={`text-sm font-normal ${fromBoleto ? 'text-indigo-700' : 'text-gray-500'}`}>
+                    {fromBoleto ? 'Boleto' : 'Manual'}
+                </span>
+            );
+        case 'valor':
+            return (
+                <div className="text-right text-sm font-medium text-gray-800">
+                    <Money value={inv.amount} />
+                </div>
+            );
+        case 'vencimento':
+            return (
+                <div className={`text-center text-sm font-normal ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
+                    {formatDateBR(inv.dueDate)}
+                    {overdue && dueDate && (
+                        <div className="text-xs text-red-500">
+                            {Math.floor((today().getTime() - dueDate.getTime()) / 86400000)}d atraso
+                        </div>
+                    )}
+                </div>
+            );
+        case 'status':
+            return (
+                <div className="text-center">
+                    <StatusBadge inv={inv} />
+                </div>
+            );
+        default:
+            return null;
+    }
 }
 
 interface Props {
@@ -726,11 +785,9 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                             <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                                 <colgroup>
                                     <col style={{ width: '40px' }} /> {/* checkbox */}
-                                    {tableColumns.visibleColumns.includes('supplier') && <col data-col-key="supplier" style={{ width: `${cols.getWidth('supplier')}px` }} />}
-                                    {tableColumns.visibleColumns.includes('origem') && <col data-col-key="origem" style={{ width: `${cols.getWidth('origem')}px` }} />}
-                                    {tableColumns.visibleColumns.includes('valor') && <col data-col-key="valor" style={{ width: `${cols.getWidth('valor')}px` }} />}
-                                    {tableColumns.visibleColumns.includes('vencimento') && <col data-col-key="vencimento" style={{ width: `${cols.getWidth('vencimento')}px` }} />}
-                                    {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
+                                    {tableColumns.orderedVisibleColumns.map(key => (
+                                        <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                    ))}
                                     {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                         borda de "Ações" não andar a cada redimensionamento. */}
                                     <col />
@@ -750,76 +807,26 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                                                 title="Selecionar todos (pagáveis)"
                                             />
                                         </th>
-                                        {tableColumns.visibleColumns.includes('supplier') && (
-                                            <SortableHeader
-                                                label="Fornecedor / Documento"
-                                                colKey="supplier"
-                                                sortable={true}
-                                                uppercase={false}
-                                                sortColumn={tableColumns.sortColumn}
-                                                sortDirection={tableColumns.sortDirection}
-                                                onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                            >
-                                                <cols.ResizeHandle colKey="supplier" />
-                                            </SortableHeader>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('origem') && (
-                                            <SortableHeader
-                                                label="Origem"
-                                                colKey="origem"
-                                                sortable={true}
-                                                uppercase={false}
-                                                sortColumn={tableColumns.sortColumn}
-                                                sortDirection={tableColumns.sortDirection}
-                                                onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                            >
-                                                <cols.ResizeHandle colKey="origem" />
-                                            </SortableHeader>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('valor') && (
-                                            <SortableHeader
-                                                label="Valor"
-                                                colKey="valor"
-                                                sortable={true}
-                                                uppercase={false}
-                                                sortColumn={tableColumns.sortColumn}
-                                                sortDirection={tableColumns.sortDirection}
-                                                onSort={tableColumns.handleColumnSort}
-                                                className="text-right px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                            >
-                                                <cols.ResizeHandle colKey="valor" />
-                                            </SortableHeader>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('vencimento') && (
-                                            <SortableHeader
-                                                label="Vencimento"
-                                                colKey="vencimento"
-                                                sortable={true}
-                                                uppercase={false}
-                                                sortColumn={tableColumns.sortColumn}
-                                                sortDirection={tableColumns.sortDirection}
-                                                onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                            >
-                                                <cols.ResizeHandle colKey="vencimento" />
-                                            </SortableHeader>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <SortableHeader
-                                                label="Status"
-                                                colKey="status"
-                                                sortable={true}
-                                                uppercase={false}
-                                                sortColumn={tableColumns.sortColumn}
-                                                sortDirection={tableColumns.sortDirection}
-                                                onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                            >
-                                                <cols.ResizeHandle colKey="status" />
-                                            </SortableHeader>
-                                        )}
+                                        {tableColumns.orderedVisibleColumns.map(key => {
+                                            const def = CONTAS_COLUMN_HEADERS[key];
+                                            if (!def) return null;
+                                            return (
+                                                <SortableHeader
+                                                    key={key}
+                                                    colKey={key}
+                                                    label={def.label}
+                                                    sortable={def.sortable !== false}
+                                                    uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn}
+                                                    sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    onMoveColumn={tableColumns.moveColumn}
+                                                    className={def.className}
+                                                >
+                                                    <cols.ResizeHandle colKey={key} />
+                                                </SortableHeader>
+                                            );
+                                        })}
                                         {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                         <th aria-hidden="true" className="border-r border-gray-100" />
                                         <th className="text-right px-6 py-2 relative overflow-hidden text-sm font-semibold text-gray-500">
@@ -847,39 +854,11 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                                                         />
                                                     ) : null}
                                                 </td>
-                                                {tableColumns.visibleColumns.includes('supplier') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <p className="text-sm font-normal text-gray-700 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
-                                                        <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
+                                                {tableColumns.orderedVisibleColumns.map(key => (
+                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        {renderContaCell(key, inv, fromBoleto, overdue, dueDate)}
                                                     </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('origem') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <span className={`text-sm font-normal ${fromBoleto ? 'text-indigo-700' : 'text-gray-500'}`}>
-                                                            {fromBoleto ? 'Boleto' : 'Manual'}
-                                                        </span>
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('valor') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
-                                                        <Money value={inv.amount} />
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('vencimento') && (
-                                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
-                                                        {formatDateBR(inv.dueDate)}
-                                                        {overdue && dueDate && (
-                                                            <div className="text-xs text-red-500">
-                                                                {Math.floor((today().getTime() - dueDate.getTime()) / 86400000)}d atraso
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('status') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                        <StatusBadge inv={inv} />
-                                                    </td>
-                                                )}
+                                                ))}
                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 <td className="px-6 py-2.5">

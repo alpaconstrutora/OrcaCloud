@@ -754,6 +754,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [defaultView]);
 
+    // Precisa vir antes de statementTableTotalWidth — ele usa flowFilter no cálculo
+    // (colunas Cliente/Credor ficam de fora da soma quando ocultadas pelo filtro).
+    const [flowFilter, setFlowFilter] = usePersistedState<'ALL' | 'INCOME' | 'EXPENSE'>('extratoBancario:flowFilter', 'ALL');
     const tableColumns = useTableColumns(STATEMENT_COLUMNS, 'extratoBancarioColumns');
     const statementAdvancedFilters = useAdvancedFilters(STATEMENT_FILTER_FIELDS, 'extratoBancario:advancedFilters');
     const pendingBankColumns = useTableColumns(PENDING_BANK_COLUMNS, 'conciliacaoPendentesBankColumns');
@@ -870,7 +873,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const sortInternalBy = (field: InternalSortField) => () =>
         internalSortField === field ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField(field), setInternalSortOrder('asc'));
     const [matchSortOrder, setMatchSortOrder] = useState<'desc' | 'asc'>('desc');
-    const [flowFilter, setFlowFilter] = usePersistedState<'ALL' | 'INCOME' | 'EXPENSE'>('extratoBancario:flowFilter', 'ALL');
     // Paginação do Extrato: a busca traz o período inteiro (sem teto), a tabela
     // renderiza uma página por vez. O tamanho da página fica persistido; a página
     // atual não — sempre começa na 1 quando o recorte muda.

@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  KERNEL_VERSION,
   KernelError,
   ModelHistory,
   type BlueprintModel,
@@ -26,6 +27,7 @@ import {
 import {
   getBranch,
   loadBranchModel,
+  getSnapshotIdentity,
   publishSnapshot,
   saveDraft,
 } from '../services/blueprintService';
@@ -102,6 +104,19 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
         ]);
         if (cancelado) return;
 
+        // A referência do "já publicado" é o hash do SNAPSHOT, buscado do banco.
+        //
+        // DEFEITO REAL, encontrado em uso: aqui estava `snapshotHash(inicial)`,
+        // e `inicial` é o RASCUNHO. O editor comparava o desenho consigo mesmo,
+        // concluía "sem alterações" e DESABILITAVA o botão Publicar — deixando
+        // o usuário sem nenhuma forma de publicar o que tinha desenhado, e ainda
+        // afirmando que já estava publicado. Três paredes ficaram presas no
+        // rascunho por causa desta linha.
+        const publicado = branch?.parent_snapshot_id
+          ? await getSnapshotIdentity(branch.parent_snapshot_id)
+          : null;
+        if (cancelado) return;
+
         // Planta sem nivel nao aceita parede — o kernel recusa. Criar o padrao
         // aqui, ANTES do historico existir, e o que impede que ele vire um passo
         // desfazivel: o usuario nunca pediu esse nivel, entao desfaze-lo nao faz
@@ -120,8 +135,17 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
         historyRef.current = new ModelHistory(inicial);
         setModel(inicial);
         setBaseRevision(branch?.base_revision ?? 0);
-        // Se o ramo já publicou, o hash do snapshot é a referência do "limpo".
-        setPublishedHash(branch?.parent_snapshot_id ? snapshotHash(inicial) : null);
+        // Kernel diferente = hash INCOMPARÁVEL. O payload canônico mudou de
+        // formato entre versões do kernel, então o hash gravado sob 0.2.0 nunca
+        // vai bater com o que o 0.3.0 calcula, mesmo para a mesma geometria.
+        //
+        // Nesse caso o certo é `null` — "não sei se está publicado" — que deixa
+        // o botão Publicar HABILITADO. Errar para o lado de oferecer publicar é
+        // recuperável; errar para o lado de esconder o botão prende o trabalho
+        // do usuário, que foi o defeito que isto corrige.
+        setPublishedHash(
+          publicado && publicado.kernel_version === KERNEL_VERSION ? publicado.hash : null,
+        );
         setSaveState('limpo');
         setHasConflict(false);
       } catch (e) {

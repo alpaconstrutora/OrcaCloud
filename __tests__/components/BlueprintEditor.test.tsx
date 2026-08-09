@@ -23,23 +23,34 @@ import type { BlueprintStudy } from '../../types/blueprint';
 
 // O editor carrega do Supabase ao montar. Sem dublê, cada teste viraria uma ida
 // à rede — e o que se quer medir aqui é a interface, não a persistência.
+const RAMO_LIMPO = {
+  id: 'brc_1',
+  study_id: 'std_1',
+  organization_id: 'org_1',
+  name: 'principal',
+  parent_snapshot_id: null as string | null,
+  base_revision: 0,
+  draft_payload: null,
+  draft_kernel_version: null,
+  draft_hash: null,
+  draft_saved_at: null,
+  created_by: null,
+  created_at: '',
+  updated_at: '',
+};
+
+const loadBranchModel = vi.fn(async () => null as unknown);
+const getSnapshotIdentity = vi.fn(async () => null as unknown);
+// `getBranch` PRECISA ser controlável: com `parent_snapshot_id` nulo o editor
+// nunca chega a comparar hash nenhum, e um teste de "já publicado" passaria sem
+// exercitar a comparação. Foi o que aconteceu na primeira versão destes casos —
+// eles aprovavam o código defeituoso.
+const getBranch = vi.fn(async () => RAMO_LIMPO as unknown);
+
 vi.mock('../../services/blueprintService', () => ({
-  loadBranchModel: vi.fn(async () => null),
-  getBranch: vi.fn(async () => ({
-    id: 'brc_1',
-    study_id: 'std_1',
-    organization_id: 'org_1',
-    name: 'principal',
-    parent_snapshot_id: null,
-    base_revision: 0,
-    draft_payload: null,
-    draft_kernel_version: null,
-    draft_hash: null,
-    draft_saved_at: null,
-    created_by: null,
-    created_at: '',
-    updated_at: '',
-  })),
+  loadBranchModel: (...a: unknown[]) => loadBranchModel(...(a as [])),
+  getSnapshotIdentity: (...a: unknown[]) => getSnapshotIdentity(...(a as [])),
+  getBranch: (...a: unknown[]) => getBranch(...(a as [])),
   saveDraft: vi.fn(async () => 'hash'),
   publishSnapshot: vi.fn(async () => 'snap_1'),
   listSnapshots: vi.fn(async () => []),
@@ -61,6 +72,10 @@ vi.mock('../../services/blueprintBudgetService', () => ({
 // jsdom não implementa ResizeObserver, e o canvas o usa para acompanhar o
 // tamanho do container.
 beforeEach(() => {
+  loadBranchModel.mockResolvedValue(null);
+  getSnapshotIdentity.mockResolvedValue(null);
+  getBranch.mockResolvedValue(RAMO_LIMPO);
+
   (globalThis as any).ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -246,5 +261,85 @@ describe('BlueprintEditor · caminho para o orçamento (RF-122)', () => {
 
     // A tela não só avisa: oferece onde vincular. Aviso sem ação é beco sem saída.
     expect(await screen.findByLabelText(/obra a vincular/i)).toBeInTheDocument();
+  });
+});
+
+describe('BlueprintEditor · o editor não pode mentir que já publicou', () => {
+  it('RASCUNHO DIFERENTE DA VERSÃO PUBLICADA HABILITA PUBLICAR', async () => {
+    // DEFEITO REAL, encontrado em uso. A referência do "já publicado" era o hash
+    // do PRÓPRIO RASCUNHO: o editor comparava o desenho consigo mesmo, concluía
+    // "sem alterações" e DESABILITAVA Publicar. Três paredes ficaram presas no
+    // rascunho, sem nenhuma forma de publicá-las, e a tela afirmava que estavam
+    // publicadas.
+    const { applyBatch, applyCommand, emptyModel, point } = await import(
+      '../../utils/blueprintKernel'
+    );
+
+    const base = applyCommand(emptyModel(), {
+      type: 'AddLevel',
+      name: 'Térreo',
+      elevationMm: 0,
+      defaultHeightMm: 2800,
+    }).model;
+    const levelId = base.levels[0].id;
+    const rascunho = applyBatch(base, [
+      {
+        type: 'AddWall',
+        levelId,
+        a: point(0, 0),
+        b: point(4000, 0),
+        thicknessMm: 150,
+        heightMm: 2800,
+      },
+    ]).model;
+
+    loadBranchModel.mockResolvedValue(rascunho);
+    getBranch.mockResolvedValue({ ...RAMO_LIMPO, parent_snapshot_id: 'snap_1', base_revision: 2 });
+    // O snapshot publicado tem OUTRA geometria — hash diferente.
+    getSnapshotIdentity.mockResolvedValue({
+      hash: 'hash-de-outra-geometria',
+      kernel_version: 'blueprint-kernel-ts-0.3.0',
+    });
+
+    await montar();
+    await waitFor(() => expect(botao(/publicar/i)).toBeEnabled());
+  });
+
+  it('kernel diferente torna o hash INCOMPARÁVEL — e aí Publicar fica ligado', async () => {
+    // O payload canônico muda de formato entre versões do kernel, então o hash
+    // gravado sob 0.2.0 nunca bate com o que o 0.3.0 calcula. Errar para o lado
+    // de oferecer publicar é recuperável; esconder o botão prende o trabalho.
+    const { applyBatch, applyCommand, emptyModel, point, snapshotHash } = await import(
+      '../../utils/blueprintKernel'
+    );
+
+    const base = applyCommand(emptyModel(), {
+      type: 'AddLevel',
+      name: 'Térreo',
+      elevationMm: 0,
+      defaultHeightMm: 2800,
+    }).model;
+    const levelId = base.levels[0].id;
+    const modelo = applyBatch(base, [
+      {
+        type: 'AddWall',
+        levelId,
+        a: point(0, 0),
+        b: point(4000, 0),
+        thicknessMm: 150,
+        heightMm: 2800,
+      },
+    ]).model;
+
+    loadBranchModel.mockResolvedValue(modelo);
+    getBranch.mockResolvedValue({ ...RAMO_LIMPO, parent_snapshot_id: 'snap_1', base_revision: 2 });
+    // MESMO hash do desenho na tela, mas de um kernel ANTIGO.
+    getSnapshotIdentity.mockResolvedValue({
+      hash: snapshotHash(modelo),
+      kernel_version: 'blueprint-kernel-ts-0.2.0',
+    });
+
+    await montar();
+    await waitFor(() => expect(botao(/publicar/i)).toBeEnabled());
   });
 });

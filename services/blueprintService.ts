@@ -259,6 +259,29 @@ export async function publishSnapshot(input: {
   return data as string;
 }
 
+/**
+ * Hash e versão de kernel de um snapshot, sem trazer o payload.
+ *
+ * Existe para o editor saber se o rascunho na tela JÁ FOI publicado. Usar o hash
+ * do próprio rascunho para isso — que era o que acontecia — faz o editor
+ * responder sempre "sem alterações": ele compara o desenho consigo mesmo.
+ *
+ * O payload fica de fora de propósito: é o campo grande da tabela, e aqui só se
+ * precisa de dois textos.
+ */
+export async function getSnapshotIdentity(
+  snapshotId: string,
+): Promise<{ hash: string; kernel_version: string } | null> {
+  const { data, error } = await supabase
+    .from('blueprint_snapshots')
+    .select('hash, kernel_version')
+    .eq('id', snapshotId)
+    .maybeSingle();
+
+  if (error) fail('getSnapshotIdentity', error);
+  return (data as { hash: string; kernel_version: string }) ?? null;
+}
+
 export async function listSnapshots(studyId: string): Promise<BlueprintSnapshotSummary[]> {
   const { data, error } = await supabase
     .from('blueprint_snapshots')

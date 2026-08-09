@@ -26,6 +26,19 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     number: 220, client: 180, status: 160, end_date: 175, days: 170, value: 130, index: 110, actions: 260,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' não entra aqui — fica fixa fora do drag.
+const RENTAL_COLUMN_HEADERS: Record<string, { label: string; className: string }> = {
+    number: { label: 'Contrato', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    client: { label: 'Locatário', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Situação', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    end_date: { label: 'Fim da vigência', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    days: { label: 'Prazo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    value: { label: 'Aluguel', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    index: { label: 'Índice', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
 type Faixa = 'all' | 'vencidos' | 'd30' | 'd60' | 'sem_vigencia';
 
 /** Data BR sem bug de fuso: em UTC-3, `new Date(iso)` retrocede um dia. */
@@ -52,6 +65,38 @@ const prazoColor = (days: number | null) =>
         : days <= 30 ? 'text-amber-700'
         : days <= 60 ? 'text-amber-600'
         : 'text-gray-600';
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna. Classes que variavam por coluna
+// no <td> original (cor/peso) migram para dentro do conteúdo.
+function renderRentalCell(key: string, r: ExpiringRental, clientName: (id?: string) => string): React.ReactNode {
+    switch (key) {
+        case 'number':
+            return (
+                <span className="text-sm font-normal text-gray-700">
+                    {r.number}
+                    <span className="block text-sm font-normal text-gray-400 truncate">{r.title}</span>
+                </span>
+            );
+        case 'client':
+            return <span className="text-sm font-normal text-gray-700">{clientName(r.client_id)}</span>;
+        case 'status':
+            return r.renewed
+                ? <span className="text-sm font-normal text-emerald-700">Renovado por {r.renewed_by}</span>
+                : <span className="text-sm font-normal text-gray-700">{r.status}</span>;
+        case 'end_date':
+            return <span className="text-sm font-normal text-gray-600">{fmtDate(r.end_date)}</span>;
+        case 'days':
+            return <span className={`text-sm font-normal ${prazoColor(r.days_until_end)}`}>{prazoLabel(r.days_until_end)}</span>;
+        case 'value':
+            return <span className="text-sm font-medium text-gray-800">{fmtCur(r.current_value)}</span>;
+        case 'index':
+            return <span className="text-sm font-normal text-gray-600">{r.reajuste_index || '—'}</span>;
+        default:
+            return null;
+    }
+}
 
 interface Props {
     /** Pode vir vazio em "Todas as organizações" — a leitura NÃO é bloqueada (REGRA #5). */
@@ -323,10 +368,8 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                     <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
                             <colgroup>
-                                {COLUMNS.filter(c => c.key !== 'actions').map(c => (
-                                    tableColumns.visibleColumns.includes(c.key)
-                                        ? <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
-                                        : null
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
                                 ))}
                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                     borda de "Ações" não andar a cada redimensionamento. */}
@@ -335,55 +378,19 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                             </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('number') && (
-                                        <SortableHeader colKey="number" label="Contrato" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="number" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('client') && (
-                                        <SortableHeader colKey="client" label="Locatário" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="client" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Situação" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="status" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('end_date') && (
-                                        <SortableHeader colKey="end_date" label="Fim da vigência" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="end_date" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('days') && (
-                                        <SortableHeader colKey="days" label="Prazo" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="days" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('value') && (
-                                        <SortableHeader colKey="value" label="Aluguel" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="value" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('index') && (
-                                        <SortableHeader colKey="index" label="Índice" uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="index" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = RENTAL_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -395,44 +402,11 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                             <tbody className="divide-y divide-gray-200">
                                 {filtered.map(r => (
                                     <tr key={r.id} className="hover:bg-blue-50/50 transition-colors group">
-                                        {tableColumns.visibleColumns.includes('number') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {r.number}
-                                                <span className="block text-sm font-normal text-gray-400 truncate">{r.title}</span>
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderRentalCell(key, r, clientName)}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('client') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {clientName(r.client_id)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                                                {r.renewed
-                                                    ? <span className="text-emerald-700">Renovado por {r.renewed_by}</span>
-                                                    : <span className="text-gray-700">{r.status}</span>}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('end_date') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {fmtDate(r.end_date)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('days') && (
-                                            <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${prazoColor(r.days_until_end)}`}>
-                                                {prazoLabel(r.days_until_end)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('value') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                                                {fmtCur(r.current_value)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('index') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {r.reajuste_index || '—'}
-                                            </td>
-                                        )}
+                                        ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">

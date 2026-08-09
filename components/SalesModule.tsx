@@ -100,6 +100,259 @@ const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
     floor: 110, sale_value: 134, sale_value_per_m2: 158, variance: 128, variance_pct: 123, status: 130, actions: 160,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `orderedVisibleColumns` (ordem que o usuário arrasta), em vez de uma sequência
+// fixa de JSX (padrão ClientList.tsx/BoletoManager.tsx). Colunas 'block',
+// 'private_area', 'position_weight', 'sun_weight' e 'floor' só aparecem no
+// inventário quando há um edifício aberto (context: 'building' — ver `isVisible`
+// dentro do render da tabela de Unidades, abaixo).
+const INVENTORY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Imóvel', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    address: { label: 'Endereço / referência', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    block: { label: 'Bloco', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    private_area: { label: 'Á. priv.', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    price: { label: 'Preço', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    price_per_m2: { label: 'Vlr/m²', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    position_weight: { label: 'Peso pos.', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    sun_weight: { label: 'Peso sol', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    floor: { label: 'Andar', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+const DEALS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    property: { label: 'Imóvel', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    block: { label: 'Bloco', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    private_area: { label: 'Á. priv.', className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden' },
+    price_base: { label: 'Preço base', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    price_per_m2_base: { label: 'Vlr/m² base', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    floor: { label: 'Andar', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    sale_value: { label: 'Vlr venda', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    sale_value_per_m2: { label: 'Vlr venda/m²', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    variance: { label: 'Var. (R$)', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    variance_pct: { label: 'Var. (%)', className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+const BROKERS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Corretor', className: 'px-6 py-2 border-r border-gray-100' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100' },
+    contact: { label: 'Contato', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
+    agency: { label: 'Imobiliária', className: 'px-6 py-2 border-r border-gray-100' },
+    commission: { label: 'Comissão', className: 'px-6 py-2 border-r border-gray-100' },
+    creci: { label: 'CRECI', className: 'px-6 py-2 border-r border-gray-100' },
+};
+
+// Conteúdo de cada <td> da tabela de Unidades (visão de DETALHE — edifício
+// aberto) — extraído para função pura para que o <tbody> possa mapear
+// `orderedVisibleColumns` (ordem arrastável) em vez de repetir um bloco
+// condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
+function renderInventoryDetailCell(key: string, property: Property, ctx: { getStatusColor: (s: PropertyStatus) => string; getStatusLabel: (s: PropertyStatus) => string }): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return <span className="text-sm font-normal text-gray-700">{property.name}</span>;
+        case 'address':
+            return <span className="text-sm font-normal text-gray-600">{property.address || 'Resumo do Empreendimento'}</span>;
+        case 'block':
+            return <span className="text-sm font-normal text-gray-700">{property.block || '-'}</span>;
+        case 'private_area':
+            return <span className="text-sm font-normal text-gray-600">{property.private_area ? `${property.private_area}m²` : '-'}</span>;
+        case 'price':
+            return <span className="text-sm font-medium text-gray-800">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}</span>;
+        case 'price_per_m2':
+            return <span className="text-sm font-medium text-gray-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}</span>;
+        case 'position_weight':
+            return (
+                <div className="flex flex-col">
+                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
+                        {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
+                    </span>
+                    <span className="text-xs font-normal text-gray-400">
+                        {property.position_type === 'FRONT' ? 'Frente' : property.position_type === 'BACK' ? 'Fundos' : 'Lateral / Base'}
+                    </span>
+                </div>
+            );
+        case 'sun_weight':
+            return (
+                <div className="flex flex-col">
+                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
+                        {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
+                    </span>
+                    <span className="text-xs font-normal text-gray-400">
+                        {property.sun_orientation === 'NORTH' ? 'Norte' : property.sun_orientation === 'EAST' ? 'Leste' : property.sun_orientation === 'WEST' ? 'Oeste' : property.sun_orientation === 'SOUTH' ? 'Sul' : 'Base'}
+                    </span>
+                </div>
+            );
+        case 'floor':
+            return <span className="text-sm font-normal text-gray-600">{property.floor ? `${property.floor}º` : 'Térreo'}</span>;
+        case 'status':
+            return <span className={`text-sm font-normal ${ctx.getStatusColor(property.status)}`}>{ctx.getStatusLabel(property.status)}</span>;
+        default:
+            return null;
+    }
+}
+
+// Classe de texto extra por coluna na visão MESTRE (lista de edifícios/imóveis
+// avulsos, sem edifício selecionado) — igual à que estava direto no <td> antes;
+// 'cursor-pointer' + onClick (abrir o edifício) são comuns a toda coluna e ficam
+// no <td> do map, no <tbody>.
+const INVENTORY_MASTER_CELL_TEXT_CLASS: Record<string, string> = {
+    name: 'text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors whitespace-nowrap',
+    address: 'text-sm font-normal text-gray-400',
+    price: 'text-sm font-medium text-gray-800 whitespace-nowrap',
+    price_per_m2: 'text-sm font-normal text-gray-400 text-center whitespace-nowrap',
+};
+
+// Conteúdo de cada <td> da tabela de Unidades na visão MESTRE — mesmo padrão de
+// renderInventoryDetailCell, para a outra "forma" da mesma tabela (master view
+// só mostra name/address/price/price_per_m2/status — as demais colunas são
+// context: 'building' e já saem filtradas por `isVisible` antes de chegar aqui).
+function renderInventoryMasterCell(key: string, property: Property, ctx: { getStatusColor: (s: PropertyStatus) => string; getStatusLabel: (s: PropertyStatus) => string }): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return property.name;
+        case 'address':
+            return property.address || 'Resumo do Empreendimento';
+        case 'price':
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0);
+        case 'price_per_m2':
+            return '---';
+        case 'status':
+            return <span className={`text-sm font-normal ${ctx.getStatusColor(property.status)}`}>{ctx.getStatusLabel(property.status)}</span>;
+        default:
+            return null;
+    }
+}
+
+// Classe extra do <td> por coluna na tabela de Negociações — varia por linha nas
+// colunas 'variance'/'variance_pct' (cor conforme sinal), por isso é função, não
+// mapa estático.
+function getDealCellClass(key: string, variancia: number): string {
+    switch (key) {
+        case 'code': return 'text-sm font-normal text-gray-600 whitespace-nowrap';
+        case 'block': return 'text-sm font-normal text-gray-600 text-center';
+        case 'private_area': return 'text-sm font-normal text-gray-600 text-center';
+        case 'price_base': return 'text-sm font-medium text-gray-600 text-right';
+        case 'price_per_m2_base': return 'text-sm font-medium text-gray-600 text-right';
+        case 'floor': return 'text-sm font-normal text-gray-600 text-center';
+        case 'sale_value': return 'text-sm font-medium text-gray-800 text-right';
+        case 'sale_value_per_m2': return 'text-sm font-medium text-blue-600 text-right';
+        case 'variance': return `text-sm font-medium text-right ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`;
+        case 'variance_pct': return `text-sm font-normal text-center ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`;
+        default: return '';
+    }
+}
+
+// Conteúdo de cada <td> da tabela de Negociações — extraído para função pura
+// (padrão renderClientCell/renderBoletoCell). Os valores derivados (área e
+// preço base somados, variação) já vêm calculados por linha no .map do
+// <tbody> — a função só formata/exibe.
+function renderDealCell(
+    key: string,
+    deal: PropertyDeal,
+    ctx: {
+        property?: Property;
+        client?: Client;
+        unitLabel: { name: string; extra: number; all: string };
+        m2: number;
+        basePrice: number;
+        m2Base: number;
+        m2Venda: number;
+        variancia: number;
+        varianciaPct: number;
+    },
+): React.ReactNode {
+    const { property, client, unitLabel, m2, basePrice, m2Base, m2Venda, variancia, varianciaPct } = ctx;
+    switch (key) {
+        case 'code':
+            return deal.code || '—';
+        case 'property':
+            return (
+                <div className="flex flex-col">
+                    <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
+                        {unitLabel.name || property?.name || '---'}
+                        {unitLabel.extra > 0 && (
+                            <span className="ml-1.5 text-xs text-gray-400">+{unitLabel.extra}</span>
+                        )}
+                    </span>
+                    <span className="text-xs font-normal text-gray-400">
+                        {client?.name || 'Não vinculado'}
+                    </span>
+                </div>
+            );
+        case 'block':
+            return property?.block || '-';
+        case 'private_area':
+            return `${m2}m²`;
+        case 'price_base':
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(basePrice);
+        case 'price_per_m2_base':
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Base);
+        case 'floor':
+            return property?.floor ? `${property.floor}º` : 'T';
+        case 'sale_value':
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value);
+        case 'sale_value_per_m2':
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Venda);
+        case 'variance':
+            return `${variancia >= 0 ? '+' : ''}${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(variancia)}`;
+        case 'variance_pct':
+            return `${Math.abs(varianciaPct).toFixed(1)}%`;
+        case 'status':
+            return (
+                <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
+// Conteúdo de cada <td> da tabela de Corretores — mesmo padrão.
+function renderBrokerCell(key: string, broker: BrokerProfile): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 font-semibold text-sm shrink-0">
+                        {broker.name.charAt(0)}
+                    </div>
+                    <span className="text-sm font-normal text-gray-900">{broker.name}</span>
+                </div>
+            );
+        case 'status':
+            return (
+                <span className={`text-sm font-normal ${broker.is_active ? 'text-emerald-700' : 'text-gray-400'}`}>
+                    {broker.is_active ? 'Ativo' : 'Inativo'}
+                </span>
+            );
+        case 'contact':
+            return (
+                <div className="space-y-1">
+                    <div className="flex items-center text-sm font-normal text-gray-600">
+                        <Mail className="w-3.5 h-3.5 mr-1.5 text-blue-500 shrink-0" />
+                        {broker.email}
+                    </div>
+                    {broker.phone && (
+                        <div className="flex items-center text-sm font-normal text-gray-600">
+                            <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
+                            {broker.phone}
+                        </div>
+                    )}
+                </div>
+            );
+        case 'agency':
+            return <span className="text-sm font-normal text-blue-600">{broker.agency_name || 'Autônomo'}</span>;
+        case 'commission':
+            return <span className="text-sm font-medium text-gray-800">{broker.commission_rate}%</span>;
+        case 'creci':
+            return <span className="text-sm font-normal text-gray-600">{broker.creci || '-'}</span>;
+        default:
+            return null;
+    }
+}
+
 const getPositionWeight = (p?: { position_type?: string | null }) =>
     p?.position_type === 'FRONT' ? 1.03 : p?.position_type === 'BACK' ? 0.97 : 1.00;
 
@@ -1171,6 +1424,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 const isVisible = (key: string) => visible.includes(key) && (
                                     INVENTORY_COLUMNS.find(c => c.key === key)?.context === 'all' || !!selectedBuildingId
                                 );
+                                // Ordem arrastável (§ "Reordenar colunas por arraste"), filtrada por
+                                // visibilidade+contexto — 'actions' fica de fora por ser renderizada fixa.
+                                const orderedVisible = inventoryColumns.orderedVisibleColumns.filter(key => key !== 'actions' && isVisible(key));
                                 // +2: checkbox + espaçador (não entram no filter acima)
                                 const colSpan = 2 + INVENTORY_COLUMNS.filter(c => isVisible(c.key)).length;
                                 const sortHeaderProps = {
@@ -1188,35 +1444,30 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     <table ref={inventoryResize.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: inventoryTableTotalWidth, minWidth: '100%' }}>
                                         <colgroup>
                                             <col style={{ width: '40px' }} /> {/* checkbox */}
-                                            {isVisible('name') && <col data-col-key="name" style={{ width: `${inventoryResize.getWidth('name')}px` }} />}
-                                            {isVisible('address') && <col data-col-key="address" style={{ width: `${inventoryResize.getWidth('address')}px` }} />}
-                                            {isVisible('block') && <col data-col-key="block" style={{ width: `${inventoryResize.getWidth('block')}px` }} />}
-                                            {isVisible('private_area') && <col data-col-key="private_area" style={{ width: `${inventoryResize.getWidth('private_area')}px` }} />}
-                                            {isVisible('price') && <col data-col-key="price" style={{ width: `${inventoryResize.getWidth('price')}px` }} />}
-                                            {isVisible('price_per_m2') && <col data-col-key="price_per_m2" style={{ width: `${inventoryResize.getWidth('price_per_m2')}px` }} />}
-                                            {isVisible('position_weight') && <col data-col-key="position_weight" style={{ width: `${inventoryResize.getWidth('position_weight')}px` }} />}
-                                            {isVisible('sun_weight') && <col data-col-key="sun_weight" style={{ width: `${inventoryResize.getWidth('sun_weight')}px` }} />}
-                                            {isVisible('floor') && <col data-col-key="floor" style={{ width: `${inventoryResize.getWidth('floor')}px` }} />}
-                                            {isVisible('status') && <col data-col-key="status" style={{ width: `${inventoryResize.getWidth('status')}px` }} />}
+                                            {orderedVisible.map(key => (
+                                                <col key={key} data-col-key={key} style={{ width: `${inventoryResize.getWidth(key)}px` }} />
+                                            ))}
                                             {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                                 borda de "Ações" não andar a cada redimensionamento. */}
                                             <col />
                                             <col data-col-key="actions" style={{ width: `${inventoryResize.getWidth('actions')}px` }} />
                                         </colgroup>
-                                        {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3) */}
+                                        {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3).
+                                            Ordem vem de orderedVisible — arrastar um header (onMoveColumn) reordena e persiste. */}
                                         <thead>
                                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                 <th className="w-10 px-4 py-2 border-r border-gray-100 text-center"></th>
-                                                {isVisible('name') && <SortableHeader colKey="name" label="Imóvel" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="name" /></SortableHeader>}
-                                                {isVisible('address') && <SortableHeader colKey="address" label="Endereço / referência" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="address" /></SortableHeader>}
-                                                {isVisible('block') && <SortableHeader colKey="block" label="Bloco" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="block" /></SortableHeader>}
-                                                {isVisible('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><inventoryResize.ResizeHandle colKey="private_area" /></SortableHeader>}
-                                                {isVisible('price') && <SortableHeader colKey="price" label="Preço" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><inventoryResize.ResizeHandle colKey="price" /></SortableHeader>}
-                                                {isVisible('price_per_m2') && <SortableHeader colKey="price_per_m2" label="Vlr/m²" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><inventoryResize.ResizeHandle colKey="price_per_m2" /></SortableHeader>}
-                                                {isVisible('position_weight') && <SortableHeader colKey="position_weight" label="Peso pos." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="position_weight" /></SortableHeader>}
-                                                {isVisible('sun_weight') && <SortableHeader colKey="sun_weight" label="Peso sol" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="sun_weight" /></SortableHeader>}
-                                                {isVisible('floor') && <SortableHeader colKey="floor" label="Andar" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="floor" /></SortableHeader>}
-                                                {isVisible('status') && <SortableHeader colKey="status" label="Status" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><inventoryResize.ResizeHandle colKey="status" /></SortableHeader>}
+                                                {orderedVisible.map(key => {
+                                                    const def = INVENTORY_COLUMN_HEADERS[key];
+                                                    if (!def) return null;
+                                                    return (
+                                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} {...sortHeaderProps}
+                                                            onMoveColumn={inventoryColumns.moveColumn}
+                                                            className={def.className}>
+                                                            <inventoryResize.ResizeHandle colKey={key} />
+                                                        </SortableHeader>
+                                                    );
+                                                })}
                                                 {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                                 <th aria-hidden="true" className="border-r border-gray-100" />
                                                 <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -1239,72 +1490,11 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                                 />
                                                             </td>
-                                                            {isVisible('name') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                                    {property.name}
+                                                            {orderedVisible.map(key => (
+                                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                                    {renderInventoryDetailCell(key, property, { getStatusColor, getStatusLabel })}
                                                                 </td>
-                                                            )}
-                                                            {isVisible('address') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                                    {property.address || 'Resumo do Empreendimento'}
-                                                                </td>
-                                                            )}
-                                                            {isVisible('block') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                                    {property.block || '-'}
-                                                                </td>
-                                                            )}
-                                                            {isVisible('private_area') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                                    {property.private_area ? `${property.private_area}m²` : '-'}
-                                                                </td>
-                                                            )}
-                                                            {isVisible('price') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
-                                                                </td>
-                                                            )}
-                                                            {isVisible('price_per_m2') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
-                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
-                                                                </td>
-                                                            )}
-                                                            {isVisible('position_weight') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-sm font-normal text-gray-900 leading-none mb-1">
-                                                                            {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
-                                                                        </span>
-                                                                        <span className="text-xs font-normal text-gray-400">
-                                                                            {property.position_type === 'FRONT' ? 'Frente' : property.position_type === 'BACK' ? 'Fundos' : 'Lateral / Base'}
-                                                                        </span>
-                                                                    </div>
-                                                                </td>
-                                                            )}
-                                                            {isVisible('sun_weight') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                    <div className="flex flex-col">
-                                                                        <span className="text-sm font-normal text-gray-900 leading-none mb-1">
-                                                                            {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
-                                                                        </span>
-                                                                        <span className="text-xs font-normal text-gray-400">
-                                                                            {property.sun_orientation === 'NORTH' ? 'Norte' : property.sun_orientation === 'EAST' ? 'Leste' : property.sun_orientation === 'WEST' ? 'Oeste' : property.sun_orientation === 'SOUTH' ? 'Sul' : 'Base'}
-                                                                        </span>
-                                                                    </div>
-                                                                </td>
-                                                            )}
-                                                            {isVisible('floor') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                                    {property.floor ? `${property.floor}º` : 'Térreo'}
-                                                                </td>
-                                                            )}
-                                                            {isVisible('status') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                    <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>
-                                                                        {getStatusLabel(property.status)}
-                                                                    </span>
-                                                                </td>
-                                                            )}
+                                                            ))}
                                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             <td className="px-6 py-2.5 text-right">
@@ -1341,15 +1531,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                             />
                                                         </td>
-                                                        {isVisible('name') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{property.name}</td>}
-                                                        {isVisible('address') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{property.address || 'Resumo do Empreendimento'}</td>}
-                                                        {isVisible('price') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}</td>}
-                                                        {isVisible('price_per_m2') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 text-center whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>---</td>}
-                                                        {isVisible('status') && (
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>
-                                                                <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>{getStatusLabel(property.status)}</span>
+                                                        {orderedVisible.map(key => (
+                                                            <td key={key}
+                                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 cursor-pointer ${INVENTORY_MASTER_CELL_TEXT_CLASS[key] || ''}`}
+                                                                onClick={() => setSelectedBuildingId(property.id)}>
+                                                                {renderInventoryMasterCell(key, property, { getStatusColor, getStatusLabel })}
                                                             </td>
-                                                        )}
+                                                        ))}
                                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                         <td className="px-6 py-2.5 text-right">
@@ -1986,78 +2174,28 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força uppercase internamente por padrão. */}
                                     <thead>
                                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            {brokersColumns.visibleColumns.includes('name') && (
-                                                <SortableHeader label="Corretor" colKey="name" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
-                                            {brokersColumns.visibleColumns.includes('status') && (
-                                                <SortableHeader label="Status" colKey="status" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
-                                            {brokersColumns.visibleColumns.includes('contact') && (
-                                                <SortableHeader label="Contato" colKey="contact" uppercase={false} sortable={false} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
-                                            {brokersColumns.visibleColumns.includes('agency') && (
-                                                <SortableHeader label="Imobiliária" colKey="agency" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
-                                            {brokersColumns.visibleColumns.includes('commission') && (
-                                                <SortableHeader label="Comissão" colKey="commission" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
-                                            {brokersColumns.visibleColumns.includes('creci') && (
-                                                <SortableHeader label="CRECI" colKey="creci" uppercase={false} sortable={true} sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection} onSort={brokersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
+                                            {brokersColumns.orderedVisibleColumns.map(key => {
+                                                const def = BROKERS_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                return (
+                                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                        sortColumn={brokersColumns.sortColumn} sortDirection={brokersColumns.sortDirection}
+                                                        onSort={brokersColumns.handleColumnSort}
+                                                        onMoveColumn={brokersColumns.moveColumn}
+                                                        className={def.className} />
+                                                );
+                                            })}
                                             <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Acesso ao portal</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
                                         {filteredBrokers.map(broker => (
                                             <tr key={broker.id} className="hover:bg-blue-50/50 transition-colors">
-                                                {brokersColumns.visibleColumns.includes('name') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 font-semibold text-sm shrink-0">
-                                                                {broker.name.charAt(0)}
-                                                            </div>
-                                                            <span className="text-sm font-normal text-gray-900">{broker.name}</span>
-                                                        </div>
+                                                {brokersColumns.orderedVisibleColumns.map(key => (
+                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        {renderBrokerCell(key, broker)}
                                                     </td>
-                                                )}
-                                                {brokersColumns.visibleColumns.includes('status') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <span className={`text-sm font-normal ${broker.is_active ? 'text-emerald-700' : 'text-gray-400'}`}>
-                                                            {broker.is_active ? 'Ativo' : 'Inativo'}
-                                                        </span>
-                                                    </td>
-                                                )}
-                                                {brokersColumns.visibleColumns.includes('contact') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center text-sm font-normal text-gray-600">
-                                                                <Mail className="w-3.5 h-3.5 mr-1.5 text-blue-500 shrink-0" />
-                                                                {broker.email}
-                                                            </div>
-                                                            {broker.phone && (
-                                                                <div className="flex items-center text-sm font-normal text-gray-600">
-                                                                    <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
-                                                                    {broker.phone}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                )}
-                                                {brokersColumns.visibleColumns.includes('agency') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
-                                                        {broker.agency_name || 'Autônomo'}
-                                                    </td>
-                                                )}
-                                                {brokersColumns.visibleColumns.includes('commission') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                                                        {broker.commission_rate}%
-                                                    </td>
-                                                )}
-                                                {brokersColumns.visibleColumns.includes('creci') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                        {broker.creci || '-'}
-                                                    </td>
-                                                )}
+                                                ))}
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
                                                         <label className="relative inline-flex items-center cursor-pointer" title="Ver este empreendimento no Portal">

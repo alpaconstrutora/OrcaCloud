@@ -40,12 +40,33 @@ CREATE TABLE IF NOT EXISTS public.blueprint_measurements (
 
     created_by      UUID,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT blueprint_medicao_study_fk
-      FOREIGN KEY (study_id, organization_id)
-      REFERENCES public.blueprint_studies(id, organization_id) ON DELETE CASCADE
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- A FK para `blueprint_studies` fica no bloco 1B, sozinha. Criá-la junto com a
+-- tabela deu `40P01 deadlock detected`: FK exige ShareRowExclusiveLock na tabela
+-- REFERENCIADA, e `blueprint_studies` está quente enquanto alguém tem o editor
+-- de plantas aberto no navegador. É a mesma família do deadlock com `auth.users`
+-- (ver aplicar_20270905000004), com outra tabela no papel de quente.
+
+-- ═══ BLOCO 1B — a chave estrangeira, sozinha ════════════════════════════════
+--
+-- O FK COMPOSTO `(study_id, organization_id)` é o que torna impossível, no nível
+-- do schema, uma medição de outra organização — melhor que confiar em trigger.
+-- Vale a espera.
+--
+-- ⚠️ FECHE A ABA DO EDITOR DE PLANTAS ANTES. Este bloco precisa de lock em
+--    `blueprint_studies`, e o editor aberto a mantém em uso. Se der 40P01, o
+--    `lock_timeout` aborta sem estragar nada — é só repetir com o app fechado.
+SET lock_timeout = '5s';
+
+ALTER TABLE public.blueprint_measurements
+  DROP CONSTRAINT IF EXISTS blueprint_medicao_study_fk;
+
+ALTER TABLE public.blueprint_measurements
+  ADD CONSTRAINT blueprint_medicao_study_fk
+  FOREIGN KEY (study_id, organization_id)
+  REFERENCES public.blueprint_studies(id, organization_id) ON DELETE CASCADE;
 
 -- ═══ BLOCO 2 — índice e comentários ═════════════════════════════════════════
 SET lock_timeout = '5s';
@@ -91,7 +112,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.blueprint_measurements TO authent
 
 -- ═══ BLOCO 4 — conferência ══════════════════════════════════════════════════
 -- Rodar sozinho, por último.
--- Esperado: tabela=1, com_rls=1, policies=4, fk_auth_users=0
+-- Esperado: tabela=1, com_rls=1, policies=4, fk_estudo=1, fk_auth_users=0
 
 SELECT
   (SELECT count(*) FROM pg_tables
@@ -101,6 +122,8 @@ SELECT
       AND rowsecurity)                                                            AS com_rls,
   (SELECT count(*) FROM pg_policies
     WHERE schemaname='public' AND tablename='blueprint_measurements')             AS policies,
+  (SELECT count(*) FROM pg_constraint
+    WHERE conname='blueprint_medicao_study_fk')                                   AS fk_estudo,
   (SELECT count(*) FROM pg_constraint c
      JOIN pg_class t  ON t.oid = c.conrelid
      JOIN pg_class rt ON rt.oid = c.confrelid

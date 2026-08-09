@@ -586,7 +586,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             setStats(agregados);
             setCcMap(Object.fromEntries((ccs || []).map((c) => [c.id, c.name])));
             setProjectMap(Object.fromEntries((projs || []).map((p) => [p.id, p.name])));
-            setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, s.name])));
+            setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)])));
             setCcList((ccs || []).map(c => ({ id: c.id, name: c.name })));
             // Projeto de sistema já sai no projectService — utils/systemProjects.ts
             setProjectList((projs || []).map(p => ({ id: p.id, name: p.name })));

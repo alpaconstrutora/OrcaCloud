@@ -3,10 +3,11 @@ export interface MeasureProject {
   /** AUTORIA — quem criou. Não é dono: dono é a organização. */
   user_id: string;
   /**
-   * Dono organizacional. Nulo só nos levantamentos criados antes de a coluna
-   * existir, cuja organização não pôde ser inferida sem ambiguidade.
+   * Dono organizacional. Obrigatório: a coluna é `NOT NULL` no banco desde
+   * `aplicar_20270905000012`, e a policy recorta só por ela — `user_id` é
+   * autoria, não posse.
    */
-  organization_id: string | null;
+  organization_id: string;
   orcamento_id: string | null;
   associated_project_id: string | null;
   nome: string;

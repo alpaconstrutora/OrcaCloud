@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   MousePointer2,
@@ -48,24 +48,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [tipoAbertura, setTipoAbertura] = useState<'door' | 'window'>('door');
 
   const levelId = editor.model.levels[0]?.id ?? null;
-
-  // Um nível precisa existir antes da primeira parede: parede sem nível não tem
-  // onde morar e o kernel recusa. Criar sob demanda evita exigir isso do usuário.
-  //
-  // O ref não é preciosismo: em StrictMode o React monta o efeito duas vezes com
-  // o MESMO estado, e sem ele o estudo nasceria com dois "Térreo".
-  const nivelPedido = useRef(false);
-  useEffect(() => {
-    if (!editor.loading && editor.model.levels.length === 0 && !nivelPedido.current) {
-      nivelPedido.current = true;
-      editor.run({
-        type: 'AddLevel',
-        name: 'Térreo',
-        elevationMm: 0,
-        defaultHeightMm: ALTURA_PADRAO_MM,
-      });
-    }
-  }, [editor.loading, editor.model.levels.length]);
 
   // Atalhos de desfazer/refazer. Ctrl+Z / Ctrl+Shift+Z, como todo editor.
   useEffect(() => {

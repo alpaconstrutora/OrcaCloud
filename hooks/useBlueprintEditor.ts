@@ -19,6 +19,7 @@ import {
   ModelHistory,
   type BlueprintModel,
   type Command,
+  applyCommand,
   emptyModel,
   snapshotHash,
 } from '../utils/blueprintKernel';
@@ -101,7 +102,21 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
         ]);
         if (cancelado) return;
 
-        const inicial = carregado ?? emptyModel();
+        // Planta sem nivel nao aceita parede — o kernel recusa. Criar o padrao
+        // aqui, ANTES do historico existir, e o que impede que ele vire um passo
+        // desfazivel: o usuario nunca pediu esse nivel, entao desfaze-lo nao faz
+        // sentido. Quando isso era um comando, "Desfazer" numa planta nova
+        // apagava o nivel, `levelId` virava nulo e desenhar parede passava a nao
+        // fazer NADA, em silencio.
+        let inicial = carregado ?? emptyModel();
+        if (inicial.levels.length === 0) {
+          inicial = applyCommand(inicial, {
+            type: 'AddLevel',
+            name: 'Térreo',
+            elevationMm: 0,
+            defaultHeightMm: 2800,
+          }).model;
+        }
         historyRef.current = new ModelHistory(inicial);
         setModel(inicial);
         setBaseRevision(branch?.base_revision ?? 0);

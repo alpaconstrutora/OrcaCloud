@@ -3,7 +3,7 @@ import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
-    Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2, MoveHorizontal,
+    Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2, MoveHorizontal, ChevronDown,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { useConfirm } from './ui/confirm';
@@ -118,9 +118,9 @@ function getAdvancedFilterValue(b: Boleto, key: string): unknown {
     }
 }
 
-// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
-// possa mapear `orderedVisibleColumns` (ordem arrastável) em vez de repetir um
-// bloco condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
+// Conteúdo de cada célula (td) por coluna — extraído para função pura para que
+// o tbody possa mapear `orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
 function renderBoletoCell(
     key: string,
     b: Boleto,
@@ -414,6 +414,27 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         const timer = setTimeout(() => setBuscaDebounced(busca), 250);
         return () => clearTimeout(timer);
     }, [busca]);
+
+    // Filtro de status — dropdown (mesmo mecanismo do AdvancedFilterPanel/ColumnConfigButton)
+    const [showStatusMenu, setShowStatusMenu] = useState(false);
+    const statusMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && showStatusMenu) setShowStatusMenu(false);
+        };
+        const onClickOutside = (e: MouseEvent) => {
+            if (showStatusMenu && statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) {
+                setShowStatusMenu(false);
+            }
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('mousedown', onClickOutside);
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            document.removeEventListener('mousedown', onClickOutside);
+        };
+    }, [showStatusMenu]);
 
     // Filtros avançados (client-side)
     const [showFiltros, setShowFiltros] = useState(false);
@@ -884,7 +905,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             <div className="p-4 border-b border-gray-100 bg-white space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 {/* min-w-0: sem isso o flex-1 não encolhe abaixo do tamanho do
-                    placeholder e a linha estoura quando os 7 filtros entram ao lado. */}
+                    placeholder e a linha estoura quando os demais grupos entram ao lado. */}
                 <div className="flex-1 min-w-0 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -896,25 +917,41 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     />
                 </div>
 
-                {/* Filtros rápidos de status — trilho segmentado, dentro da toolbar
-                    acoplada e logo após a busca, como manda o §5 (o padrão
-                    "Tudo/Receitas/Despesas" do Extrato). Antes era uma barra própria
-                    acima do card da tabela. */}
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                    {(['todos', ...Object.keys(STATUS_LABELS)] as const).map((s) => (
-                        <button
-                            key={s}
-                            onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                                filtroStatus === s
-                                    ? 'bg-white text-blue-600 shadow-sm'
-                                    : 'text-gray-700 hover:text-gray-900'
-                            }`}
-                        >
-                            {s === 'todos' ? 'Todos' : STATUS_LABELS[s as BoletoStatus]}
-                            <span className="ml-1.5 opacity-60">{counts[s] ?? 0}</span>
-                        </button>
-                    ))}
+                {/* Filtro de status — dropdown, dentro da toolbar acoplada e logo após
+                    a busca (§5). Antes era um trilho segmentado com as 7 pílulas lado
+                    a lado, que não cabia bem junto dos outros grupos da toolbar; virou
+                    um único botão que abre a lista, mesmo mecanismo de abre/fecha do
+                    AdvancedFilterPanel/ColumnConfigButton (click fora + Escape). */}
+                <div className="relative shrink-0" ref={statusMenuRef}>
+                    <button
+                        onClick={() => setShowStatusMenu(v => !v)}
+                        className={`flex items-center gap-2 h-9 px-3.5 rounded-[6px] border font-medium text-[13px] whitespace-nowrap transition-colors ${
+                            filtroStatus !== 'todos'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                        }`}
+                    >
+                        {filtroStatus === 'todos' ? 'Status' : STATUS_LABELS[filtroStatus as BoletoStatus]}
+                        <span className="opacity-60">{counts[filtroStatus] ?? 0}</span>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+
+                    {showStatusMenu && (
+                        <div className="absolute left-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg py-1 min-w-[200px] z-50">
+                            {(['todos', ...Object.keys(STATUS_LABELS)] as const).map((s) => (
+                                <button
+                                    key={s}
+                                    onClick={() => { setFiltroStatus(s as BoletoStatus | 'todos'); setShowStatusMenu(false); }}
+                                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-sm font-medium transition-colors ${
+                                        filtroStatus === s ? 'text-blue-700 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <span>{s === 'todos' ? 'Todos' : STATUS_LABELS[s as BoletoStatus]}</span>
+                                    <span className="opacity-60">{counts[s] ?? 0}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <button

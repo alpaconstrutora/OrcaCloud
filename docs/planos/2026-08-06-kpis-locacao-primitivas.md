@@ -352,8 +352,11 @@ eliminou (proprietário).
       - **Absorção líquida (30d) = +2**, batendo com as 2 locações feitas no
         teste — o primeiro indicador do sistema que só existe por causa do log.
       19 testes da matemática de vacância verdes.
-- [~] **Fase 2 — MOTOR e UI prontos; MIGRATION APLICADA e CONFERIDA no remoto
-      (2026-08-06). Falta só o teste de gravação de ponta a ponta.**
+- [x] **Fase 2 — CONCLUÍDA (2026-08-10).** Motor, UI e migrations aplicados e
+      conferidos no remoto. **Os dois modos exercitados contra o banco real** —
+      `DIRECT` (2 apropriações do usuário) e `PRORATED` (12 unidades, dízima
+      fechando exato) — mais as travas do servidor. Nada ficou provado só por
+      teste unitário.
       - Banco: 4 partes em `supabase/migrations/aplicar_20270902000000/`
         **aplicadas**, e conferidas **por query no remoto**, não pelo arquivo:
         `internal_transactions` devolveu `property_allocation_mode: "DIRECT"`
@@ -376,12 +379,32 @@ eliminou (proprietário).
       - UI de apropriação **feita** (caminho B — ver F2.2): seleção múltipla e
         ação em lote na visão Parcelas, mais o botão por linha, mais a coluna
         "Imóvel" (F2.2.1).
-      - **PENDENTE: gravar de verdade uma vez.** Tudo que foi verificado no
-        navegador rodou em harness isolado, com as chamadas do Supabase
-        interceptadas — o que prova a UI, não o invariante da RPC. Falta
-        apropriar um lançamento real na tela e conferir que
-        `SUM(allocations.amount) = internal_transactions.amount`. Só depois
-        disso a Fase 2 pode ser marcada concluída.
+      - ✅ **GRAVAÇÃO REAL VERIFICADA (2026-08-10).** Duas despesas apropriadas
+        pela tela, e o invariante conferido pela API: `252,88 = 252,88` e
+        `550,00 = 550,00`. A consulta de `expenseByProperty` (join `DEBIT` +
+        `status ≠ CANCELLED`) devolve as duas — o motor de NOI enxerga o que a
+        UI grava. O caminho fecha de ponta a ponta.
+      - ✅ **RATEIO (`PRORATED`) EXERCITADO CONTRA O BANCO (2026-08-10).**
+        R$ 1.000,00 rateados entre as **12 unidades** de "013 - Galeria
+        Altavista" (áreas irregulares: 28,39 / 20,04 / 17,58 / 15,31 m²…,
+        somando 256,51 m²) — caso escolhido justamente para forçar dízima.
+        Feito pela UI real (Sheet → serviço → RPC), com sessão autenticada, não
+        por `curl`:
+        - prévia na tela somou **R$ 1.000,00** exato;
+        - banco: **12 linhas**, `basis = PRIVATE_AREA`, modo `PRORATED`,
+          `SUM = 1000.00` — **invariante fecha**.
+
+        **As travas do servidor também foram testadas**, e é o que garante que
+        um cliente com bug não corrompa o NOI:
+
+        | Entrada | Resposta |
+        |---|---|
+        | rateio somando 999,99 para lançamento de 1.000,00 | recusa `23514`, com a diferença de R$ 0,01 na mensagem |
+        | estado após a recusa | **12 linhas intactas** — atômico, sem estado parcial |
+        | `p_mode = 'BANANA'` | recusa `22023` |
+
+        O lançamento de teste foi **revertido** ao estado original (lista vazia
+        + `DIRECT`); as 2 apropriações reais do usuário seguem intactas.
       - **PENDENTE: reapropriar** — trocar imóvel ou modo de um lançamento já
         apropriado. A RPC substitui atomicamente, mas a Sheet sempre abre em
         branco: não lê `getAllocations` para pré-selecionar o que já está lá.

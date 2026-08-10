@@ -29,6 +29,57 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'aderencia',   label: 'Aderência',   sortable: true },
 ];
 
+const PANELS_TH_CLASS = 'px-6 py-2 border-r border-gray-100';
+const PANELS_TD_CLASS = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
+
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `colunas.orderedVisibleColumns` (ordem que o usuário arrasta), em vez da
+// sequência fixa derivada de `COLUMNS.filter(...)` no JSX original.
+const PANELS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    colaborador: { label: 'Colaborador', className: PANELS_TH_CLASS },
+    cargo: { label: 'Cargo', className: PANELS_TH_CLASS },
+    total: { label: 'Atribuídos', className: PANELS_TH_CLASS },
+    concluidos: { label: 'Concluídos', className: PANELS_TH_CLASS },
+    pendentes: { label: 'Pendentes', className: PANELS_TH_CLASS },
+    atrasados: { label: 'Em atraso', className: PANELS_TH_CLASS },
+    aderencia: { label: 'Aderência', className: PANELS_TH_CLASS },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `colunas.orderedVisibleColumns` (ordem arrastável) em vez de repetir
+// um bloco condicional fixo por coluna.
+function renderPanelCell(key: string, r: AcademyManagerRow): React.ReactNode {
+    switch (key) {
+        case 'colaborador':
+            return <span className="text-gray-900">{r.employee_name}</span>;
+        case 'cargo':
+            return <span className="text-gray-500">{r.employee_role || '—'}</span>;
+        case 'total':
+            return <span className="text-gray-600">{r.total}</span>;
+        case 'concluidos':
+            return <span className="text-emerald-700">{r.concluidos}</span>;
+        case 'pendentes':
+            return <span className="text-gray-600">{r.pendentes}</span>;
+        case 'atrasados':
+            return (
+                <span className={r.atrasados > 0 ? 'text-rose-700' : 'text-gray-400'}>
+                    {r.atrasados}
+                </span>
+            );
+        case 'aderencia':
+            return (
+                <span className={
+                    r.aderencia_pct >= 80 ? 'text-emerald-700'
+                        : r.aderencia_pct >= 50 ? 'text-amber-700' : 'text-rose-700'
+                }>
+                    {r.aderencia_pct}%
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
 interface Props {
     orgId?: string | null;
 }
@@ -73,9 +124,6 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
             }
         });
     }, [linhas, colunas.sortColumn, colunas.sortDirection]);
-
-    const th = 'px-6 py-2 border-r border-gray-100';
-    const td = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
 
     if (carregando) {
         return (
@@ -163,55 +211,27 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {COLUMNS.filter(c => colunas.visibleColumns.includes(c.key)).map(c => (
-                                        <SortableHeader
-                                            key={c.key}
-                                            label={c.label}
-                                            colKey={c.key}
-                                            uppercase={false}
-                                            sortColumn={colunas.sortColumn}
-                                            sortDirection={colunas.sortDirection}
-                                            onSort={colunas.handleColumnSort}
-                                            className={th}
-                                        />
-                                    ))}
+                                    {colunas.orderedVisibleColumns.map(key => {
+                                        const def = PANELS_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection}
+                                                onSort={colunas.handleColumnSort}
+                                                onMoveColumn={colunas.moveColumn}
+                                                className={def.className} />
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {ordenadas.map(r => (
                                     <tr key={r.employee_id} className="hover:bg-blue-50/50 transition-colors">
-                                        {colunas.visibleColumns.includes('colaborador') && (
-                                            <td className={`${td} text-gray-900`}>{r.employee_name}</td>
-                                        )}
-                                        {colunas.visibleColumns.includes('cargo') && (
-                                            <td className={`${td} text-gray-500`}>{r.employee_role || '—'}</td>
-                                        )}
-                                        {colunas.visibleColumns.includes('total') && (
-                                            <td className={`${td} text-gray-600`}>{r.total}</td>
-                                        )}
-                                        {colunas.visibleColumns.includes('concluidos') && (
-                                            <td className={`${td} text-emerald-700`}>{r.concluidos}</td>
-                                        )}
-                                        {colunas.visibleColumns.includes('pendentes') && (
-                                            <td className={`${td} text-gray-600`}>{r.pendentes}</td>
-                                        )}
-                                        {colunas.visibleColumns.includes('atrasados') && (
-                                            <td className={td}>
-                                                <span className={r.atrasados > 0 ? 'text-rose-700' : 'text-gray-400'}>
-                                                    {r.atrasados}
-                                                </span>
+                                        {colunas.orderedVisibleColumns.map(key => (
+                                            <td key={key} className={PANELS_TD_CLASS}>
+                                                {renderPanelCell(key, r)}
                                             </td>
-                                        )}
-                                        {colunas.visibleColumns.includes('aderencia') && (
-                                            <td className={td}>
-                                                <span className={
-                                                    r.aderencia_pct >= 80 ? 'text-emerald-700'
-                                                        : r.aderencia_pct >= 50 ? 'text-amber-700' : 'text-rose-700'
-                                                }>
-                                                    {r.aderencia_pct}%
-                                                </span>
-                                            </td>
-                                        )}
+                                        ))}
                                     </tr>
                                 ))}
                             </tbody>

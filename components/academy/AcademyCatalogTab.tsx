@@ -32,6 +32,71 @@ const MODALIDADE_LABEL: Record<string, string> = {
     PRESENCIAL: 'Presencial', EAD: 'EAD', HIBRIDO: 'Híbrido',
 };
 
+const CATALOG_TH_CLASS = 'px-6 py-2 border-r border-gray-100';
+const CATALOG_TD_CLASS = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
+
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `colunas.orderedVisibleColumns` (ordem que o usuário arrasta), em vez da
+// sequência fixa derivada de `COLUMNS.filter(...)` no JSX original.
+const CATALOG_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    nome: { label: 'Treinamento', className: CATALOG_TH_CLASS },
+    categoria: { label: 'Categoria', className: CATALOG_TH_CLASS },
+    modalidade: { label: 'Modalidade', className: CATALOG_TH_CLASS },
+    nr: { label: 'NR', className: CATALOG_TH_CLASS },
+    carga: { label: 'Carga', className: CATALOG_TH_CLASS },
+    validade: { label: 'Validade', className: CATALOG_TH_CLASS },
+    conteudo: { label: 'Conteúdo', className: CATALOG_TH_CLASS },
+    obrigatorio: { label: 'Obrigatório', className: CATALOG_TH_CLASS },
+};
+
+interface RenderCatalogCellCtx {
+    versoes: Record<string, string>;
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `colunas.orderedVisibleColumns` (ordem arrastável) em vez de repetir
+// um bloco condicional fixo por coluna.
+function renderCatalogCell(key: string, c: TrainingCourse, ctx: RenderCatalogCellCtx): React.ReactNode {
+    const cat = CAT_CONFIG[c.categoria];
+    const ead = c.modalidade && c.modalidade !== 'PRESENCIAL';
+    switch (key) {
+        case 'nome':
+            return (
+                <>
+                    <p className="text-gray-900">{c.nome}</p>
+                    {c.instrutor && <p className="text-xs text-gray-400">{c.instrutor}</p>}
+                </>
+            );
+        case 'categoria':
+            return <span className={cat?.color ?? 'text-gray-600'}>{cat?.label ?? c.categoria}</span>;
+        case 'modalidade':
+            return <span className="text-gray-600">{MODALIDADE_LABEL[c.modalidade || 'PRESENCIAL']}</span>;
+        case 'nr':
+            return <span className="text-rose-600">{c.nr_referencia || '—'}</span>;
+        case 'carga':
+            return <span className="text-gray-600">{c.carga_horaria}h</span>;
+        case 'validade':
+            return <span className="text-gray-500">{c.validade_meses ? `${c.validade_meses} meses` : 'Sem validade'}</span>;
+        case 'conteudo':
+            // Explica em vez de omitir: "—" não dizia se faltava conteúdo ou se
+            // o treinamento nem aceita conteúdo.
+            return !ead ? <span className="text-gray-400">Presencial — sem conteúdo</span>
+                : ctx.versoes[c.id] === 'rascunho'
+                    ? <span className="text-amber-700">Rascunho — não publicado</span>
+                    : ctx.versoes[c.id]
+                        ? <span className="text-emerald-700">{ctx.versoes[c.id]}</span>
+                        : <span className="text-gray-400">Sem conteúdo</span>;
+        case 'obrigatorio':
+            return c.is_obrigatorio ? (
+                <span className="flex items-center gap-1 text-rose-700">
+                    <Shield className="w-3.5 h-3.5" /> Sim
+                </span>
+            ) : <span className="text-gray-400">Não</span>;
+        default:
+            return null;
+    }
+}
+
 interface Props {
     orgId?: string | null;
     courses: TrainingCourse[];
@@ -155,9 +220,6 @@ const AcademyCatalogTab: React.FC<Props> = ({
         });
     }, [courses, search, colunas.sortColumn, colunas.sortDirection, versoes]);
 
-    const th = 'px-6 py-2 border-r border-gray-100';
-    const td = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
-
     return (
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-white">
@@ -210,18 +272,17 @@ const AcademyCatalogTab: React.FC<Props> = ({
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                {COLUMNS.filter(c => c.key !== 'actions' && colunas.visibleColumns.includes(c.key)).map(c => (
-                                    <SortableHeader
-                                        key={c.key}
-                                        label={c.label}
-                                        colKey={c.key}
-                                        uppercase={false}
-                                        sortColumn={colunas.sortColumn}
-                                        sortDirection={colunas.sortDirection}
-                                        onSort={colunas.handleColumnSort}
-                                        className={th}
-                                    />
-                                ))}
+                                {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                    const def = CATALOG_COLUMN_HEADERS[key];
+                                    if (!def) return null;
+                                    return (
+                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                            sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection}
+                                            onSort={colunas.handleColumnSort}
+                                            onMoveColumn={colunas.moveColumn}
+                                            className={def.className} />
+                                    );
+                                })}
                                 {colunas.visibleColumns.includes('actions') && (
                                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                 )}
@@ -229,58 +290,13 @@ const AcademyCatalogTab: React.FC<Props> = ({
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {filtrados.map(c => {
-                                const cat = CAT_CONFIG[c.categoria];
-                                const ead = c.modalidade && c.modalidade !== 'PRESENCIAL';
                                 return (
                                     <tr key={c.id} className="hover:bg-blue-50/50 transition-colors">
-                                        {colunas.visibleColumns.includes('nome') && (
-                                            <td className={td}>
-                                                <p className="text-gray-900">{c.nome}</p>
-                                                {c.instrutor && <p className="text-xs text-gray-400">{c.instrutor}</p>}
+                                        {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className={CATALOG_TD_CLASS}>
+                                                {renderCatalogCell(key, c, { versoes })}
                                             </td>
-                                        )}
-                                        {colunas.visibleColumns.includes('categoria') && (
-                                            <td className={td}>
-                                                <span className={cat?.color ?? 'text-gray-600'}>{cat?.label ?? c.categoria}</span>
-                                            </td>
-                                        )}
-                                        {colunas.visibleColumns.includes('modalidade') && (
-                                            <td className={`${td} text-gray-600`}>
-                                                {MODALIDADE_LABEL[c.modalidade || 'PRESENCIAL']}
-                                            </td>
-                                        )}
-                                        {colunas.visibleColumns.includes('nr') && (
-                                            <td className={`${td} text-rose-600`}>{c.nr_referencia || '—'}</td>
-                                        )}
-                                        {colunas.visibleColumns.includes('carga') && (
-                                            <td className={`${td} text-gray-600`}>{c.carga_horaria}h</td>
-                                        )}
-                                        {colunas.visibleColumns.includes('validade') && (
-                                            <td className={`${td} text-gray-500`}>
-                                                {c.validade_meses ? `${c.validade_meses} meses` : 'Sem validade'}
-                                            </td>
-                                        )}
-                                        {colunas.visibleColumns.includes('conteudo') && (
-                                            <td className={td}>
-                                                {/* Explica em vez de omitir: "—" não dizia se faltava
-                                                    conteúdo ou se o treinamento nem aceita conteúdo. */}
-                                                {!ead ? <span className="text-gray-400">Presencial — sem conteúdo</span>
-                                                    : versoes[c.id] === 'rascunho'
-                                                        ? <span className="text-amber-700">Rascunho — não publicado</span>
-                                                        : versoes[c.id]
-                                                            ? <span className="text-emerald-700">{versoes[c.id]}</span>
-                                                            : <span className="text-gray-400">Sem conteúdo</span>}
-                                            </td>
-                                        )}
-                                        {colunas.visibleColumns.includes('obrigatorio') && (
-                                            <td className={td}>
-                                                {c.is_obrigatorio ? (
-                                                    <span className="flex items-center gap-1 text-rose-700">
-                                                        <Shield className="w-3.5 h-3.5" /> Sim
-                                                    </span>
-                                                ) : <span className="text-gray-400">Não</span>}
-                                            </td>
-                                        )}
+                                        ))}
                                         {colunas.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">

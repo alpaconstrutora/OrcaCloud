@@ -488,6 +488,74 @@ const CALCULO_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' não entra (renderizada fixa fora do drag).
+const CALCULO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    employee: { label: 'Colaborador', className: 'px-3 py-2 border-r border-gray-100' },
+    project: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100' },
+    dias_uteis: { label: 'Dias úteis', className: 'px-3 py-2 border-r border-gray-100 text-center' },
+    faltas: { label: 'Faltas', className: 'px-3 py-2 border-r border-gray-100 text-center' },
+    ferias: { label: 'Férias', className: 'px-3 py-2 border-r border-gray-100 text-center' },
+    afastamento: { label: 'Afastam.', className: 'px-3 py-2 border-r border-gray-100 text-center' },
+    elegiveis: { label: 'Elegíveis', className: 'px-3 py-2 border-r border-gray-100 text-center' },
+    valor_dia: { label: 'Valor/dia', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    bruto: { label: 'Bruto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    desconto: { label: 'Desconto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    liquido: { label: 'Líquido', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    status: { label: 'Status', className: 'px-3 py-2 border-r border-gray-100' },
+};
+
+interface CalculoCellCtx {
+    isEdit: boolean;
+    editDias: number;
+    setEditDias: (n: number) => void;
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderCalculoCell(key: string, c: VrCalculo, ctx: CalculoCellCtx): React.ReactNode {
+    switch (key) {
+        case 'employee':
+            return <span className="text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</span>;
+        case 'project':
+            return <span className="text-sm font-normal text-gray-500 whitespace-nowrap">{c.project_name || '—'}</span>;
+        case 'dias_uteis':
+            return <span className="text-sm font-normal text-gray-700">{c.dias_uteis}</span>;
+        case 'faltas':
+            return <span className="text-sm font-normal text-rose-600">{c.dias_faltas || '—'}</span>;
+        case 'ferias':
+            return <span className="text-sm font-normal text-indigo-600">{c.dias_ferias || '—'}</span>;
+        case 'afastamento':
+            return <span className="text-sm font-normal text-amber-600">{c.dias_afastamento || '—'}</span>;
+        case 'elegiveis':
+            return ctx.isEdit ? (
+                <input
+                    type="number"
+                    min="0"
+                    className="w-16 px-2 py-1 border border-orange-300 rounded-[6px] text-center text-sm font-normal"
+                    value={ctx.editDias}
+                    onChange={e => ctx.setEditDias(parseInt(e.target.value) || 0)}
+                />
+            ) : (
+                <span className="text-sm font-normal text-emerald-700">{c.dias_elegiveis}</span>
+            );
+        case 'valor_dia':
+            return <span className="text-sm font-medium text-gray-700 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</span>;
+        case 'bruto':
+            return <span className="text-sm font-medium text-gray-800 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</span>;
+        case 'desconto':
+            return <span className="text-sm font-medium text-rose-600 whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</span>;
+        case 'liquido':
+            return <span className="text-sm font-medium text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</span>;
+        case 'status':
+            return <span className={`text-sm font-normal ${STATUS_CFG[c.status].color}`}>{STATUS_CFG[c.status].label}</span>;
+        default:
+            return null;
+    }
+}
+
 const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { id: string; name: string }[] }> = ({ orgId, employees, projects }) => {
     const qc = useQueryClient();
     const { notify, Toast } = useToast();
@@ -711,42 +779,19 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                         <input type="checkbox" onChange={toggleAll} checked={rascunhos.length > 0 && selectedIds.size === rascunhos.length} className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer" />
                                     </th>
-                                    {tableColumns.visibleColumns.includes('employee') && (
-                                        <SortableHeader label="Colaborador" colKey="employee" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('project') && (
-                                        <SortableHeader label="Obra" colKey="project" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('dias_uteis') && (
-                                        <SortableHeader label="Dias úteis" colKey="dias_uteis" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('faltas') && (
-                                        <SortableHeader label="Faltas" colKey="faltas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('ferias') && (
-                                        <SortableHeader label="Férias" colKey="ferias" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('afastamento') && (
-                                        <SortableHeader label="Afastam." colKey="afastamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('elegiveis') && (
-                                        <SortableHeader label="Elegíveis" colKey="elegiveis" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('valor_dia') && (
-                                        <SortableHeader label="Valor/dia" colKey="valor_dia" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('bruto') && (
-                                        <SortableHeader label="Bruto" colKey="bruto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('desconto') && (
-                                        <SortableHeader label="Desconto" colKey="desconto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('liquido') && (
-                                        <SortableHeader label="Líquido" colKey="liquido" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns
+                                        .filter(key => key !== 'actions')
+                                        .map(key => {
+                                            const def = CALCULO_COLUMN_HEADERS[key];
+                                            if (!def) return null;
+                                            return (
+                                                <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    onMoveColumn={tableColumns.moveColumn}
+                                                    className={def.className} />
+                                            );
+                                        })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-3 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                     )}
@@ -754,7 +799,6 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filtered.map(c => {
-                                    const st = STATUS_CFG[c.status];
                                     const isEdit = editId === c.id;
                                     return (
                                         <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
@@ -763,56 +807,13 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                                                     <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSel(c.id)} className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer" />
                                                 )}
                                             </td>
-                                            {tableColumns.visibleColumns.includes('employee') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('project') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500 whitespace-nowrap">{c.project_name || '—'}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('dias_uteis') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-gray-700">{c.dias_uteis}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('faltas') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-rose-600">{c.dias_faltas || '—'}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('ferias') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-indigo-600">{c.dias_ferias || '—'}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('afastamento') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-amber-600">{c.dias_afastamento || '—'}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('elegiveis') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center">
-                                                    {isEdit ? (
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            className="w-16 px-2 py-1 border border-orange-300 rounded-[6px] text-center text-sm font-normal"
-                                                            value={editDias}
-                                                            onChange={e => setEditDias(parseInt(e.target.value) || 0)}
-                                                        />
-                                                    ) : (
-                                                        <span className="text-sm font-normal text-emerald-700">{c.dias_elegiveis}</span>
-                                                    )}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('valor_dia') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-700 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('bruto') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('desconto') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-rose-600 whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('liquido') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal">
-                                                    <span className={st.color}>{st.label}</span>
-                                                </td>
-                                            )}
+                                            {tableColumns.orderedVisibleColumns
+                                                .filter(key => key !== 'actions')
+                                                .map(key => (
+                                                    <td key={key} className={`px-3 py-2.5 border-r border-gray-100 ${key === 'dias_uteis' || key === 'faltas' || key === 'ferias' || key === 'afastamento' || key === 'elegiveis' ? 'text-center' : ''} ${key === 'valor_dia' || key === 'bruto' || key === 'desconto' || key === 'liquido' ? 'text-right' : ''}`}>
+                                                        {renderCalculoCell(key, c, { isEdit, editDias, setEditDias })}
+                                                    </td>
+                                                ))}
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-3 py-2.5 text-right">
                                                     {c.status === 'rascunho' && !isEdit && (
@@ -877,6 +878,46 @@ const APROVADOS_COLUMNS: ColumnConfig[] = [
     { key: 'liquido', label: 'Líquido', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
 ];
+
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX.
+const APROVADOS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    employee: { label: 'Colaborador', className: 'px-4 py-2 border-r border-gray-100' },
+    project: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100' },
+    elegiveis: { label: 'Elegíveis', className: 'px-3 py-2 border-r border-gray-100 text-center' },
+    valor_dia: { label: 'Valor/dia', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    bruto: { label: 'Bruto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    desconto: { label: 'Desconto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    liquido: { label: 'Líquido', className: 'px-3 py-2 border-r border-gray-100 text-right' },
+    status: { label: 'Status', className: 'px-4 py-2' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderAprovadosCell(key: string, c: VrCalculo): React.ReactNode {
+    switch (key) {
+        case 'employee':
+            return <span className="text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</span>;
+        case 'project':
+            return <span className="text-sm font-normal text-gray-500 whitespace-nowrap">{c.project_name || '—'}</span>;
+        case 'elegiveis':
+            return <span className="text-sm font-normal text-emerald-700">{c.dias_elegiveis}</span>;
+        case 'valor_dia':
+            return <span className="text-sm font-medium text-gray-700 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</span>;
+        case 'bruto':
+            return <span className="text-sm font-medium text-gray-800 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</span>;
+        case 'desconto':
+            return <span className="text-sm font-medium text-rose-600 whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</span>;
+        case 'liquido':
+            return <span className="text-sm font-medium text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</span>;
+        case 'status':
+            return <span className={`text-sm font-normal ${STATUS_CFG[c.status].color}`}>{STATUS_CFG[c.status].label}</span>;
+        default:
+            return null;
+    }
+}
 
 const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
     const qc = useQueryClient();
@@ -1019,63 +1060,28 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('employee') && (
-                                        <SortableHeader label="Colaborador" colKey="employee" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('project') && (
-                                        <SortableHeader label="Obra" colKey="project" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('elegiveis') && (
-                                        <SortableHeader label="Elegíveis" colKey="elegiveis" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('valor_dia') && (
-                                        <SortableHeader label="Valor/dia" colKey="valor_dia" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('bruto') && (
-                                        <SortableHeader label="Bruto" colKey="bruto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('desconto') && (
-                                        <SortableHeader label="Desconto" colKey="desconto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('liquido') && (
-                                        <SortableHeader label="Líquido" colKey="liquido" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = APROVADOS_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className} />
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filtered.map(c => {
-                                    const st = STATUS_CFG[c.status];
                                     return (
                                         <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
-                                            {tableColumns.visibleColumns.includes('employee') && (
-                                                <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('project') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500 whitespace-nowrap">{c.project_name || '—'}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('elegiveis') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-emerald-700">{c.dias_elegiveis}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('valor_dia') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-700 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('bruto') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('desconto') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-rose-600 whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('liquido') && (
-                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-4 py-2.5 text-sm font-normal">
-                                                    <span className={st.color}>{st.label}</span>
+                                            {tableColumns.orderedVisibleColumns.map(key => (
+                                                <td key={key} className={`px-3 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'employee' ? 'px-4' : ''} ${key === 'elegiveis' ? 'text-center' : ''} ${key === 'valor_dia' || key === 'bruto' || key === 'desconto' || key === 'liquido' ? 'text-right' : ''} ${key === 'status' ? 'px-4' : ''}`}>
+                                                    {renderAprovadosCell(key, c)}
                                                 </td>
-                                            )}
+                                            ))}
                                         </tr>
                                     );
                                 })}

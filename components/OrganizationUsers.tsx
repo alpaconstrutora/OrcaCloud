@@ -26,6 +26,74 @@ const MEMBER_COL_WIDTHS: Record<string, number> = {
     code: 118, name: 260, email: 300, role: 240, joinedAt: 150, actions: 220,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `memberColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'role' (Função/Cargo) não tem valor único pra
+// ordenar (§6.3).
+const MEMBER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    name: { label: 'Membro', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    email: { label: 'Email', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    role: { label: 'Função / Cargo', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    joinedAt: { label: 'Entrou em', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `memberColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderMemberCell(
+    key: string,
+    member: OrganizationMember,
+    ctx: { customRoles: OrganizationCustomRole[]; onRoleChange: (id: string, role: OrganizationRole) => void },
+): React.ReactNode {
+    switch (key) {
+        case 'code':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{member.code || '-'}</span>;
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
+                        {member.name.charAt(0).toUpperCase()}
+                    </div>
+                    <p className="text-sm font-normal text-gray-700 truncate">{member.name}</p>
+                </div>
+            );
+        case 'email':
+            return (
+                <div className="flex items-center gap-1.5 text-sm text-gray-600 font-normal">
+                    <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate">{member.email}</span>
+                </div>
+            );
+        case 'role':
+            return (
+                <div className="flex flex-col gap-1">
+                    {/* Select editável inline — MESMA tipografia do TD comum (§7.1),
+                        nunca pílula/caixa-alta/peso pesado só porque parece um chip
+                        (era exatamente esse erro que já vazou em BankReconciliation.tsx). */}
+                    <select
+                        value={member.role}
+                        onChange={(e) => ctx.onRoleChange(member.id, e.target.value as OrganizationRole)}
+                        className="w-fit text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 outline-none cursor-pointer appearance-none transition-all"
+                    >
+                        <option value="admin">Admin</option>
+                        <option value="member">Membro</option>
+                        <option value="viewer">Visitante</option>
+                    </select>
+                    {member.customRoleId && (
+                        <span className="text-xs font-medium text-gray-400">
+                            Cargo: {ctx.customRoles.find(r => r.id === member.customRoleId)?.name || 'Customizado'}
+                        </span>
+                    )}
+                </div>
+            );
+        case 'joinedAt':
+            return <span className="text-sm font-normal text-gray-600">{new Date(member.joinedAt).toLocaleDateString('pt-BR')}</span>;
+        default:
+            return null;
+    }
+}
+
 interface OrganizationUsersProps {
     organizationId?: string;
     members: OrganizationMember[];
@@ -1019,43 +1087,28 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: memberTableTotalWidth }}>
                             <colgroup>
-                                {memberColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
-                                {memberColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
-                                {memberColumns.visibleColumns.includes('email') && <col data-col-key="email" style={{ width: `${cols.getWidth('email')}px` }} />}
-                                {memberColumns.visibleColumns.includes('role') && <col data-col-key="role" style={{ width: `${cols.getWidth('role')}px` }} />}
-                                {memberColumns.visibleColumns.includes('joinedAt') && <col data-col-key="joinedAt" style={{ width: `${cols.getWidth('joinedAt')}px` }} />}
+                                {memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* espaçador — absorve a folga ANTES de "Ações", senão a borda dela anda a cada resize (§6.1.1) */}
                                 <col />
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                             </colgroup>
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {memberColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="code" />
-                                        </SortableHeader>
-                                    )}
-                                    {memberColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Membro" colKey="name" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="name" />
-                                        </SortableHeader>
-                                    )}
-                                    {memberColumns.visibleColumns.includes('email') && (
-                                        <SortableHeader label="Email" colKey="email" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="email" />
-                                        </SortableHeader>
-                                    )}
-                                    {/* Função/Cargo composta (papel + nome do cargo customizado) — sem valor único pra ordenar (§6.3). */}
-                                    {memberColumns.visibleColumns.includes('role') && (
-                                        <SortableHeader label="Função / Cargo" colKey="role" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="role" />
-                                        </SortableHeader>
-                                    )}
-                                    {memberColumns.visibleColumns.includes('joinedAt') && (
-                                        <SortableHeader label="Entrou em" colKey="joinedAt" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="joinedAt" />
-                                        </SortableHeader>
-                                    )}
+                                    {memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = MEMBER_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection}
+                                                onSort={memberColumns.handleColumnSort}
+                                                onMoveColumn={memberColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem (§6.1.1) */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -1075,57 +1128,11 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     sortedMembers.map((member) => (
                                         <React.Fragment key={member.id}>
                                             <tr className="hover:bg-blue-50/50 transition-colors">
-                                                {memberColumns.visibleColumns.includes('code') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                        {member.code || '-'}
+                                                {memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        {renderMemberCell(key, member, { customRoles, onRoleChange: handleMemberRoleChange })}
                                                     </td>
-                                                )}
-                                                {memberColumns.visibleColumns.includes('name') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
-                                                                {member.name.charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <p className="text-sm font-normal text-gray-700 truncate">{member.name}</p>
-                                                        </div>
-                                                    </td>
-                                                )}
-                                                {memberColumns.visibleColumns.includes('email') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <div className="flex items-center gap-1.5 text-sm text-gray-600 font-normal">
-                                                            <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                            <span className="truncate">{member.email}</span>
-                                                        </div>
-                                                    </td>
-                                                )}
-                                                {memberColumns.visibleColumns.includes('role') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <div className="flex flex-col gap-1">
-                                                            {/* Select editável inline — MESMA tipografia do TD comum (§7.1),
-                                                                nunca pílula/caixa-alta/peso pesado só porque parece um chip
-                                                                (era exatamente esse erro que já vazou em BankReconciliation.tsx). */}
-                                                            <select
-                                                                value={member.role}
-                                                                onChange={(e) => handleMemberRoleChange(member.id, e.target.value as OrganizationRole)}
-                                                                className="w-fit text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 outline-none cursor-pointer appearance-none transition-all"
-                                                            >
-                                                                <option value="admin">Admin</option>
-                                                                <option value="member">Membro</option>
-                                                                <option value="viewer">Visitante</option>
-                                                            </select>
-                                                            {member.customRoleId && (
-                                                                <span className="text-xs font-medium text-gray-400">
-                                                                    Cargo: {customRoles.find(r => r.id === member.customRoleId)?.name || 'Customizado'}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                )}
-                                                {memberColumns.visibleColumns.includes('joinedAt') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                        {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
-                                                    </td>
-                                                )}
+                                                ))}
                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 <td className="px-6 py-2.5 text-right">

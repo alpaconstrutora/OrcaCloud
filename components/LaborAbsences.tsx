@@ -476,6 +476,70 @@ const BALANCE_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX.
+const BALANCE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    employee: { label: 'Colaborador', className: 'px-4 py-2 border-r border-gray-100' },
+    periodo: { label: 'Período aquisitivo', className: 'px-4 py-2 border-r border-gray-100' },
+    prazo: { label: 'Prazo concessivo', className: 'px-4 py-2 border-r border-gray-100 min-w-[180px]' },
+    direito: { label: 'Direito', className: 'px-4 py-2 border-r border-gray-100' },
+    gozados: { label: 'Gozados', className: 'px-4 py-2 border-r border-gray-100' },
+    vendidos: { label: 'Vendidos', className: 'px-4 py-2 border-r border-gray-100' },
+    restantes: { label: 'Restantes', className: 'px-4 py-2 border-r border-gray-100' },
+    status: { label: 'Status', className: 'px-4 py-2' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderBalanceCell(key: string, bal: VacationBalance): React.ReactNode {
+    switch (key) {
+        case 'employee':
+            return <span className="text-sm font-normal text-gray-900">{bal.employee_name}</span>;
+        case 'periodo':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{bal.periodo_inicio} → {bal.periodo_fim}</span>;
+        case 'prazo': {
+            const today = new Date().toISOString().split('T')[0];
+            const vencendo = bal.vencimento && bal.vencimento <= new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
+            const vencido = bal.vencimento && bal.vencimento < today;
+            // Barra de progresso do período concessivo
+            // concessivo = periodo_fim → vencimento (12 meses)
+            const start = new Date(bal.periodo_fim).getTime();
+            const end = new Date(bal.vencimento!).getTime();
+            const now = Date.now();
+            const pct = Math.min(100, Math.max(0, Math.round((now - start) / (end - start) * 100)));
+            const barColor = vencido ? 'bg-rose-500' : vencendo ? 'bg-amber-400' : pct > 50 ? 'bg-indigo-400' : 'bg-emerald-400';
+            const daysLeft = Math.ceil((end - now) / 86400000);
+            return (
+                <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className={`text-xs font-medium ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-gray-600'}`}>
+                            {vencido ? '⚠ Vencido' : vencendo ? `⏰ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
+                        </span>
+                        <span className="text-xs text-gray-400">{bal.vencimento}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                    </div>
+                </div>
+            );
+        }
+        case 'direito':
+            return <span className="text-sm font-normal text-gray-700">{bal.dias_direito}d</span>;
+        case 'gozados':
+            return <span className="text-sm font-normal text-indigo-600">{bal.dias_gozados}d</span>;
+        case 'vendidos':
+            return <span className="text-sm font-normal text-gray-500">{bal.dias_vendidos}d</span>;
+        case 'restantes':
+            return <span className={(bal.dias_restantes || 0) > 0 ? 'text-sm font-normal text-emerald-700' : 'text-sm font-normal text-gray-500'}>{bal.dias_restantes}d</span>;
+        case 'status':
+            return <span className={`text-sm font-normal ${BALANCE_STATUS_COLORS[bal.status] ?? 'text-rose-700'}`}>{bal.status}</span>;
+        default:
+            return null;
+    }
+}
+
 const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefresh, organizations }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
@@ -842,91 +906,28 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        {tableColumns.visibleColumns.includes('employee') && (
-                                            <SortableHeader label="Colaborador" colKey="employee" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
-                                        )}
-                                        {tableColumns.visibleColumns.includes('periodo') && (
-                                            <SortableHeader label="Período aquisitivo" colKey="periodo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
-                                        )}
-                                        {tableColumns.visibleColumns.includes('prazo') && (
-                                            <SortableHeader label="Prazo concessivo" colKey="prazo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100 min-w-[180px]" />
-                                        )}
-                                        {tableColumns.visibleColumns.includes('direito') && (
-                                            <SortableHeader label="Direito" colKey="direito" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
-                                        )}
-                                        {tableColumns.visibleColumns.includes('gozados') && (
-                                            <SortableHeader label="Gozados" colKey="gozados" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
-                                        )}
-                                        {tableColumns.visibleColumns.includes('vendidos') && (
-                                            <SortableHeader label="Vendidos" colKey="vendidos" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
-                                        )}
-                                        {tableColumns.visibleColumns.includes('restantes') && (
-                                            <SortableHeader label="Restantes" colKey="restantes" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2" />
-                                        )}
+                                        {tableColumns.orderedVisibleColumns.map(key => {
+                                            const def = BALANCE_COLUMN_HEADERS[key];
+                                            if (!def) return null;
+                                            return (
+                                                <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    onMoveColumn={tableColumns.moveColumn}
+                                                    className={def.className} />
+                                            );
+                                        })}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {filteredBalances.map(bal => {
-                                        const today = new Date().toISOString().split('T')[0];
-                                        const vencendo = bal.vencimento && bal.vencimento <= new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
-                                        const vencido  = bal.vencimento && bal.vencimento < today;
                                         return (
                                             <tr key={bal.id} className="hover:bg-blue-50/50 transition-colors">
-                                                {tableColumns.visibleColumns.includes('employee') && (
-                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900">{bal.employee_name}</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('periodo') && (
-                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">{bal.periodo_inicio} → {bal.periodo_fim}</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('prazo') && (
-                                                    <td className="px-4 py-2.5 border-r border-gray-100 min-w-[180px]">
-                                                        {(() => {
-                                                            // Barra de progresso do período concessivo
-                                                            // concessivo = periodo_fim → vencimento (12 meses)
-                                                            const start = new Date(bal.periodo_fim).getTime();
-                                                            const end   = new Date(bal.vencimento!).getTime();
-                                                            const now   = Date.now();
-                                                            const pct   = Math.min(100, Math.max(0, Math.round((now - start) / (end - start) * 100)));
-                                                            const barColor = vencido ? 'bg-rose-500' : vencendo ? 'bg-amber-400' : pct > 50 ? 'bg-indigo-400' : 'bg-emerald-400';
-                                                            const daysLeft = Math.ceil((end - now) / 86400000);
-                                                            return (
-                                                                <div className="space-y-1">
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <span className={`text-xs font-medium ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-gray-600'}`}>
-                                                                            {vencido ? '⚠ Vencido' : vencendo ? `⏰ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
-                                                                        </span>
-                                                                        <span className="text-xs text-gray-400">{bal.vencimento}</span>
-                                                                    </div>
-                                                                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                                                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
+                                                {tableColumns.orderedVisibleColumns.map(key => (
+                                                    <td key={key} className={`px-4 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'prazo' ? 'min-w-[180px]' : ''}`}>
+                                                        {renderBalanceCell(key, bal)}
                                                     </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('direito') && (
-                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{bal.dias_direito}d</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('gozados') && (
-                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-indigo-600">{bal.dias_gozados}d</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('vendidos') && (
-                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500">{bal.dias_vendidos}d</td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('restantes') && (
-                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal">
-                                                        <span className={(bal.dias_restantes || 0) > 0 ? 'text-emerald-700' : 'text-gray-500'}>{bal.dias_restantes}d</span>
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('status') && (
-                                                    <td className="px-4 py-2.5 text-sm font-normal">
-                                                        <span className={BALANCE_STATUS_COLORS[bal.status] ?? 'text-rose-700'}>{bal.status}</span>
-                                                    </td>
-                                                )}
+                                                ))}
                                             </tr>
                                         );
                                     })}

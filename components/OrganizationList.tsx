@@ -32,6 +32,24 @@ const ORG_LIST_COLUMNS: ColumnConfig[] = [
     { key: 'cnpj', label: 'CNPJ', sortable: true },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> da tabela de
+// organizações a partir de `tableColumns.orderedVisibleColumns` (ordem que o
+// usuário arrasta), em vez de uma sequência fixa de JSX.
+const ORG_LIST_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    name: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100' },
+    contact: { label: 'Contato', className: 'px-6 py-2 border-r border-gray-100' },
+    cnpj: { label: 'CNPJ', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+};
+
+// Metadados de header por coluna da tabela fallback "Todos os Usuários".
+const ALL_USERS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Usuário', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    email: { label: 'E-mail', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    role: { label: 'Função', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca já existente, não a substitui.
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
@@ -50,8 +68,86 @@ function getAdvancedFilterValue(org: Organization, key: string): unknown {
         default: return null;
     }
 }
+
+// Conteúdo de cada <td> por coluna da tabela de organizações — extraído para
+// função pura para que o <tbody> possa mapear `tableColumns.orderedVisibleColumns`
+// (ordem arrastável). `org === null` representa a linha fixa "Todas as
+// organizações" (não é um registro real, mas segue a mesma ordem de colunas).
+function renderOrgListCell(key: string, org: Organization | null, ctx: { isActive: boolean }): React.ReactNode {
+    if (org === null) {
+        switch (key) {
+            case 'code':
+                return <span className="text-sm font-normal text-gray-400 whitespace-nowrap">-</span>;
+            case 'name':
+                return (
+                    <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${ctx.isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            <Activity className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-normal text-gray-900 flex items-center gap-2">
+                                Todas as organizações
+                                {ctx.isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
+                            </p>
+                            <p className="text-xs font-medium text-gray-400">Visão consolidada do grupo</p>
+                        </div>
+                    </div>
+                );
+            case 'contact':
+                return <span className="text-sm font-normal text-gray-400">Global</span>;
+            case 'cnpj':
+                return <span className="text-sm font-normal text-gray-400">-</span>;
+            default:
+                return null;
+        }
+    }
+    switch (key) {
+        case 'code':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{org.code || '-'}</span>;
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${ctx.isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                        <Building2 className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-normal text-gray-900 flex items-center gap-2">
+                        {org.name}
+                        {ctx.isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
+                    </span>
+                </div>
+            );
+        case 'contact':
+            return (
+                <div className="flex items-center text-sm font-normal text-gray-600">
+                    <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
+                    {org.email || '-'}
+                </div>
+            );
+        case 'cnpj':
+            return <span className="text-sm font-normal text-gray-600">{org.cnpj || '-'}</span>;
+        default:
+            return null;
+    }
+}
+
+// Conteúdo de cada <td> por coluna da tabela fallback "Todos os Usuários".
+function renderAllUsersCell(key: string, item: { org: Organization; member: OrganizationMember }): React.ReactNode {
+    const { org, member } = item;
+    switch (key) {
+        case 'name':
+            return <span className="text-sm font-normal text-gray-700 truncate">{member.name}</span>;
+        case 'email':
+            return <span className="text-sm font-normal text-gray-600 truncate">{member.email}</span>;
+        case 'organization':
+            return <span className="text-sm font-normal text-blue-600 truncate">{org.name}</span>;
+        case 'role':
+            return <span className="text-sm font-normal text-gray-600">{member.role}</span>;
+        default:
+            return null;
+    }
+}
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
-import { Organization, BudgetEntry } from '../types';
+import { Organization, OrganizationMember, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import OrganizationUsers from './OrganizationUsers';
@@ -328,18 +424,17 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            {tableColumns.visibleColumns.includes('code') && (
-                                                <SortableHeader label="Código" colKey="code" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('name') && (
-                                                <SortableHeader label="Organização" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('contact') && (
-                                                <SortableHeader label="Contato" colKey="contact" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('cnpj') && (
-                                                <SortableHeader label="CNPJ" colKey="cnpj" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                                            )}
+                                            {tableColumns.orderedVisibleColumns.map(key => {
+                                                const def = ORG_LIST_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                return (
+                                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                        onSort={tableColumns.handleColumnSort}
+                                                        onMoveColumn={tableColumns.moveColumn}
+                                                        className={def.className} />
+                                                );
+                                            })}
                                             <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                         </tr>
                                     </thead>
@@ -348,31 +443,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             onClick={() => { setActiveOrganizationId(null); setManagingOrgId(null); }}
                                             className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${!activeOrganizationId ? 'bg-blue-50/60' : ''}`}
                                         >
-                                            {tableColumns.visibleColumns.includes('code') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 whitespace-nowrap">-</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${!activeOrganizationId ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                                            <Activity className="w-4 h-4" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-normal text-gray-900 flex items-center gap-2">
-                                                                Todas as organizações
-                                                                {!activeOrganizationId && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
-                                                            </p>
-                                                            <p className="text-xs font-medium text-gray-400">Visão consolidada do grupo</p>
-                                                        </div>
-                                                    </div>
+                                            {tableColumns.orderedVisibleColumns.map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderOrgListCell(key, null, { isActive: !activeOrganizationId })}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('contact') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">Global</td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('cnpj') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">-</td>
-                                            )}
+                                            ))}
                                             <td className="px-6 py-2.5 text-right text-xs font-medium text-gray-400" onClick={(e) => e.stopPropagation()}>
                                                 {!activeOrganizationId && 'Ativa'}
                                             </td>
@@ -383,37 +458,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                 <tr key={org.id} className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${isActive ? 'bg-blue-50/60' : ''}`}
                                                     onClick={() => setActiveOrganizationId(org.id)}
                                                 >
-                                                    {tableColumns.visibleColumns.includes('code') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                            {org.code || '-'}
+                                                    {tableColumns.orderedVisibleColumns.map(key => (
+                                                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            {renderOrgListCell(key, org, { isActive })}
                                                         </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('name') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                                                    <Building2 className="w-4 h-4" />
-                                                                </div>
-                                                                <span className="text-sm font-normal text-gray-900 flex items-center gap-2">
-                                                                    {org.name}
-                                                                    {isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('contact') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <div className="flex items-center text-sm font-normal text-gray-600">
-                                                                <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
-                                                                {org.email || '-'}
-                                                            </div>
-                                                        </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('cnpj') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                            {org.cnpj || '-'}
-                                                        </td>
-                                                    )}
+                                                    ))}
                                                     <td className="px-6 py-2.5 text-right">
                                                         {/* Selecionar = clique na linha (ação dominante, §9.1). O botão
                                                             "Ativo/Selecionar" antigo duplicava exatamente essa ação —
@@ -587,36 +636,28 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 <div className="overflow-x-auto">
                                 <table ref={allUsersCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: allUsersTableTotalWidth }}>
                                     <colgroup>
-                                        {allUsersColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${allUsersCols.getWidth('name')}px` }} />}
-                                        {allUsersColumns.visibleColumns.includes('email') && <col data-col-key="email" style={{ width: `${allUsersCols.getWidth('email')}px` }} />}
-                                        {allUsersColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${allUsersCols.getWidth('organization')}px` }} />}
-                                        {allUsersColumns.visibleColumns.includes('role') && <col data-col-key="role" style={{ width: `${allUsersCols.getWidth('role')}px` }} />}
+                                        {allUsersColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <col key={key} data-col-key={key} style={{ width: `${allUsersCols.getWidth(key)}px` }} />
+                                        ))}
                                         {/* espaçador — absorve a folga ANTES de "Ações" (§6.1.1) */}
                                         <col />
                                         <col data-col-key="actions" style={{ width: `${allUsersCols.getWidth('actions')}px` }} />
                                     </colgroup>
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            {allUsersColumns.visibleColumns.includes('name') && (
-                                                <SortableHeader label="Usuário" colKey="name" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                    <allUsersCols.ResizeHandle colKey="name" />
-                                                </SortableHeader>
-                                            )}
-                                            {allUsersColumns.visibleColumns.includes('email') && (
-                                                <SortableHeader label="E-mail" colKey="email" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                    <allUsersCols.ResizeHandle colKey="email" />
-                                                </SortableHeader>
-                                            )}
-                                            {allUsersColumns.visibleColumns.includes('organization') && (
-                                                <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                    <allUsersCols.ResizeHandle colKey="organization" />
-                                                </SortableHeader>
-                                            )}
-                                            {allUsersColumns.visibleColumns.includes('role') && (
-                                                <SortableHeader label="Função" colKey="role" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                    <allUsersCols.ResizeHandle colKey="role" />
-                                                </SortableHeader>
-                                            )}
+                                            {allUsersColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                                const def = ALL_USERS_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                return (
+                                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                        sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection}
+                                                        onSort={allUsersColumns.handleColumnSort}
+                                                        onMoveColumn={allUsersColumns.moveColumn}
+                                                        className={def.className}>
+                                                        <allUsersCols.ResizeHandle colKey={key} />
+                                                    </SortableHeader>
+                                                );
+                                            })}
                                             {/* espaçador — casa com o <col /> sem largura, na mesma ordem (§6.1.1) */}
                                             <th aria-hidden="true" className="border-r border-gray-100" />
                                             <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -634,22 +675,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             </tr>
                                         ) : allUsersFlat.map(({ org, member }) => (
                                             <tr key={`${org.id}-${member.email}`} className="hover:bg-blue-50/50 transition-colors">
-                                                {allUsersColumns.visibleColumns.includes('name') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">{member.name}</td>
-                                                )}
-                                                {allUsersColumns.visibleColumns.includes('email') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate">{member.email}</td>
-                                                )}
-                                                {allUsersColumns.visibleColumns.includes('organization') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600 truncate">
-                                                        {org.name}
+                                                {allUsersColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        {renderAllUsersCell(key, { org, member })}
                                                     </td>
-                                                )}
-                                                {allUsersColumns.visibleColumns.includes('role') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                        {member.role}
-                                                    </td>
-                                                )}
+                                                ))}
                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                                 <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                 <td className="px-6 py-2.5 text-right">

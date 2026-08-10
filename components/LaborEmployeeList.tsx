@@ -26,6 +26,90 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     name: 240, document: 150, role: 160, organization: 180, contract: 120, status: 112, salary: 152, cost: 150, actions: 138,
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX.
+const LABOR_EMPLOYEE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Colaborador', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    document: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    role: { label: 'Função', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    contract: { label: 'Vínculo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    salary: { label: 'Salário base', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    cost: { label: 'Custo/dia', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderEmployeeCell(key: string, emp: Employee, ctx: { orgName: (id: string) => string }): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shrink-0">
+                        {emp.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-normal text-gray-700 truncate">{emp.name}</p>
+                            {(emp.shared_orgs?.length ?? 0) > 0 && (
+                                <span
+                                    title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
+                                    className="flex items-center gap-0.5 text-violet-600 text-xs shrink-0"
+                                >
+                                    <Share2 className="w-3 h-3" />
+                                    {emp.shared_orgs!.length}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        case 'document':
+            return <span className="text-sm font-normal text-gray-600">{emp.cpf || <span className="text-gray-300">—</span>}</span>;
+        case 'role':
+            return <span className="text-sm font-normal text-gray-600">{emp.role}</span>;
+        case 'organization':
+            return (
+                <div className="flex items-center gap-1.5 min-w-[120px] text-sm font-normal text-gray-600">
+                    <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate" title={ctx.orgName(emp.org_id)}>{ctx.orgName(emp.org_id)}</span>
+                </div>
+            );
+        case 'contract':
+            return (
+                <span className={`text-sm font-normal ${CONTRACT_COLORS[emp.contract_type]}`}>
+                    {CONTRACT_LABELS[emp.contract_type]}
+                </span>
+            );
+        case 'status':
+            return (
+                <span className={`text-sm font-normal ${STATUS_COLORS[emp.status]}`}>
+                    {STATUS_LABELS[emp.status]}
+                </span>
+            );
+        case 'salary':
+            return emp.base_salary > 0 ? (
+                <span className="text-sm font-medium text-gray-800">{formatMoney(emp.base_salary)}</span>
+            ) : (
+                <span className="text-sm font-normal text-gray-400">—</span>
+            );
+        case 'cost':
+            return (
+                <span className="text-sm font-medium text-gray-800">
+                    {(emp.daily_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    {emp.hourly_cost > 0 && (
+                        <span className="text-gray-400 font-normal"> / {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h</span>
+                    )}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
 interface LaborEmployeeListProps {
     employees: Employee[];
     projects: any[];
@@ -286,60 +370,32 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                 <div className="overflow-auto max-h-[70vh]">
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                         <colgroup>
-                            {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
-                            {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
-                            {tableColumns.visibleColumns.includes('role') && <col data-col-key="role" style={{ width: `${cols.getWidth('role')}px` }} />}
-                            {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
-                            {tableColumns.visibleColumns.includes('contract') && <col data-col-key="contract" style={{ width: `${cols.getWidth('contract')}px` }} />}
-                            {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
-                            {tableColumns.visibleColumns.includes('salary') && <col data-col-key="salary" style={{ width: `${cols.getWidth('salary')}px` }} />}
-                            {tableColumns.visibleColumns.includes('cost') && <col data-col-key="cost" style={{ width: `${cols.getWidth('cost')}px` }} />}
+                            {tableColumns.orderedVisibleColumns
+                                .filter(key => key !== 'organization' || organizations.length > 1)
+                                .map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                             {/* espaçador — absorve a folga ANTES de "Ações" (§6.1.1 do guia de UI) */}
                             <col />
                             <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                         </colgroup>
                         <thead>
                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                {tableColumns.visibleColumns.includes('name') && (
-                                    <SortableHeader label="Colaborador" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="name" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('document') && (
-                                    <SortableHeader label="Documento" colKey="document" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="document" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('role') && (
-                                    <SortableHeader label="Função" colKey="role" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="role" />
-                                    </SortableHeader>
-                                )}
-                                {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
-                                    <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="organization" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('contract') && (
-                                    <SortableHeader label="Vínculo" colKey="contract" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="contract" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('status') && (
-                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                        <cols.ResizeHandle colKey="status" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('salary') && (
-                                    <SortableHeader label="Salário base" colKey="salary" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
-                                        <cols.ResizeHandle colKey="salary" />
-                                    </SortableHeader>
-                                )}
-                                {tableColumns.visibleColumns.includes('cost') && (
-                                    <SortableHeader label="Custo/dia" colKey="cost" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden">
-                                        <cols.ResizeHandle colKey="cost" />
-                                    </SortableHeader>
-                                )}
+                                {tableColumns.orderedVisibleColumns
+                                    .filter(key => key !== 'organization' || organizations.length > 1)
+                                    .map(key => {
+                                        const def = LABOR_EMPLOYEE_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                 {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                 <th aria-hidden="true" className="border-r border-gray-100" />
                                 {tableColumns.visibleColumns.includes('actions') && (
@@ -364,80 +420,13 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                             )}
                             {filtered.map(emp => (
                                 <tr key={emp.id} className="hover:bg-blue-50/50 transition-colors group">
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shrink-0">
-                                                    {emp.name.charAt(0).toUpperCase()}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <p className="text-sm font-normal text-gray-700 truncate">{emp.name}</p>
-                                                        {(emp.shared_orgs?.length ?? 0) > 0 && (
-                                                            <span
-                                                                title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
-                                                                className="flex items-center gap-0.5 text-violet-600 text-xs shrink-0"
-                                                            >
-                                                                <Share2 className="w-3 h-3" />
-                                                                {emp.shared_orgs!.length}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('document') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                            {emp.cpf || <span className="text-gray-300">—</span>}
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('role') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                            {emp.role}
-                                        </td>
-                                    )}
-                                    {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                            <div className="flex items-center gap-1.5 min-w-[120px]">
-                                                <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                <span className="truncate" title={orgName(emp.org_id)}>{orgName(emp.org_id)}</span>
-                                            </div>
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('contract') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <span className={`text-sm font-normal ${CONTRACT_COLORS[emp.contract_type]}`}>
-                                                {CONTRACT_LABELS[emp.contract_type]}
-                                            </span>
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            <span className={`text-sm font-normal ${STATUS_COLORS[emp.status]}`}>
-                                                {STATUS_LABELS[emp.status]}
-                                            </span>
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('salary') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                            {emp.base_salary > 0 ? (
-                                                <span className="text-sm font-medium text-gray-800">{formatMoney(emp.base_salary)}</span>
-                                            ) : (
-                                                <span className="text-sm font-normal text-gray-400">—</span>
-                                            )}
-                                        </td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('cost') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                            <span className="text-sm font-medium text-gray-800">
-                                                {(emp.daily_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                {emp.hourly_cost > 0 && (
-                                                    <span className="text-gray-400 font-normal"> / {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h</span>
-                                                )}
-                                            </span>
-                                        </td>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns
+                                        .filter(key => key !== 'organization' || organizations.length > 1)
+                                        .map(key => (
+                                            <td key={key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'salary' || key === 'cost' ? 'text-right' : ''}`}>
+                                                {renderEmployeeCell(key, emp, { orgName })}
+                                            </td>
+                                        ))}
                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                     <td aria-hidden="true" className="border-r border-gray-100"></td>
                                     {tableColumns.visibleColumns.includes('actions') && (

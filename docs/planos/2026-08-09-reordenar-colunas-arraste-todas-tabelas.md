@@ -115,15 +115,17 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 **Fase 4 concluída — 9 de 9.**
 
 ### Fase 5 — RH / Labor / Academia
-- [ ] LaborEmployeeList.tsx
-- [ ] LaborAbsences.tsx
-- [ ] LaborValeRefeicao.tsx
-- [ ] LaborTrainings.tsx
-- [ ] academy/AcademyAssignmentsTab.tsx
-- [ ] academy/AcademyCatalogTab.tsx
-- [ ] academy/AcademyPanels.tsx
-- [ ] OrganizationUsers.tsx
-- [ ] OrganizationList.tsx
+- [x] LaborEmployeeList.tsx — deployado
+- [x] LaborAbsences.tsx — deployado
+- [x] LaborValeRefeicao.tsx — deployado (3 tabelas: cálculo/aprovados/histórico é card list)
+- [x] LaborTrainings.tsx — deployado
+- [x] academy/AcademyAssignmentsTab.tsx — deployado
+- [x] academy/AcademyCatalogTab.tsx — deployado
+- [x] academy/AcademyPanels.tsx — deployado
+- [x] OrganizationUsers.tsx — deployado
+- [x] OrganizationList.tsx — deployado
+
+**Fase 5 concluída — 9 de 9.**
 
 ### Fase 6 — Empreendimento / Engenharia / Áreas
 - [ ] empreendimento/EmpreendimentoModule.tsx
@@ -163,7 +165,7 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 - [x] Fase 2 (11 arquivos)
 - [x] Fase 3 (9 arquivos)
 - [x] Fase 4 (9 arquivos)
-- [ ] Fase 5 (9 arquivos)
+- [x] Fase 5 (9 arquivos)
 - [ ] Fase 6 (10 arquivos)
 - [ ] Fase 7 (16 arquivos)
 

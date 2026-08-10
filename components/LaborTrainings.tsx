@@ -71,6 +71,19 @@ const RECORD_COLUMNS: ColumnConfig[] = [
     { key: 'actions',   label: 'Ações',        sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' não entra (renderizada fixa fora do drag).
+const RECORD_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    employee: { label: 'Colaborador', className: 'px-6 py-2 border-r border-gray-100' },
+    course: { label: 'Treinamento', className: 'px-6 py-2 border-r border-gray-100' },
+    origem: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100' },
+    realizado: { label: 'Realizado em', className: 'px-6 py-2 border-r border-gray-100' },
+    validade: { label: 'Validade', className: 'px-6 py-2 border-r border-gray-100' },
+    nota: { label: 'Nota', className: 'px-6 py-2 border-r border-gray-100' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100' },
+};
+
 const STATUS_COLORS: Record<string, string> = {
     ATIVO: 'text-emerald-700', VENCIDO: 'text-rose-700', PENDENTE: 'text-amber-700',
 };
@@ -81,6 +94,53 @@ const fmtData = (iso?: string) => {
     const [a, m, d] = iso.split('T')[0].split('-');
     return `${d}/${m}/${a}`;
 };
+
+interface RecordCellCtx {
+    hoje: string;
+    vencendo: boolean | '' | null | undefined;
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `recordColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderRecordCell(key: string, r: EmployeeTraining, ctx: RecordCellCtx): React.ReactNode {
+    switch (key) {
+        case 'employee':
+            return <span className="text-gray-900">{r.employee_name || '—'}</span>;
+        case 'course':
+            return (
+                <>
+                    <p className="text-gray-800">{r.course_nome || '—'}</p>
+                    {r.nr_referencia && <p className="text-xs font-medium text-rose-600">{r.nr_referencia}</p>}
+                </>
+            );
+        case 'origem':
+            return (
+                <span className={r.origem === 'ACADEMIA' ? 'text-indigo-700' : 'text-gray-600'}>
+                    {r.origem === 'ACADEMIA' ? 'Academia (EAD)' : 'Presencial'}
+                </span>
+            );
+        case 'realizado':
+            return <span className="text-gray-500">{fmtData(r.data_realizacao)}</span>;
+        case 'validade':
+            return r.data_validade ? (
+                <span className={
+                    r.data_validade < ctx.hoje ? 'text-rose-700'
+                        : ctx.vencendo ? 'text-amber-700' : 'text-gray-600'
+                }>
+                    {fmtData(r.data_validade)}
+                </span>
+            ) : <span className="text-gray-400">Sem validade</span>;
+        case 'nota':
+            return r.nota != null ? (
+                <span className={r.aprovado ? 'text-emerald-700' : 'text-rose-700'}>{r.nota}</span>
+            ) : <span className="text-gray-400">—</span>;
+        case 'status':
+            return <span className={STATUS_COLORS[r.status] ?? 'text-gray-600'}>{r.status}</span>;
+        default:
+            return null;
+    }
+}
 
 function useToast() {
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -379,18 +439,19 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        {RECORD_COLUMNS.filter(c => c.key !== 'actions' && recordColumns.visibleColumns.includes(c.key)).map(c => (
-                                            <SortableHeader
-                                                key={c.key}
-                                                label={c.label}
-                                                colKey={c.key}
-                                                uppercase={false}
-                                                sortColumn={recordColumns.sortColumn}
-                                                sortDirection={recordColumns.sortDirection}
-                                                onSort={recordColumns.handleColumnSort}
-                                                className={th}
-                                            />
-                                        ))}
+                                        {recordColumns.orderedVisibleColumns
+                                            .filter(key => key !== 'actions')
+                                            .map(key => {
+                                                const def = RECORD_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                return (
+                                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                        sortColumn={recordColumns.sortColumn} sortDirection={recordColumns.sortDirection}
+                                                        onSort={recordColumns.handleColumnSort}
+                                                        onMoveColumn={recordColumns.moveColumn}
+                                                        className={def.className} />
+                                                );
+                                            })}
                                         {recordColumns.visibleColumns.includes('actions') && (
                                             <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                         )}
@@ -402,49 +463,13 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
                                             r.data_validade <= new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
                                         return (
                                             <tr key={r.id} className="hover:bg-blue-50/50 transition-colors">
-                                                {recordColumns.visibleColumns.includes('employee') && (
-                                                    <td className={`${td} text-gray-900`}>{r.employee_name || '—'}</td>
-                                                )}
-                                                {recordColumns.visibleColumns.includes('course') && (
-                                                    <td className={td}>
-                                                        <p className="text-gray-800">{r.course_nome || '—'}</p>
-                                                        {r.nr_referencia && <p className="text-xs font-medium text-rose-600">{r.nr_referencia}</p>}
-                                                    </td>
-                                                )}
-                                                {recordColumns.visibleColumns.includes('origem') && (
-                                                    <td className={td}>
-                                                        <span className={r.origem === 'ACADEMIA' ? 'text-indigo-700' : 'text-gray-600'}>
-                                                            {r.origem === 'ACADEMIA' ? 'Academia (EAD)' : 'Presencial'}
-                                                        </span>
-                                                    </td>
-                                                )}
-                                                {recordColumns.visibleColumns.includes('realizado') && (
-                                                    <td className={`${td} text-gray-500`}>{fmtData(r.data_realizacao)}</td>
-                                                )}
-                                                {recordColumns.visibleColumns.includes('validade') && (
-                                                    <td className={td}>
-                                                        {r.data_validade ? (
-                                                            <span className={
-                                                                r.data_validade < hoje ? 'text-rose-700'
-                                                                    : vencendo ? 'text-amber-700' : 'text-gray-600'
-                                                            }>
-                                                                {fmtData(r.data_validade)}
-                                                            </span>
-                                                        ) : <span className="text-gray-400">Sem validade</span>}
-                                                    </td>
-                                                )}
-                                                {recordColumns.visibleColumns.includes('nota') && (
-                                                    <td className={td}>
-                                                        {r.nota != null ? (
-                                                            <span className={r.aprovado ? 'text-emerald-700' : 'text-rose-700'}>{r.nota}</span>
-                                                        ) : <span className="text-gray-400">—</span>}
-                                                    </td>
-                                                )}
-                                                {recordColumns.visibleColumns.includes('status') && (
-                                                    <td className={td}>
-                                                        <span className={STATUS_COLORS[r.status] ?? 'text-gray-600'}>{r.status}</span>
-                                                    </td>
-                                                )}
+                                                {recordColumns.orderedVisibleColumns
+                                                    .filter(key => key !== 'actions')
+                                                    .map(key => (
+                                                        <td key={key} className={td}>
+                                                            {renderRecordCell(key, r, { hoje, vencendo })}
+                                                        </td>
+                                                    ))}
                                                 {recordColumns.visibleColumns.includes('actions') && (
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5">

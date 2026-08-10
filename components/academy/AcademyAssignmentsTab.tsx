@@ -37,6 +37,70 @@ const ALVO_LABEL: Record<AcademyAssignmentAlvo, string> = {
     EQUIPE: 'Equipe', OBRA: 'Obra', TODOS: 'Toda a organização',
 };
 
+const TH_CLASS = 'px-6 py-2 border-r border-gray-100';
+const TD_CLASS = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
+
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `colunas.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de uma
+// sequência fixa de JSX. NB: 'matriculas' não tem entrada de propósito — no
+// JSX original essa coluna já não tinha cabeçalho próprio (só célula), então
+// aqui ela cai no `if (!def) return null` e mantém o mesmo resultado visual.
+const ASSIGNMENT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    curso: { label: 'Treinamento', className: TH_CLASS },
+    alvo: { label: 'Atribuído a', className: TH_CLASS },
+    prazo: { label: 'Prazo', className: TH_CLASS },
+    obrigatorio: { label: 'Obrigatório', className: TH_CLASS },
+    reciclagem: { label: 'Reciclagem', className: TH_CLASS },
+    status: { label: 'Status', className: TH_CLASS },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `colunas.orderedVisibleColumns` (ordem arrastável) em vez de repetir
+// um bloco condicional fixo por coluna.
+function renderAssignmentCell(key: string, a: AcademyAssignment, nomeDoAlvo: (a: AcademyAssignment) => string): React.ReactNode {
+    switch (key) {
+        case 'curso':
+            return <span className="text-gray-900">{a.course_nome || '—'}</span>;
+        case 'alvo':
+            return (
+                <>
+                    <p className="text-gray-800">{nomeDoAlvo(a)}</p>
+                    <p className="text-xs text-gray-400">{ALVO_LABEL[a.alvo_tipo]}</p>
+                </>
+            );
+        case 'prazo':
+            return <span className="text-gray-600">{a.prazo_dias ? `${a.prazo_dias} dias` : '—'}</span>;
+        case 'obrigatorio':
+            return (
+                <span className={a.obrigatorio ? 'text-rose-700' : 'text-gray-400'}>
+                    {a.obrigatorio ? 'Sim' : 'Não'}
+                </span>
+            );
+        case 'reciclagem':
+            return (
+                <span className={a.reciclagem_automatica ? 'text-emerald-700' : 'text-gray-400'}>
+                    {a.reciclagem_automatica ? 'Automática' : 'Manual'}
+                </span>
+            );
+        case 'matriculas':
+            return a.sem_conteudo_publicado ? (
+                <span className="text-amber-700">Sem conteúdo publicado</span>
+            ) : (
+                <span className={a.matriculas ? 'text-gray-700' : 'text-gray-400'}>
+                    {a.matriculas ?? 0}
+                </span>
+            );
+        case 'status':
+            return (
+                <span className={a.status === 'ATIVA' ? 'text-emerald-700' : 'text-gray-500'}>
+                    {a.status === 'ATIVA' ? 'Ativa' : 'Inativa'}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
 interface Props {
     orgId?: string | null;
     courses: TrainingCourse[];
@@ -163,9 +227,6 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
         });
     }, [assignments, search, colunas.sortColumn, colunas.sortDirection, nomeDoAlvo]);
 
-    const th = 'px-6 py-2 border-r border-gray-100';
-    const td = 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
-
     // A atribuição sem conteúdo publicado é criada normalmente e nunca gera
     // matrícula — o RH atribui, acha que resolveu, e ninguém recebe nada.
     const bloqueadas = assignments.filter(a => a.status === 'ATIVA' && a.sem_conteudo_publicado);
@@ -254,25 +315,18 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                 <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                {colunas.visibleColumns.includes('curso') && (
-                                    <SortableHeader label="Treinamento" colKey="curso" uppercase={false} sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection} onSort={colunas.handleColumnSort} className={th} />
-                                )}
-                                {colunas.visibleColumns.includes('alvo') && (
-                                    <SortableHeader label="Atribuído a" colKey="alvo" uppercase={false} sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection} onSort={colunas.handleColumnSort} className={th} />
-                                )}
-                                {colunas.visibleColumns.includes('prazo') && (
-                                    <SortableHeader label="Prazo" colKey="prazo" uppercase={false} sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection} onSort={colunas.handleColumnSort} className={th} />
-                                )}
-                                {colunas.visibleColumns.includes('obrigatorio') && (
-                                    <SortableHeader label="Obrigatório" colKey="obrigatorio" uppercase={false} sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection} onSort={colunas.handleColumnSort} className={th} />
-                                )}
-                                {colunas.visibleColumns.includes('reciclagem') && (
-                                    <SortableHeader label="Reciclagem" colKey="reciclagem" uppercase={false} sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection} onSort={colunas.handleColumnSort} className={th} />
-                                )}
-                                {colunas.visibleColumns.includes('status') && (
-                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection} onSort={colunas.handleColumnSort} className={th} />
-                                )}
+            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                    const def = ASSIGNMENT_COLUMN_HEADERS[key];
+                                    if (!def) return null;
+                                    return (
+                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                            sortColumn={colunas.sortColumn} sortDirection={colunas.sortDirection}
+                                            onSort={colunas.handleColumnSort}
+                                            onMoveColumn={colunas.moveColumn}
+                                            className={def.className} />
+                                    );
+                                })}
                                 {colunas.visibleColumns.includes('actions') && (
                                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                 )}
@@ -281,52 +335,11 @@ const AcademyAssignmentsTab: React.FC<Props> = ({
                         <tbody className="divide-y divide-gray-200">
                             {filtradas.map(a => (
                                 <tr key={a.id} className="hover:bg-blue-50/50 transition-colors">
-                                    {colunas.visibleColumns.includes('curso') && (
-                                        <td className={`${td} text-gray-900`}>{a.course_nome || '—'}</td>
-                                    )}
-                                    {colunas.visibleColumns.includes('alvo') && (
-                                        <td className={td}>
-                                            <p className="text-gray-800">{nomeDoAlvo(a)}</p>
-                                            <p className="text-xs text-gray-400">{ALVO_LABEL[a.alvo_tipo]}</p>
+                                    {colunas.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                        <td key={key} className={TD_CLASS}>
+                                            {renderAssignmentCell(key, a, nomeDoAlvo)}
                                         </td>
-                                    )}
-                                    {colunas.visibleColumns.includes('prazo') && (
-                                        <td className={`${td} text-gray-600`}>
-                                            {a.prazo_dias ? `${a.prazo_dias} dias` : '—'}
-                                        </td>
-                                    )}
-                                    {colunas.visibleColumns.includes('obrigatorio') && (
-                                        <td className={td}>
-                                            <span className={a.obrigatorio ? 'text-rose-700' : 'text-gray-400'}>
-                                                {a.obrigatorio ? 'Sim' : 'Não'}
-                                            </span>
-                                        </td>
-                                    )}
-                                    {colunas.visibleColumns.includes('reciclagem') && (
-                                        <td className={td}>
-                                            <span className={a.reciclagem_automatica ? 'text-emerald-700' : 'text-gray-400'}>
-                                                {a.reciclagem_automatica ? 'Automática' : 'Manual'}
-                                            </span>
-                                        </td>
-                                    )}
-                                    {colunas.visibleColumns.includes('matriculas') && (
-                                        <td className={td}>
-                                            {a.sem_conteudo_publicado ? (
-                                                <span className="text-amber-700">Sem conteúdo publicado</span>
-                                            ) : (
-                                                <span className={a.matriculas ? 'text-gray-700' : 'text-gray-400'}>
-                                                    {a.matriculas ?? 0}
-                                                </span>
-                                            )}
-                                        </td>
-                                    )}
-                                    {colunas.visibleColumns.includes('status') && (
-                                        <td className={td}>
-                                            <span className={a.status === 'ATIVA' ? 'text-emerald-700' : 'text-gray-500'}>
-                                                {a.status === 'ATIVA' ? 'Ativa' : 'Inativa'}
-                                            </span>
-                                        </td>
-                                    )}
+                                    ))}
                                     {colunas.visibleColumns.includes('actions') && (
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-1.5">

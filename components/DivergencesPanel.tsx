@@ -80,6 +80,37 @@ const BANK_COLUMNS: ColumnConfig[] = [
 ];
 const BANK_COL_WIDTHS: Record<string, number> = { description: 280, account_name: 160, transaction_date: 110, amount: 130, actions: 220 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (drag-and-drop estilo ClickUp, ver GUIA_TABLE_UTILS.md).
+// 'actions' fica fora do mapa — continua fixa como última coluna (mesmo padrão de ClientList.tsx).
+const BANK_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    account_name: { label: 'Conta', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    transaction_date: { label: 'Data', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    amount: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+function renderBankCell(key: string, b: BankWithoutInternal): React.ReactNode {
+    switch (key) {
+        case 'description':
+            return (
+                <div className="flex items-center gap-2 min-w-0 text-gray-700">
+                    <DirIcon dir={b.direction} />
+                    <span className="truncate">{b.description}</span>
+                </div>
+            );
+        case 'account_name':
+            return b.account_name;
+        case 'transaction_date':
+            return formatDate(b.transaction_date);
+        case 'amount':
+            return <span className={`font-medium ${b.direction === 'CREDIT' ? 'text-emerald-700' : 'text-gray-800'}`}>{formatBRL(b.amount)}</span>;
+        default:
+            return null;
+    }
+}
+
 const INTERNAL_COLUMNS: ColumnConfig[] = [
     { key: 'description', label: 'Descrição', sortable: true },
     { key: 'ref_date', label: 'Vencimento', sortable: true },
@@ -88,6 +119,33 @@ const INTERNAL_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 const INTERNAL_COL_WIDTHS: Record<string, number> = { description: 280, ref_date: 120, days_overdue: 100, amount: 130, actions: 180 };
+
+const INTERNAL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    ref_date: { label: 'Vencimento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    days_overdue: { label: 'Atraso', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    amount: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+function renderInternalCell(key: string, i: InternalWithoutBank): React.ReactNode {
+    switch (key) {
+        case 'description':
+            return (
+                <div className="flex items-center gap-2 min-w-0 text-gray-700">
+                    <DirIcon dir={i.direction} />
+                    <span className="truncate">{i.description || i.party_name || 'Lançamento'}</span>
+                </div>
+            );
+        case 'ref_date':
+            return formatDate(i.ref_date);
+        case 'days_overdue':
+            return <span className={i.days_overdue > 0 ? 'text-red-600' : 'text-gray-400'}>{i.days_overdue > 0 ? `${i.days_overdue}d` : '—'}</span>;
+        case 'amount':
+            return <span className={`font-medium ${i.direction === 'CREDIT' ? 'text-emerald-700' : 'text-gray-800'}`}>{formatBRL(i.amount)}</span>;
+        default:
+            return null;
+    }
+}
 
 const MISMATCH_COLUMNS: ColumnConfig[] = [
     { key: 'bank_description', label: 'Descrição', sortable: true },
@@ -98,6 +156,36 @@ const MISMATCH_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 const MISMATCH_COL_WIDTHS: Record<string, number> = { bank_description: 260, account_name: 150, internal_amount: 120, bank_amount: 120, difference: 120, actions: 190 };
+
+const MISMATCH_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    bank_description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    account_name: { label: 'Conta', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    internal_amount: { label: 'Sistema', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    bank_amount: { label: 'Banco', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    difference: { label: 'Diferença', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+function renderMismatchCell(key: string, m: ValueMismatch): React.ReactNode {
+    switch (key) {
+        case 'bank_description':
+            return (
+                <div className="flex items-center gap-2 min-w-0 text-gray-700">
+                    <DirIcon dir={m.direction} />
+                    <span className="truncate">{m.bank_description}</span>
+                </div>
+            );
+        case 'account_name':
+            return m.account_name;
+        case 'internal_amount':
+            return <span className="font-medium text-gray-800">{formatBRL(m.internal_amount)}</span>;
+        case 'bank_amount':
+            return <span className="font-medium text-gray-800">{formatBRL(m.bank_amount)}</span>;
+        case 'difference':
+            return <span className="font-medium text-purple-600">Δ {formatBRL(Math.abs(m.difference))}</span>;
+        default:
+            return null;
+    }
+}
 
 // Cromo compartilhado pelas 3 seções (cabeçalho colapsável + toolbar acoplada,
 // §5.2). Cada chamador passa a própria <table> já filtrada/ordenada.
@@ -406,14 +494,14 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
         });
     }, [data?.value_mismatch, mismatchSearch, mismatchTableColumns.sortColumn, mismatchTableColumns.sortDirection]);
 
-    const bankVisible = BANK_COLUMNS.filter(c => c.key !== 'actions' && bankTableColumns.visibleColumns.includes(c.key));
-    const bankTableWidth = bankVisible.reduce((s, col) => s + bankCols.getWidth(col.key), 0) + bankCols.getWidth('actions');
+    const bankVisible = bankTableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+    const bankTableWidth = bankVisible.reduce((s, key) => s + bankCols.getWidth(key), 0) + bankCols.getWidth('actions');
 
-    const internalVisible = INTERNAL_COLUMNS.filter(c => c.key !== 'actions' && internalTableColumns.visibleColumns.includes(c.key));
-    const internalTableWidth = internalVisible.reduce((s, col) => s + internalCols.getWidth(col.key), 0) + internalCols.getWidth('actions');
+    const internalVisible = internalTableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+    const internalTableWidth = internalVisible.reduce((s, key) => s + internalCols.getWidth(key), 0) + internalCols.getWidth('actions');
 
-    const mismatchVisible = MISMATCH_COLUMNS.filter(c => c.key !== 'actions' && mismatchTableColumns.visibleColumns.includes(c.key));
-    const mismatchTableWidth = mismatchVisible.reduce((s, col) => s + mismatchCols.getWidth(col.key), 0) + mismatchCols.getWidth('actions');
+    const mismatchVisible = mismatchTableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+    const mismatchTableWidth = mismatchVisible.reduce((s, key) => s + mismatchCols.getWidth(key), 0) + mismatchCols.getWidth('actions');
 
     return (
         <div className="space-y-6">
@@ -449,40 +537,24 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
             >
                 <table ref={bankCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: bankTableWidth }}>
                     <colgroup>
-                        {bankVisible.map(col => <col key={col.key} data-col-key={col.key} style={{ width: `${bankCols.getWidth(col.key)}px` }} />)}
+                        {bankVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${bankCols.getWidth(key)}px` }} />)}
                         <col />
                         <col data-col-key="actions" style={{ width: `${bankCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                            {bankTableColumns.visibleColumns.includes('description') && (
-                                <SortableHeader colKey="description" label="Descrição" uppercase={false}
-                                    sortColumn={bankTableColumns.sortColumn} sortDirection={bankTableColumns.sortDirection} onSort={bankTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <bankCols.ResizeHandle colKey="description" />
-                                </SortableHeader>
-                            )}
-                            {bankTableColumns.visibleColumns.includes('account_name') && (
-                                <SortableHeader colKey="account_name" label="Conta" uppercase={false}
-                                    sortColumn={bankTableColumns.sortColumn} sortDirection={bankTableColumns.sortDirection} onSort={bankTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <bankCols.ResizeHandle colKey="account_name" />
-                                </SortableHeader>
-                            )}
-                            {bankTableColumns.visibleColumns.includes('transaction_date') && (
-                                <SortableHeader colKey="transaction_date" label="Data" uppercase={false}
-                                    sortColumn={bankTableColumns.sortColumn} sortDirection={bankTableColumns.sortDirection} onSort={bankTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <bankCols.ResizeHandle colKey="transaction_date" />
-                                </SortableHeader>
-                            )}
-                            {bankTableColumns.visibleColumns.includes('amount') && (
-                                <SortableHeader colKey="amount" label="Valor" uppercase={false}
-                                    sortColumn={bankTableColumns.sortColumn} sortDirection={bankTableColumns.sortDirection} onSort={bankTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <bankCols.ResizeHandle colKey="amount" />
-                                </SortableHeader>
-                            )}
+                            {bankVisible.map(key => {
+                                const def = BANK_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                        sortColumn={bankTableColumns.sortColumn} sortDirection={bankTableColumns.sortDirection} onSort={bankTableColumns.handleColumnSort}
+                                        onMoveColumn={bankTableColumns.moveColumn}
+                                        className={def.className}>
+                                        <bankCols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                );
+                            })}
                             <th aria-hidden="true" className="border-r border-gray-100" />
                             {bankTableColumns.visibleColumns.includes('actions') && (
                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -492,25 +564,11 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     <tbody className="divide-y divide-gray-100">
                         {bankRows.map(b => (
                             <tr key={b.id} className="hover:bg-blue-50/50 transition-colors">
-                                {bankTableColumns.visibleColumns.includes('description') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <DirIcon dir={b.direction} />
-                                            <span className="truncate">{b.description}</span>
-                                        </div>
+                                {bankVisible.map(key => (
+                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                        {renderBankCell(key, b)}
                                     </td>
-                                )}
-                                {bankTableColumns.visibleColumns.includes('account_name') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{b.account_name}</td>
-                                )}
-                                {bankTableColumns.visibleColumns.includes('transaction_date') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatDate(b.transaction_date)}</td>
-                                )}
-                                {bankTableColumns.visibleColumns.includes('amount') && (
-                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium ${b.direction === 'CREDIT' ? 'text-emerald-700' : 'text-gray-800'}`}>
-                                        {formatBRL(b.amount)}
-                                    </td>
-                                )}
+                                ))}
                                 <td aria-hidden="true"></td>
                                 {bankTableColumns.visibleColumns.includes('actions') && (
                                     <td className="px-6 py-2.5 text-right">
@@ -540,40 +598,24 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
             >
                 <table ref={internalCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: internalTableWidth }}>
                     <colgroup>
-                        {internalVisible.map(col => <col key={col.key} data-col-key={col.key} style={{ width: `${internalCols.getWidth(col.key)}px` }} />)}
+                        {internalVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${internalCols.getWidth(key)}px` }} />)}
                         <col />
                         <col data-col-key="actions" style={{ width: `${internalCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                            {internalTableColumns.visibleColumns.includes('description') && (
-                                <SortableHeader colKey="description" label="Descrição" uppercase={false}
-                                    sortColumn={internalTableColumns.sortColumn} sortDirection={internalTableColumns.sortDirection} onSort={internalTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <internalCols.ResizeHandle colKey="description" />
-                                </SortableHeader>
-                            )}
-                            {internalTableColumns.visibleColumns.includes('ref_date') && (
-                                <SortableHeader colKey="ref_date" label="Vencimento" uppercase={false}
-                                    sortColumn={internalTableColumns.sortColumn} sortDirection={internalTableColumns.sortDirection} onSort={internalTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <internalCols.ResizeHandle colKey="ref_date" />
-                                </SortableHeader>
-                            )}
-                            {internalTableColumns.visibleColumns.includes('days_overdue') && (
-                                <SortableHeader colKey="days_overdue" label="Atraso" uppercase={false}
-                                    sortColumn={internalTableColumns.sortColumn} sortDirection={internalTableColumns.sortDirection} onSort={internalTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <internalCols.ResizeHandle colKey="days_overdue" />
-                                </SortableHeader>
-                            )}
-                            {internalTableColumns.visibleColumns.includes('amount') && (
-                                <SortableHeader colKey="amount" label="Valor" uppercase={false}
-                                    sortColumn={internalTableColumns.sortColumn} sortDirection={internalTableColumns.sortDirection} onSort={internalTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <internalCols.ResizeHandle colKey="amount" />
-                                </SortableHeader>
-                            )}
+                            {internalVisible.map(key => {
+                                const def = INTERNAL_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                        sortColumn={internalTableColumns.sortColumn} sortDirection={internalTableColumns.sortDirection} onSort={internalTableColumns.handleColumnSort}
+                                        onMoveColumn={internalTableColumns.moveColumn}
+                                        className={def.className}>
+                                        <internalCols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                );
+                            })}
                             <th aria-hidden="true" className="border-r border-gray-100" />
                             {internalTableColumns.visibleColumns.includes('actions') && (
                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -583,27 +625,11 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     <tbody className="divide-y divide-gray-100">
                         {internalRows.map(i => (
                             <tr key={i.id} className="hover:bg-blue-50/50 transition-colors">
-                                {internalTableColumns.visibleColumns.includes('description') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <DirIcon dir={i.direction} />
-                                            <span className="truncate">{i.description || i.party_name || 'Lançamento'}</span>
-                                        </div>
+                                {internalVisible.map(key => (
+                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                        {renderInternalCell(key, i)}
                                     </td>
-                                )}
-                                {internalTableColumns.visibleColumns.includes('ref_date') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatDate(i.ref_date)}</td>
-                                )}
-                                {internalTableColumns.visibleColumns.includes('days_overdue') && (
-                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${i.days_overdue > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                                        {i.days_overdue > 0 ? `${i.days_overdue}d` : '—'}
-                                    </td>
-                                )}
-                                {internalTableColumns.visibleColumns.includes('amount') && (
-                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium ${i.direction === 'CREDIT' ? 'text-emerald-700' : 'text-gray-800'}`}>
-                                        {formatBRL(i.amount)}
-                                    </td>
-                                )}
+                                ))}
                                 <td aria-hidden="true"></td>
                                 {internalTableColumns.visibleColumns.includes('actions') && (
                                     <td className="px-6 py-2.5 text-right">
@@ -633,47 +659,24 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
             >
                 <table ref={mismatchCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: mismatchTableWidth }}>
                     <colgroup>
-                        {mismatchVisible.map(col => <col key={col.key} data-col-key={col.key} style={{ width: `${mismatchCols.getWidth(col.key)}px` }} />)}
+                        {mismatchVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${mismatchCols.getWidth(key)}px` }} />)}
                         <col />
                         <col data-col-key="actions" style={{ width: `${mismatchCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                            {mismatchTableColumns.visibleColumns.includes('bank_description') && (
-                                <SortableHeader colKey="bank_description" label="Descrição" uppercase={false}
-                                    sortColumn={mismatchTableColumns.sortColumn} sortDirection={mismatchTableColumns.sortDirection} onSort={mismatchTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <mismatchCols.ResizeHandle colKey="bank_description" />
-                                </SortableHeader>
-                            )}
-                            {mismatchTableColumns.visibleColumns.includes('account_name') && (
-                                <SortableHeader colKey="account_name" label="Conta" uppercase={false}
-                                    sortColumn={mismatchTableColumns.sortColumn} sortDirection={mismatchTableColumns.sortDirection} onSort={mismatchTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <mismatchCols.ResizeHandle colKey="account_name" />
-                                </SortableHeader>
-                            )}
-                            {mismatchTableColumns.visibleColumns.includes('internal_amount') && (
-                                <SortableHeader colKey="internal_amount" label="Sistema" uppercase={false}
-                                    sortColumn={mismatchTableColumns.sortColumn} sortDirection={mismatchTableColumns.sortDirection} onSort={mismatchTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <mismatchCols.ResizeHandle colKey="internal_amount" />
-                                </SortableHeader>
-                            )}
-                            {mismatchTableColumns.visibleColumns.includes('bank_amount') && (
-                                <SortableHeader colKey="bank_amount" label="Banco" uppercase={false}
-                                    sortColumn={mismatchTableColumns.sortColumn} sortDirection={mismatchTableColumns.sortDirection} onSort={mismatchTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <mismatchCols.ResizeHandle colKey="bank_amount" />
-                                </SortableHeader>
-                            )}
-                            {mismatchTableColumns.visibleColumns.includes('difference') && (
-                                <SortableHeader colKey="difference" label="Diferença" uppercase={false}
-                                    sortColumn={mismatchTableColumns.sortColumn} sortDirection={mismatchTableColumns.sortDirection} onSort={mismatchTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <mismatchCols.ResizeHandle colKey="difference" />
-                                </SortableHeader>
-                            )}
+                            {mismatchVisible.map(key => {
+                                const def = MISMATCH_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                        sortColumn={mismatchTableColumns.sortColumn} sortDirection={mismatchTableColumns.sortDirection} onSort={mismatchTableColumns.handleColumnSort}
+                                        onMoveColumn={mismatchTableColumns.moveColumn}
+                                        className={def.className}>
+                                        <mismatchCols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                );
+                            })}
                             <th aria-hidden="true" className="border-r border-gray-100" />
                             {mismatchTableColumns.visibleColumns.includes('actions') && (
                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -683,26 +686,11 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     <tbody className="divide-y divide-gray-100">
                         {mismatchRows.map(m => (
                             <tr key={m.bank_id} className="hover:bg-blue-50/50 transition-colors">
-                                {mismatchTableColumns.visibleColumns.includes('bank_description') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <DirIcon dir={m.direction} />
-                                            <span className="truncate">{m.bank_description}</span>
-                                        </div>
+                                {mismatchVisible.map(key => (
+                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                        {renderMismatchCell(key, m)}
                                     </td>
-                                )}
-                                {mismatchTableColumns.visibleColumns.includes('account_name') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{m.account_name}</td>
-                                )}
-                                {mismatchTableColumns.visibleColumns.includes('internal_amount') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">{formatBRL(m.internal_amount)}</td>
-                                )}
-                                {mismatchTableColumns.visibleColumns.includes('bank_amount') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">{formatBRL(m.bank_amount)}</td>
-                                )}
-                                {mismatchTableColumns.visibleColumns.includes('difference') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-purple-600">Δ {formatBRL(Math.abs(m.difference))}</td>
-                                )}
+                                ))}
                                 <td aria-hidden="true"></td>
                                 {mismatchTableColumns.visibleColumns.includes('actions') && (
                                     <td className="px-6 py-2.5 text-right">

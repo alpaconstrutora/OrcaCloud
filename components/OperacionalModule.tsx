@@ -65,6 +65,29 @@ const OBRA_COLUMNS: ColumnConfig[] = [
 ]
 const OBRA_COL_WIDTHS: Record<string, number> = { name: 320, actions: 140 }
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta). 'actions' é
+// estrutural (fixo, fora do drag) e não entra aqui.
+const OBRA_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  name: { label: 'Nome', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` em vez de uma sequência fixa.
+function renderObraCell(key: string, p: { id: string; name: string }): React.ReactNode {
+  switch (key) {
+    case 'name':
+      return (
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+          <span className="truncate">{p.name}</span>
+        </div>
+      )
+    default:
+      return null
+  }
+}
+
 const ProjectSelector: React.FC<{
   projects: Array<{ id: string; name: string; settings?: { organizationId?: string } }>
   selectedId: string | null
@@ -204,17 +227,27 @@ const ProjectSelector: React.FC<{
           <div className="overflow-x-auto">
             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
               <colgroup>
-                {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                  <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                ))}
                 <col />
                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                  {tableColumns.visibleColumns.includes('name') && (
-                    <SortableHeader colKey="name" label="Nome" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="name" />
-                    </SortableHeader>
-                  )}
+                  {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                    const def = OBRA_COLUMN_HEADERS[key]
+                    if (!def) return null
+                    return (
+                      <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                        onSort={tableColumns.handleColumnSort}
+                        onMoveColumn={tableColumns.moveColumn}
+                        className={def.className}>
+                        <cols.ResizeHandle colKey={key} />
+                      </SortableHeader>
+                    )
+                  })}
                   <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
                     <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -224,14 +257,11 @@ const ProjectSelector: React.FC<{
               <tbody className="divide-y divide-gray-100">
                 {sortedObras.map(p => (
                   <tr key={p.id} onClick={() => onSelect(p.id)} className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedId === p.id ? 'bg-blue-50/60' : ''}`}>
-                    {tableColumns.visibleColumns.includes('name') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                          <span className="truncate">{p.name}</span>
-                        </div>
+                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                      <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                        {renderObraCell(key, p)}
                       </td>
-                    )}
+                    ))}
                     <td aria-hidden="true"></td>
                     {tableColumns.visibleColumns.includes('actions') && (
                       // §9.1 — a linha já seleciona a obra (ação dominante); sem duplicar como botão.

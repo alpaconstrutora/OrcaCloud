@@ -352,6 +352,89 @@ const COLUMNS_MOVIMENTOS: ColumnConfig[] = [
     { key: 'valor', label: 'Valor', sortable: true },
 ];
 
+// Mapas header (label/sortable/className) por chave — usados nos theads dinâmicos
+// (drag-and-drop de colunas, ver GUIA_TABLE_UTILS.md).
+// className replica exatamente o que cada <SortableHeader> original recebia — as
+// colunas numéricas só passavam "text-right" (sem px-6 py-4, que é o default do
+// componente), então esse comportamento (perda do padding-default) é preservado.
+const SALDOS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    insumo: { label: 'Insumo', className: 'px-6 py-4' },
+    almoxarifado: { label: 'Almoxarifado', className: 'px-6 py-4' },
+    quantidade: { label: 'Qtd', className: 'text-right' },
+    unidade: { label: 'Un', sortable: false, className: 'px-6 py-4' },
+    custo: { label: 'Custo Médio', className: 'text-right' },
+    valor: { label: 'Valor Total', className: 'text-right' },
+};
+
+const MOVIMENTOS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    data: { label: 'Data', className: 'px-6 py-4' },
+    tipo: { label: 'Tipo', className: 'px-6 py-4' },
+    insumo: { label: 'Insumo', className: 'px-6 py-4' },
+    almoxarifado: { label: 'Almoxarifado', className: 'px-6 py-4' },
+    quantidade: { label: 'Qtd', className: 'text-right' },
+    valor: { label: 'Valor', className: 'text-right' },
+};
+
+// Colunas cujo <td> original tinha `text-right` — usado para preservar o
+// alinhamento numérico no tbody dinâmico.
+const SALDOS_TD_RIGHT_ALIGN = new Set(['quantidade', 'custo', 'valor']);
+const MOVIMENTOS_TD_RIGHT_ALIGN = new Set(['quantidade', 'valor']);
+
+// Conteúdo de cada célula da tabela de Saldos, extraído do <td> original.
+function renderSaldoCell(key: string, b: StockBalance, fmt: (v: number) => string, fmtBrl: (v: number) => string): React.ReactNode {
+    switch (key) {
+        case 'insumo':
+            return (
+                <>
+                    <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{b.inputDescription}</p>
+                    {b.inputCode && <p className="text-xs text-gray-500 mt-0.5">{b.inputCode}</p>}
+                </>
+            );
+        case 'almoxarifado':
+            return <span className="text-sm text-gray-600">{b.warehouseName ?? '—'}</span>;
+        case 'quantidade':
+            return <span className={`font-medium ${b.quantity <= 0 ? 'text-red-600' : 'text-gray-900'}`}>{fmt(b.quantity)}</span>;
+        case 'unidade':
+            return <span className="text-sm text-gray-500">{b.inputUnit}</span>;
+        case 'custo':
+            return <span className="text-sm text-gray-600">{fmtBrl(b.avgUnitCost)}</span>;
+        case 'valor':
+            return <span className="font-medium text-gray-900">{fmtBrl(b.totalValue)}</span>;
+        default:
+            return null;
+    }
+}
+
+// Conteúdo de cada célula da tabela de Movimentos, extraído do <td> original.
+function renderMovimentoCell(
+    key: string,
+    m: StockMovement,
+    ctx: { isIn: boolean; typeLabel: Record<string, string>; badgeStatus: string; fmt: (v: number) => string; fmtBrl: (v: number) => string },
+): React.ReactNode {
+    const { isIn, typeLabel, badgeStatus, fmt, fmtBrl } = ctx;
+    switch (key) {
+        case 'data':
+            return <span className="text-sm text-gray-500 whitespace-nowrap">{formatDateBR(m.movedAt)}</span>;
+        case 'tipo':
+            return <StatusBadge status={badgeStatus as any} label={typeLabel[m.type]} />;
+        case 'insumo':
+            return (
+                <>
+                    <p className="text-sm font-medium text-gray-900">{m.inputDescription}</p>
+                    {m.notes && <p className="text-xs text-gray-500 mt-0.5">{m.notes}</p>}
+                </>
+            );
+        case 'almoxarifado':
+            return <span className="text-sm text-gray-600">{m.warehouseName ?? '—'}</span>;
+        case 'quantidade':
+            return <span className={`font-medium ${isIn ? 'text-green-600' : 'text-red-600'}`}>{isIn ? '+' : '−'}{fmt(m.quantity)} {m.inputUnit}</span>;
+        case 'valor':
+            return <span className="text-sm text-gray-600">{m.totalCost != null ? fmtBrl(m.totalCost) : '—'}</span>;
+        default:
+            return null;
+    }
+}
+
 // ─── Módulo principal ──────────────────────────────────────────────────────────
 export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const { projects, organizations } = useStore();
@@ -583,12 +666,18 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                     <table className="w-full text-sm text-left">
                                         <thead>
                                             <tr className="border-b border-gray-100 bg-gray-50/50">
-                                                {tableSaldos.visibleColumns.includes('insumo') && <SortableHeader colKey="insumo" label="Insumo" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} />}
-                                                {tableSaldos.visibleColumns.includes('almoxarifado') && <SortableHeader colKey="almoxarifado" label="Almoxarifado" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} />}
-                                                {tableSaldos.visibleColumns.includes('quantidade') && <SortableHeader colKey="quantidade" label="Qtd" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} className="text-right" />}
-                                                {tableSaldos.visibleColumns.includes('unidade') && <SortableHeader colKey="unidade" label="Un" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} />}
-                                                {tableSaldos.visibleColumns.includes('custo') && <SortableHeader colKey="custo" label="Custo Médio" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} className="text-right" />}
-                                                {tableSaldos.visibleColumns.includes('valor') && <SortableHeader colKey="valor" label="Valor Total" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} className="text-right" />}
+                                                {tableSaldos.orderedVisibleColumns.map(key => {
+                                                    const def = SALDOS_COLUMN_HEADERS[key];
+                                                    if (!def) return null;
+                                                    return (
+                                                        <SortableHeader key={key} colKey={key} label={def.label}
+                                                            sortable={def.sortable !== false}
+                                                            sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection}
+                                                            onSort={tableSaldos.handleColumnSort}
+                                                            onMoveColumn={tableSaldos.moveColumn}
+                                                            className={def.className} />
+                                                    );
+                                                })}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
@@ -597,29 +686,11 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                     key={`${b.warehouseId}-${b.inputCode}`}
                                                     className="group hover:bg-gray-50/50 transition-colors"
                                                 >
-                                                    {tableSaldos.visibleColumns.includes('insumo') && (
-                                                        <td className="px-4 py-3">
-                                                            <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{b.inputDescription}</p>
-                                                            {b.inputCode && <p className="text-xs text-gray-500 mt-0.5">{b.inputCode}</p>}
+                                                    {tableSaldos.orderedVisibleColumns.map(key => (
+                                                        <td key={key} className={`px-4 py-3 ${SALDOS_TD_RIGHT_ALIGN.has(key) ? 'text-right' : ''}`}>
+                                                            {renderSaldoCell(key, b, fmt, fmtBrl)}
                                                         </td>
-                                                    )}
-                                                    {tableSaldos.visibleColumns.includes('almoxarifado') && (
-                                                        <td className="px-4 py-3 text-sm text-gray-600">{b.warehouseName ?? '—'}</td>
-                                                    )}
-                                                    {tableSaldos.visibleColumns.includes('quantidade') && (
-                                                        <td className={`px-4 py-3 text-right font-medium ${b.quantity <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                                            {fmt(b.quantity)}
-                                                        </td>
-                                                    )}
-                                                    {tableSaldos.visibleColumns.includes('unidade') && (
-                                                        <td className="px-4 py-3 text-sm text-gray-500">{b.inputUnit}</td>
-                                                    )}
-                                                    {tableSaldos.visibleColumns.includes('custo') && (
-                                                        <td className="px-4 py-3 text-right text-sm text-gray-600">{fmtBrl(b.avgUnitCost)}</td>
-                                                    )}
-                                                    {tableSaldos.visibleColumns.includes('valor') && (
-                                                        <td className="px-4 py-3 text-right font-medium text-gray-900">{fmtBrl(b.totalValue)}</td>
-                                                    )}
+                                                    ))}
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -818,12 +889,18 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                     <table className="w-full text-sm text-left">
                                         <thead>
                                             <tr className="border-b border-gray-100 bg-gray-50/50">
-                                                {tableMovimentos.visibleColumns.includes('data') && <SortableHeader colKey="data" label="Data" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
-                                                {tableMovimentos.visibleColumns.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
-                                                {tableMovimentos.visibleColumns.includes('insumo') && <SortableHeader colKey="insumo" label="Insumo" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
-                                                {tableMovimentos.visibleColumns.includes('almoxarifado') && <SortableHeader colKey="almoxarifado" label="Almoxarifado" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
-                                                {tableMovimentos.visibleColumns.includes('quantidade') && <SortableHeader colKey="quantidade" label="Qtd" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} className="text-right" />}
-                                                {tableMovimentos.visibleColumns.includes('valor') && <SortableHeader colKey="valor" label="Valor" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} className="text-right" />}
+                                                {tableMovimentos.orderedVisibleColumns.map(key => {
+                                                    const def = MOVIMENTOS_COLUMN_HEADERS[key];
+                                                    if (!def) return null;
+                                                    return (
+                                                        <SortableHeader key={key} colKey={key} label={def.label}
+                                                            sortable={def.sortable !== false}
+                                                            sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection}
+                                                            onSort={tableMovimentos.handleColumnSort}
+                                                            onMoveColumn={tableMovimentos.moveColumn}
+                                                            className={def.className} />
+                                                    );
+                                                })}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
@@ -834,38 +911,14 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                     transfer_in: 'Transf. In', transfer_out: 'Transf. Out',
                                                 };
                                                 const badgeStatus = isIn ? 'success' : m.type === 'adjust' ? 'warning' : 'danger';
-                                                
+
                                                 return (
                                                     <tr key={m.id} className="group hover:bg-gray-50/50 transition-colors">
-                                                        {tableMovimentos.visibleColumns.includes('data') && (
-                                                            <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                                                                {formatDateBR(m.movedAt)}
+                                                        {tableMovimentos.orderedVisibleColumns.map(key => (
+                                                            <td key={key} className={`px-4 py-3 ${MOVIMENTOS_TD_RIGHT_ALIGN.has(key) ? 'text-right' : ''}`}>
+                                                                {renderMovimentoCell(key, m, { isIn, typeLabel, badgeStatus, fmt, fmtBrl })}
                                                             </td>
-                                                        )}
-                                                        {tableMovimentos.visibleColumns.includes('tipo') && (
-                                                            <td className="px-4 py-3">
-                                                                <StatusBadge status={badgeStatus} label={typeLabel[m.type]} />
-                                                            </td>
-                                                        )}
-                                                        {tableMovimentos.visibleColumns.includes('insumo') && (
-                                                            <td className="px-4 py-3">
-                                                                <p className="text-sm font-medium text-gray-900">{m.inputDescription}</p>
-                                                                {m.notes && <p className="text-xs text-gray-500 mt-0.5">{m.notes}</p>}
-                                                            </td>
-                                                        )}
-                                                        {tableMovimentos.visibleColumns.includes('almoxarifado') && (
-                                                            <td className="px-4 py-3 text-sm text-gray-600">{m.warehouseName ?? '—'}</td>
-                                                        )}
-                                                        {tableMovimentos.visibleColumns.includes('quantidade') && (
-                                                            <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-600' : 'text-red-600'}`}>
-                                                                {isIn ? '+' : '−'}{fmt(m.quantity)} {m.inputUnit}
-                                                            </td>
-                                                        )}
-                                                        {tableMovimentos.visibleColumns.includes('valor') && (
-                                                            <td className="px-4 py-3 text-right text-sm text-gray-600">
-                                                                {m.totalCost != null ? fmtBrl(m.totalCost) : '—'}
-                                                            </td>
-                                                        )}
+                                                        ))}
                                                     </tr>
                                                 );
                                             })}

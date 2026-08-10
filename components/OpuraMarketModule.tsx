@@ -33,6 +33,54 @@ const CONCORRENCIA_COLUMNS: ColumnConfig[] = [
   { key: 'constructionStandard', label: 'Padrão', sortable: true },
 ];
 
+// Header (label/sortable/className) por chave — as duas tabelas de Concorrência
+// (anúncios importados e resultados do scraper) compartilham as mesmas colunas.
+const CONCORRENCIA_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> =
+  Object.fromEntries(CONCORRENCIA_COLUMNS.map(col => [col.key, {
+    label: col.label,
+    sortable: col.sortable,
+    className: 'px-5 py-3 text-xs font-bold text-slate-500 text-left border-r border-gray-100 last:border-r-0',
+  }]));
+
+// Conteúdo de cada célula da tabela de Concorrência, extraído do <td> original
+// (compartilhado pelas duas tabelas — anúncios importados e scraper).
+function renderConcorrenciaCell(key: string, l: OpuraMarketListing, neighborhoods: OpuraMarketNeighborhood[]): React.ReactNode {
+  switch (key) {
+    case 'propertyType':
+      return <span className="text-sm font-normal text-gray-700 truncate">{l.propertyType}</span>;
+    case 'neighborhood':
+      return <span className="text-sm font-normal text-gray-700 truncate">{neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}</span>;
+    case 'price':
+      return <span className="text-sm font-medium text-gray-800">R$ {l.price.toLocaleString('pt-BR')}</span>;
+    case 'pricePerM2':
+      return <span className="text-sm font-medium text-gray-800">{l.pricePerM2 ? `R$ ${Math.round(l.pricePerM2).toLocaleString('pt-BR')}/m²` : '-'}</span>;
+    case 'areaPrivate':
+      return <span className="text-sm font-normal text-gray-600">{l.areaPrivate ? `${l.areaPrivate}m²` : '-'}</span>;
+    case 'bedrooms':
+      return <span className="text-sm font-normal text-gray-600">{l.bedrooms || '-'}</span>;
+    case 'suites':
+      return <span className="text-sm font-normal text-gray-600">{l.suites || '-'}</span>;
+    case 'bathrooms':
+      return <span className="text-sm font-normal text-gray-600">{l.bathrooms || '-'}</span>;
+    case 'parkingSpaces':
+      return <span className="text-sm font-normal text-gray-600">{l.parkingSpaces || '-'}</span>;
+    case 'source':
+      return (
+        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded uppercase">
+          {l.source}
+        </span>
+      );
+    case 'constructionStandard':
+      return l.constructionStandard ? (
+        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded uppercase">
+          {l.constructionStandard}
+        </span>
+      ) : <span className="text-sm font-normal text-gray-600">-</span>;
+    default:
+      return null;
+  }
+}
+
 interface OpuraMarketModuleProps {
   organizationId: string;
   onBack?: () => void;
@@ -1696,21 +1744,24 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
             <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
               <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 z-10">
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                  {CONCORRENCIA_COLUMNS.map(col =>
-                    tableColumns.visibleColumns.includes(col.key) && (
+                  {tableColumns.orderedVisibleColumns.map(key => {
+                    const def = CONCORRENCIA_COLUMN_HEADERS[key];
+                    if (!def) return null;
+                    return (
                       <SortableHeader
-                        key={col.key}
-                        label={col.label}
-                        colKey={col.key}
-                        sortable={col.sortable}
+                        key={key}
+                        label={def.label}
+                        colKey={key}
+                        sortable={def.sortable}
                         sortColumn={tableColumns.sortColumn || undefined}
                         sortDirection={tableColumns.sortDirection}
                         onSort={tableColumns.handleColumnSort}
-                        className="px-5 py-3 text-xs font-bold text-slate-500 text-left border-r border-gray-100 last:border-r-0"
+                        onMoveColumn={tableColumns.moveColumn}
+                        className={def.className}
                         uppercase={false}
                       />
-                    )
-                  )}
+                    );
+                  })}
                   <th className="px-5 py-3 text-right text-xs font-bold text-slate-500">Ações</th>
                 </tr>
               </thead>
@@ -1726,65 +1777,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         }}
                         className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                       >
-                        {tableColumns.visibleColumns.includes('propertyType') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">{l.propertyType}</td>
-                        )}
-                        {tableColumns.visibleColumns.includes('neighborhood') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">
-                            {neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}
+                        {tableColumns.orderedVisibleColumns.map(key => (
+                          <td key={key} className="px-5 py-2.5 border-r border-gray-100 last:border-r-0">
+                            {renderConcorrenciaCell(key, l, neighborhoods)}
                           </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('price') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                            R$ {l.price.toLocaleString('pt-BR')}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('pricePerM2') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                            {l.pricePerM2 ? `R$ ${Math.round(l.pricePerM2).toLocaleString('pt-BR')}/m²` : '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('areaPrivate') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.areaPrivate ? `${l.areaPrivate}m²` : '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('bedrooms') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.bedrooms || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('suites') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.suites || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('bathrooms') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.bathrooms || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('parkingSpaces') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.parkingSpaces || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('source') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
-                            <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded uppercase">
-                              {l.source}
-                            </span>
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('constructionStandard') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                            {l.constructionStandard ? (
-                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded uppercase">
-                                {l.constructionStandard}
-                              </span>
-                            ) : '-'}
-                          </td>
-                        )}
+                        ))}
                         <td className="px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => {
@@ -1893,21 +1890,24 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
                   <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 z-10">
                     <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                      {CONCORRENCIA_COLUMNS.map(col =>
-                        tableColumns.visibleColumns.includes(col.key) && (
+                      {tableColumns.orderedVisibleColumns.map(key => {
+                        const def = CONCORRENCIA_COLUMN_HEADERS[key];
+                        if (!def) return null;
+                        return (
                           <SortableHeader
-                            key={col.key}
-                            label={col.label}
-                            colKey={col.key}
-                            sortable={col.sortable}
+                            key={key}
+                            label={def.label}
+                            colKey={key}
+                            sortable={def.sortable}
                             sortColumn={tableColumns.sortColumn || undefined}
                             sortDirection={tableColumns.sortDirection}
                             onSort={tableColumns.handleColumnSort}
-                            className="px-5 py-3 text-xs font-bold text-slate-500 text-left border-r border-gray-100 last:border-r-0"
+                            onMoveColumn={tableColumns.moveColumn}
+                            className={def.className}
                             uppercase={false}
                           />
-                        )
-                      )}
+                        );
+                      })}
                       <th className="px-5 py-3 text-right text-xs font-bold text-slate-500">Ações</th>
                     </tr>
                   </thead>
@@ -1921,65 +1921,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         }}
                         className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                       >
-                        {tableColumns.visibleColumns.includes('propertyType') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">{l.propertyType}</td>
-                        )}
-                        {tableColumns.visibleColumns.includes('neighborhood') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">
-                            {neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}
+                        {tableColumns.orderedVisibleColumns.map(key => (
+                          <td key={key} className="px-5 py-2.5 border-r border-gray-100 last:border-r-0">
+                            {renderConcorrenciaCell(key, l, neighborhoods)}
                           </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('price') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                            R$ {l.price.toLocaleString('pt-BR')}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('pricePerM2') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                            {l.pricePerM2 ? `R$ ${Math.round(l.pricePerM2).toLocaleString('pt-BR')}/m²` : '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('areaPrivate') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.areaPrivate ? `${l.areaPrivate}m²` : '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('bedrooms') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.bedrooms || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('suites') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.suites || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('bathrooms') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.bathrooms || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('parkingSpaces') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                            {l.parkingSpaces || '-'}
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('source') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
-                            <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded uppercase">
-                              {l.source}
-                            </span>
-                          </td>
-                        )}
-                        {tableColumns.visibleColumns.includes('constructionStandard') && (
-                          <td className="px-5 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                            {l.constructionStandard ? (
-                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded uppercase">
-                                {l.constructionStandard}
-                              </span>
-                            ) : '-'}
-                          </td>
-                        )}
+                        ))}
                         <td className="px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => {

@@ -110,6 +110,163 @@ const RATEIO_COLUMNS: ColumnConfig[] = [
 ];
 const RATEIO_COL_WIDTHS: Record<string, number> = { project_name: 220, assets_count: 150, total_days: 150, allocated_cost: 210, percentage: 200 };
 
+// Header (label/sortable/className) da tabela "Ativos Patrimoniais" — mesmo
+// className que cada <SortableHeader> original recebia.
+const ASSET_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  name: { label: 'Ativo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  value: { label: 'Valor Atual', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada célula da tabela "Ativos Patrimoniais", extraído do <td> original.
+// Header (label/sortable/className) da tabela "Reservas & Locação".
+const RESERVATION_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  asset: { label: 'Ativo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  project: { label: 'Obra Solicitante', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  start_date: { label: 'Início', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  end_date: { label: 'Término', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  responsible: { label: 'Responsável', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  requester: { label: 'Solicitante', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada célula da tabela "Reservas & Locação", extraído do <td> original.
+function renderReservationCell(
+  key: string,
+  res: OpuraAssetReservation,
+  ctx: { asset?: OpuraAsset; proj?: { name?: string } | undefined; employees: any[]; statusColor: Record<string, string> },
+): React.ReactNode {
+  switch (key) {
+    case 'asset':
+      return <span className="text-sm font-normal text-gray-700">{ctx.asset?.name || 'Ativo'}</span>;
+    case 'project':
+      return <span className="text-sm font-normal text-gray-600">{ctx.proj?.name || 'Obra'}</span>;
+    case 'start_date':
+      return <span className="text-sm font-normal text-gray-600">{new Date(res.start_date).toLocaleDateString('pt-BR')}</span>;
+    case 'end_date':
+      return <span className="text-sm font-normal text-gray-600">{new Date(res.end_date).toLocaleDateString('pt-BR')}</span>;
+    case 'responsible':
+      return <span className="text-sm font-normal text-gray-700">{ctx.employees.find(e => e.id === res.responsible_employee_id)?.name || 'Central'}</span>;
+    case 'requester':
+      return <span className="text-sm font-normal text-gray-500">{res.requested_by_email}</span>;
+    case 'status':
+      return <span className={`text-sm font-normal ${ctx.statusColor[res.status] || 'text-gray-600'}`}>{res.status === 'ativa' ? 'Em Uso' : res.status}</span>;
+    default:
+      return null;
+  }
+}
+
+// Header (label/sortable/className) da tabela "Manutenções".
+const MAINTENANCE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  asset: { label: 'Ativo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  type: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  description: { label: 'Serviço / Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  scheduled_date: { label: 'Data Programada', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  cost: { label: 'Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada célula da tabela "Manutenções", extraído do <td> original.
+function renderMaintenanceCell(
+  key: string,
+  m: OpuraAssetMaintenance,
+  ctx: { asset?: OpuraAsset; typeLabels: Record<string, string>; statusColor: Record<string, string> },
+): React.ReactNode {
+  switch (key) {
+    case 'asset':
+      return (
+        <div>
+          <p className="truncate text-sm font-normal text-gray-700">{ctx.asset?.name || 'Ativo Desconhecido'}</p>
+          <p className="text-xs text-gray-400">{ctx.asset?.code || ''}</p>
+        </div>
+      );
+    case 'type':
+      return <span className="text-sm font-normal text-gray-600">{ctx.typeLabels[m.type] || m.type}</span>;
+    case 'description':
+      return <span className="block truncate max-w-[240px] text-sm font-normal text-gray-600" title={m.description}>{m.description}</span>;
+    case 'scheduled_date':
+      return <span className="text-sm font-normal text-gray-600">{new Date(m.scheduled_date).toLocaleDateString('pt-BR')}</span>;
+    case 'cost':
+      return <span className="text-sm font-medium text-gray-800">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+    case 'status':
+      return <span className={`text-sm font-normal ${ctx.statusColor[m.status] || 'text-gray-600'}`}>{m.status === 'em_execucao' ? 'Em Oficina' : m.status}</span>;
+    default:
+      return null;
+  }
+}
+
+// Header (label/sortable/className) da tabela "Custos & Rateio" — sem coluna de
+// ações, então (diferente das outras 3 tabelas deste arquivo) o último header
+// precisa do próprio `last:border-r-0` (não há spacer/actions à direita para
+// esconder a borda).
+const RATEIO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  project_name: { label: 'Obra / Projeto', className: 'px-6 py-2 overflow-hidden border-r border-gray-100 last:border-r-0' },
+  assets_count: { label: 'Nº Ativos Usados', className: 'px-6 py-2 overflow-hidden border-r border-gray-100 last:border-r-0' },
+  total_days: { label: 'Dias Acumulados', className: 'px-6 py-2 overflow-hidden border-r border-gray-100 last:border-r-0' },
+  allocated_cost: { label: 'Custo Alocado (Depreciação)', className: 'px-6 py-2 overflow-hidden border-r border-gray-100 last:border-r-0' },
+  percentage: { label: 'Participação no Custo', className: 'px-6 py-2 overflow-hidden border-r border-gray-100 last:border-r-0' },
+};
+
+// Conteúdo de cada célula da tabela "Custos & Rateio", extraído do <td> original.
+function renderRateioCell(key: string, r: OpuraAssetDepreciationRateio): React.ReactNode {
+  switch (key) {
+    case 'project_name':
+      return <span className="text-sm font-normal text-gray-700">{r.project_name}</span>;
+    case 'assets_count':
+      return <span className="text-sm font-normal text-gray-600">{r.assets_count}</span>;
+    case 'total_days':
+      return <span className="text-sm font-normal text-gray-600">{r.total_days} dias</span>;
+    case 'allocated_cost':
+      return <span className="text-sm font-medium text-gray-800">R$ {r.allocated_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>;
+    case 'percentage':
+      return (
+        <div className="flex items-center gap-3 text-sm">
+          <div className="w-24 bg-gray-100 rounded-full h-2">
+            <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${r.percentage}%` }} />
+          </div>
+          <span className="font-medium text-gray-700">{r.percentage}%</span>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+function renderAssetCell(
+  key: string,
+  asset: OpuraAsset,
+  ctx: { categoryIcons: Record<AssetCategory, any>; calculateDepreciation: (a: OpuraAsset) => { current: number; depreciated: number } },
+): React.ReactNode {
+  switch (key) {
+    case 'code':
+      return <span className="text-sm font-normal text-gray-600">{asset.code}</span>;
+    case 'name': {
+      const Icon = ctx.categoryIcons[asset.category] || Package;
+      return (
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`w-7 h-7 rounded-[6px] flex items-center justify-center shrink-0
+            ${asset.status === 'disponivel' ? 'bg-emerald-50 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
+            <Icon className="w-4 h-4" />
+          </div>
+          <span className="truncate text-sm font-normal text-gray-700">{asset.name}</span>
+        </div>
+      );
+    }
+    case 'category':
+      return <span className="text-sm font-normal text-gray-600 capitalize">{asset.category}</span>;
+    case 'status': {
+      const statusColor = asset.status === 'disponivel' ? 'text-emerald-700' : asset.status === 'em_uso' ? 'text-blue-700' : asset.status === 'manutencao' ? 'text-amber-700' : asset.status === 'baixado' ? 'text-gray-400' : 'text-gray-600';
+      return <span className={`text-sm font-normal ${statusColor}`}>{asset.status === 'em_uso' ? 'Em Obra' : asset.status}</span>;
+    }
+    case 'value':
+      return <span className="text-sm font-medium text-gray-800">R$ {ctx.calculateDepreciation(asset).current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>;
+    default:
+      return null;
+  }
+}
+
 function sortRows<T>(rows: T[], sortColumn: string | null, sortDirection: 'asc' | 'desc', getValue: (row: T, key: string) => unknown): T[] {
   if (!sortColumn) return rows;
   const dir = sortDirection === 'asc' ? 1 : -1;
@@ -1207,41 +1364,33 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     ) : (() => {
                       const visible = ASSET_COLUMNS.filter(c => c.key !== 'actions' && assetTableColumns.visibleColumns.includes(c.key));
                       const tableWidth = visible.reduce((s, c) => s + assetCols.getWidth(c.key), 0) + assetCols.getWidth('actions');
+                      const orderedVisibleKeys = assetTableColumns.orderedVisibleColumns.filter(k => k !== 'actions');
                       return (
                         <div className="overflow-x-auto">
                           <table ref={assetCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                             <colgroup>
-                              {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${assetCols.getWidth(c.key)}px` }} />)}
+                              {orderedVisibleKeys.map(key => (
+                                <col key={key} data-col-key={key} style={{ width: `${assetCols.getWidth(key)}px` }} />
+                              ))}
                               <col />
                               <col data-col-key="actions" style={{ width: `${assetCols.getWidth('actions')}px` }} />
                             </colgroup>
                             <thead>
                               <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                {assetTableColumns.visibleColumns.includes('code') && (
-                                  <SortableHeader colKey="code" label="Código" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <assetCols.ResizeHandle colKey="code" />
-                                  </SortableHeader>
-                                )}
-                                {assetTableColumns.visibleColumns.includes('name') && (
-                                  <SortableHeader colKey="name" label="Ativo" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <assetCols.ResizeHandle colKey="name" />
-                                  </SortableHeader>
-                                )}
-                                {assetTableColumns.visibleColumns.includes('category') && (
-                                  <SortableHeader colKey="category" label="Categoria" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <assetCols.ResizeHandle colKey="category" />
-                                  </SortableHeader>
-                                )}
-                                {assetTableColumns.visibleColumns.includes('status') && (
-                                  <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <assetCols.ResizeHandle colKey="status" />
-                                  </SortableHeader>
-                                )}
-                                {assetTableColumns.visibleColumns.includes('value') && (
-                                  <SortableHeader colKey="value" label="Valor Atual" uppercase={false} sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection} onSort={assetTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <assetCols.ResizeHandle colKey="value" />
-                                  </SortableHeader>
-                                )}
+                                {orderedVisibleKeys.map(key => {
+                                  const def = ASSET_COLUMN_HEADERS[key];
+                                  if (!def) return null;
+                                  return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                                      sortable={def.sortable !== false}
+                                      sortColumn={assetTableColumns.sortColumn} sortDirection={assetTableColumns.sortDirection}
+                                      onSort={assetTableColumns.handleColumnSort}
+                                      onMoveColumn={assetTableColumns.moveColumn}
+                                      className={def.className}>
+                                      <assetCols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                  );
+                                })}
                                 <th aria-hidden="true" className="border-r border-gray-100" />
                                 {assetTableColumns.visibleColumns.includes('actions') && (
                                   <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -1250,9 +1399,6 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                               {sortedAssets.map(asset => {
-                                const Icon = categoryIcons[asset.category] || Package;
-                                const depreciation = calculateDepreciation(asset);
-                                const statusColor = asset.status === 'disponivel' ? 'text-emerald-700' : asset.status === 'em_uso' ? 'text-blue-700' : asset.status === 'manutencao' ? 'text-amber-700' : asset.status === 'baixado' ? 'text-gray-400' : 'text-gray-600';
                                 return (
                                   <tr
                                     key={asset.id}
@@ -1263,33 +1409,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                     }}
                                     className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedAsset?.id === asset.id ? 'bg-blue-50/60' : ''}`}
                                   >
-                                    {assetTableColumns.visibleColumns.includes('code') && (
-                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{asset.code}</td>
-                                    )}
-                                    {assetTableColumns.visibleColumns.includes('name') && (
-                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                        <div className="flex items-center gap-2.5 min-w-0">
-                                          <div className={`w-7 h-7 rounded-[6px] flex items-center justify-center shrink-0
-                                            ${asset.status === 'disponivel' ? 'bg-emerald-50 text-emerald-600' : asset.status === 'em_uso' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'}`}>
-                                            <Icon className="w-4 h-4" />
-                                          </div>
-                                          <span className="truncate">{asset.name}</span>
-                                        </div>
+                                    {orderedVisibleKeys.map(key => (
+                                      <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                        {renderAssetCell(key, asset, { categoryIcons, calculateDepreciation })}
                                       </td>
-                                    )}
-                                    {assetTableColumns.visibleColumns.includes('category') && (
-                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 capitalize">{asset.category}</td>
-                                    )}
-                                    {assetTableColumns.visibleColumns.includes('status') && (
-                                      <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${statusColor}`}>
-                                        {asset.status === 'em_uso' ? 'Em Obra' : asset.status}
-                                      </td>
-                                    )}
-                                    {assetTableColumns.visibleColumns.includes('value') && (
-                                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                                        R$ {depreciation.current.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                                      </td>
-                                    )}
+                                    ))}
                                     <td aria-hidden="true"></td>
                                     {assetTableColumns.visibleColumns.includes('actions') && (
                                       // §9.1 — a linha inteira já seleciona o ativo (ação dominante); a coluna só
@@ -1646,6 +1770,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 });
                 const visible = RESERVATION_COLUMNS.filter(c => c.key !== 'actions' && reservationTableColumns.visibleColumns.includes(c.key));
                 const tableWidth = visible.reduce((s, c) => s + reservationCols.getWidth(c.key), 0) + reservationCols.getWidth('actions');
+                const orderedVisibleKeys = reservationTableColumns.orderedVisibleColumns.filter(k => k !== 'actions');
                 const statusColor: Record<string, string> = {
                   ativa: 'text-emerald-700', aprovada: 'text-blue-700', pendente: 'text-amber-700',
                   finalizada: 'text-gray-500', cancelada: 'text-rose-600',
@@ -1665,19 +1790,27 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     <div className="overflow-x-auto">
                       <table ref={reservationCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                         <colgroup>
-                          {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${reservationCols.getWidth(c.key)}px` }} />)}
+                          {orderedVisibleKeys.map(key => (
+                            <col key={key} data-col-key={key} style={{ width: `${reservationCols.getWidth(key)}px` }} />
+                          ))}
                           <col />
                           <col data-col-key="actions" style={{ width: `${reservationCols.getWidth('actions')}px` }} />
                         </colgroup>
                         <thead>
                           <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                            {RESERVATION_COLUMNS.filter(c => c.key !== 'actions').map(c => reservationTableColumns.visibleColumns.includes(c.key) && (
-                              <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
-                                sortColumn={reservationTableColumns.sortColumn} sortDirection={reservationTableColumns.sortDirection} onSort={reservationTableColumns.handleColumnSort}
-                                className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                <reservationCols.ResizeHandle colKey={c.key} />
-                              </SortableHeader>
-                            ))}
+                            {orderedVisibleKeys.map(key => {
+                              const def = RESERVATION_COLUMN_HEADERS[key];
+                              if (!def) return null;
+                              return (
+                                <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                                  sortable={def.sortable !== false}
+                                  sortColumn={reservationTableColumns.sortColumn} sortDirection={reservationTableColumns.sortDirection} onSort={reservationTableColumns.handleColumnSort}
+                                  onMoveColumn={reservationTableColumns.moveColumn}
+                                  className={def.className}>
+                                  <reservationCols.ResizeHandle colKey={key} />
+                                </SortableHeader>
+                              );
+                            })}
                             <th aria-hidden="true" className="border-r border-gray-100" />
                             {reservationTableColumns.visibleColumns.includes('actions') && (
                               <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -1690,29 +1823,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             const proj = projects.find(p => p.id === res.project_id);
                             return (
                               <tr key={res.id} className="hover:bg-blue-50/50 transition-colors">
-                                {reservationTableColumns.visibleColumns.includes('asset') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{asset?.name || 'Ativo'}</td>
-                                )}
-                                {reservationTableColumns.visibleColumns.includes('project') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{proj?.name || 'Obra'}</td>
-                                )}
-                                {reservationTableColumns.visibleColumns.includes('start_date') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{new Date(res.start_date).toLocaleDateString('pt-BR')}</td>
-                                )}
-                                {reservationTableColumns.visibleColumns.includes('end_date') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{new Date(res.end_date).toLocaleDateString('pt-BR')}</td>
-                                )}
-                                {reservationTableColumns.visibleColumns.includes('responsible') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{employees.find(e => e.id === res.responsible_employee_id)?.name || 'Central'}</td>
-                                )}
-                                {reservationTableColumns.visibleColumns.includes('requester') && (
-                                  <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{res.requested_by_email}</td>
-                                )}
-                                {reservationTableColumns.visibleColumns.includes('status') && (
-                                  <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${statusColor[res.status] || 'text-gray-600'}`}>
-                                    {res.status === 'ativa' ? 'Em Uso' : res.status}
+                                {orderedVisibleKeys.map(key => (
+                                  <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                    {renderReservationCell(key, res, { asset, proj, employees, statusColor })}
                                   </td>
-                                )}
+                                ))}
                                 <td aria-hidden="true"></td>
                                 {reservationTableColumns.visibleColumns.includes('actions') && (
                                   <td className="px-6 py-2.5 text-right">
@@ -1885,6 +2000,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   });
                   const visible = MAINTENANCE_COLUMNS.filter(c => c.key !== 'actions' && maintenanceTableColumns.visibleColumns.includes(c.key));
                   const tableWidth = visible.reduce((s, c) => s + maintenanceCols.getWidth(c.key), 0) + maintenanceCols.getWidth('actions');
+                  const orderedVisibleKeys = maintenanceTableColumns.orderedVisibleColumns.filter(k => k !== 'actions');
                   const statusColor: Record<string, string> = {
                     concluida: 'text-emerald-700', em_execucao: 'text-amber-700', agendada: 'text-blue-700', cancelada: 'text-rose-600',
                   };
@@ -1904,19 +2020,27 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <div className="overflow-x-auto">
                         <table ref={maintenanceCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                           <colgroup>
-                            {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${maintenanceCols.getWidth(c.key)}px` }} />)}
+                            {orderedVisibleKeys.map(key => (
+                              <col key={key} data-col-key={key} style={{ width: `${maintenanceCols.getWidth(key)}px` }} />
+                            ))}
                             <col />
                             <col data-col-key="actions" style={{ width: `${maintenanceCols.getWidth('actions')}px` }} />
                           </colgroup>
                           <thead>
                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                              {MAINTENANCE_COLUMNS.filter(c => c.key !== 'actions').map(c => maintenanceTableColumns.visibleColumns.includes(c.key) && (
-                                <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
-                                  sortColumn={maintenanceTableColumns.sortColumn} sortDirection={maintenanceTableColumns.sortDirection} onSort={maintenanceTableColumns.handleColumnSort}
-                                  className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                  <maintenanceCols.ResizeHandle colKey={c.key} />
-                                </SortableHeader>
-                              ))}
+                              {orderedVisibleKeys.map(key => {
+                                const def = MAINTENANCE_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                  <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                                    sortable={def.sortable !== false}
+                                    sortColumn={maintenanceTableColumns.sortColumn} sortDirection={maintenanceTableColumns.sortDirection} onSort={maintenanceTableColumns.handleColumnSort}
+                                    onMoveColumn={maintenanceTableColumns.moveColumn}
+                                    className={def.className}>
+                                    <maintenanceCols.ResizeHandle colKey={key} />
+                                  </SortableHeader>
+                                );
+                              })}
                               <th aria-hidden="true" className="border-r border-gray-100" />
                               {maintenanceTableColumns.visibleColumns.includes('actions') && (
                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -1928,31 +2052,11 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               const asset = assets.find(a => a.id === m.asset_id);
                               return (
                                 <tr key={m.id} className="hover:bg-blue-50/50 transition-colors">
-                                  {maintenanceTableColumns.visibleColumns.includes('asset') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                      <div>
-                                        <p className="truncate">{asset?.name || 'Ativo Desconhecido'}</p>
-                                        <p className="text-xs text-gray-400">{asset?.code || ''}</p>
-                                      </div>
+                                  {orderedVisibleKeys.map(key => (
+                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                      {renderMaintenanceCell(key, m, { asset, typeLabels, statusColor })}
                                     </td>
-                                  )}
-                                  {maintenanceTableColumns.visibleColumns.includes('type') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{typeLabels[m.type] || m.type}</td>
-                                  )}
-                                  {maintenanceTableColumns.visibleColumns.includes('description') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 truncate max-w-[240px]" title={m.description}>{m.description}</td>
-                                  )}
-                                  {maintenanceTableColumns.visibleColumns.includes('scheduled_date') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{new Date(m.scheduled_date).toLocaleDateString('pt-BR')}</td>
-                                  )}
-                                  {maintenanceTableColumns.visibleColumns.includes('cost') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">R$ {m.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                  )}
-                                  {maintenanceTableColumns.visibleColumns.includes('status') && (
-                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${statusColor[m.status] || 'text-gray-600'}`}>
-                                      {m.status === 'em_execucao' ? 'Em Oficina' : m.status}
-                                    </td>
-                                  )}
+                                  ))}
                                   <td aria-hidden="true"></td>
                                   {maintenanceTableColumns.visibleColumns.includes('actions') && (
                                     <td className="px-6 py-2.5 text-right">
@@ -2095,6 +2199,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     const sortedRateio = sortRows(filteredRateio, rateioTableColumns.sortColumn, rateioTableColumns.sortDirection, (r, key) => (r as unknown as Record<string, unknown>)[key]);
                     const visible = RATEIO_COLUMNS.filter(c => rateioTableColumns.visibleColumns.includes(c.key));
                     const tableWidth = visible.reduce((s, c) => s + rateioCols.getWidth(c.key), 0);
+                    const orderedVisibleKeys = rateioTableColumns.orderedVisibleColumns;
 
                     if (sortedRateio.length === 0) {
                       return (
@@ -2110,46 +2215,35 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         <div className="overflow-x-auto">
                           <table ref={rateioCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                             <colgroup>
-                              {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${rateioCols.getWidth(c.key)}px` }} />)}
+                              {orderedVisibleKeys.map(key => (
+                                <col key={key} data-col-key={key} style={{ width: `${rateioCols.getWidth(key)}px` }} />
+                              ))}
                             </colgroup>
                             <thead>
                               <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                {visible.map((c, i) => (
-                                  <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
-                                    sortColumn={rateioTableColumns.sortColumn} sortDirection={rateioTableColumns.sortDirection} onSort={rateioTableColumns.handleColumnSort}
-                                    className={`px-6 py-2 overflow-hidden ${i < visible.length - 1 ? 'border-r border-gray-100' : ''}`}>
-                                    <rateioCols.ResizeHandle colKey={c.key} />
-                                  </SortableHeader>
-                                ))}
+                                {orderedVisibleKeys.map(key => {
+                                  const def = RATEIO_COLUMN_HEADERS[key];
+                                  if (!def) return null;
+                                  return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                                      sortable={def.sortable !== false}
+                                      sortColumn={rateioTableColumns.sortColumn} sortDirection={rateioTableColumns.sortDirection} onSort={rateioTableColumns.handleColumnSort}
+                                      onMoveColumn={rateioTableColumns.moveColumn}
+                                      className={def.className}>
+                                      <rateioCols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                  );
+                                })}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                               {sortedRateio.map(r => (
                                 <tr key={r.project_id} className="hover:bg-blue-50/50 transition-colors">
-                                  {rateioTableColumns.visibleColumns.includes('project_name') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{r.project_name}</td>
-                                  )}
-                                  {rateioTableColumns.visibleColumns.includes('assets_count') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{r.assets_count}</td>
-                                  )}
-                                  {rateioTableColumns.visibleColumns.includes('total_days') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{r.total_days} dias</td>
-                                  )}
-                                  {rateioTableColumns.visibleColumns.includes('allocated_cost') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                                      R$ {r.allocated_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  {orderedVisibleKeys.map(key => (
+                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                      {renderRateioCell(key, r)}
                                     </td>
-                                  )}
-                                  {rateioTableColumns.visibleColumns.includes('percentage') && (
-                                    <td className="px-6 py-2.5 text-sm font-normal text-gray-600">
-                                      <div className="flex items-center gap-3">
-                                        <div className="w-24 bg-gray-100 rounded-full h-2">
-                                          <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${r.percentage}%` }} />
-                                        </div>
-                                        <span className="font-medium text-gray-700">{r.percentage}%</span>
-                                      </div>
-                                    </td>
-                                  )}
+                                  ))}
                                 </tr>
                               ))}
                             </tbody>

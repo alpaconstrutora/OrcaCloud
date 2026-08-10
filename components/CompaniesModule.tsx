@@ -181,6 +181,55 @@ const COMPANY_COLUMNS: ColumnConfig[] = [
 ];
 const COMPANY_COL_WIDTHS: Record<string, number> = { code: 90, razao_social: 280, tipo: 160, cnpj: 170, status: 140, actions: 140 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta). 'actions' é
+// estrutural (fixo, fora do drag) e não entra aqui.
+const COMPANY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    razao_social: { label: 'Razão Social', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    tipo: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    cnpj: { label: 'CNPJ', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` em vez de uma sequência fixa.
+function renderCompanyCell(key: string, c: Company): React.ReactNode {
+    switch (key) {
+        case 'code':
+            return <span className="text-sm font-normal text-gray-500">{c.code || '—'}</span>;
+        case 'razao_social':
+            return (
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.cor_sistema }} />
+                    <span className="text-sm font-normal text-gray-700 truncate">{c.razao_social}</span>
+                    {c.is_headquarters && (
+                        <span className="flex items-center gap-1 text-xs text-amber-700 shrink-0">
+                            <Star className="w-3 h-3" /> Sede
+                        </span>
+                    )}
+                </div>
+            );
+        case 'tipo':
+            return <span className="text-sm font-normal text-gray-600">{COMPANY_TIPO_LABELS[c.tipo]}</span>;
+        case 'cnpj':
+            return <span className="text-sm font-normal text-gray-600">{c.cnpj || '—'}</span>;
+        case 'status':
+            return (
+                <span className={`text-sm font-normal ${
+                    c.status === 'ativa' ? 'text-green-700' :
+                    c.status === 'encerrada' ? 'text-red-700' :
+                    c.status === 'em_implantacao' ? 'text-blue-700' :
+                    'text-gray-500'
+                }`}>
+                    {c.status.replace('_', ' ')}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
 // ─── Main component ───────────────────────────────────────────
 
 const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
@@ -640,8 +689,8 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                             const bv = (b as unknown as Record<string, unknown>)[key];
                             return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
                         });
-                        const visible = COMPANY_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
-                        const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+                        const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+                        const tableWidth = orderedVisible.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
 
                         if (sorted.length === 0) {
                             return (
@@ -657,19 +706,24 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                             <div className="overflow-x-auto">
                                 <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                                     <colgroup>
-                                        {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                                        {orderedVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                                         <col />
                                         <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                                     </colgroup>
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            {COMPANY_COLUMNS.filter(c => c.key !== 'actions').map(c => tableColumns.visibleColumns.includes(c.key) && (
-                                                <SortableHeader key={c.key} colKey={c.key} label={c.label} uppercase={false}
-                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                    <cols.ResizeHandle colKey={c.key} />
-                                                </SortableHeader>
-                                            ))}
+                                            {orderedVisible.map(key => {
+                                                const def = COMPANY_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                return (
+                                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                                                        onMoveColumn={tableColumns.moveColumn}
+                                                        className={def.className}>
+                                                        <cols.ResizeHandle colKey={key} />
+                                                    </SortableHeader>
+                                                );
+                                            })}
                                             <th aria-hidden="true" className="border-r border-gray-100" />
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -680,38 +734,11 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                         {sorted.map(c => (
                                             <React.Fragment key={c.id}>
                                                 <tr className="hover:bg-blue-50/50 transition-colors">
-                                                    {tableColumns.visibleColumns.includes('code') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">{c.code || '—'}</td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('razao_social') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.cor_sistema }} />
-                                                                <span className="truncate">{c.razao_social}</span>
-                                                                {c.is_headquarters && (
-                                                                    <span className="flex items-center gap-1 text-xs text-amber-700 shrink-0">
-                                                                        <Star className="w-3 h-3" /> Sede
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                    {orderedVisible.map(key => (
+                                                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            {renderCompanyCell(key, c)}
                                                         </td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('tipo') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{COMPANY_TIPO_LABELS[c.tipo]}</td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('cnpj') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{c.cnpj || '—'}</td>
-                                                    )}
-                                                    {tableColumns.visibleColumns.includes('status') && (
-                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${
-                                                            c.status === 'ativa' ? 'text-green-700' :
-                                                            c.status === 'encerrada' ? 'text-red-700' :
-                                                            c.status === 'em_implantacao' ? 'text-blue-700' :
-                                                            'text-gray-500'
-                                                        }`}>
-                                                            {c.status.replace('_', ' ')}
-                                                        </td>
-                                                    )}
+                                                    ))}
                                                     <td aria-hidden="true"></td>
                                                     {tableColumns.visibleColumns.includes('actions') && (
                                                         <td className="px-6 py-2.5 text-right">
@@ -734,7 +761,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                                 </tr>
                                                 {expandedId === c.id && (
                                                     <tr>
-                                                        <td colSpan={visible.length + 2} className="border-t border-gray-100 px-6 py-4 bg-gray-50">
+                                                        <td colSpan={orderedVisible.length + 2} className="border-t border-gray-100 px-6 py-4 bg-gray-50">
                                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                                 {c.endereco_fiscal?.logradouro && (
                                                                     <div className="col-span-2">

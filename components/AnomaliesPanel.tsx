@@ -6,7 +6,7 @@ import { reconciliationAnomalyService } from '../services/reconciliationAnomalyS
 import { useToast } from '../hooks/useToast';
 import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
-import type { ReconciliationAnomalies } from '../types/financial';
+import type { ReconciliationAnomalies, DuplicateAnomaly, ValueOutlierAnomaly } from '../types/financial';
 
 function sortValue<T>(row: T, key: string): unknown {
     return (row as unknown as Record<string, unknown>)[key];
@@ -31,6 +31,47 @@ const DUPLICATE_COLUMNS: ColumnConfig[] = [
 ];
 const DUPLICATE_COL_WIDTHS: Record<string, number> = { party: 220, source: 120, dates: 190, days_apart: 110, amount: 130 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (drag-and-drop estilo ClickUp, ver GUIA_TABLE_UTILS.md).
+const DUPLICATE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    party: { label: 'Contraparte', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    source: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    dates: { label: 'Datas', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    days_apart: { label: 'Intervalo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    amount: { label: 'Valor', className: 'px-6 py-2 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `orderedVisibleColumns` em vez de repetir um bloco condicional fixo.
+function renderDuplicateCell(key: string, d: DuplicateAnomaly): React.ReactNode {
+    switch (key) {
+        case 'party':
+            return (
+                <div className="flex items-center gap-2 min-w-0 text-gray-700">
+                    {d.source === 'BANK'
+                        ? <Landmark className="w-4 h-4 text-gray-400 shrink-0" />
+                        : <FileText className="w-4 h-4 text-gray-400 shrink-0" />}
+                    <span className="truncate">{d.party}</span>
+                </div>
+            );
+        case 'source':
+            return d.source === 'BANK' ? 'Extrato' : 'Lançamentos';
+        case 'dates':
+            return `${formatDate(d.date_a)} e ${formatDate(d.date_b)}`;
+        case 'days_apart':
+            return <span className="text-red-600">{d.days_apart}d</span>;
+        case 'amount':
+            return (
+                <span className={`font-medium ${d.direction === 'CREDIT' ? 'text-emerald-700' : 'text-gray-800'}`}>
+                    {formatBRL(d.amount)} <span className="text-xs text-gray-400 font-normal">×2</span>
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
 const OUTLIER_COLUMNS: ColumnConfig[] = [
     { key: 'party', label: 'Contraparte', sortable: true },
     { key: 'category', label: 'Categoria', sortable: true },
@@ -40,6 +81,39 @@ const OUTLIER_COLUMNS: ColumnConfig[] = [
     { key: 'amount', label: 'Valor', sortable: true },
 ];
 const OUTLIER_COL_WIDTHS: Record<string, number> = { party: 220, category: 150, dt: 110, avg_a: 140, z: 100, amount: 130 };
+
+const OUTLIER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    party: { label: 'Contraparte', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    dt: { label: 'Data', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    avg_a: { label: 'Média histórica', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    z: { label: 'Desvio', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    amount: { label: 'Valor', className: 'px-6 py-2 overflow-hidden' },
+};
+
+function renderOutlierCell(key: string, o: ValueOutlierAnomaly): React.ReactNode {
+    switch (key) {
+        case 'party':
+            return (
+                <div className="flex items-center gap-2 min-w-0 text-gray-700">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="truncate">{o.party}</span>
+                </div>
+            );
+        case 'category':
+            return o.category || '—';
+        case 'dt':
+            return formatDate(o.dt);
+        case 'avg_a':
+            return `${formatBRL(o.avg_a)} (${o.n})`;
+        case 'z':
+            return <span className="text-amber-600">{o.z}×</span>;
+        case 'amount':
+            return <span className="font-medium text-red-600">{formatBRL(o.amount)}</span>;
+        default:
+            return null;
+    }
+}
 
 interface TableCardProps {
     title: string;
@@ -186,11 +260,11 @@ const AnomaliesPanel: React.FC<AnomaliesPanelProps> = ({ organizationId }) => {
         });
     }, [data?.value_outliers, outlierSearch, outlierTableColumns.sortColumn, outlierTableColumns.sortDirection]);
 
-    const dupVisible = DUPLICATE_COLUMNS.filter(col => dupTableColumns.visibleColumns.includes(col.key));
-    const dupTableWidth = dupVisible.reduce((s, col) => s + dupCols.getWidth(col.key), 0);
+    const dupVisible = dupTableColumns.orderedVisibleColumns;
+    const dupTableWidth = dupVisible.reduce((s, key) => s + dupCols.getWidth(key), 0);
 
-    const outlierVisible = OUTLIER_COLUMNS.filter(col => outlierTableColumns.visibleColumns.includes(col.key));
-    const outlierTableWidth = outlierVisible.reduce((s, col) => s + outlierCols.getWidth(col.key), 0);
+    const outlierVisible = outlierTableColumns.orderedVisibleColumns;
+    const outlierTableWidth = outlierVisible.reduce((s, key) => s + outlierCols.getWidth(key), 0);
 
     return (
         <div className="space-y-6">
@@ -227,77 +301,32 @@ const AnomaliesPanel: React.FC<AnomaliesPanelProps> = ({ organizationId }) => {
             >
                 <table ref={dupCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: dupTableWidth }}>
                     <colgroup>
-                        {dupVisible.map(col => <col key={col.key} data-col-key={col.key} style={{ width: `${dupCols.getWidth(col.key)}px` }} />)}
+                        {dupVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${dupCols.getWidth(key)}px` }} />)}
                     </colgroup>
                     <thead>
                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                            {dupTableColumns.visibleColumns.includes('party') && (
-                                <SortableHeader colKey="party" label="Contraparte" uppercase={false}
-                                    sortColumn={dupTableColumns.sortColumn} sortDirection={dupTableColumns.sortDirection} onSort={dupTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <dupCols.ResizeHandle colKey="party" />
-                                </SortableHeader>
-                            )}
-                            {dupTableColumns.visibleColumns.includes('source') && (
-                                <SortableHeader colKey="source" label="Origem" uppercase={false}
-                                    sortColumn={dupTableColumns.sortColumn} sortDirection={dupTableColumns.sortDirection} onSort={dupTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <dupCols.ResizeHandle colKey="source" />
-                                </SortableHeader>
-                            )}
-                            {dupTableColumns.visibleColumns.includes('dates') && (
-                                <SortableHeader colKey="dates" label="Datas" sortable={false} uppercase={false}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <dupCols.ResizeHandle colKey="dates" />
-                                </SortableHeader>
-                            )}
-                            {dupTableColumns.visibleColumns.includes('days_apart') && (
-                                <SortableHeader colKey="days_apart" label="Intervalo" uppercase={false}
-                                    sortColumn={dupTableColumns.sortColumn} sortDirection={dupTableColumns.sortDirection} onSort={dupTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <dupCols.ResizeHandle colKey="days_apart" />
-                                </SortableHeader>
-                            )}
-                            {dupTableColumns.visibleColumns.includes('amount') && (
-                                <SortableHeader colKey="amount" label="Valor" uppercase={false}
-                                    sortColumn={dupTableColumns.sortColumn} sortDirection={dupTableColumns.sortDirection} onSort={dupTableColumns.handleColumnSort}
-                                    className="px-6 py-2 overflow-hidden">
-                                    <dupCols.ResizeHandle colKey="amount" />
-                                </SortableHeader>
-                            )}
+                            {dupTableColumns.orderedVisibleColumns.map(key => {
+                                const def = DUPLICATE_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                        sortColumn={dupTableColumns.sortColumn} sortDirection={dupTableColumns.sortDirection} onSort={dupTableColumns.handleColumnSort}
+                                        onMoveColumn={dupTableColumns.moveColumn}
+                                        className={def.className}>
+                                        <dupCols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                );
+                            })}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {dupRows.map(d => (
                             <tr key={`${d.id_a}-${d.id_b}`} className="hover:bg-blue-50/50 transition-colors">
-                                {dupTableColumns.visibleColumns.includes('party') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            {d.source === 'BANK'
-                                                ? <Landmark className="w-4 h-4 text-gray-400 shrink-0" />
-                                                : <FileText className="w-4 h-4 text-gray-400 shrink-0" />}
-                                            <span className="truncate">{d.party}</span>
-                                        </div>
+                                {dupTableColumns.orderedVisibleColumns.map(key => (
+                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                        {renderDuplicateCell(key, d)}
                                     </td>
-                                )}
-                                {dupTableColumns.visibleColumns.includes('source') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                        {d.source === 'BANK' ? 'Extrato' : 'Lançamentos'}
-                                    </td>
-                                )}
-                                {dupTableColumns.visibleColumns.includes('dates') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                        {formatDate(d.date_a)} e {formatDate(d.date_b)}
-                                    </td>
-                                )}
-                                {dupTableColumns.visibleColumns.includes('days_apart') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-red-600">{d.days_apart}d</td>
-                                )}
-                                {dupTableColumns.visibleColumns.includes('amount') && (
-                                    <td className={`px-6 py-2.5 text-sm font-medium ${d.direction === 'CREDIT' ? 'text-emerald-700' : 'text-gray-800'}`}>
-                                        {formatBRL(d.amount)} <span className="text-xs text-gray-400 font-normal">×2</span>
-                                    </td>
-                                )}
+                                ))}
                             </tr>
                         ))}
                     </tbody>
@@ -318,80 +347,32 @@ const AnomaliesPanel: React.FC<AnomaliesPanelProps> = ({ organizationId }) => {
             >
                 <table ref={outlierCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: outlierTableWidth }}>
                     <colgroup>
-                        {outlierVisible.map(col => <col key={col.key} data-col-key={col.key} style={{ width: `${outlierCols.getWidth(col.key)}px` }} />)}
+                        {outlierVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${outlierCols.getWidth(key)}px` }} />)}
                     </colgroup>
                     <thead>
                         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                            {outlierTableColumns.visibleColumns.includes('party') && (
-                                <SortableHeader colKey="party" label="Contraparte" uppercase={false}
-                                    sortColumn={outlierTableColumns.sortColumn} sortDirection={outlierTableColumns.sortDirection} onSort={outlierTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <outlierCols.ResizeHandle colKey="party" />
-                                </SortableHeader>
-                            )}
-                            {outlierTableColumns.visibleColumns.includes('category') && (
-                                <SortableHeader colKey="category" label="Categoria" uppercase={false}
-                                    sortColumn={outlierTableColumns.sortColumn} sortDirection={outlierTableColumns.sortDirection} onSort={outlierTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <outlierCols.ResizeHandle colKey="category" />
-                                </SortableHeader>
-                            )}
-                            {outlierTableColumns.visibleColumns.includes('dt') && (
-                                <SortableHeader colKey="dt" label="Data" uppercase={false}
-                                    sortColumn={outlierTableColumns.sortColumn} sortDirection={outlierTableColumns.sortDirection} onSort={outlierTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <outlierCols.ResizeHandle colKey="dt" />
-                                </SortableHeader>
-                            )}
-                            {outlierTableColumns.visibleColumns.includes('avg_a') && (
-                                <SortableHeader colKey="avg_a" label="Média histórica" uppercase={false}
-                                    sortColumn={outlierTableColumns.sortColumn} sortDirection={outlierTableColumns.sortDirection} onSort={outlierTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <outlierCols.ResizeHandle colKey="avg_a" />
-                                </SortableHeader>
-                            )}
-                            {outlierTableColumns.visibleColumns.includes('z') && (
-                                <SortableHeader colKey="z" label="Desvio" uppercase={false}
-                                    sortColumn={outlierTableColumns.sortColumn} sortDirection={outlierTableColumns.sortDirection} onSort={outlierTableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <outlierCols.ResizeHandle colKey="z" />
-                                </SortableHeader>
-                            )}
-                            {outlierTableColumns.visibleColumns.includes('amount') && (
-                                <SortableHeader colKey="amount" label="Valor" uppercase={false}
-                                    sortColumn={outlierTableColumns.sortColumn} sortDirection={outlierTableColumns.sortDirection} onSort={outlierTableColumns.handleColumnSort}
-                                    className="px-6 py-2 overflow-hidden">
-                                    <outlierCols.ResizeHandle colKey="amount" />
-                                </SortableHeader>
-                            )}
+                            {outlierTableColumns.orderedVisibleColumns.map(key => {
+                                const def = OUTLIER_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                        sortColumn={outlierTableColumns.sortColumn} sortDirection={outlierTableColumns.sortDirection} onSort={outlierTableColumns.handleColumnSort}
+                                        onMoveColumn={outlierTableColumns.moveColumn}
+                                        className={def.className}>
+                                        <outlierCols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                );
+                            })}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {outlierRows.map(o => (
                             <tr key={o.id} className="hover:bg-blue-50/50 transition-colors">
-                                {outlierTableColumns.visibleColumns.includes('party') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                                            <span className="truncate">{o.party}</span>
-                                        </div>
+                                {outlierTableColumns.orderedVisibleColumns.map(key => (
+                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                        {renderOutlierCell(key, o)}
                                     </td>
-                                )}
-                                {outlierTableColumns.visibleColumns.includes('category') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{o.category || '—'}</td>
-                                )}
-                                {outlierTableColumns.visibleColumns.includes('dt') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatDate(o.dt)}</td>
-                                )}
-                                {outlierTableColumns.visibleColumns.includes('avg_a') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatBRL(o.avg_a)} ({o.n})</td>
-                                )}
-                                {outlierTableColumns.visibleColumns.includes('z') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-amber-600">{o.z}×</td>
-                                )}
-                                {outlierTableColumns.visibleColumns.includes('amount') && (
-                                    <td className="px-6 py-2.5 text-sm font-medium text-red-600">{formatBRL(o.amount)}</td>
-                                )}
+                                ))}
                             </tr>
                         ))}
                     </tbody>

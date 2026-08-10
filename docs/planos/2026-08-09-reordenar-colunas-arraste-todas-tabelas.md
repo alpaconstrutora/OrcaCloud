@@ -147,22 +147,40 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 **Fase 6 concluída — 10 de 10.**
 
 ### Fase 7 — Operacional / ÒPURA / Diversos
-- [ ] OperacionalList.tsx
-- [ ] OperacionalModule.tsx
-- [ ] OpuraMarketModule.tsx
-- [ ] OpuraCnoModule.tsx
-- [ ] OpuraAssetsModule.tsx
-- [ ] OpuraDocsModule.tsx
-- [ ] InventoryModule.tsx
-- [ ] CompaniesModule.tsx
-- [ ] CostCenterModule.tsx
-- [ ] ClientCategoriesSettings.tsx
-- [ ] TasksList.tsx
-- [ ] DatabaseExplorer.tsx
-- [ ] documents/DocumentsTable.tsx
-- [ ] AnomaliesPanel.tsx
-- [ ] DivergencesPanel.tsx
-- [ ] ProlaboreReconciliationPanel.tsx
+- [x] OperacionalList.tsx — deployado
+- [x] OperacionalModule.tsx — deployado (ProjectSelector)
+- [x] OpuraMarketModule.tsx — deployado (2 tabelas)
+- [x] OpuraCnoModule.tsx — deployado
+- [x] OpuraAssetsModule.tsx — deployado (4 tabelas: ativos/reservas/manutenções/rateio)
+- [x] OpuraDocsModule.tsx — N/A: a tabela real é `<DocumentsTable>` (componente
+      compartilhado), coberto abaixo; nada a converter no próprio arquivo
+- [x] InventoryModule.tsx — deployado (2 tabelas: saldos/movimentos)
+- [x] CompaniesModule.tsx — deployado
+- [x] CostCenterModule.tsx — deployado
+- [x] ClientCategoriesSettings.tsx — deployado
+- [x] TasksList.tsx — N/A, decisão registrada: já tem mecanismo PRÓPRIO de
+      drag-and-drop de colunas (`colOrder`/`colDragging`, `ColHeader` custom),
+      independente de `SortableHeader`/`moveColumn` — só que **sem persistir em
+      localStorage** entre sessões, ao contrário do padrão central. Migrar
+      exigiria reescrever também o sort (`sortCol`/`sortDir` já é próprio e
+      desconectado de `tableColumns`), o que é mudança de arquitetura, não a
+      conversão mecânica deste plano. Oportunidade futura, fora deste escopo.
+- [x] DatabaseExplorer.tsx — deployado
+- [x] documents/DocumentsTable.tsx — deployado (componente compartilhado por
+      GED/PartnerWorkspaceManager/PartnerPortal; colunas dinâmicas de máscara
+      de pasta não entram no drag, ficam ancoradas onde já estavam)
+- [x] AnomaliesPanel.tsx — deployado (2 tabelas)
+- [x] DivergencesPanel.tsx — deployado (3 tabelas)
+- [x] ProlaboreReconciliationPanel.tsx — deployado
+
+**Fase 7 concluída — 14 de 16 convertidos + 2 exceções documentadas (não é
+trabalho pendente, é decisão registrada).**
+
+⚠️ Mesma dívida técnica pré-existente encontrada em `PlanningList.tsx` (Fase 6)
+apareceu em `DatabaseExplorer.tsx`, `OperacionalList.tsx` e
+`OpuraMarketModule.tsx`: `font-bold`/`font-black`/`font-mono` dentro de `<td>`,
+confirmados via `git show HEAD` como já existentes ANTES deste rollout — fora
+de escopo aqui, candidatos a uma limpeza futura do guia de UI.
 
 ## Estado
 
@@ -174,7 +192,11 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 - [x] Fase 4 (9 arquivos)
 - [x] Fase 5 (9 arquivos)
 - [x] Fase 6 (10 arquivos)
-- [ ] Fase 7 (16 arquivos)
+- [x] Fase 7 (14 de 16 + 2 exceções documentadas)
+
+**ROLLOUT CONCLUÍDO — 72 de 74 arquivos convertidos, 2 exceções documentadas
+(TasksList.tsx tem mecanismo próprio; OpuraDocsModule.tsx delega para
+DocumentsTable.tsx, que foi convertido).**
 
 **Não declarar o rollout concluído com fase em aberto** — reportar
 "Fase N: X de Y arquivos", nunca "concluído" enquanto sobrar item.

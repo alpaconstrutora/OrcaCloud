@@ -4,10 +4,13 @@ import { SortableHeader, useTableColumns, useResizableColumns } from '../ui/Tabl
 import { OpuraDocument } from '../../types';
 
 /** Subconjunto do retorno de `useTableColumns` que a tabela precisa — cada tela
- * cria seu próprio hook (chave de persistência própria) e repassa aqui. */
+ * cria seu próprio hook (chave de persistência própria) e repassa aqui.
+ * `orderedVisibleColumns`/`moveColumn` habilitam o drag-and-drop de colunas (estilo
+ * ClickUp, ver GUIA_TABLE_UTILS.md) — todo chamador já os tem, pois passa o retorno
+ * inteiro de `useTableColumns(...)`, então isto é aditivo (não quebra ninguém). */
 type TableColumnsState = Pick<
   ReturnType<typeof useTableColumns>,
-  'visibleColumns' | 'sortColumn' | 'sortDirection' | 'handleColumnSort'
+  'visibleColumns' | 'sortColumn' | 'sortDirection' | 'handleColumnSort' | 'orderedVisibleColumns' | 'moveColumn'
 >;
 
 /** Resize/autofit (§6.1) — opcional: quem não passar `cols` mantém o comportamento
@@ -77,6 +80,81 @@ const DEFAULT_EMPTY_STATE = (
   <div className="text-sm text-slate-400 font-medium">Nenhum documento encontrado.</div>
 );
 
+/** Metadados de header por coluna "fixa" (declarada no `ColumnConfig` de cada tela) —
+ * usados para renderizar o `<thead>`/`<colgroup>` a partir de `orderedVisibleColumns`
+ * (ordem que o usuário arrasta) em vez de uma sequência fixa de JSX. As colunas
+ * dinâmicas (máscara de pasta, só o GED usa) não entram aqui — ver `dynamicColumns`. */
+const DOCUMENTS_TABLE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  nome: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  descricao: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  autor: { label: 'Autor', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  tipo_documento: { label: 'Tipo / Categoria', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  project_id: { label: 'Obra Vinculada', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  data_emissao: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  data_validade: { label: 'Validade', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
+
+/** className completo do `<td>` por coluna fixa — mantém as variações originais
+ * (min-w/max-w/truncate/whitespace) que afetam o layout da célula, não só a cor do texto. */
+const DOCUMENTS_TABLE_CELL_CLASS: Record<string, string> = {
+  nome: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 min-w-[200px]',
+  descricao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[260px] truncate',
+  autor: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
+  tipo_documento: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
+  project_id: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
+  data_emissao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
+  data_validade: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
+  status: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal',
+};
+
+/** Conteúdo de cada <td> de coluna fixa — extraído para função pura para que o
+ * <tbody> possa mapear a ordem escolhida pelo usuário em vez de repetir um bloco
+ * condicional fixo por coluna. */
+function renderDocumentCell(
+  key: string,
+  doc: OpuraDocument,
+  ctx: { resolveProjectName?: (doc: OpuraDocument) => string },
+): React.ReactNode {
+  switch (key) {
+    case 'nome':
+      return (
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0">
+            {doc.active_version ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path) : <FileText className="w-5 h-5 text-gray-400" />}
+          </div>
+          <div className="min-w-0">
+            <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
+            {doc.locked_by && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-orange-600 mt-0.5">
+                <Lock className="w-3 h-3" />
+                Em edição por {doc.locked_by_name || doc.locked_by} — V{doc.locked_version}
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    case 'descricao':
+      return doc.descricao || '-';
+    case 'autor':
+      return doc.autor || '-';
+    case 'tipo_documento':
+      return doc.tipo_documento;
+    case 'project_id':
+      return ctx.resolveProjectName ? ctx.resolveProjectName(doc) : '-';
+    case 'data_emissao':
+      return doc.data_emissao ? new Date(doc.data_emissao).toLocaleDateString() : '-';
+    case 'data_validade':
+      return doc.data_validade ? new Date(doc.data_validade).toLocaleDateString() : '-';
+    case 'status': {
+      const { statusColor, statusLabel } = getDocumentStatusPresentation(doc.status);
+      return <span className={statusColor}>{statusLabel}</span>;
+    }
+    default:
+      return null;
+  }
+}
+
 /**
  * Tabela de documentos compartilhada entre a Gestão de Documentos (GED / ÒPURA Docs) e o
  * Portal do Parceiro — fonte única de layout: qualquer ajuste aqui reflete nos dois lugares.
@@ -102,15 +180,37 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   onToggleAll,
   cols,
 }) => {
-  const { visibleColumns, sortColumn, sortDirection, handleColumnSort } = tableColumns;
+  const { visibleColumns, sortColumn, sortDirection, handleColumnSort, orderedVisibleColumns, moveColumn } = tableColumns;
+
+  // Colunas "fixas" (declaradas no ColumnConfig de cada tela) na ordem escolhida pelo
+  // usuário (drag-and-drop) — exclui 'actions' (sempre fixa ao final) e 'data_validade'
+  // quando a tela pediu para escondê-la (GED oculta na aba Engenharia).
+  const coreOrderedKeys = orderedVisibleColumns.filter(k => k !== 'actions' && (k !== 'data_validade' || showValidade));
+  // As colunas dinâmicas (máscara de pasta) não fazem parte de `columnOrder` — mudam por
+  // pasta, não são um ColumnConfig fixo, então não podem ser arrastadas. Ficam ancoradas
+  // logo após 'nome'/'descricao', na mesma posição visual que já tinham antes do drag.
+  const anchorIdx = Math.max(coreOrderedKeys.lastIndexOf('nome'), coreOrderedKeys.lastIndexOf('descricao'));
+  const beforeDynamicKeys = anchorIdx === -1 ? [] : coreOrderedKeys.slice(0, anchorIdx + 1);
+  const afterDynamicKeys = anchorIdx === -1 ? coreOrderedKeys : coreOrderedKeys.slice(anchorIdx + 1);
 
   // §6.1 — só entra na conta quando `cols` foi passado (opt-in).
-  const dataColKeys = ['nome', 'descricao', ...dynamicColumns, 'autor', 'tipo_documento', 'project_id',
-    ...(showValidade ? ['data_validade'] : []), 'data_emissao', 'status']
-    .filter(k => visibleColumns.includes(k) || dynamicColumns.includes(k));
+  const dataColKeys = [...beforeDynamicKeys, ...dynamicColumns, ...afterDynamicKeys];
   const tableWidth = cols
     ? (selectable ? 40 : 0) + dataColKeys.reduce((s, k) => s + cols.getWidth(k), 0) + (visibleColumns.includes('actions') ? cols.getWidth('actions') : 0)
     : undefined;
+
+  const renderCoreHeader = (key: string) => {
+    const def = DOCUMENTS_TABLE_COLUMN_HEADERS[key];
+    if (!def) return null;
+    return (
+      <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+        sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort}
+        onMoveColumn={moveColumn}
+        className={def.className}>
+        {cols && <cols.ResizeHandle colKey={key} />}
+      </SortableHeader>
+    );
+  };
 
   return (
     <div className="bg-white overflow-hidden">
@@ -123,7 +223,9 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
           {cols && (
             <colgroup>
               {selectable && <col style={{ width: '40px' }} />}
-              {dataColKeys.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+              {beforeDynamicKeys.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+              {dynamicColumns.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+              {afterDynamicKeys.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
               <col />
               {visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
             </colgroup>
@@ -140,16 +242,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                   />
                 </th>
               )}
-              {visibleColumns.includes('nome') && (
-                <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="nome" />}
-                </SortableHeader>
-              )}
-              {visibleColumns.includes('descricao') && (
-                <SortableHeader colKey="descricao" label="Descrição" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="descricao" />}
-                </SortableHeader>
-              )}
+              {beforeDynamicKeys.map(renderCoreHeader)}
 
               {dynamicColumns.map((col, idx) => (
                 <th key={`dyn-head-${idx}`} className="px-6 py-2 border-r border-gray-100 text-left text-table-header font-semibold text-gray-500 whitespace-nowrap relative overflow-hidden">
@@ -158,36 +251,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 </th>
               ))}
 
-              {visibleColumns.includes('autor') && (
-                <SortableHeader colKey="autor" label="Autor" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="autor" />}
-                </SortableHeader>
-              )}
-              {visibleColumns.includes('tipo_documento') && (
-                <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="tipo_documento" />}
-                </SortableHeader>
-              )}
-              {visibleColumns.includes('project_id') && (
-                <SortableHeader colKey="project_id" label="Obra Vinculada" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="project_id" />}
-                </SortableHeader>
-              )}
-              {visibleColumns.includes('data_emissao') && (
-                <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="data_emissao" />}
-                </SortableHeader>
-              )}
-              {visibleColumns.includes('data_validade') && showValidade && (
-                <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="data_validade" />}
-                </SortableHeader>
-              )}
-              {visibleColumns.includes('status') && (
-                <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                  {cols && <cols.ResizeHandle colKey="status" />}
-                </SortableHeader>
-              )}
+              {afterDynamicKeys.map(renderCoreHeader)}
               {cols && <th aria-hidden="true" className="border-r border-gray-100" />}
               {visibleColumns.includes('actions') && (
                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Ações</th>
@@ -203,8 +267,13 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
               </tr>
             ) : (
               documents.map((doc, rowIndex) => {
-                const { statusColor, statusLabel } = getDocumentStatusPresentation(doc.status);
                 const rowSelectable = !selectable || !isRowSelectable || isRowSelectable(doc);
+                const renderCoreTd = (key: string) => (
+                  <td key={key} className={DOCUMENTS_TABLE_CELL_CLASS[key] ?? 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600'}
+                    title={key === 'descricao' ? (doc.descricao || undefined) : undefined}>
+                    {renderDocumentCell(key, doc, { resolveProjectName })}
+                  </td>
+                );
                 return (
                   <tr
                     key={doc.id}
@@ -223,29 +292,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                         />
                       </td>
                     )}
-                    {visibleColumns.includes('nome') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 min-w-[200px]">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-shrink-0">
-                            {doc.active_version ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path) : <FileText className="w-5 h-5 text-gray-400" />}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
-                            {doc.locked_by && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-orange-600 mt-0.5">
-                                <Lock className="w-3 h-3" />
-                                Em edição por {doc.locked_by_name || doc.locked_by} — V{doc.locked_version}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    )}
-                    {visibleColumns.includes('descricao') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[260px] truncate" title={doc.descricao || undefined}>
-                        {doc.descricao || '-'}
-                      </td>
-                    )}
+                    {beforeDynamicKeys.map(renderCoreTd)}
 
                     {dynamicColumns.map((col, idx) => (
                       <td key={`dyn-body-${doc.id}-${idx}`} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 whitespace-nowrap bg-slate-50/30">
@@ -253,36 +300,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                       </td>
                     ))}
 
-                    {visibleColumns.includes('autor') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                        {doc.autor || '-'}
-                      </td>
-                    )}
-                    {visibleColumns.includes('tipo_documento') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                        {doc.tipo_documento}
-                      </td>
-                    )}
-                    {visibleColumns.includes('project_id') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                        {resolveProjectName ? resolveProjectName(doc) : '-'}
-                      </td>
-                    )}
-                    {visibleColumns.includes('data_emissao') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                        {doc.data_emissao ? new Date(doc.data_emissao).toLocaleDateString() : '-'}
-                      </td>
-                    )}
-                    {visibleColumns.includes('data_validade') && showValidade && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                        {doc.data_validade ? new Date(doc.data_validade).toLocaleDateString() : '-'}
-                      </td>
-                    )}
-                    {visibleColumns.includes('status') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                        <span className={statusColor}>{statusLabel}</span>
-                      </td>
-                    )}
+                    {afterDynamicKeys.map(renderCoreTd)}
                     {cols && <td aria-hidden="true"></td>}
                     {visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right whitespace-nowrap">

@@ -102,6 +102,48 @@ const APPROVAL_COLORS: Record<string, string> = {
     REJEITADO: 'text-red-600',
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (drag-and-drop estilo ClickUp, ver GUIA_TABLE_UTILS.md).
+// 'actions' fica fora do mapa — continua fixa como última coluna (mesmo padrão de ClientList.tsx).
+const PROLABORE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    party: { label: 'Contraparte', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    date: { label: 'Data', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    amount: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    approval: { label: 'Aprovação', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `orderedVisibleColumns` em vez de repetir um bloco condicional fixo.
+function renderProlaboreCell(key: string, row: ProlaboreRow): React.ReactNode {
+    switch (key) {
+        case 'description':
+            return row.description || '—';
+        case 'party':
+            return row.party_name || '—';
+        case 'category':
+            return row.category || '—';
+        case 'date':
+            return formatDateBR(row.transaction_date);
+        case 'amount':
+            return <span className="font-medium text-gray-800">{formatMoney(row.amount)}</span>;
+        case 'approval': {
+            const approved = isApproved(row);
+            const approvalLabel = row.source === 'internal'
+                ? (APPROVAL_LABELS[row.approval_status || 'RASCUNHO'] || row.approval_status)
+                : (approved ? 'Aprovado' : 'Pendente');
+            const approvalColor = row.source === 'internal'
+                ? (APPROVAL_COLORS[row.approval_status || 'RASCUNHO'] || 'text-gray-500')
+                : (approved ? 'text-emerald-700' : 'text-amber-700');
+            return <span className={`font-normal ${approvalColor}`}>{approvalLabel}</span>;
+        }
+        default:
+            return null;
+    }
+}
+
 const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> = ({ organizationId }) => {
     const confirm = useConfirm();
     const { localToast, showToast } = useToast();
@@ -132,6 +174,9 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         + (['description', 'party', 'category', 'date', 'amount', 'approval'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
+    // Colunas de dados (sem "actions") na ordem escolhida pelo usuário — usada para
+    // mapear colgroup/thead/tbody em vez de uma sequência fixa (drag-and-drop, §ver guia).
+    const orderedDataKeys = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
 
     // Em "Todas as organizações" (organizationId vazio), a empresa selecionada
     // no seletor abaixo é quem define o escopo efetivo — mesmo padrão do resto
@@ -570,12 +615,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                 <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                     <colgroup>
                         <col style={{ width: '40px' }} /> {/* checkbox */}
-                        {tableColumns.visibleColumns.includes('description') && <col data-col-key="description" style={{ width: `${cols.getWidth('description')}px` }} />}
-                        {tableColumns.visibleColumns.includes('party') && <col data-col-key="party" style={{ width: `${cols.getWidth('party')}px` }} />}
-                        {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
-                        {tableColumns.visibleColumns.includes('date') && <col data-col-key="date" style={{ width: `${cols.getWidth('date')}px` }} />}
-                        {tableColumns.visibleColumns.includes('amount') && <col data-col-key="amount" style={{ width: `${cols.getWidth('amount')}px` }} />}
-                        {tableColumns.visibleColumns.includes('approval') && <col data-col-key="approval" style={{ width: `${cols.getWidth('approval')}px` }} />}
+                        {orderedDataKeys.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                         {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                             borda de "Ações" não andar a cada redimensionamento. */}
                         <col />
@@ -592,48 +632,18 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                     onChange={toggleAllVisible}
                                 />
                             </th>
-                            {tableColumns.visibleColumns.includes('description') && (
-                                <SortableHeader colKey="description" label="Descrição" uppercase={false}
-                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <cols.ResizeHandle colKey="description" />
-                                </SortableHeader>
-                            )}
-                            {tableColumns.visibleColumns.includes('party') && (
-                                <SortableHeader colKey="party" label="Contraparte" uppercase={false}
-                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <cols.ResizeHandle colKey="party" />
-                                </SortableHeader>
-                            )}
-                            {tableColumns.visibleColumns.includes('category') && (
-                                <SortableHeader colKey="category" label="Categoria" uppercase={false}
-                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <cols.ResizeHandle colKey="category" />
-                                </SortableHeader>
-                            )}
-                            {tableColumns.visibleColumns.includes('date') && (
-                                <SortableHeader colKey="date" label="Data" uppercase={false}
-                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <cols.ResizeHandle colKey="date" />
-                                </SortableHeader>
-                            )}
-                            {tableColumns.visibleColumns.includes('amount') && (
-                                <SortableHeader colKey="amount" label="Valor" uppercase={false}
-                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <cols.ResizeHandle colKey="amount" />
-                                </SortableHeader>
-                            )}
-                            {tableColumns.visibleColumns.includes('approval') && (
-                                <SortableHeader colKey="approval" label="Aprovação" uppercase={false}
-                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                                    className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                    <cols.ResizeHandle colKey="approval" />
-                                </SortableHeader>
-                            )}
+                            {orderedDataKeys.map(key => {
+                                const def = PROLABORE_COLUMN_HEADERS[key];
+                                if (!def) return null;
+                                return (
+                                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                                        onMoveColumn={tableColumns.moveColumn}
+                                        className={def.className}>
+                                        <cols.ResizeHandle colKey={key} />
+                                    </SortableHeader>
+                                );
+                            })}
                             {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                             <th aria-hidden="true" className="border-r border-gray-100" />
                             {tableColumns.visibleColumns.includes('actions') && (
@@ -658,12 +668,6 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                             </td></tr>
                         ) : sortedRows.map(row => {
                             const approved = isApproved(row);
-                            const approvalLabel = row.source === 'internal'
-                                ? (APPROVAL_LABELS[row.approval_status || 'RASCUNHO'] || row.approval_status)
-                                : (approved ? 'Aprovado' : 'Pendente');
-                            const approvalColor = row.source === 'internal'
-                                ? (APPROVAL_COLORS[row.approval_status || 'RASCUNHO'] || 'text-gray-500')
-                                : (approved ? 'text-emerald-700' : 'text-amber-700');
                             return (
                                 <tr key={rowKey(row)} className={`hover:bg-blue-50/50 transition-colors ${selectedKeys.has(rowKey(row)) ? 'bg-blue-50/60' : ''}`}>
                                     <td className="px-4 py-2.5 border-r border-gray-100 text-center">
@@ -675,26 +679,11 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                             onChange={() => toggleRowSelection(row)}
                                         />
                                     </td>
-                                    {tableColumns.visibleColumns.includes('description') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{row.description || '—'}</td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('party') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{row.party_name || '—'}</td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('category') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{row.category || '—'}</td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('date') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{formatDateBR(row.transaction_date)}</td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('amount') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">{formatMoney(row.amount)}</td>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('approval') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100">
-                                            <span className={`text-sm font-normal ${approvalColor}`}>{approvalLabel}</span>
+                                    {orderedDataKeys.map(key => (
+                                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                            {renderProlaboreCell(key, row)}
                                         </td>
-                                    )}
+                                    ))}
                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                     <td aria-hidden="true" className="border-r border-gray-100"></td>
                                     {tableColumns.visibleColumns.includes('actions') && (

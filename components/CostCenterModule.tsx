@@ -21,6 +21,16 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions',     label: 'Ações',                  sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta). 'actions' é
+// estrutural (fixo, fora do drag) e não entra aqui.
+const COST_CENTER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code:        { label: 'Código',                  className: 'px-6 py-2 border-r border-gray-100 w-24' },
+    group:       { label: 'Centro de custo (grupo)',  className: 'px-6 py-2 border-r border-gray-100' },
+    name:        { label: 'Centro de custo',          className: 'px-6 py-2 border-r border-gray-100' },
+    description: { label: 'Descrição',                className: 'px-6 py-2 border-r border-gray-100' },
+};
+
 interface CostCenterModuleProps {
     /** Org sobre a qual criar/editar. REGRA #5: leitura nunca bloqueia por org nula; criar exige.
      *  Vem do seletor global de organização do topo — esta tela não tem seletor próprio. */
@@ -34,6 +44,51 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { parent_id: '', name: '', description: '' };
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` em vez de uma sequência fixa.
+function renderCostCenterCell(
+    key: string,
+    ctx: {
+        item: CostCenterV2;
+        isGroup: boolean;
+        hasChildren: boolean;
+        expanded: boolean;
+        toggleExpand: (id: string) => void;
+        groupNameFor: (item: CostCenterV2) => string;
+    },
+): React.ReactNode {
+    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor } = ctx;
+    switch (key) {
+        case 'code':
+            return <span className="text-xs font-normal text-gray-500 whitespace-nowrap">{item.code}</span>;
+        case 'group':
+            return (
+                <div className="flex items-center gap-2 min-w-0">
+                    {isGroup && hasChildren ? (
+                        <button type="button" onClick={() => toggleExpand(item.id)} className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 shrink-0 rounded transition-colors">
+                            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        </button>
+                    ) : (
+                        <span className="w-5 h-5 shrink-0" />
+                    )}
+                    <span className={`truncate text-sm font-normal ${isGroup ? 'text-gray-900' : 'text-gray-500'}`}>
+                        {isGroup ? item.name : groupNameFor(item)}
+                    </span>
+                </div>
+            );
+        case 'name':
+            return isGroup ? (
+                <span className="text-sm font-normal text-gray-300">—</span>
+            ) : (
+                <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>
+            );
+        case 'description':
+            return <span className="text-sm font-normal text-gray-500 truncate line-clamp-1">{item.description || '-'}</span>;
+        default:
+            return null;
+    }
+}
 
 const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) => {
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
@@ -341,18 +396,17 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader label="Código" colKey="code" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 w-24" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('group') && (
-                                        <SortableHeader label="Centro de custo (grupo)" colKey="group" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Centro de custo" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('description') && (
-                                        <SortableHeader label="Descrição" colKey="description" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = COST_CENTER_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className} />
+                                        );
+                                    })}
                                     <th className="px-6 py-2 text-right w-32 text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
@@ -361,41 +415,11 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                     const expanded = !!expandedIds[item.id];
                                     return (
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${isGroup ? 'bg-gray-50/60' : ''}`}>
-                                            {tableColumns.visibleColumns.includes('code') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <span className="text-xs font-normal text-gray-500 whitespace-nowrap">{item.code}</span>
+                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor })}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('group') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        {isGroup && hasChildren ? (
-                                                            <button type="button" onClick={() => toggleExpand(item.id)} className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 shrink-0 rounded transition-colors">
-                                                                {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                                            </button>
-                                                        ) : (
-                                                            <span className="w-5 h-5 shrink-0" />
-                                                        )}
-                                                        <span className={`truncate text-sm font-normal ${isGroup ? 'text-gray-900' : 'text-gray-500'}`}>
-                                                            {isGroup ? item.name : groupNameFor(item)}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    {isGroup ? (
-                                                        <span className="text-sm font-normal text-gray-300">—</span>
-                                                    ) : (
-                                                        <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>
-                                                    )}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('description') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <span className="text-sm font-normal text-gray-500 truncate line-clamp-1">{item.description || '-'}</span>
-                                                </td>
-                                            )}
+                                            ))}
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     <ActionIconButton kind="edit" onClick={() => openEdit(item)} />

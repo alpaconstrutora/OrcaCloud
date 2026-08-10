@@ -23,6 +23,18 @@ const OPERACIONAL_COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: '', sortable: false },
 ]
 
+// Metadados de header/célula por coluna — usados para renderizar thead/tbody a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de uma
+// sequência fixa de JSX. 'actions' é estrutural (fixo, fora do drag) e não entra aqui.
+const OPERACIONAL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string; tdClassName: string }> = {
+  title:    { label: 'Código / Título', className: 'px-6 py-2 border-r border-gray-100',                    tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+  phase:    { label: 'Etapa',           className: 'px-6 py-2 border-r border-gray-100 hidden md:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden md:table-cell' },
+  status:   { label: 'Status',          className: 'px-6 py-2 border-r border-gray-100',                    tdClassName: 'px-6 py-2.5 border-r border-gray-100' },
+  deadline: { label: 'Prazo',           className: 'px-6 py-2 border-r border-gray-100 hidden lg:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden lg:table-cell' },
+  progress: { label: 'Avanço',          className: 'px-6 py-2 border-r border-gray-100 hidden lg:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden lg:table-cell w-32' },
+  cost:     { label: 'Custo Real',      className: 'px-6 py-2 border-r border-gray-100 hidden xl:table-cell', tdClassName: 'px-6 py-2.5 border-r border-gray-100 hidden xl:table-cell' },
+}
+
 interface WorkOrderRow {
   id: string
   code: string | null
@@ -149,6 +161,55 @@ const STATUS_FILTERS: Array<{ value: WorkOrderStatus | 'all'; label: string }> =
   { value: 'blocked',            label: 'Bloqueada' },
   { value: 'closed',             label: 'Encerrada' },
 ]
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderOperacionalCell(key: string, wo: WorkOrderRow, ctx: { overdue: boolean; openNcs: number; pColor: string }): React.ReactNode {
+  switch (key) {
+    case 'title':
+      return (
+        <div className="flex items-start gap-2">
+          <Zap className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${ctx.pColor}`} />
+          <div>
+            <div className="flex items-center gap-1.5">
+              {wo.code && (
+                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                  {wo.code}
+                </span>
+              )}
+              {ctx.openNcs > 0 && (
+                <span className="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">
+                  {ctx.openNcs} NC
+                </span>
+              )}
+            </div>
+            <p className="text-sm font-normal text-gray-700 mt-0.5 leading-snug line-clamp-1">{wo.title}</p>
+            {wo.team && (
+              <p className="text-[11px] text-gray-400 font-medium">{(wo.team as { name: string }).name}</p>
+            )}
+          </div>
+        </div>
+      )
+    case 'phase':
+      return <span className="text-sm font-normal text-gray-600">{wo.phase ?? '—'}</span>
+    case 'status':
+      return <StatusBadge status={wo.status} />
+    case 'deadline':
+      return (
+        <div className={`text-sm ${ctx.overdue ? 'font-medium text-red-600' : 'font-normal text-gray-700'}`}>
+          {ctx.overdue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+          {fmtDate(wo.planned_end_date)}
+        </div>
+      )
+    case 'progress':
+      return <ProgressBar pct={wo.completion_pct} />
+    case 'cost':
+      return <span className="text-sm font-medium text-gray-800">{fmtCurrency(wo.actual_total_cost)}</span>
+    default:
+      return null
+  }
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCreateNew }) => {
@@ -471,24 +532,17 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                  {tableColumns.visibleColumns.includes('title') && (
-                    <SortableHeader uppercase={false} label="Código / Título" colKey="title" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                  )}
-                  {tableColumns.visibleColumns.includes('phase') && (
-                    <SortableHeader uppercase={false} label="Etapa" colKey="phase" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 hidden md:table-cell" />
-                  )}
-                  {tableColumns.visibleColumns.includes('status') && (
-                    <SortableHeader uppercase={false} label="Status" colKey="status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                  )}
-                  {tableColumns.visibleColumns.includes('deadline') && (
-                    <SortableHeader uppercase={false} label="Prazo" colKey="deadline" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 hidden lg:table-cell" />
-                  )}
-                  {tableColumns.visibleColumns.includes('progress') && (
-                    <SortableHeader uppercase={false} label="Avanço" colKey="progress" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 hidden lg:table-cell" />
-                  )}
-                  {tableColumns.visibleColumns.includes('cost') && (
-                    <SortableHeader uppercase={false} label="Custo Real" colKey="cost" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 hidden xl:table-cell" />
-                  )}
+                  {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                    const def = OPERACIONAL_COLUMN_HEADERS[key]
+                    if (!def) return null
+                    return (
+                      <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                        onSort={tableColumns.handleColumnSort}
+                        onMoveColumn={tableColumns.moveColumn}
+                        className={def.className} />
+                    )
+                  })}
                   {tableColumns.visibleColumns.includes('actions') && (
                     <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right text-table-header font-semibold text-gray-500">Ações</th>
                   )}
@@ -506,59 +560,15 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                       onClick={() => onViewDetail(wo.id)}
                       className={`group hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 cursor-pointer ${overdue ? 'bg-red-50/10' : ''}`}
                     >
-                      {tableColumns.visibleColumns.includes('title') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100">
-                          <div className="flex items-start gap-2">
-                            <Zap className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${pColor}`} />
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                {wo.code && (
-                                  <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                                    {wo.code}
-                                  </span>
-                                )}
-                                {openNcs > 0 && (
-                                  <span className="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">
-                                    {openNcs} NC
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm font-normal text-gray-700 mt-0.5 leading-snug line-clamp-1">{wo.title}</p>
-                              {wo.team && (
-                                <p className="text-[11px] text-gray-400 font-medium">{(wo.team as { name: string }).name}</p>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      )}
-                      {tableColumns.visibleColumns.includes('phase') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 hidden md:table-cell">
-                          <span className="text-sm font-normal text-gray-600">{wo.phase ?? '—'}</span>
-                        </td>
-                      )}
-                      {tableColumns.visibleColumns.includes('status') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100">
-                          <StatusBadge status={wo.status} />
-                        </td>
-                      )}
-                      {tableColumns.visibleColumns.includes('deadline') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 hidden lg:table-cell">
-                          <div className={`text-sm ${overdue ? 'font-medium text-red-600' : 'font-normal text-gray-700'}`}>
-                            {overdue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
-                            {fmtDate(wo.planned_end_date)}
-                          </div>
-                        </td>
-                      )}
-                      {tableColumns.visibleColumns.includes('progress') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 hidden lg:table-cell w-32">
-                          <ProgressBar pct={wo.completion_pct} />
-                        </td>
-                      )}
-                      {tableColumns.visibleColumns.includes('cost') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 hidden xl:table-cell">
-                          <span className="text-sm font-medium text-gray-800">{fmtCurrency(wo.actual_total_cost)}</span>
-                        </td>
-                      )}
+                      {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                        const def = OPERACIONAL_COLUMN_HEADERS[key]
+                        if (!def) return null
+                        return (
+                          <td key={key} className={def.tdClassName}>
+                            {renderOperacionalCell(key, wo, { overdue, openNcs, pColor })}
+                          </td>
+                        )
+                      })}
                       {tableColumns.visibleColumns.includes('actions') && (
                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right w-[120px]">
                           <button

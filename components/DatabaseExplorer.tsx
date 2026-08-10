@@ -54,11 +54,84 @@ const EXPLORER_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX (drag-and-drop estilo ClickUp, ver GUIA_TABLE_UTILS.md).
+const EXPLORER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Item', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0' },
+    nature: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0 text-center' },
+    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0' },
+    unit: { label: 'Unid', sortable: false, className: 'px-6 py-2 border-r border-gray-100 last:border-r-0 text-center' },
+    price: { label: 'Preço Unitário', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap' },
+    actions: { label: 'Ações', sortable: false, className: 'px-6 py-2 text-right' },
+};
+
 interface DatabaseExplorerProps {
     budget?: BudgetEntry[];
     favorites: string[];
     onToggleFavorite: (e: React.MouseEvent | React.TouchEvent, code: string) => void;
     onUpdateBudget?: (newBudget: BudgetEntry[]) => void;
+}
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderExplorerCell(key: string, result: SinapiItem, ctx: {
+    favorites: string[];
+    onToggleFavorite: (e: React.MouseEvent | React.TouchEvent, code: string) => void;
+    searchDatabase: string;
+    onDeleteItem: (e: React.MouseEvent, item: SinapiItem) => void;
+}): React.ReactNode {
+    switch (key) {
+        case 'code':
+            return (
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={(e) => ctx.onToggleFavorite(e, result.code)}
+                        className="p-1 rounded-lg hover:bg-white shadow-sm transition-all z-10"
+                    >
+                        <Star className={`w-3 h-3 ${ctx.favorites.includes(result.code) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
+                    </button>
+                    <span className="font-mono text-sm font-bold text-gray-600">{result.code}</span>
+                </div>
+            );
+        case 'nature':
+            return (
+                <div className="text-center">
+                    <span className={`
+                        px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest inline-block
+                        ${result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600' :
+                            result.nature === 'Material' ? 'bg-blue-50 text-blue-600' :
+                                'bg-purple-50 text-purple-600'}
+                    `}>
+                        {result.nature}
+                    </span>
+                </div>
+            );
+        case 'description':
+            return <span className="text-sm font-medium text-gray-800 group-hover:text-blue-600 transition-colors leading-tight">{result.description}</span>;
+        case 'unit':
+            return <div className="text-center"><span className="text-sm font-bold text-gray-600 uppercase">{result.unit}</span></div>;
+        case 'price':
+            return <div className="text-right"><span className="text-sm font-black text-gray-900">{formatMoney(result.price)}</span></div>;
+        case 'actions':
+            return (
+                <div className="flex items-center justify-end gap-2">
+                    {(ctx.searchDatabase === 'GENERAL' || result.isOverride) && (
+                        <button
+                            onClick={(e) => ctx.onDeleteItem(e, result)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title={result.isOverride ? "Restaurar item SINAPI" : "Excluir item"}
+                        >
+                            <Trash className="w-4 h-4" />
+                        </button>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-blue-500" />
+                </div>
+            );
+        default:
+            return null;
+    }
 }
 
 const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, onToggleFavorite, onUpdateBudget }) => {
@@ -1109,24 +1182,16 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-gray-50/50 border-b border-gray-200">
                                         <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">
-                                            {tableColumns.visibleColumns.includes('code') && (
-                                                <SortableHeader label="Item" colKey="code" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('nature') && (
-                                                <SortableHeader label="Tipo" colKey="nature" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('description') && (
-                                                <SortableHeader label="Descrição" colKey="description" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('unit') && (
-                                                <SortableHeader label="Unid" colKey="unit" sortable={false} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('price') && (
-                                                <SortableHeader label="Preço Unitário" colKey="price" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />
-                                            )}
-                                            {tableColumns.visibleColumns.includes('actions') && (
-                                                <SortableHeader label="Ações" colKey="actions" sortable={false} className="px-6 py-2 text-right" />
-                                            )}
+                                            {tableColumns.orderedVisibleColumns.map(key => {
+                                                const def = EXPLORER_COLUMN_HEADERS[key];
+                                                if (!def) return null;
+                                                return (
+                                                    <SortableHeader key={key} label={def.label} colKey={key} sortable={def.sortable !== false}
+                                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                                                        onMoveColumn={tableColumns.moveColumn}
+                                                        className={def.className} />
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
@@ -1136,62 +1201,11 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                 className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                                 onClick={() => handleSelectItem(result)}
                                             >
-                                                {tableColumns.visibleColumns.includes('code') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                onClick={(e) => onToggleFavorite(e, result.code)}
-                                                                className="p-1 rounded-lg hover:bg-white shadow-sm transition-all z-10"
-                                                            >
-                                                                <Star className={`w-3 h-3 ${favorites.includes(result.code) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
-                                                            </button>
-                                                            <span className="font-mono text-sm font-bold text-gray-600">{result.code}</span>
-                                                        </div>
+                                                {tableColumns.orderedVisibleColumns.map(key => (
+                                                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        {renderExplorerCell(key, result, { favorites, onToggleFavorite, searchDatabase, onDeleteItem: handleDeleteItem })}
                                                     </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('nature') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                        <span className={`
-                                                            px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest inline-block
-                                                            ${result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600' :
-                                                                result.nature === 'Material' ? 'bg-blue-50 text-blue-600' :
-                                                                    'bg-purple-50 text-purple-600'}
-                                                        `}>
-                                                            {result.nature}
-                                                        </span>
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('description') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <span className="text-sm font-medium text-gray-800 group-hover:text-blue-600 transition-colors leading-tight">{result.description}</span>
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('unit') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                        <span className="text-sm font-bold text-gray-600 uppercase">{result.unit}</span>
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('price') && (
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                                        <span className="text-sm font-black text-gray-900">{formatMoney(result.price)}</span>
-                                                    </td>
-                                                )}
-                                                {tableColumns.visibleColumns.includes('actions') && (
-                                                    <td className="px-6 py-2.5 text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {(searchDatabase === 'GENERAL' || result.isOverride) && (
-                                                                <button
-                                                                    onClick={(e) => handleDeleteItem(e, result)}
-                                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                                    title={result.isOverride ? "Restaurar item SINAPI" : "Excluir item"}
-                                                                >
-                                                                    <Trash className="w-4 h-4" />
-                                                                </button>
-                                                            )}
-                                                            <ChevronRight className="w-4 h-4 text-blue-500" />
-                                                        </div>
-                                                    </td>
-                                                )}
+                                                ))}
                                             </tr>
                                         ))}
                                     </tbody>

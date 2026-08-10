@@ -56,6 +56,61 @@ const PROJECT_COLUMNS: ColumnConfig[] = [
   { key: 'status',  label: 'Status',  sortable: true },
 ];
 
+// Mapa header (label/sortable/className) por chave — usado no thead dinâmico
+// (drag-and-drop de colunas, ver GUIA_TABLE_UTILS.md).
+const PROJECT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  obra:    { label: 'Obra',    className: 'px-6 py-2 border-r border-gray-100' },
+  codigo:  { label: 'Código',  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  cliente: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100' },
+  local:   { label: 'Local',   className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  area:    { label: 'Área',    className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  status:  { label: 'Status',  className: 'px-6 py-2' },
+};
+
+type CnoProjectRow = {
+  id?: string;
+  obra: string;
+  codigo: string;
+  cliente: string;
+  local: string;
+  area: number;
+  status: string;
+};
+
+// Conteúdo de cada célula da tabela de seleção de obra, extraído do <td> original.
+function renderCnoProjectCell(
+  key: string,
+  row: CnoProjectRow,
+  ctx: { setSelectedProjectId: (id: string | null) => void }
+): React.ReactNode {
+  switch (key) {
+    case 'obra':
+      return (
+        // §9.1 — a linha É a ação; o botão existe só para dar foco de teclado à mesma ação, não é um segundo controle
+        <button
+          onClick={(e) => { e.stopPropagation(); ctx.setSelectedProjectId(row.id || null); }}
+          className="text-left text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors"
+          title="Gerenciar previdência desta obra"
+        >
+          {row.obra}
+        </button>
+      );
+    case 'codigo':
+      return <span className="text-sm font-normal text-gray-600">{row.codigo || 'N/D'}</span>;
+    case 'cliente':
+      return <span className="text-sm font-normal text-gray-700">{row.cliente || '—'}</span>;
+    case 'local':
+      return <span className="text-sm font-normal text-gray-600">{row.local || '—'}</span>;
+    case 'area':
+      return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{row.area ? `${row.area.toLocaleString('pt-BR')} m²` : '—'}</span>;
+    case 'status':
+      // §8 — texto colorido, sem pílula
+      return <span className={`text-sm font-normal ${OBRA_STATUS_COLORS[row.status] || 'text-gray-400'}`}>{row.status || '—'}</span>;
+    default:
+      return null;
+  }
+}
+
 // §8 — status da obra em texto colorido simples (sem pílula/fundo/uppercase)
 const OBRA_STATUS_COLORS: Record<string, string> = {
   'Em andamento': 'text-blue-600',
@@ -705,42 +760,18 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 <thead>
                   {/* §6.2 — sentence case */}
                   <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    {projectColumns.visibleColumns.includes('obra') && (
-                      <SortableHeader colKey="obra" label="Obra" uppercase={false}
-                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
-                        onSort={projectColumns.handleColumnSort}
-                        className="px-6 py-2 border-r border-gray-100" />
-                    )}
-                    {projectColumns.visibleColumns.includes('codigo') && (
-                      <SortableHeader colKey="codigo" label="Código" uppercase={false}
-                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
-                        onSort={projectColumns.handleColumnSort}
-                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                    )}
-                    {projectColumns.visibleColumns.includes('cliente') && (
-                      <SortableHeader colKey="cliente" label="Cliente" uppercase={false}
-                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
-                        onSort={projectColumns.handleColumnSort}
-                        className="px-6 py-2 border-r border-gray-100" />
-                    )}
-                    {projectColumns.visibleColumns.includes('local') && (
-                      <SortableHeader colKey="local" label="Local" uppercase={false}
-                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
-                        onSort={projectColumns.handleColumnSort}
-                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                    )}
-                    {projectColumns.visibleColumns.includes('area') && (
-                      <SortableHeader colKey="area" label="Área" uppercase={false}
-                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
-                        onSort={projectColumns.handleColumnSort}
-                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                    )}
-                    {projectColumns.visibleColumns.includes('status') && (
-                      <SortableHeader colKey="status" label="Status" uppercase={false}
-                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
-                        onSort={projectColumns.handleColumnSort}
-                        className="px-6 py-2" />
-                    )}
+                    {projectColumns.orderedVisibleColumns.map(key => {
+                      const def = PROJECT_COLUMN_HEADERS[key];
+                      if (!def) return null;
+                      return (
+                        <SortableHeader key={key} colKey={key} label={def.label} uppercase={false}
+                          sortable={def.sortable !== false}
+                          sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
+                          onSort={projectColumns.handleColumnSort}
+                          onMoveColumn={projectColumns.moveColumn}
+                          className={def.className} />
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -750,46 +781,11 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       onClick={() => setSelectedProjectId(row.id || null)}
                       className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                     >
-                      {projectColumns.visibleColumns.includes('obra') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                          {/* §9.1 — a linha É a ação; o botão existe só para dar foco de teclado à mesma ação, não é um segundo controle */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedProjectId(row.id || null); }}
-                            className="text-left text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors"
-                            title="Gerenciar previdência desta obra"
-                          >
-                            {row.obra}
-                          </button>
+                      {projectColumns.orderedVisibleColumns.map(key => (
+                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                          {renderCnoProjectCell(key, row, { setSelectedProjectId })}
                         </td>
-                      )}
-                      {projectColumns.visibleColumns.includes('codigo') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                          {row.codigo || 'N/D'}
-                        </td>
-                      )}
-                      {projectColumns.visibleColumns.includes('cliente') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                          {row.cliente || '—'}
-                        </td>
-                      )}
-                      {projectColumns.visibleColumns.includes('local') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                          {row.local || '—'}
-                        </td>
-                      )}
-                      {projectColumns.visibleColumns.includes('area') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                          {row.area ? `${row.area.toLocaleString('pt-BR')} m²` : '—'}
-                        </td>
-                      )}
-                      {projectColumns.visibleColumns.includes('status') && (
-                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                          {/* §8 — texto colorido, sem pílula */}
-                          <span className={`text-sm font-normal ${OBRA_STATUS_COLORS[row.status] || 'text-gray-400'}`}>
-                            {row.status || '—'}
-                          </span>
-                        </td>
-                      )}
+                      ))}
                     </tr>
                   ))}
                 </tbody>

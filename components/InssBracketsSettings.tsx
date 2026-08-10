@@ -14,6 +14,31 @@ const COLUMNS: ColumnConfig[] = [
 const fmtBRL = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtPct = (n: number) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%`;
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX.
+const INSS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    base_de:  { label: 'Base de cálculo: De',  className: 'px-6 py-2 border-r border-gray-100' },
+    base_ate: { label: 'Base de cálculo: Até', className: 'px-6 py-2 border-r border-gray-100' },
+    aliquota: { label: 'Alíquota',             className: 'px-6 py-2 text-right' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderInssCell(key: string, b: { base_de: number; base_ate: number; aliquota: number }): React.ReactNode {
+    switch (key) {
+        case 'base_de':
+            return <span className="text-sm font-normal text-gray-700">{fmtBRL(b.base_de)}</span>;
+        case 'base_ate':
+            return <span className="text-sm font-normal text-gray-700">{fmtBRL(b.base_ate)}</span>;
+        case 'aliquota':
+            return <div className="text-right"><span className="text-sm font-medium text-gray-800">{fmtPct(b.aliquota)}</span></div>;
+        default:
+            return null;
+    }
+}
+
 const InssBracketsSettings: React.FC = () => {
     const tableColumns = useTableColumns(COLUMNS, 'inssBracketsColumns');
 
@@ -95,29 +120,34 @@ const InssBracketsSettings: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <tr>
-                                    {tableColumns.visibleColumns.includes('base_de') && (
-                                        <SortableHeader colKey="base_de" label="Base de cálculo: De" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('base_ate') && (
-                                        <SortableHeader colKey="base_ate" label="Base de cálculo: Até" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('aliquota') && (
-                                        <SortableHeader colKey="aliquota" label="Alíquota" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-right" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = INSS_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                sortable={def.sortable !== false}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            />
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {rows.map(b => (
                                     <tr key={b.id} className="hover:bg-blue-50/50 transition-colors">
-                                        {tableColumns.visibleColumns.includes('base_de') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{fmtBRL(b.base_de)}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('base_ate') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{fmtBRL(b.base_ate)}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('aliquota') && (
-                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">{fmtPct(b.aliquota)}</td>
-                                        )}
+                                        {tableColumns.orderedVisibleColumns.map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderInssCell(key, b)}
+                                            </td>
+                                        ))}
                                     </tr>
                                 ))}
                             </tbody>

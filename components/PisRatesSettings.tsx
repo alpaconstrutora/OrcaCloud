@@ -3,7 +3,7 @@ import { Landmark, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { STALE } from '../lib/queryClient';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
-import { pisRatesService } from '../services/pisRatesService';
+import { pisRatesService, PisRate } from '../services/pisRatesService';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'exercicio', label: 'Exercício',         sortable: true },
@@ -11,7 +11,34 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'aliquota',  label: 'Alíquota',          sortable: true },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. `last:border-r-0` (em vez de omitir a borda só na
+// coluna que hoje é a última) garante que a borda some corretamente na coluna
+// que ficar por último depois de um arraste, seja ela qual for.
+const PIS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    exercicio: { label: 'Exercício', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0' },
+    regime: { label: 'Regime Tributário', className: 'px-6 py-2 border-r border-gray-100 last:border-r-0' },
+    aliquota: { label: 'Alíquota', className: 'px-6 py-2 text-right border-r border-gray-100 last:border-r-0' },
+};
+
 const fmtPct = (n: number) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%`;
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderPisCell(key: string, r: PisRate): React.ReactNode {
+    switch (key) {
+        case 'exercicio':
+            return <span className="text-sm font-normal text-gray-700">{r.exercicio}</span>;
+        case 'regime':
+            return <span className="text-sm font-normal text-gray-600">{r.regime_tributario}</span>;
+        case 'aliquota':
+            return <span className="block text-right text-sm font-medium text-gray-800">{fmtPct(r.aliquota)}</span>;
+        default:
+            return null;
+    }
+}
 
 const PisRatesSettings: React.FC = () => {
     const tableColumns = useTableColumns(COLUMNS, 'pisRatesColumns');
@@ -97,29 +124,27 @@ const PisRatesSettings: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <tr>
-                                    {tableColumns.visibleColumns.includes('exercicio') && (
-                                        <SortableHeader colKey="exercicio" label="Exercício" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('regime') && (
-                                        <SortableHeader colKey="regime" label="Regime Tributário" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('aliquota') && (
-                                        <SortableHeader colKey="aliquota" label="Alíquota" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 text-right" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = PIS_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className} />
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {rows.map(r => (
                                     <tr key={r.id} className="hover:bg-blue-50/50 transition-colors">
-                                        {tableColumns.visibleColumns.includes('exercicio') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{r.exercicio}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('regime') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{r.regime_tributario}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('aliquota') && (
-                                            <td className="px-6 py-2.5 text-right text-sm font-medium text-gray-800">{fmtPct(r.aliquota)}</td>
-                                        )}
+                                        {tableColumns.orderedVisibleColumns.map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderPisCell(key, r)}
+                                            </td>
+                                        ))}
                                     </tr>
                                 ))}
                             </tbody>

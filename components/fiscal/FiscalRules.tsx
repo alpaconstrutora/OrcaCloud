@@ -28,6 +28,40 @@ function CategoryText({ cat }: { cat: string }) {
   return <span className={`text-sm font-normal ${CATEGORY_COLORS[cat] ?? 'text-gray-600'}`}>{cat}</span>;
 }
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa à direita).
+const RULES_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  type: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  value: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  category: { label: 'Categoria', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  priority: { label: 'Prioridade', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  scope: { label: 'Escopo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderRuleCell(key: string, r: ClassificationRule): React.ReactNode {
+  switch (key) {
+    case 'type':
+      return <span className="text-sm font-normal text-gray-600">{r.rule_type}</span>;
+    case 'value':
+      return <span className="text-sm font-medium text-gray-800">{r.match_value}</span>;
+    case 'category':
+      return <CategoryText cat={r.category} />;
+    case 'priority':
+      return <span className={r.priority < 30 ? 'text-sm font-normal text-emerald-600' : r.priority < 60 ? 'text-sm font-normal text-amber-600' : 'text-sm font-normal text-gray-400'}>{r.priority}</span>;
+    case 'scope':
+      return <span className="text-sm font-normal text-gray-500">{r.organization_id ? 'empresa' : 'global'}</span>;
+    case 'status':
+      return <span className={r.is_active ? 'text-sm font-normal text-emerald-700' : 'text-sm font-normal text-gray-400'}>{r.is_active ? 'Ativa' : 'Inativa'}</span>;
+    default:
+      return null;
+  }
+}
+
 const RULE_TYPES: RuleType[] = ['ncm', 'cfop', 'keyword'];
 const CATEGORIES = ['aço', 'concreto', 'elétrica', 'hidráulica', 'alvenaria', 'material', 'equipamento'];
 
@@ -250,59 +284,30 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             {(() => {
-              const visibleR = COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
-              const rulesTableWidth = visibleR.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+              const visibleR = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+              const rulesTableWidth = visibleR.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
               return (
             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: rulesTableWidth }}>
               <colgroup>
-                {visibleR.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                {visibleR.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                 <col />
                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                  {tableColumns.visibleColumns.includes('type') && (
-                    <SortableHeader colKey="type" label="Tipo" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="type" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('value') && (
-                    <SortableHeader colKey="value" label="Valor" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="value" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('category') && (
-                    <SortableHeader colKey="category" label="Categoria" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="category" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('priority') && (
-                    <SortableHeader colKey="priority" label="Prioridade" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="priority" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('scope') && (
-                    <SortableHeader colKey="scope" label="Escopo" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="scope" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('status') && (
-                    <SortableHeader colKey="status" label="Status" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="status" />
-                    </SortableHeader>
-                  )}
+                  {visibleR.map(key => {
+                    const def = RULES_COLUMN_HEADERS[key];
+                    if (!def) return null;
+                    return (
+                      <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                        onSort={tableColumns.handleColumnSort}
+                        onMoveColumn={tableColumns.moveColumn}
+                        className={def.className}>
+                        <cols.ResizeHandle colKey={key} />
+                      </SortableHeader>
+                    );
+                  })}
                   <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
@@ -312,30 +317,11 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
               <tbody className="divide-y divide-gray-200">
                 {shown.map(r => (
                   <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${!r.is_active ? 'opacity-50' : ''}`}>
-                    {tableColumns.visibleColumns.includes('type') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{r.rule_type}</td>
-                    )}
-                    {tableColumns.visibleColumns.includes('value') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">{r.match_value}</td>
-                    )}
-                    {tableColumns.visibleColumns.includes('category') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"><CategoryText cat={r.category} /></td>
-                    )}
-                    {tableColumns.visibleColumns.includes('priority') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                        <span className={r.priority < 30 ? 'text-emerald-600' : r.priority < 60 ? 'text-amber-600' : 'text-gray-400'}>{r.priority}</span>
+                    {visibleR.map(key => (
+                      <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                        {renderRuleCell(key, r)}
                       </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('scope') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-500">
-                        {r.organization_id ? 'empresa' : 'global'}
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('status') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                        <span className={r.is_active ? 'text-emerald-700' : 'text-gray-400'}>{r.is_active ? 'Ativa' : 'Inativa'}</span>
-                      </td>
-                    )}
+                    ))}
                     <td aria-hidden="true"></td>
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">

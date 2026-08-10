@@ -102,15 +102,17 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 **Fase 3 concluída — 9 de 9.**
 
 ### Fase 4 — Fiscal / Impostos / Folha
-- [ ] fiscal/FiscalJobs.tsx
-- [ ] fiscal/FiscalDocuments.tsx
-- [ ] fiscal/FiscalRules.tsx
-- [ ] CofinsRatesSettings.tsx
-- [ ] PisRatesSettings.tsx
-- [ ] InssBracketsSettings.tsx
-- [ ] TaxSettingsManager.tsx
-- [ ] PaymentTypesSettings.tsx
-- [ ] PayrollRunList.tsx
+- [x] fiscal/FiscalJobs.tsx — commit a seguir, deployado
+- [x] fiscal/FiscalDocuments.tsx — commit a seguir, deployado (subtabela de itens NF-e não usa TableUtils, intocada)
+- [x] fiscal/FiscalRules.tsx — commit a seguir, deployado
+- [x] CofinsRatesSettings.tsx — commit a seguir, deployado
+- [x] PisRatesSettings.tsx — commit a seguir, deployado
+- [x] InssBracketsSettings.tsx — commit a seguir, deployado
+- [x] TaxSettingsManager.tsx — commit a seguir, deployado
+- [x] PaymentTypesSettings.tsx — commit a seguir, deployado
+- [x] PayrollRunList.tsx — commit a seguir, deployado
+
+**Fase 4 concluída — 9 de 9.**
 
 ### Fase 5 — RH / Labor / Academia
 - [ ] LaborEmployeeList.tsx
@@ -160,7 +162,7 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 - [x] Fase 1 (10 arquivos) — commit a seguir
 - [x] Fase 2 (11 arquivos)
 - [x] Fase 3 (9 arquivos)
-- [ ] Fase 4 (9 arquivos)
+- [x] Fase 4 (9 arquivos)
 - [ ] Fase 5 (9 arquivos)
 - [ ] Fase 6 (10 arquivos)
 - [ ] Fase 7 (16 arquivos)

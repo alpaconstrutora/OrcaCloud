@@ -63,6 +63,67 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa, não entra no arraste.
+const PAYROLL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    period:       { label: 'Período',      className: 'px-6 py-2 border-r border-gray-100' },
+    organization: { label: 'Organização',  className: 'px-6 py-2 border-r border-gray-100' },
+    value:        { label: 'Valor total',  className: 'px-6 py-2 border-r border-gray-100 text-right' },
+    type:         { label: 'Tipo',         className: 'px-6 py-2 border-r border-gray-100' },
+    status:       { label: 'Status',       className: 'px-6 py-2 border-r border-gray-100' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderPayrollCell(key: string, run: PayrollRun, ctx: { orgName: (id: string) => string; runTotals: Record<string, number> }): React.ReactNode {
+    const isClosed = run.status === 'FECHADO';
+    const hasWarning = run.validation_logs && run.validation_logs.length > 0;
+    switch (key) {
+        case 'period':
+            return (
+                <div className="flex items-center gap-2">
+                    <Calendar className={`w-3.5 h-3.5 shrink-0 ${isClosed ? 'text-emerald-500' : 'text-amber-500'}`} />
+                    <span className="text-sm font-normal text-gray-700 whitespace-nowrap">
+                        {formatDate(run.start_date)}
+                        <span className="text-gray-400 mx-1">→</span>
+                        {formatDate(run.end_date)}
+                    </span>
+                </div>
+            );
+        case 'organization':
+            return <span className="text-sm font-normal text-gray-600">{ctx.orgName(run.org_id)}</span>;
+        case 'value':
+            return (
+                <div className="text-right">
+                    {ctx.runTotals[run.id] != null ? (
+                        <span className="text-sm font-medium text-gray-800">{fmtBRL(ctx.runTotals[run.id])}</span>
+                    ) : (
+                        <span className="text-sm font-normal text-gray-300">—</span>
+                    )}
+                </div>
+            );
+        case 'type':
+            return (
+                <span className={`text-sm font-normal ${TYPE_COLORS[run.type] ?? 'text-gray-600'}`}>
+                    {TYPE_LABELS[run.type] ?? run.type}{run.subtype ? ` · ${run.subtype}` : ''}
+                </span>
+            );
+        case 'status':
+            return (
+                <div className="flex items-center gap-1.5">
+                    <span className={`text-sm font-normal ${STATUS_COLORS[run.status] ?? 'text-gray-600'}`}>
+                        {isClosed ? 'Fechado' : 'Rascunho'}
+                    </span>
+                    {hasWarning && <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
+                </div>
+            );
+        default:
+            return null;
+    }
+}
+
 const PayrollRunList: React.FC<PayrollRunListProps> = ({
     runs, orgId, organizations, loading,
     typeFilter, monthFilter, yearFilter, search, runTotals,
@@ -217,21 +278,24 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('period') && (
-                                        <SortableHeader label="Período" colKey="period" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('value') && (
-                                        <SortableHeader label="Valor total" colKey="value" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('type') && (
-                                        <SortableHeader label="Tipo" colKey="type" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = PAYROLL_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                sortable={def.sortable !== false}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            />
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                     )}
@@ -239,57 +303,17 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                             </thead>
                             <tbody className="divide-y divide-gray-200">
                                 {filteredRuns.map(run => {
-                                    const isClosed = run.status === 'FECHADO';
-                                    const hasWarning = run.validation_logs && run.validation_logs.length > 0;
                                     return (
                                         <tr
                                             key={run.id}
                                             onClick={() => onSelectRun(run)}
                                             className="hover:bg-indigo-50/50 transition-colors cursor-pointer group"
                                         >
-                                            {tableColumns.visibleColumns.includes('period') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <Calendar className={`w-3.5 h-3.5 shrink-0 ${isClosed ? 'text-emerald-500' : 'text-amber-500'}`} />
-                                                        <span className="text-sm font-normal text-gray-700 whitespace-nowrap">
-                                                            {formatDate(run.start_date)}
-                                                            <span className="text-gray-400 mx-1">→</span>
-                                                            {formatDate(run.end_date)}
-                                                        </span>
-                                                    </div>
+                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    {renderPayrollCell(key, run, { orgName, runTotals })}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('organization') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                    {orgName(run.org_id)}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('value') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                                    {runTotals[run.id] != null ? (
-                                                        <span className="text-sm font-medium text-gray-800">{fmtBRL(runTotals[run.id])}</span>
-                                                    ) : (
-                                                        <span className="text-sm font-normal text-gray-300">—</span>
-                                                    )}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('type') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <span className={`text-sm font-normal ${TYPE_COLORS[run.type] ?? 'text-gray-600'}`}>
-                                                        {TYPE_LABELS[run.type] ?? run.type}{run.subtype ? ` · ${run.subtype}` : ''}
-                                                    </span>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className={`text-sm font-normal ${STATUS_COLORS[run.status] ?? 'text-gray-600'}`}>
-                                                            {isClosed ? 'Fechado' : 'Rascunho'}
-                                                        </span>
-                                                        {hasWarning && <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
-                                                    </div>
-                                                </td>
-                                            )}
+                                            ))}
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

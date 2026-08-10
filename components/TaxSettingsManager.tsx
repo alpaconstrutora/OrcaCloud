@@ -23,6 +23,54 @@ const emptyForm: TaxSettingInput = { nome: '', aliquota: null, base_calculo: '',
 
 const inputCls = 'w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all';
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa, não entra no arraste.
+const TAX_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    nome:           { label: 'Nome',              className: 'px-6 py-2 border-r border-gray-100' },
+    aliquota:       { label: 'Alíquota (%)',      className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
+    base_calculo:   { label: 'Base de Cálculo',   sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
+    regra_retencao: { label: 'Regra de Retenção', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
+    aplica:         { label: 'Aplica a',          sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
+    ativo:          { label: 'Ativo',             className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderTaxCell(key: string, item: TaxSetting): React.ReactNode {
+    switch (key) {
+        case 'nome':
+            return <span className="text-sm font-normal text-gray-700">{item.nome}</span>;
+        case 'aliquota':
+            return (
+                <div className="text-right">
+                    <span className="text-sm font-normal text-gray-700">
+                        {item.aliquota !== null ? `${item.aliquota.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%` : '—'}
+                    </span>
+                </div>
+            );
+        case 'base_calculo':
+            return <span className="text-sm font-normal text-gray-600">{item.base_calculo || '—'}</span>;
+        case 'regra_retencao':
+            return <span className="text-sm font-normal text-gray-600">{item.regra_retencao || '—'}</span>;
+        case 'aplica': {
+            const parts: string[] = [];
+            if (item.aplica_venda_ativo) parts.push('Venda de Ativo');
+            if (item.aplica_locacao) parts.push('Locação');
+            return (
+                <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
+                    {parts.length ? parts.join(' · ') : <span className="text-gray-400">—</span>}
+                </span>
+            );
+        }
+        case 'ativo':
+            return <span className={item.ativo ? 'text-sm text-emerald-600' : 'text-sm text-gray-400'}>{item.ativo ? 'Sim' : 'Não'}</span>;
+        default:
+            return null;
+    }
+}
+
 const TaxSettingsManager: React.FC = () => {
     // Organização do seletor do topo, já com a herança de empresa/obra.
     const { orgId: activeOrganizationId } = useOrgContext();
@@ -288,24 +336,24 @@ const TaxSettingsManager: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <tr>
-                                    {tableColumns.visibleColumns.includes('nome') && (
-                                        <SortableHeader colKey="nome" label="Nome" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('aliquota') && (
-                                        <SortableHeader colKey="aliquota" label="Alíquota (%)" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('base_calculo') && (
-                                        <th className="px-6 py-2 border-r border-gray-100 text-sm font-semibold text-gray-500">Base de Cálculo</th>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('regra_retencao') && (
-                                        <th className="px-6 py-2 border-r border-gray-100 text-sm font-semibold text-gray-500">Regra de Retenção</th>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('aplica') && (
-                                        <th className="px-6 py-2 border-r border-gray-100 text-sm font-semibold text-gray-500">Aplica a</th>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('ativo') && (
-                                        <SortableHeader colKey="ativo" label="Ativo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = TAX_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                sortable={def.sortable !== false}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            />
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                     )}
@@ -314,35 +362,11 @@ const TaxSettingsManager: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                                 {filteredItems.map(item => (
                                     <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
-                                        {tableColumns.visibleColumns.includes('nome') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{item.nome}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('aliquota') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-700">
-                                                {item.aliquota !== null ? `${item.aliquota.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%` : '—'}
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderTaxCell(key, item)}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('base_calculo') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.base_calculo || '—'}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('regra_retencao') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.regra_retencao || '—'}</td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('aplica') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {(() => {
-                                                    const parts: string[] = [];
-                                                    if (item.aplica_venda_ativo) parts.push('Venda de Ativo');
-                                                    if (item.aplica_locacao) parts.push('Locação');
-                                                    return parts.length ? parts.join(' · ') : <span className="text-gray-400">—</span>;
-                                                })()}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('ativo') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm">
-                                                <span className={item.ativo ? 'text-emerald-600' : 'text-gray-400'}>{item.ativo ? 'Sim' : 'Não'}</span>
-                                            </td>
-                                        )}
+                                        ))}
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

@@ -32,6 +32,15 @@ function StatusText({ job }: { job: ProcessingJobWithDoc }) {
   return <span className={`text-sm font-normal ${STATUS_COLORS[job.status] ?? 'text-gray-600'}`}>{job.status.replace('_', ' ')}</span>;
 }
 
+const duration = (job: ProcessingJobWithDoc) => {
+  if (!job.started_at || !job.finished_at) return null;
+  return (new Date(job.finished_at).getTime() - new Date(job.started_at).getTime()) / 1000;
+};
+const durationLabel = (job: ProcessingJobWithDoc) => {
+  const s = duration(job);
+  return s === null ? '—' : `${s.toFixed(1)}s`;
+};
+
 const RUNBOOK = [
   {
     trigger: 'Dead letter cresce',
@@ -64,6 +73,59 @@ const COLUMNS: ColumnConfig[] = [
 const COL_WIDTHS: Record<string, number> = {
   status: 110, document: 220, type: 130, retries: 100, failure: 100, error: 130, duration: 100, actions: 160,
 };
+
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa à
+// direita), assim como o checkbox de seleção em lote (sempre a primeira).
+const JOBS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  document: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  type: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  retries: { label: 'Retries', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  failure: { label: 'Falha', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  error: { label: 'Erro', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  duration: { label: 'Duração', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderJobCell(key: string, job: ProcessingJobWithDoc): React.ReactNode {
+  switch (key) {
+    case 'status':
+      return <StatusText job={job} />;
+    case 'document':
+      return (
+        <>
+          <div className="text-sm font-normal text-gray-700">{job.raw_document?.access_key?.substring(0, 20)}…</div>
+          <div className="text-xs text-gray-400 mt-0.5">{job.id}</div>
+        </>
+      );
+    case 'type':
+      return <span className="text-sm font-normal text-gray-600">{job.job_type}</span>;
+    case 'retries':
+      return (
+        <span className={`text-sm font-normal ${job.retry_count >= job.max_retries ? 'text-red-600' : 'text-gray-600'}`}>
+          {job.retry_count}/{job.max_retries}
+        </span>
+      );
+    case 'failure':
+      return job.failure_type
+        ? <span className={`text-sm font-normal ${job.failure_type === 'data_failure' ? 'text-red-600' : 'text-amber-600'}`}>
+            {job.failure_type === 'data_failure' ? 'dados' : 'técnica'}
+          </span>
+        : <span className="text-sm font-normal text-gray-400">—</span>;
+    case 'error':
+      return job.error_code
+        ? <span className="text-sm font-normal text-red-600">{job.error_code}</span>
+        : <span className="text-sm font-normal text-gray-400">—</span>;
+    case 'duration':
+      return <span className="text-sm font-normal text-gray-600">{durationLabel(job)}</span>;
+    default:
+      return null;
+  }
+}
 
 export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
   const [jobs, setJobs] = useState<ProcessingJobWithDoc[]>([]);
@@ -180,15 +242,6 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
     { k: 'dead_letter', label: 'Dead letter', count: counts.dead_letter },
     { k: 'archived', label: 'Arquivados', count: counts.archived },
   ];
-
-  const duration = (job: ProcessingJobWithDoc) => {
-    if (!job.started_at || !job.finished_at) return null;
-    return (new Date(job.finished_at).getTime() - new Date(job.started_at).getTime()) / 1000;
-  };
-  const durationLabel = (job: ProcessingJobWithDoc) => {
-    const s = duration(job);
-    return s === null ? '—' : `${s.toFixed(1)}s`;
-  };
 
   const term = searchTerm.trim().toLowerCase();
   const filtered = jobs.filter(j => {
@@ -349,13 +402,13 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
         <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             {(() => {
-              const visibleJ = COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
-              const jobsTableWidth = 40 + visibleJ.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+              const visibleJ = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+              const jobsTableWidth = 40 + visibleJ.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
               return (
             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: jobsTableWidth }}>
               <colgroup>
                 <col style={{ width: '40px' }} />
-                {visibleJ.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                {visibleJ.map(key => <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />)}
                 <col />
                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
               </colgroup>
@@ -371,55 +424,19 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
                       className="w-4 h-4 rounded accent-blue-600 cursor-pointer disabled:opacity-30"
                     />
                   </th>
-                  {tableColumns.visibleColumns.includes('status') && (
-                    <SortableHeader colKey="status" label="Status" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="status" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('document') && (
-                    <SortableHeader colKey="document" label="Documento" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="document" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('type') && (
-                    <SortableHeader colKey="type" label="Tipo" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="type" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('retries') && (
-                    <SortableHeader colKey="retries" label="Retries" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="retries" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('failure') && (
-                    <SortableHeader colKey="failure" label="Falha" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="failure" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('error') && (
-                    <SortableHeader colKey="error" label="Erro" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="error" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('duration') && (
-                    <SortableHeader colKey="duration" label="Duração" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="duration" />
-                    </SortableHeader>
-                  )}
+                  {visibleJ.map(key => {
+                    const def = JOBS_COLUMN_HEADERS[key];
+                    if (!def) return null;
+                    return (
+                      <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                        onSort={tableColumns.handleColumnSort}
+                        onMoveColumn={tableColumns.moveColumn}
+                        className={def.className}>
+                        <cols.ResizeHandle colKey={key} />
+                      </SortableHeader>
+                    );
+                  })}
                   <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ação</th>
@@ -441,42 +458,11 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
                         />
                       )}
                     </td>
-                    {tableColumns.visibleColumns.includes('status') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"><StatusText job={job} /></td>
-                    )}
-                    {tableColumns.visibleColumns.includes('document') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                        <div className="text-sm font-normal text-gray-700">{job.raw_document?.access_key?.substring(0, 20)}…</div>
-                        <div className="text-xs text-gray-400 mt-0.5">{job.id}</div>
+                    {visibleJ.map(key => (
+                      <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                        {renderJobCell(key, job)}
                       </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('type') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{job.job_type}</td>
-                    )}
-                    {tableColumns.visibleColumns.includes('retries') && (
-                      <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${job.retry_count >= job.max_retries ? 'text-red-600' : 'text-gray-600'}`}>
-                        {job.retry_count}/{job.max_retries}
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('failure') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                        {job.failure_type
-                          ? <span className={job.failure_type === 'data_failure' ? 'text-red-600' : 'text-amber-600'}>
-                              {job.failure_type === 'data_failure' ? 'dados' : 'técnica'}
-                            </span>
-                          : <span className="text-gray-400">—</span>}
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('error') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                        {job.error_code
-                          ? <span className="text-red-600">{job.error_code}</span>
-                          : <span className="text-gray-400">—</span>}
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('duration') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{durationLabel(job)}</td>
-                    )}
+                    ))}
                     <td aria-hidden="true"></td>
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">

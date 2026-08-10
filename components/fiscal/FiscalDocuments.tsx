@@ -81,6 +81,80 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa à direita).
+const DOCUMENTS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  nf_number: { label: 'Nº NF-e', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  status: { label: 'Status', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
+  issuer: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100' },
+  issue_date: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  value: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100' },
+  link: { label: 'Título', className: 'px-6 py-2 border-r border-gray-100' },
+  order: { label: 'Pedido', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+  payable: { label: 'Contas a Pagar', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna. Colunas 'order'/'payable' navegam
+// para outras telas — dependem de callbacks e do mapa de números de pedido
+// resolvidos em runtime, por isso recebem um `ctx`.
+function renderDocumentCell(
+  key: string,
+  inv: NfeInvoice,
+  ctx: { orderNumbers: Record<string, string>; onViewOrder?: (orderId: string) => void; onViewPayable?: (projectId: string | null) => void },
+): React.ReactNode {
+  switch (key) {
+    case 'code':
+      return <span className="text-sm font-normal text-gray-600">{inv.code ?? '—'}</span>;
+    case 'nf_number':
+      return <span className="text-sm font-normal text-gray-600">{nfNumber(inv.access_key)}</span>;
+    case 'status':
+      return <span className="text-sm font-normal text-emerald-700">Processado</span>;
+    case 'issuer':
+      return (
+        <>
+          <div className="text-sm font-normal text-gray-700">{inv.issuer_name}</div>
+          <div className="text-xs text-gray-400 mt-0.5">{inv.issuer_cnpj}</div>
+        </>
+      );
+    case 'issue_date':
+      return <span className="text-sm font-normal text-gray-600">{fmtDate(inv.issue_date)}</span>;
+    case 'value':
+      return <span className="text-sm font-medium text-gray-800">{fmt(inv.total_value)}</span>;
+    case 'link':
+      return inv.linked_transaction_id
+        ? <span className="text-sm font-normal text-emerald-700">Gerado</span>
+        : <span className="text-sm font-normal text-amber-600">Pendente</span>;
+    case 'order':
+      return inv.purchase_order_id && ctx.onViewOrder ? (
+        <button
+          onClick={e => { e.stopPropagation(); ctx.onViewOrder!(inv.purchase_order_id!); }}
+          className="text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          #{ctx.orderNumbers[inv.purchase_order_id] ?? '…'}
+        </button>
+      ) : (
+        <span className="text-sm font-normal text-gray-400">—</span>
+      );
+    case 'payable':
+      return inv.linked_transaction_id && ctx.onViewPayable ? (
+        <button
+          onClick={e => { e.stopPropagation(); ctx.onViewPayable!(inv.project_id); }}
+          className="text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          Ver título
+        </button>
+      ) : (
+        <span className="text-sm font-normal text-gray-400">—</span>
+      );
+    default:
+      return null;
+  }
+}
+
 // ── Modal: Gerar ou Vincular Título Financeiro ────────────────────────────────
 function ApproveModal({
   invoice,
@@ -926,50 +1000,17 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                {tableColumns.visibleColumns.includes('code') && (
-                  <SortableHeader colKey="code" label="Código" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                )}
-                {tableColumns.visibleColumns.includes('nf_number') && (
-                  <SortableHeader colKey="nf_number" label="Nº NF-e" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                )}
-                {tableColumns.visibleColumns.includes('status') && (
-                  <SortableHeader colKey="status" label="Status" sortable={false} uppercase={false}
-                    className="px-6 py-2 border-r border-gray-100" />
-                )}
-                {tableColumns.visibleColumns.includes('issuer') && (
-                  <SortableHeader colKey="issuer" label="Fornecedor" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100" />
-                )}
-                {tableColumns.visibleColumns.includes('issue_date') && (
-                  <SortableHeader colKey="issue_date" label="Emissão" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                )}
-                {tableColumns.visibleColumns.includes('value') && (
-                  <SortableHeader colKey="value" label="Valor" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100" />
-                )}
-                {tableColumns.visibleColumns.includes('link') && (
-                  <SortableHeader colKey="link" label="Título" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100" />
-                )}
-                {tableColumns.visibleColumns.includes('order') && (
-                  <SortableHeader colKey="order" label="Pedido" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                )}
-                {tableColumns.visibleColumns.includes('payable') && (
-                  <SortableHeader colKey="payable" label="Contas a Pagar" uppercase={false}
-                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
-                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                )}
+                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                  const def = DOCUMENTS_COLUMN_HEADERS[key];
+                  if (!def) return null;
+                  return (
+                    <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                      onSort={tableColumns.handleColumnSort}
+                      onMoveColumn={tableColumns.moveColumn}
+                      className={def.className} />
+                  );
+                })}
                 {tableColumns.visibleColumns.includes('actions') && (
                   <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                 )}
@@ -982,62 +1023,11 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                   className="hover:bg-blue-50/50 transition-colors cursor-pointer"
                   onClick={() => setSelected(inv)}
                 >
-                  {tableColumns.visibleColumns.includes('code') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{inv.code ?? '—'}</td>
-                  )}
-                  {tableColumns.visibleColumns.includes('nf_number') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{nfNumber(inv.access_key)}</td>
-                  )}
-                  {tableColumns.visibleColumns.includes('status') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-emerald-700">Processado</td>
-                  )}
-                  {tableColumns.visibleColumns.includes('issuer') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                      <div className="text-sm font-normal text-gray-700">{inv.issuer_name}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{inv.issuer_cnpj}</div>
+                  {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                    <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                      {renderDocumentCell(key, inv, { orderNumbers, onViewOrder, onViewPayable })}
                     </td>
-                  )}
-                  {tableColumns.visibleColumns.includes('issue_date') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{fmtDate(inv.issue_date)}</td>
-                  )}
-                  {tableColumns.visibleColumns.includes('value') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">{fmt(inv.total_value)}</td>
-                  )}
-                  {tableColumns.visibleColumns.includes('link') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                      {inv.linked_transaction_id
-                        ? <span className="text-emerald-700">Gerado</span>
-                        : <span className="text-amber-600">Pendente</span>}
-                    </td>
-                  )}
-                  {tableColumns.visibleColumns.includes('order') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                      {inv.purchase_order_id && onViewOrder ? (
-                        <button
-                          onClick={e => { e.stopPropagation(); onViewOrder(inv.purchase_order_id!); }}
-                          className="text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          #{orderNumbers[inv.purchase_order_id] ?? '…'}
-                        </button>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                  )}
-                  {tableColumns.visibleColumns.includes('payable') && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                      {inv.linked_transaction_id && onViewPayable ? (
-                        <button
-                          onClick={e => { e.stopPropagation(); onViewPayable(inv.project_id); }}
-                          className="text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          Ver título
-                        </button>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                  )}
+                  ))}
                   {tableColumns.visibleColumns.includes('actions') && (
                     <td className="px-6 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Boxes, Download, FileText, GitCompare, Image, Ruler, Shapes } from 'lucide-react';
+import { Boxes, Download, FileText, GitCompare, Image, Maximize2, Ruler, Shapes } from 'lucide-react';
 import type { BlueprintStudy, BlueprintSnapshotSummary } from '../../types/blueprint';
 import { getSnapshot, listSnapshots } from '../../services/blueprintService';
 import {
@@ -11,6 +11,7 @@ import {
 } from '../../services/blueprintExportService';
 import {
   ESCALAS,
+  MENOR_ESCALA_DE_PLANTA,
   PAPEIS,
   enquadrar,
   orientar,
@@ -204,6 +205,7 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
                   {ESCALAS.map((d) => (
                     <option key={d} value={d}>
                       1:{d}
+                      {d < MENOR_ESCALA_DE_PLANTA ? ' · detalhe' : ''}
                     </option>
                   ))}
                 </select>
@@ -224,6 +226,23 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
                 </select>
               </label>
             </div>
+
+            {/* AJUSTAR À FOLHA escolhe a melhor escala DA LISTA, não um número
+                livre. É a diferença entre ajustar e encolher: 1:37,4 preenche a
+                folha e não se mede no escalímetro, então a folha passaria a
+                declarar uma escala que ninguém consegue conferir. A escala
+                continua sendo ENTRADA — o botão só poupa a busca manual. */}
+            {enq?.escalaSugerida && enq.escalaSugerida !== denominador && (
+              <button
+                type="button"
+                onClick={() => setDenominador(enq.escalaSugerida!)}
+                title="Escolhe a maior escala da lista em que o desenho ainda cabe nesta folha"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Maximize2 className="h-3 w-3" />
+                Ajustar à folha (1:{enq.escalaSugerida})
+              </button>
+            )}
 
             <div className="mt-2 flex gap-4">
               <label className="flex items-center gap-1.5 text-[11px] text-slate-600">

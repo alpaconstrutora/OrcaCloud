@@ -51,8 +51,23 @@ export const PAPEIS: Papel[] = [
   { id: 'A0', larguraMm: 841, alturaMm: 1189 },
 ];
 
-/** Denominadores usuais em arquitetura. 1:1 não entra: planta não se imprime 1:1. */
-export const ESCALAS = [20, 25, 50, 75, 100, 125, 200, 250, 500];
+/**
+ * Denominadores usuais em arquitetura.
+ *
+ * As quatro primeiras são de DETALHE e ampliação, não de planta baixa. Elas
+ * faltavam, e o comentário que as excluía ("planta não se imprime 1:1") julgava
+ * só o caso da planta inteira — mas o que se exporta nem sempre é a planta
+ * inteira. Um trecho publicado sozinho não cabia em escala nenhuma da lista:
+ * 1:20 já era a maior, e mesmo nela o desenho saía com 3% da folha. Quem
+ * exportava recebia uma folha quase branca e nenhuma saída.
+ *
+ * Ampliar a lista foi preferido a permitir escala livre: escala tem de ser um
+ * número que se lê no escalímetro. 1:37,4 preenche a folha e não se mede.
+ */
+export const ESCALAS = [1, 2, 5, 10, 20, 25, 50, 75, 100, 125, 200, 250, 500];
+
+/** A partir daqui é planta; abaixo é detalhe ou ampliação. Só para rotular. */
+export const MENOR_ESCALA_DE_PLANTA = 20;
 
 export function orientar(papel: Papel, paisagem: boolean): Papel {
   return paisagem

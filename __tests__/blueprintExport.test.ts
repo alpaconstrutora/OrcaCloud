@@ -146,19 +146,25 @@ describe('exportação · a escala é entrada, não resultado', () => {
 
     // A mesma `escalaSugerida` serve nas duas direções: a lista é crescente em
     // denominador, então a primeira que cabe é a que produz o maior desenho.
-    expect(enq.escalaSugerida).toBe(20);
-    expect(enquadrar(minusculo, 20, A4).ocupacao).toBeGreaterThan(enq.ocupacao);
+    // 1:5 e nao 1:20 porque a lista ganhou as escalas de DETALHE — sem elas um
+    // trecho pequeno nao cabia em escala nenhuma e a folha saia quase branca.
+    expect(enq.escalaSugerida).toBe(5);
+    expect(enquadrar(minusculo, 5, A4).ocupacao).toBeGreaterThan(enq.ocupacao);
   });
 
   it('A SUGESTÃO NÃO PODE PROMETER O QUE A LISTA NÃO ENTREGA', () => {
-    // `escalaSugerida` é a primeira que CABE, e para um desenho minúsculo isso
-    // é sempre 1:20 — a menor da lista. Dizer "em 1:20 preenche a folha" seria
-    // falso: fica 5× maior e continua um risco no meio do branco, porque o
-    // problema não é a escala, é não haver o que desenhar. Quem chama precisa
-    // do dado para saber qual das duas frases dizer.
-    const minusculo = planta(0.4, 0.3);
-    const naSugerida = enquadrar(minusculo, 20, A4).ocupacao;
+    // `escalaSugerida` é a primeira que CABE — a MENOR da lista que serve. Para
+    // um desenho minúsculo ela é sempre a menor de todas, e prometer que ali
+    // "preenche a folha" seria falso: fica maior e continua um risco no meio do
+    // branco, porque o problema não é a escala, é não haver o que desenhar.
+    // Quem chama precisa do dado para saber qual das duas frases dizer.
+    //
+    // Trecho de 2 cm com parede de 1 cm: nem em 1:1 chega perto de preencher.
+    const microscopico = planta(0.02, 0.015, 10);
+    const sug = enquadrar(microscopico, 100, A4).escalaSugerida!;
+    const naSugerida = enquadrar(microscopico, sug, A4).ocupacao;
 
+    expect(sug, 'a maior da lista').toBe(1);
     expect(naSugerida, 'nem na maior escala da lista ele preenche').toBeLessThan(0.25);
 
     // E o caso oposto, que a mesma conta tem de separar: um desenho que só

@@ -76,6 +76,16 @@ const PROJECT_COLUMNS: ColumnConfig[] = [
 ];
 const PROJECT_COL_WIDTHS: Record<string, number> = { name: 240, project_type: 130, normative_reference: 200, status: 120, updated_at: 140, actions: 170 };
 
+// Reordenar colunas por arraste (estilo ClickUp) — mesmos label/sortable/className que
+// estavam hardcoded no <SortableHeader> original de cada coluna.
+const PROJECT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Nome', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    project_type: { label: 'Tipo', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    normative_reference: { label: 'Referência normativa', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status: { label: 'Status', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    updated_at: { label: 'Atualizado em', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
 const PROJECT_TYPE_LABEL: Record<string, string> = {
     vertical: 'Vertical',
     mixed: 'Misto',
@@ -102,6 +112,23 @@ function formatDateShort(value?: string | null): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '-';
     return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date);
+}
+
+function renderProjectCell(key: string, project: AreaProject): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return <span className="text-sm font-normal text-gray-700">{project.name}</span>;
+        case 'project_type':
+            return <span className="text-sm font-normal text-gray-600">{PROJECT_TYPE_LABEL[project.project_type] || project.project_type}</span>;
+        case 'normative_reference':
+            return <span className="text-sm font-normal text-gray-600">{project.normative_reference}</span>;
+        case 'status':
+            return <span className={`text-sm font-normal ${projectStatusTone(project.status)}`}>{PROJECT_STATUS_LABEL[project.status] || project.status}</span>;
+        case 'updated_at':
+            return <span className="text-sm font-normal text-gray-600">{formatDateShort(project.updated_at)}</span>;
+        default:
+            return null;
+    }
 }
 
 export default function AreaEngineModule({ organizationId }: AreaEngineModuleProps) {
@@ -1367,51 +1394,32 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                         ) : (() => {
                             const visible = PROJECT_COLUMNS.filter(c => c.key !== 'actions' && projectTableColumns.visibleColumns.includes(c.key));
                             const tableWidth = visible.reduce((s, c) => s + projectCols.getWidth(c.key), 0) + projectCols.getWidth('actions');
+                            const orderedProjectColumns = projectTableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
                             return (
                                 <div className="overflow-x-auto">
                                     <table ref={projectCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                                         <colgroup>
-                                            {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${projectCols.getWidth(c.key)}px` }} />)}
+                                            {orderedProjectColumns.map(key => (
+                                                <col key={key} data-col-key={key} style={{ width: `${projectCols.getWidth(key)}px` }} />
+                                            ))}
                                             <col />
                                             <col data-col-key="actions" style={{ width: `${projectCols.getWidth('actions')}px` }} />
                                         </colgroup>
                                         <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                             <tr>
-                                                {projectTableColumns.visibleColumns.includes('name') && (
-                                                    <SortableHeader colKey="name" label="Nome" uppercase={false}
-                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                        <projectCols.ResizeHandle colKey="name" />
-                                                    </SortableHeader>
-                                                )}
-                                                {projectTableColumns.visibleColumns.includes('project_type') && (
-                                                    <SortableHeader colKey="project_type" label="Tipo" uppercase={false}
-                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                        <projectCols.ResizeHandle colKey="project_type" />
-                                                    </SortableHeader>
-                                                )}
-                                                {projectTableColumns.visibleColumns.includes('normative_reference') && (
-                                                    <SortableHeader colKey="normative_reference" label="Referência normativa" uppercase={false}
-                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                        <projectCols.ResizeHandle colKey="normative_reference" />
-                                                    </SortableHeader>
-                                                )}
-                                                {projectTableColumns.visibleColumns.includes('status') && (
-                                                    <SortableHeader colKey="status" label="Status" uppercase={false}
-                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                        <projectCols.ResizeHandle colKey="status" />
-                                                    </SortableHeader>
-                                                )}
-                                                {projectTableColumns.visibleColumns.includes('updated_at') && (
-                                                    <SortableHeader colKey="updated_at" label="Atualizado em" uppercase={false}
-                                                        sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
-                                                        onSort={projectTableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                                        <projectCols.ResizeHandle colKey="updated_at" />
-                                                    </SortableHeader>
-                                                )}
+                                                {orderedProjectColumns.map(key => {
+                                                    const def = PROJECT_COLUMN_HEADERS[key];
+                                                    if (!def) return null;
+                                                    return (
+                                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                            sortColumn={projectTableColumns.sortColumn} sortDirection={projectTableColumns.sortDirection}
+                                                            onSort={projectTableColumns.handleColumnSort}
+                                                            onMoveColumn={projectTableColumns.moveColumn}
+                                                            className={def.className}>
+                                                            <projectCols.ResizeHandle colKey={key} />
+                                                        </SortableHeader>
+                                                    );
+                                                })}
                                                 <th aria-hidden="true" className="border-r border-gray-100" />
                                                 {projectTableColumns.visibleColumns.includes('actions') && (
                                                     <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
@@ -1425,23 +1433,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                     className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedProjectId === project.id ? 'bg-blue-50/60' : ''}`}
                                                     onClick={() => openProjectWorkspace(project.id)}
                                                 >
-                                                    {projectTableColumns.visibleColumns.includes('name') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{project.name}</td>
-                                                    )}
-                                                    {projectTableColumns.visibleColumns.includes('project_type') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{PROJECT_TYPE_LABEL[project.project_type] || project.project_type}</td>
-                                                    )}
-                                                    {projectTableColumns.visibleColumns.includes('normative_reference') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{project.normative_reference}</td>
-                                                    )}
-                                                    {projectTableColumns.visibleColumns.includes('status') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <span className={`text-sm font-normal ${projectStatusTone(project.status)}`}>{PROJECT_STATUS_LABEL[project.status] || project.status}</span>
+                                                    {orderedProjectColumns.map(key => (
+                                                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            {renderProjectCell(key, project)}
                                                         </td>
-                                                    )}
-                                                    {projectTableColumns.visibleColumns.includes('updated_at') && (
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatDateShort(project.updated_at)}</td>
-                                                    )}
+                                                    ))}
                                                     <td aria-hidden="true"></td>
                                                     {projectTableColumns.visibleColumns.includes('actions') && (
                                                         <td className="px-6 py-2.5 text-right">

@@ -53,6 +53,55 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
   actions: 90,
 };
 
+// Reordenar colunas por arraste (estilo ClickUp) — mesmos label/sortable/className que
+// estavam hardcoded no <SortableHeader> original de cada coluna.
+const EMPREENDIMENTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  code: { label: 'Código', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  name: { label: 'Empreendimento', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  tipo: { label: 'Tipo', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  status: { label: 'Status', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  vgv: { label: 'VGV total', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
+
+function renderEmpreendimentoCell(
+  key: string,
+  item: Empreendimento,
+  ctx: { tipoLabel: (slug?: string | null) => string },
+): React.ReactNode {
+  switch (key) {
+    case 'code':
+      return <div className="text-sm font-normal text-gray-600 whitespace-nowrap">{item.code || '—'}</div>;
+    case 'name':
+      return (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <Building2 className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
+            <p className="text-sm font-normal text-gray-400 truncate">{item.spe_razao_social || '—'}</p>
+          </div>
+        </div>
+      );
+    case 'tipo':
+      return <div className="text-sm font-normal text-gray-600 whitespace-nowrap truncate">{ctx.tipoLabel(item.tipo)}</div>;
+    case 'status':
+      return (
+        <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
+          {STATUS_LABELS[item.status]}
+        </span>
+      );
+    case 'vgv':
+      return (
+        <div className="text-sm font-medium text-gray-800">
+          {item.vgv_total != null ? `R$ ${item.vgv_total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '—'}
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
 // Fallback só usado se o catálogo (Configurações do Sistema → Tipos de Empreendimento)
 // ainda não carregou ou o tipo salvo foi excluído do catálogo — mesmo mapa de EmpreendimentoDetail.tsx.
 const FALLBACK_TIPO_LABELS: Record<string, string> = {
@@ -354,11 +403,9 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           <div className="overflow-x-auto">
             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
               <colgroup>
-                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
-                {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
-                {tableColumns.visibleColumns.includes('tipo') && <col data-col-key="tipo" style={{ width: `${cols.getWidth('tipo')}px` }} />}
-                {tableColumns.visibleColumns.includes('status') && <col data-col-key="status" style={{ width: `${cols.getWidth('status')}px` }} />}
-                {tableColumns.visibleColumns.includes('vgv') && <col data-col-key="vgv" style={{ width: `${cols.getWidth('vgv')}px` }} />}
+                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                  <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                ))}
                 {/* espaçador sem largura fixa — absorve a sobra quando a tabela é mais
                     estreita que o container (ver comentário equivalente em SupplierList) */}
                 <col />
@@ -366,46 +413,19 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                  {tableColumns.visibleColumns.includes('code') && (
-                    <SortableHeader colKey="code" label="Código" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                      onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                      <cols.ResizeHandle colKey="code" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('name') && (
-                    <SortableHeader colKey="name" label="Empreendimento" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                      onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="name" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('tipo') && (
-                    <SortableHeader colKey="tipo" label="Tipo" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                      onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                      <cols.ResizeHandle colKey="tipo" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('status') && (
-                    <SortableHeader colKey="status" label="Status" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                      onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                      <cols.ResizeHandle colKey="status" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('vgv') && (
-                    <SortableHeader colKey="vgv" label="VGV total" uppercase={false}
-                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                      onSort={tableColumns.handleColumnSort}
-                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                      <cols.ResizeHandle colKey="vgv" />
-                    </SortableHeader>
-                  )}
+                  {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                    const def = EMPREENDIMENTO_COLUMN_HEADERS[key];
+                    if (!def) return null;
+                    return (
+                      <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                        onSort={tableColumns.handleColumnSort}
+                        onMoveColumn={tableColumns.moveColumn}
+                        className={def.className}>
+                        <cols.ResizeHandle colKey={key} />
+                      </SortableHeader>
+                    );
+                  })}
                   {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                   <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
@@ -423,41 +443,11 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                     onClick={() => setSelected(item)}
                     className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                   >
-                    {tableColumns.visibleColumns.includes('code') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                        {item.code || '—'}
+                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                      <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                        {renderEmpreendimentoCell(key, item, { tipoLabel })}
                       </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('name') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                            <Building2 className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
-                            <p className="text-sm font-normal text-gray-400 truncate">{item.spe_razao_social || '—'}</p>
-                          </div>
-                        </div>
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('tipo') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap truncate">
-                        {tipoLabel(item.tipo)}
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('status') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                        <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
-                          {STATUS_LABELS[item.status]}
-                        </span>
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('vgv') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                        {item.vgv_total != null ? `R$ ${item.vgv_total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '—'}
-                      </td>
-                    )}
+                    ))}
                     <td aria-hidden="true" className="border-r border-gray-100" />
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">

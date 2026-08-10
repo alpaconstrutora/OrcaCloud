@@ -212,13 +212,256 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const isDiaryContext = isDiarioContext;
 
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'projectListColWidths');
+    // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — usada para
+    // colgroup/thead/tbody. As 2 colunas extras do contexto Diário (obra-vinculada,
+    // planejamento-vinculada) não fazem parte de COLUMNS (não são configuráveis/arrastáveis)
+    // — entram sempre logo após 'linked', igual à posição fixa que já tinham antes.
+    const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+    const displayColumns = isDiaryContext
+        ? (() => {
+            const idx = orderedVisible.indexOf('linked');
+            const insertAt = idx === -1 ? orderedVisible.length : idx + 1;
+            return [...orderedVisible.slice(0, insertAt), 'obra-vinculada', 'planejamento-vinculada', ...orderedVisible.slice(insertAt)];
+        })()
+        : orderedVisible;
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
-    // table-layout:fixed (§6.1). As 2 colunas extras do contexto Diário entram
-    // condicionalmente — não fazem parte de COLUMNS/visibleColumns.
-    const tableTotalWidth = (['code', 'name', 'tipo-obra', 'organization', 'empreendimento', 'linked', 'client', 'created', 'updated', 'status-budget', 'status-obra', 'lock'] as const)
-        .reduce((sum, key) => sum + (visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
-        + (isDiaryContext ? cols.getWidth('obra-vinculada') + cols.getWidth('planejamento-vinculada') : 0)
-        + cols.getWidth('actions');
+    // table-layout:fixed (§6.1).
+    const tableTotalWidth = displayColumns.reduce((sum, key) => sum + cols.getWidth(key), 0) + cols.getWidth('actions');
+
+    // Metadados de header por coluna — usados para renderizar o <thead> a partir de
+    // `displayColumns` (ordem que o usuário arrasta + as 2 colunas fixas do Diário), em vez
+    // de uma sequência fixa de JSX. Alguns labels dependem do contexto (Obra/Planejamento/
+    // Orçamento/Diário), por isso o mapa é montado a cada render (mesmo padrão do resto do
+    // arquivo, que já recalcula coisas simples a cada render).
+    const PROJECT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+        code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+        name: { label: isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento')), className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+        'tipo-obra': { label: 'Tipo de Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        // Vinculado = obra/orçamento/planejamento ligado — sem valor único pra ordenar (§6.3).
+        linked: { label: isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada'), sortable: false, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        'obra-vinculada': { label: 'Obra Vinculada', sortable: false, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        'planejamento-vinculada': { label: 'Planejamento Vinculado', sortable: false, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        client: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+        created: { label: 'Data de Criação', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        updated: { label: isDiaryContext ? 'Clima' : 'Atualização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        'status-budget': { label: isDiaryContext ? 'Status Diário' : 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+        'status-obra': { label: isDiaryContext ? 'Total Registros' : 'Status Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+        lock: { label: 'Bloqueio', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    };
+
+    // Conteúdo de cada <td> por coluna — extraído para função pura (fecha sobre helpers e
+    // estado do componente) para que o <tbody> possa mapear `displayColumns` (ordem
+    // arrastável) em vez de repetir um bloco condicional fixo por coluna.
+    const renderProjectCell = (key: string, project: ProjectSummary): React.ReactNode => {
+        switch (key) {
+            case 'code':
+                return <div className="text-center text-sm font-normal text-gray-700">{project.code || project.settings?.code || '—'}</div>;
+            case 'name':
+                return (
+                    <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
+                            <FolderOpen className="w-4 h-4" />
+                        </div>
+                        <div className="text-sm font-normal text-gray-900">
+                            {project.name}
+                        </div>
+                    </div>
+                );
+            case 'tipo-obra':
+                return project.settings?.tipoObra ? (
+                    <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                        {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
+                    </span>
+                ) : (
+                    <span className="text-sm text-gray-400 font-normal italic">-</span>
+                );
+            case 'organization': {
+                const orgId = project.settings?.organizationId;
+                const org = organizations.find(o => o.id === orgId);
+                return <span className="text-sm font-normal text-gray-700">{org ? org.name : <span className="text-gray-400 italic">—</span>}</span>;
+            }
+            case 'empreendimento': {
+                const emp = empreendimentoByProject[project.id];
+                return (
+                    <span className="text-sm font-normal text-gray-700">
+                        {emp ? (
+                            <div className="flex flex-col">
+                                <span className="truncate max-w-[180px]">{emp.name}</span>
+                                {/* Multi-torre: a obra é de uma torre específica, não do empreendimento inteiro. */}
+                                {emp.towerName && (
+                                    <span className="text-xs text-gray-400">{emp.towerName}</span>
+                                )}
+                            </div>
+                        ) : (
+                            <span className="text-gray-400 italic">—</span>
+                        )}
+                    </span>
+                );
+            }
+            case 'linked':
+                return isDiaryContext ? (
+                    <div className="flex flex-col">
+                        <div className="text-sm font-normal text-gray-900 truncate max-w-[150px]">
+                            {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0)
+                                ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString()
+                                : '-'}
+                        </div>
+                        <span className="text-xs text-gray-400 font-normal lowercase italic">Visto por último</span>
+                    </div>
+                ) : (
+                    isObraContext ? (() => {
+                        const linked = getLinkedBudgets(project.id);
+                        const suggested = linked.length === 0 ? getSuggestedBudgetsForObra(project) : [];
+                        if (linked.length > 0) return (
+                            <div className="flex flex-col gap-1">
+                                {linked.map(budget => (
+                                    <span key={budget.id} className="text-sm font-normal text-blue-600 truncate max-w-[200px]">
+                                        {budget.name}
+                                    </span>
+                                ))}
+                            </div>
+                        );
+                        if (suggested.length > 0) return (
+                            <div className="flex flex-col gap-1">
+                                {suggested.map(s => (
+                                    <div key={s.id} className="flex items-center gap-1.5 text-sm font-normal text-amber-600" title={`Orçamento "${s.name}" tem o mesmo cliente e pode ser vinculado a esta Obra`}>
+                                        <Link2 className="w-3.5 h-3.5 shrink-0" />
+                                        <span className="truncate max-w-[160px]">{s.name}</span>
+                                        <span className="text-xs text-amber-500">(sugerido)</span>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                        return <span className="text-sm font-normal text-gray-400">-</span>;
+                    })() : (() => {
+                        const linked = getLinkedProjectData(project);
+                        if (linked) return (
+                            <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
+                                <span className="truncate max-w-[180px]">{linked.name}</span>
+                            </div>
+                        );
+                        if (project.settings?.linkedProjectName) return (
+                            <div className="flex items-center gap-1.5 text-sm font-normal text-gray-400">
+                                <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 opacity-50 shrink-0"></div>
+                                <span className="truncate max-w-[180px]">{project.settings.linkedProjectName}</span>
+                            </div>
+                        );
+                        const suggested = getSuggestedObraForOrcamento(project);
+                        if (suggested) return (
+                            <div className="flex items-center gap-1.5 text-sm font-normal text-amber-600" title={`Obra "${suggested.name}" tem o mesmo cliente e pode ser vinculada a este Orçamento`}>
+                                <Link2 className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate max-w-[160px]">{suggested.name}</span>
+                                <span className="text-xs text-amber-500">(sugerido)</span>
+                            </div>
+                        );
+                        return <span className="text-sm font-normal text-gray-400">-</span>;
+                    })()
+                );
+            case 'obra-vinculada':
+                return getLinkedProjectData(project) ? (
+                    <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
+                        <span className="truncate max-w-[180px]">{getLinkedProjectData(project)?.name}</span>
+                    </div>
+                ) : <span className="text-sm font-normal text-gray-400">-</span>;
+            case 'planejamento-vinculada': {
+                const linked = getLinkedPlanning(project);
+                if (!linked) return <span className="text-sm font-normal text-gray-400">-</span>;
+                return (
+                    <div className={`flex items-center gap-1.5 text-sm font-normal ${linked.type === 'manual' ? 'text-emerald-600' : 'text-blue-600'}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${linked.type === 'manual' ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
+                        <span className="truncate max-w-[180px]">{linked.project.name}</span>
+                    </div>
+                );
+            }
+            case 'client':
+                return (
+                    <>
+                        {project.settings?.obraPropria ? (
+                            <span className="text-sm font-normal text-indigo-700">Obra Própria</span>
+                        ) : (activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
+                            <span className="text-sm font-normal text-gray-600">
+                                {activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)}
+                            </span>
+                        ) : (
+                            <span className="text-sm font-normal text-gray-400 italic">-</span>
+                        )}
+                    </>
+                );
+            case 'created':
+                return <span className="text-sm font-normal text-gray-600">{new Date(project.created_at || 0).toLocaleDateString()}</span>;
+            case 'updated':
+                return isDiaryContext ? (
+                    <div className="flex items-center gap-2 text-sm font-normal text-gray-600">
+                        {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
+                            <>
+                                {project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'sunny' ? (
+                                    <>☀ Sol</>
+                                ) : project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'cloudy' ? (
+                                    <>☁ Nublado</>
+                                ) : (
+                                    <>🌧 Chuva</>
+                                )}
+                            </>
+                        ) : '-'}
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1.5 text-sm font-normal text-gray-600 whitespace-nowrap">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span>{new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}</span>
+                        <span className="text-xs text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                );
+            case 'status-budget':
+                return isDiaryContext ? (
+                    (project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
+                        <StatusBadge status="Atualizado" />
+                    ) : (
+                        <StatusBadge status="Sem Registros" />
+                    )
+                ) : (
+                    project.settings?.budgetStatus ? (
+                        <StatusBadge status={capitalizeStatus(project.settings.budgetStatus)} />
+                    ) : (
+                        <span className="text-sm text-gray-400 font-normal italic">-</span>
+                    )
+                );
+            case 'status-obra':
+                return isDiaryContext ? (
+                    <div className="flex items-center gap-1.5 text-sm font-normal text-gray-900">
+                        <span>{project.settings?.diaryEntries?.length || 0}</span>
+                        <span className="text-xs text-gray-400">dias</span>
+                    </div>
+                ) : (
+                    project.settings?.obraStatus ? (
+                        <StatusBadge status={project.settings.obraStatus === 'Em andamento' ? 'Em andamento' : project.settings.obraStatus} />
+                    ) : (
+                        <span className="text-sm text-gray-400 font-normal italic">-</span>
+                    )
+                );
+            case 'lock':
+                return (
+                    <div className="flex justify-center">
+                        {getEffectiveOrderCount(project.id) > 0 ? (
+                            <div className="flex items-center gap-1.5 text-amber-600" title={`${getEffectiveOrderCount(project.id)} orçamento(s)/pedido(s) vinculados - Exclusão Bloqueada`}>
+                                <Lock className="w-4 h-4" />
+                                <span className="text-sm font-normal">Bloqueado</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-1.5 text-emerald-600" title="Sem pedidos vinculados - Exclusão Permitida">
+                                <Unlock className="w-4 h-4" />
+                                <span className="text-sm font-normal">Livre</span>
+                            </div>
+                        )}
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
 
     const loadProjects = async () => {
         setIsLoading(true);
@@ -749,20 +992,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
-                                {visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
-                                {visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
-                                {visibleColumns.includes('tipo-obra') && <col data-col-key="tipo-obra" style={{ width: `${cols.getWidth('tipo-obra')}px` }} />}
-                                {visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
-                                {visibleColumns.includes('empreendimento') && <col data-col-key="empreendimento" style={{ width: `${cols.getWidth('empreendimento')}px` }} />}
-                                {visibleColumns.includes('linked') && <col data-col-key="linked" style={{ width: `${cols.getWidth('linked')}px` }} />}
-                                {isDiaryContext && <col data-col-key="obra-vinculada" style={{ width: `${cols.getWidth('obra-vinculada')}px` }} />}
-                                {isDiaryContext && <col data-col-key="planejamento-vinculada" style={{ width: `${cols.getWidth('planejamento-vinculada')}px` }} />}
-                                {visibleColumns.includes('client') && <col data-col-key="client" style={{ width: `${cols.getWidth('client')}px` }} />}
-                                {visibleColumns.includes('created') && <col data-col-key="created" style={{ width: `${cols.getWidth('created')}px` }} />}
-                                {visibleColumns.includes('updated') && <col data-col-key="updated" style={{ width: `${cols.getWidth('updated')}px` }} />}
-                                {visibleColumns.includes('status-budget') && <col data-col-key="status-budget" style={{ width: `${cols.getWidth('status-budget')}px` }} />}
-                                {visibleColumns.includes('status-obra') && <col data-col-key="status-obra" style={{ width: `${cols.getWidth('status-obra')}px` }} />}
-                                {visibleColumns.includes('lock') && <col data-col-key="lock" style={{ width: `${cols.getWidth('lock')}px` }} />}
+                                {displayColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio, para a
                                     borda de "Ações" não andar a cada redimensionamento. */}
                                 <col />
@@ -772,192 +1004,22 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 força uppercase internamente por padrão. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {visibleColumns.includes('code') && (
-                                        <SortableHeader
-                                            label="Código"
-                                            colKey="code"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="code" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('name') && (
-                                        <SortableHeader
-                                            label={isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
-                                            colKey="name"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="name" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('tipo-obra') && (
-                                        <SortableHeader
-                                            label="Tipo de Obra"
-                                            colKey="tipo-obra"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="tipo-obra" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('organization') && (
-                                        <SortableHeader
-                                            label="Organização"
-                                            colKey="organization"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="organization" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('empreendimento') && (
-                                        <SortableHeader
-                                            label="Empreendimento"
-                                            colKey="empreendimento"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="empreendimento" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('linked') && (
-                                        // Vinculado = obra/orçamento/planejamento ligado — sem valor único pra ordenar (§6.3).
-                                        <SortableHeader
-                                            label={isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada')}
-                                            colKey="linked"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            sortable={false}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="linked" />
-                                        </SortableHeader>
-                                    )}
-                                    {isDiaryContext && (
-                                        <>
-                                            <SortableHeader
-                                                label="Obra Vinculada"
-                                                colKey="obra-vinculada"
-                                                uppercase={false}
-                                                sortColumn={sortColumn}
-                                                sortDirection={sortDirection}
+                                    {displayColumns.map(key => {
+                                        const def = PROJECT_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        // As 2 colunas fixas do Diário (não fazem parte de COLUMNS/columnOrder) ficam
+                                        // fora do drag — sempre logo após "linked", nunca reordenáveis.
+                                        const isFixedDiaryCol = key === 'obra-vinculada' || key === 'planejamento-vinculada';
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={sortColumn} sortDirection={sortDirection}
                                                 onSort={handleColumnSort}
-                                                sortable={false}
-                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                            >
-                                                <cols.ResizeHandle colKey="obra-vinculada" />
+                                                onMoveColumn={isFixedDiaryCol ? undefined : tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
                                             </SortableHeader>
-                                            <SortableHeader
-                                                label="Planejamento Vinculado"
-                                                colKey="planejamento-vinculada"
-                                                uppercase={false}
-                                                sortColumn={sortColumn}
-                                                sortDirection={sortDirection}
-                                                onSort={handleColumnSort}
-                                                sortable={false}
-                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                            >
-                                                <cols.ResizeHandle colKey="planejamento-vinculada" />
-                                            </SortableHeader>
-                                        </>
-                                    )}
-                                    {visibleColumns.includes('client') && (
-                                        <SortableHeader
-                                            label="Cliente"
-                                            colKey="client"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="client" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('created') && (
-                                        <SortableHeader
-                                            label="Data de Criação"
-                                            colKey="created"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="created" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('updated') && (
-                                        <SortableHeader
-                                            label={isDiaryContext ? 'Clima' : 'Atualização'}
-                                            colKey="updated"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="updated" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('status-budget') && (
-                                        <SortableHeader
-                                            label={isDiaryContext ? 'Status Diário' : 'Status'}
-                                            colKey="status-budget"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="status-budget" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('status-obra') && (
-                                        <SortableHeader
-                                            label={isDiaryContext ? 'Total Registros' : 'Status Obra'}
-                                            colKey="status-obra"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="status-obra" />
-                                        </SortableHeader>
-                                    )}
-                                    {visibleColumns.includes('lock') && (
-                                        <SortableHeader
-                                            label="Bloqueio"
-                                            colKey="lock"
-                                            uppercase={false}
-                                            sortColumn={sortColumn}
-                                            sortDirection={sortDirection}
-                                            onSort={handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
-                                        >
-                                            <cols.ResizeHandle colKey="lock" />
-                                        </SortableHeader>
-                                    )}
+                                        );
+                                    })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -973,242 +1035,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                     >
-                                        {visibleColumns.includes('code') && (
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal text-gray-700">
-                                            {project.code || project.settings?.code || '—'}
-                                        </td>
-                                    )}
-                                    {visibleColumns.includes('name') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
-                                                        <FolderOpen className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="text-sm font-normal text-gray-900">
-                                                        {project.name}
-                                                    </div>
-                                                </div>
+                                        {displayColumns.map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderProjectCell(key, project)}
                                             </td>
-                                        )}
-                                        {visibleColumns.includes('tipo-obra') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {project.settings?.tipoObra ? (
-                                                    <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                                                        {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-sm text-gray-400 font-normal italic">-</span>
-                                                )}
-                                            </td>
-                                        )}
-                                        {visibleColumns.includes('organization') && (() => {
-                                            const orgId = project.settings?.organizationId;
-                                            const org = organizations.find(o => o.id === orgId);
-                                            return (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                    {org ? org.name : <span className="text-gray-400 italic">—</span>}
-                                                </td>
-                                            );
-                                        })()}
-                                        {visibleColumns.includes('empreendimento') && (() => {
-                                            const emp = empreendimentoByProject[project.id];
-                                            return (
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                    {emp ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="truncate max-w-[180px]">{emp.name}</span>
-                                                            {/* Multi-torre: a obra é de uma torre específica, não do empreendimento inteiro. */}
-                                                            {emp.towerName && (
-                                                                <span className="text-xs text-gray-400">{emp.towerName}</span>
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-gray-400 italic">—</span>
-                                                    )}
-                                                </td>
-                                            );
-                                        })()}
-                                        {visibleColumns.includes('linked') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {isDiaryContext ? (
-                                                    <div className="flex flex-col">
-                                                        <div className="text-sm font-normal text-gray-900 truncate max-w-[150px]">
-                                                            {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0)
-                                                                ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString()
-                                                                : '-'}
-                                                        </div>
-                                                        <span className="text-xs text-gray-400 font-normal lowercase italic">Visto por último</span>
-                                                    </div>
-                                                ) : (
-                                                    isObraContext ? (() => {
-                                                    const linked = getLinkedBudgets(project.id);
-                                                    const suggested = linked.length === 0 ? getSuggestedBudgetsForObra(project) : [];
-                                                    if (linked.length > 0) return (
-                                                        <div className="flex flex-col gap-1">
-                                                            {linked.map(budget => (
-                                                                <span key={budget.id} className="text-sm font-normal text-blue-600 truncate max-w-[200px]">
-                                                                    {budget.name}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                    if (suggested.length > 0) return (
-                                                        <div className="flex flex-col gap-1">
-                                                            {suggested.map(s => (
-                                                                <div key={s.id} className="flex items-center gap-1.5 text-sm font-normal text-amber-600" title={`Orçamento "${s.name}" tem o mesmo cliente e pode ser vinculado a esta Obra`}>
-                                                                    <Link2 className="w-3.5 h-3.5 shrink-0" />
-                                                                    <span className="truncate max-w-[160px]">{s.name}</span>
-                                                                    <span className="text-xs text-amber-500">(sugerido)</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                    return <span className="text-sm font-normal text-gray-400">-</span>;
-                                                })() : (() => {
-                                                    const linked = getLinkedProjectData(project);
-                                                    if (linked) return (
-                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
-                                                            <span className="truncate max-w-[180px]">{linked.name}</span>
-                                                        </div>
-                                                    );
-                                                    if (project.settings?.linkedProjectName) return (
-                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-gray-400">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 opacity-50 shrink-0"></div>
-                                                            <span className="truncate max-w-[180px]">{project.settings.linkedProjectName}</span>
-                                                        </div>
-                                                    );
-                                                    const suggested = getSuggestedObraForOrcamento(project);
-                                                    if (suggested) return (
-                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-amber-600" title={`Obra "${suggested.name}" tem o mesmo cliente e pode ser vinculada a este Orçamento`}>
-                                                            <Link2 className="w-3.5 h-3.5 shrink-0" />
-                                                            <span className="truncate max-w-[160px]">{suggested.name}</span>
-                                                            <span className="text-xs text-amber-500">(sugerido)</span>
-                                                        </div>
-                                                    );
-                                                    return <span className="text-sm font-normal text-gray-400">-</span>;
-                                                })()
-                                            )}
-                                            </td>
-                                        )}
-                                        {isDiaryContext && (
-                                            <>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {getLinkedProjectData(project) ? (
-                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
-                                                            <span className="truncate max-w-[180px]">{getLinkedProjectData(project)?.name}</span>
-                                                        </div>
-                                                    ) : <span className="text-sm font-normal text-gray-400">-</span>}
-                                                </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {(() => {
-                                                        const linked = getLinkedPlanning(project);
-                                                        if (!linked) return <span className="text-sm font-normal text-gray-400">-</span>;
-
-                                                        return (
-                                                            <div className={`flex items-center gap-1.5 text-sm font-normal ${linked.type === 'manual' ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${linked.type === 'manual' ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
-                                                                <span className="truncate max-w-[180px]">{linked.project.name}</span>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </td>
-                                            </>
-                                        )}
-                                        {visibleColumns.includes('client') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
-                                                {project.settings?.obraPropria ? (
-                                                    <span className="text-indigo-700">Obra Própria</span>
-                                                ) : (activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
-                                                    <span className="text-gray-600">
-                                                        {activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-400 italic">-</span>
-                                                )}
-                                            </td>
-                                        )}
-                                        {visibleColumns.includes('created') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {new Date(project.created_at || 0).toLocaleDateString()}
-                                            </td>
-                                        )}
-                                        {visibleColumns.includes('updated') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            {isDiaryContext ? (
-                                                <div className="flex items-center gap-2 text-sm font-normal text-gray-600">
-                                                    {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
-                                                        <>
-                                                            {project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'sunny' ? (
-                                                                <>☀ Sol</>
-                                                            ) : project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'cloudy' ? (
-                                                                <>☁ Nublado</>
-                                                            ) : (
-                                                                <>🌧 Chuva</>
-                                                            )}
-                                                        </>
-                                                    ) : '-'}
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center gap-1.5 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                    <span>{new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}</span>
-                                                    <span className="text-xs text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                </div>
-                                            )}
-                                            </td>
-                                        )}
-                                        {visibleColumns.includes('status-budget') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {isDiaryContext ? (
-                                                    (project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
-                                                        <StatusBadge status="Atualizado" />
-                                                    ) : (
-                                                        <StatusBadge status="Sem Registros" />
-                                                    )
-                                                ) : (
-                                                    project.settings?.budgetStatus ? (
-                                                        <StatusBadge status={capitalizeStatus(project.settings.budgetStatus)} />
-                                                    ) : (
-                                                        <span className="text-sm text-gray-400 font-normal italic">-</span>
-                                                    )
-                                                )}
-                                            </td>
-                                        )}
-                                        {visibleColumns.includes('status-obra') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {isDiaryContext ? (
-                                                <div className="flex items-center gap-1.5 text-sm font-normal text-gray-900">
-                                                    <span>{project.settings?.diaryEntries?.length || 0}</span>
-                                                    <span className="text-xs text-gray-400">dias</span>
-                                                </div>
-                                            ) : (
-                                                project.settings?.obraStatus ? (
-                                                    <StatusBadge status={project.settings.obraStatus === 'Em andamento' ? 'Em andamento' : project.settings.obraStatus} />
-                                                ) : (
-                                                    <span className="text-sm text-gray-400 font-normal italic">-</span>
-                                                )
-                                            )}
-                                            </td>
-                                        )}
-                                        {visibleColumns.includes('lock') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex justify-center">
-                                                {getEffectiveOrderCount(project.id) > 0 ? (
-                                                    <div className="flex items-center gap-1.5 text-amber-600" title={`${getEffectiveOrderCount(project.id)} orçamento(s)/pedido(s) vinculados - Exclusão Bloqueada`}>
-                                                        <Lock className="w-4 h-4" />
-                                                        <span className="text-sm font-normal">Bloqueado</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1.5 text-emerald-600" title="Sem pedidos vinculados - Exclusão Permitida">
-                                                        <Unlock className="w-4 h-4" />
-                                                        <span className="text-sm font-normal">Livre</span>
-                                                    </div>
-                                                )}
-                                                </div>
-                                            </td>
-                                        )}
+                                        ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">

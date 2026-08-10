@@ -129,15 +129,22 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 
 ### Fase 6 — Empreendimento / Engenharia / Áreas
 - [ ] empreendimento/EmpreendimentoModule.tsx
-- [ ] empreendimento/HistoricoTab.tsx
-- [ ] EmpreendimentoTypesSettings.tsx
-- [ ] AreaEngineModule.tsx
-- [ ] RegulatoryZoneTable.tsx
-- [ ] regulatoryMap/RegulatoryMapModule.tsx
-- [ ] electrical/ElectricalProjectsView.tsx
-- [ ] ProjectList.tsx
-- [ ] PlanningList.tsx
-- [ ] DiaryProjectsList.tsx
+- [x] empreendimento/HistoricoTab.tsx — deployado
+- [x] EmpreendimentoTypesSettings.tsx — deployado
+- [x] AreaEngineModule.tsx — deployado (achado+corrigido bug de colisão `Map` do lucide-react com `new Map()`)
+- [x] RegulatoryZoneTable.tsx — deployado
+- [x] regulatoryMap/RegulatoryMapModule.tsx — deployado
+- [x] electrical/ElectricalProjectsView.tsx — deployado
+- [x] ProjectList.tsx — deployado (Diário injeta 2 colunas fixas extras, tratadas como não-arrastáveis)
+- [x] PlanningList.tsx — deployado. ⚠️ tela nunca foi migrada para o guia de UI (§7):
+      `font-bold`/`font-black` dentro de `<td>` já existiam no arquivo original antes
+      deste rollout (confirmado via `git show HEAD`) — copiados literalmente por
+      instrução explícita de não mudar visual, não é regressão desta tarefa. Fica
+      registrado aqui como item de dívida técnica pré-existente para uma limpeza
+      futura do guia de UI (fora do escopo deste plano).
+- [x] DiaryProjectsList.tsx — deployado
+
+**Fase 6 concluída — 10 de 10.**
 
 ### Fase 7 — Operacional / ÒPURA / Diversos
 - [ ] OperacionalList.tsx
@@ -166,7 +173,7 @@ RentalsModule.tsx corrigido manualmente (`.tbody` sem fechar chave do `.map`).
 - [x] Fase 3 (9 arquivos)
 - [x] Fase 4 (9 arquivos)
 - [x] Fase 5 (9 arquivos)
-- [ ] Fase 6 (10 arquivos)
+- [x] Fase 6 (10 arquivos)
 - [ ] Fase 7 (16 arquivos)
 
 **Não declarar o rollout concluído com fase em aberto** — reportar

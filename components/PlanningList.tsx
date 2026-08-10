@@ -18,6 +18,19 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa fora do drag).
+const PLANNING_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Planejamento', className: 'px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]' },
+    budgets: { label: 'Orçamentos', sortable: false, className: 'px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]' },
+    client: { label: 'Cliente', className: 'px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]' },
+    start: { label: 'Início', className: 'px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center' },
+    end: { label: 'Prazo', className: 'px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center' },
+    duration: { label: 'Duração', sortable: false, className: 'px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center' },
+    status: { label: 'Status', sortable: false, className: 'px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]' },
+};
+
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca já existente, não a substitui.
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
@@ -207,6 +220,80 @@ const PlanningList: React.FC<PlanningListProps> = ({
         );
     };
 
+    // Conteúdo de cada <td> por coluna — extraído para função pura (fecha sobre helpers e
+    // estado do componente) para que o <tbody> possa mapear `orderedVisibleColumns` (ordem
+    // arrastável) em vez de repetir um bloco condicional fixo por coluna. `ctx` carrega
+    // start/end/duration já calculados por linha (evita recalcular por coluna).
+    const renderPlanningCell = (key: string, project: ProjectSummary, ctx: { startDate?: string; endDate?: string; duration?: number }): React.ReactNode => {
+        switch (key) {
+            case 'name':
+                return (
+                    <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 mr-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <Calendar className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <div className="text-sm font-bold text-gray-900">{project.name}</div>
+                            <div className="text-xs text-blue-600 font-bold uppercase tracking-tight">
+                                {project.settings?.linkedProjectName || 'Obra não vinculada'}
+                            </div>
+                            <div className="text-xs text-gray-400 font-medium uppercase tracking-tight">
+                                Modificado em {formatDate(project.updated_at)}
+                            </div>
+                        </div>
+                    </div>
+                );
+            case 'budgets':
+                return getLinkedBudgets(project.id).length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                        {getLinkedBudgets(project.id).map(budget => (
+                            <span key={budget.id} className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                {budget.name}
+                            </span>
+                        ))}
+                    </div>
+                ) : (
+                    <span className="text-xs text-gray-400 italic pl-2">-</span>
+                );
+            case 'client':
+                return (
+                    <div className="text-sm text-gray-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
+                        {project.settings?.client || '-'}
+                    </div>
+                );
+            case 'start':
+                return (
+                    <div className="flex justify-center">
+                        <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
+                            <Clock className="w-3 h-3 text-gray-400" />
+                            {formatDate(ctx.startDate)}
+                        </div>
+                    </div>
+                );
+            case 'end':
+                return (
+                    <div className="flex justify-center">
+                        <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
+                            <Clock className="w-3 h-3 text-gray-400" />
+                            {formatDate(ctx.endDate)}
+                        </div>
+                    </div>
+                );
+            case 'duration':
+                return (
+                    <div className="flex justify-center">
+                        <span className="text-sm font-bold text-gray-700">
+                            {ctx.duration || '-'} <span className="text-xs text-gray-400 uppercase">Meses</span>
+                        </span>
+                    </div>
+                );
+            case 'status':
+                return getStatusBadge(project);
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -282,27 +369,17 @@ const PlanningList: React.FC<PlanningListProps> = ({
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader colKey="name" label="Planejamento" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('budgets') && (
-                                        <SortableHeader colKey="budgets" label="Orçamentos" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('client') && (
-                                        <SortableHeader colKey="client" label="Cliente" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('start') && (
-                                        <SortableHeader colKey="start" label="Início" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('end') && (
-                                        <SortableHeader colKey="end" label="Prazo" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('duration') && (
-                                        <SortableHeader colKey="duration" label="Duração" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-center" />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" sortable={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]" />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = PLANNING_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className} />
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
                                     )}
@@ -341,72 +418,11 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                             onClick={() => onLoadProject(project.id, 'schedule')}
                                             className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                         >
-                                            {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center">
-                                                        <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 mr-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                                            <Calendar className="w-5 h-5" />
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-sm font-bold text-gray-900">{project.name}</div>
-                                                            <div className="text-xs text-blue-600 font-bold uppercase tracking-tight">
-                                                                {project.settings?.linkedProjectName || 'Obra não vinculada'}
-                                                            </div>
-                                                            <div className="text-xs text-gray-400 font-medium uppercase tracking-tight">
-                                                                Modificado em {formatDate(project.updated_at)}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                            {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                                <td key={key} className="px-6 py-4">
+                                                    {renderPlanningCell(key, project, { startDate, endDate, duration })}
                                                 </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('budgets') && (
-                                                <td className="px-6 py-4">
-                                                    {getLinkedBudgets(project.id).length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {getLinkedBudgets(project.id).map(budget => (
-                                                                <span key={budget.id} className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
-                                                                    {budget.name}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-gray-400 italic pl-2">-</span>
-                                                    )}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('client') && (
-                                                <td className="px-6 py-4 text-sm text-gray-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
-                                                    {project.settings?.client || '-'}
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('start') && (
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
-                                                        <Clock className="w-3 h-3 text-gray-400" />
-                                                        {formatDate(startDate)}
-                                                    </div>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('end') && (
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 text-gray-700 rounded-md border border-gray-100 text-xs font-bold">
-                                                        <Clock className="w-3 h-3 text-gray-400" />
-                                                        {formatDate(endDate)}
-                                                    </div>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('duration') && (
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className="text-sm font-bold text-gray-700">
-                                                        {duration || '-'} <span className="text-xs text-gray-400 uppercase">Meses</span>
-                                                    </span>
-                                                </td>
-                                            )}
-                                            {tableColumns.visibleColumns.includes('status') && (
-                                                <td className="px-6 py-4">
-                                                    {getStatusBadge(project)}
-                                                </td>
-                                            )}
+                                            ))}
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>

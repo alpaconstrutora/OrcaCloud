@@ -81,6 +81,64 @@ const StatusBadge = ({ status }: { status: Situacao }) => {
     return <span className={`text-sm font-normal ${colors[status]}`}>{status}</span>;
 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (nem entra em COLUMNS — coluna
+// estrutural fixa fora do drag).
+const DIARY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    name: { label: 'Diário', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    obra: { label: 'Obra vinculada', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    entries: { label: 'Registros', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    lastEntry: { label: 'Último registro', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    impediments: { label: 'Impedimentos', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    status: { label: 'Situação', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    updated: { label: 'Atualização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderDiaryCell(key: string, row: DiaryRow): React.ReactNode {
+    switch (key) {
+        case 'code':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{row.code || '-'}</span>;
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                        <BookOpen className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-normal text-gray-900 truncate" title={row.name}>{row.name}</span>
+                </div>
+            );
+        case 'obra':
+            return row.obra ? (
+                <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                    <Building2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate" title={row.obra}>{row.obra}</span>
+                </div>
+            ) : (
+                <span className="text-sm font-normal text-gray-400">-</span>
+            );
+        case 'organization':
+            return <span className="text-sm font-normal text-gray-700 truncate">{row.organization || '-'}</span>;
+        case 'entries':
+            return <span className="text-sm font-normal text-gray-600">{row.entries}</span>;
+        case 'lastEntry':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{formatDate(row.lastEntry)}</span>;
+        case 'impediments':
+            return <span className={`text-sm font-normal ${row.impediments > 0 ? 'text-amber-600' : 'text-gray-600'}`}>{row.impediments}</span>;
+        case 'status':
+            return <StatusBadge status={row.status} />;
+        case 'updated':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{row.updated ? row.updated.toLocaleDateString('pt-BR') : '-'}</span>;
+        default:
+            return null;
+    }
+}
+
 /**
  * Data de registro do diário vem como 'YYYY-MM-DD' (sem hora). `new Date()` sobre
  * essa string interpreta como UTC e, em UTC-3, a data volta um dia. Ancorar ao
@@ -393,10 +451,8 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
                             style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}
                         >
                             <colgroup>
-                                {COLUMNS.map(c => (
-                                    tableColumns.visibleColumns.includes(c.key) && (
-                                        <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
-                                    )
+                                {tableColumns.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
                                 ))}
                                 {/* §6.1.1 — espaçador ANTES de "Ações": absorve a folga no meio
                                     e mantém "Ações" ancorada na borda direita do card. */}
@@ -405,60 +461,17 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
                             </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('code') && (
-                                        <SortableHeader colKey="code" label="Código" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="code" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader colKey="name" label="Diário" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('obra') && (
-                                        <SortableHeader colKey="obra" label="Obra vinculada" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="obra" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader colKey="organization" label="Organização" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="organization" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('entries') && (
-                                        <SortableHeader colKey="entries" label="Registros" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="entries" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('lastEntry') && (
-                                        <SortableHeader colKey="lastEntry" label="Último registro" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="lastEntry" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('impediments') && (
-                                        <SortableHeader colKey="impediments" label="Impedimentos" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="impediments" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Situação" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="status" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('updated') && (
-                                        <SortableHeader colKey="updated" label="Atualização" {...headerProps}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="updated" />
-                                        </SortableHeader>
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = DIARY_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} {...headerProps}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
                                         Ações
@@ -473,63 +486,11 @@ const DiaryProjectsList: React.FC<DiaryProjectsListProps> = ({
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                         onClick={() => onOpenDiary(row.project.id)}
                                     >
-                                        {tableColumns.visibleColumns.includes('code') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {row.code || '-'}
+                                        {tableColumns.orderedVisibleColumns.map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderDiaryCell(key, row)}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('name') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                                                        <BookOpen className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="text-sm font-normal text-gray-900 truncate" title={row.name}>{row.name}</span>
-                                                </div>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('obra') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {row.obra ? (
-                                                    <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
-                                                        <Building2 className="w-3.5 h-3.5 shrink-0" />
-                                                        <span className="truncate" title={row.obra}>{row.obra}</span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-sm font-normal text-gray-400">-</span>
-                                                )}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('organization') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 truncate">
-                                                {row.organization || '-'}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('entries') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {row.entries}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('lastEntry') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {formatDate(row.lastEntry)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('impediments') && (
-                                            <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${row.impediments > 0 ? 'text-amber-600' : 'text-gray-600'}`}>
-                                                {row.impediments}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <StatusBadge status={row.status} />
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('updated') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
-                                                {row.updated ? row.updated.toLocaleDateString('pt-BR') : '-'}
-                                            </td>
-                                        )}
+                                        ))}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         {/* §9 — ação primária em texto azul + ícone secundário + kebab */}
                                         <td className="px-6 py-2.5 text-right">

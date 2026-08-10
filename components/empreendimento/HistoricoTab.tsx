@@ -145,6 +145,58 @@ const formatValue = (v: unknown): string => {
 
 const truncate = (s: string, max = 42): string => (s.length > max ? `${s.slice(0, max)}…` : s);
 
+// Reordenar colunas por arraste (estilo ClickUp) — mesmos label/sortable/className que
+// estavam hardcoded no <SortableHeader> original de cada coluna.
+const HISTORICO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  created_at: { label: 'Data/hora', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+  user: { label: 'Usuário', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+  entity: { label: 'Entidade', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+  action: { label: 'Ação', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+  field: { label: 'Campo', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+  change: { label: 'De → Para', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
+  source: { label: 'Origem', sortable: true, className: 'px-6 py-2' },
+};
+
+function renderHistoricoCell(key: string, log: EmpreendimentoAuditLog): React.ReactNode {
+  switch (key) {
+    case 'created_at':
+      return <span className="text-sm font-normal text-gray-600">{formatDateTime(log.created_at)}</span>;
+    case 'user':
+      return <span className="text-sm font-normal text-gray-700">{log.user_email || 'Sistema'}</span>;
+    case 'entity':
+      return (
+        <span className="text-sm font-normal text-gray-700">
+          {auditEntityLabel(log.entity_type)}
+          {log.entity_label && (
+            <span className="text-gray-400"> · {truncate(log.entity_label, 28)}</span>
+          )}
+        </span>
+      );
+    case 'action':
+      return (
+        <span className={`text-sm font-normal ${ACTION_COLORS[log.action] || 'text-gray-600'}`}>
+          {auditActionLabel(log.action)}
+        </span>
+      );
+    case 'field':
+      return <span className="text-sm font-normal text-gray-600">{auditFieldLabel(log.field_name)}</span>;
+    case 'change': {
+      const resumo = summarizeMetadata(log.metadata);
+      return (
+        <span className="text-sm font-normal text-gray-600">
+          {log.field_name
+            ? `${truncate(formatValue(log.old_value), 24)} → ${truncate(formatValue(log.new_value), 24)}`
+            : resumo || '—'}
+        </span>
+      );
+    }
+    case 'source':
+      return <span className="text-sm font-normal text-gray-600">{auditSourceLabel(log.source)}</span>;
+    default:
+      return null;
+  }
+}
+
 /** Resumo legível de um evento de lote (metadata com contadores). */
 const summarizeMetadata = (metadata: Record<string, unknown> | null | undefined): string | null => {
   if (!metadata) return null;
@@ -237,8 +289,6 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
     };
     return [...logs].sort((a, b) => key(a).localeCompare(key(b), 'pt-BR') * dir);
   }, [logs, tableColumns.sortColumn, tableColumns.sortDirection]);
-
-  const isVisible = (key: string) => tableColumns.visibleColumns.includes(key);
 
   return (
     <div className="space-y-6">
@@ -348,110 +398,40 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    {isVisible('created_at') && (
-                      <SortableHeader
-                        colKey="created_at" label="Data/hora" uppercase={false}
-                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                        onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100"
-                      />
-                    )}
-                    {isVisible('user') && (
-                      <SortableHeader
-                        colKey="user" label="Usuário" uppercase={false}
-                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                        onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100"
-                      />
-                    )}
-                    {isVisible('entity') && (
-                      <SortableHeader
-                        colKey="entity" label="Entidade" uppercase={false}
-                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                        onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100"
-                      />
-                    )}
-                    {isVisible('action') && (
-                      <SortableHeader
-                        colKey="action" label="Ação" uppercase={false}
-                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                        onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100"
-                      />
-                    )}
-                    {isVisible('field') && (
-                      <SortableHeader
-                        colKey="field" label="Campo" uppercase={false}
-                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                        onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100"
-                      />
-                    )}
-                    {isVisible('change') && (
-                      <SortableHeader
-                        colKey="change" label="De → Para" sortable={false} uppercase={false}
-                        className="px-6 py-2 border-r border-gray-100"
-                      />
-                    )}
-                    {isVisible('source') && (
-                      <SortableHeader
-                        colKey="source" label="Origem" uppercase={false}
-                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                        onSort={tableColumns.handleColumnSort} className="px-6 py-2"
-                      />
-                    )}
+                    {tableColumns.orderedVisibleColumns.map(key => {
+                      const def = HISTORICO_COLUMN_HEADERS[key];
+                      if (!def) return null;
+                      return (
+                        <SortableHeader
+                          key={key}
+                          colKey={key}
+                          label={def.label}
+                          sortable={def.sortable !== false}
+                          uppercase={false}
+                          sortColumn={tableColumns.sortColumn}
+                          sortDirection={tableColumns.sortDirection}
+                          onSort={tableColumns.handleColumnSort}
+                          onMoveColumn={tableColumns.moveColumn}
+                          className={def.className}
+                        />
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {sorted.map(log => {
-                    const resumo = summarizeMetadata(log.metadata);
-                    return (
-                      <tr
-                        key={log.id}
-                        onClick={() => setSelected(log)}
-                        className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
-                      >
-                        {isVisible('created_at') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                            {formatDateTime(log.created_at)}
-                          </td>
-                        )}
-                        {isVisible('user') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                            {log.user_email || 'Sistema'}
-                          </td>
-                        )}
-                        {isVisible('entity') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                            {auditEntityLabel(log.entity_type)}
-                            {log.entity_label && (
-                              <span className="text-gray-400"> · {truncate(log.entity_label, 28)}</span>
-                            )}
-                          </td>
-                        )}
-                        {isVisible('action') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                            <span className={`text-sm font-normal ${ACTION_COLORS[log.action] || 'text-gray-600'}`}>
-                              {auditActionLabel(log.action)}
-                            </span>
-                          </td>
-                        )}
-                        {isVisible('field') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                            {auditFieldLabel(log.field_name)}
-                          </td>
-                        )}
-                        {isVisible('change') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                            {log.field_name
-                              ? `${truncate(formatValue(log.old_value), 24)} → ${truncate(formatValue(log.new_value), 24)}`
-                              : resumo || '—'}
-                          </td>
-                        )}
-                        {isVisible('source') && (
-                          <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                            {auditSourceLabel(log.source)}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
+                  {sorted.map(log => (
+                    <tr
+                      key={log.id}
+                      onClick={() => setSelected(log)}
+                      className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                    >
+                      {tableColumns.orderedVisibleColumns.map(key => (
+                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                          {renderHistoricoCell(key, log)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

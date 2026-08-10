@@ -147,7 +147,15 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
         return [...filteredZones].sort((a, b) => compareZoneValues(a, b, key, tableColumns.sortDirection));
     }, [filteredZones, tableColumns.sortColumn, tableColumns.sortDirection]);
 
-    const visibleColumnDefs = ZONE_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key));
+    // Ordem escolhida pelo usuário (drag do cabeçalho), não a ordem fixa de ZONE_COLUMNS.
+    // (lookup por objeto, não Map — `Map` aqui é o ícone importado de lucide-react, não a classe global)
+    const zoneColumnsByKey = React.useMemo(
+        () => Object.fromEntries(ZONE_COLUMNS.map(c => [c.key, c])) as Partial<Record<ZoneField, ColDef>>,
+        [],
+    );
+    const visibleColumnDefs = tableColumns.orderedVisibleColumns
+        .map(key => zoneColumnsByKey[key as ZoneField])
+        .filter((c): c is ColDef => !!c);
 
     if (loading) {
         return (
@@ -231,6 +239,7 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
+                                        onMoveColumn={tableColumns.moveColumn}
                                         className={`px-6 py-2 border-r border-gray-100 ${col.width}`}
                                     />
                                 ))}

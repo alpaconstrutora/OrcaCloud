@@ -20,6 +20,70 @@ const TYPE_COLUMNS: ColumnConfig[] = [
     { key: 'actions',  label: 'Ações',     sortable: false },
 ];
 
+// Reordenar colunas por arraste (estilo ClickUp) — mesmos label/sortable/className que
+// estavam hardcoded no <SortableHeader> original de cada coluna.
+const TYPE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Nome', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
+    category: { label: 'Categoria', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+};
+
+interface RenderTypeCellCtx {
+    editingId: string | null;
+    editName: string;
+    setEditName: (v: string) => void;
+    handleUpdate: (id: string) => void;
+    editCategory: EmpreendimentoMotorCategory;
+    setEditCategory: (v: EmpreendimentoMotorCategory) => void;
+    editColor: string;
+    setEditColor: (v: string) => void;
+    selectCls: string;
+    categoryLabel: (c: EmpreendimentoMotorCategory) => string;
+}
+
+function renderEmpreendimentoTypeCell(key: string, type: EmpreendimentoTypeRecord, ctx: RenderTypeCellCtx): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return (
+                <div className="text-sm font-normal text-gray-700">
+                    {ctx.editingId === type.id ? (
+                        <input
+                            autoFocus
+                            type="text"
+                            value={ctx.editName}
+                            onChange={e => ctx.setEditName(e.target.value)}
+                            className="w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            onKeyDown={e => e.key === 'Enter' && ctx.handleUpdate(type.id)}
+                        />
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <span className={`font-normal ${colorTextClass(type.color)}`}>{type.name}</span>
+                            {type.is_system && (
+                                <span className="text-xs font-normal text-gray-400">Global</span>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        case 'category':
+            return (
+                <div className="text-sm font-normal text-gray-600">
+                    {ctx.editingId === type.id ? (
+                        <div className="flex items-center gap-2">
+                            <select value={ctx.editCategory} onChange={e => ctx.setEditCategory(e.target.value as EmpreendimentoMotorCategory)} className={ctx.selectCls}>
+                                {MOTOR_CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                            <select value={ctx.editColor} onChange={e => ctx.setEditColor(e.target.value)} className={ctx.selectCls}>
+                                {COLOR_OPTIONS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                            </select>
+                        </div>
+                    ) : ctx.categoryLabel(type.motor_category)}
+                </div>
+            );
+        default:
+            return null;
+    }
+}
+
 // Extrai só o tom de texto do combo bg+text+border de colorClasses() — mantém
 // a cor escolhida pelo usuário como identificação, sem reintroduzir a pílula
 // (§8: texto colorido simples, sem fundo/uppercase/rounded-full).
@@ -250,28 +314,24 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <tr>
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader
-                                            colKey="name"
-                                            label="Nome"
-                                            uppercase={false}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100"
-                                        />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader
-                                            colKey="category"
-                                            label="Categoria"
-                                            uppercase={false}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
-                                        />
-                                    )}
+                                    {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
+                                        const def = TYPE_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader
+                                                key={key}
+                                                colKey={key}
+                                                label={def.label}
+                                                sortable={def.sortable !== false}
+                                                uppercase={false}
+                                                sortColumn={tableColumns.sortColumn}
+                                                sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}
+                                            />
+                                        );
+                                    })}
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                     )}
@@ -280,41 +340,15 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                             <tbody className="divide-y divide-gray-200">
                                 {filteredTypes.map(type => (
                                     <tr key={type.id} className="hover:bg-blue-50/50 transition-colors group">
-                                        {tableColumns.visibleColumns.includes('name') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                {editingId === type.id ? (
-                                                    <input
-                                                        autoFocus
-                                                        type="text"
-                                                        value={editName}
-                                                        onChange={e => setEditName(e.target.value)}
-                                                        className="w-full h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                                                        onKeyDown={e => e.key === 'Enter' && handleUpdate(type.id)}
-                                                    />
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`font-normal ${colorTextClass(type.color)}`}>{type.name}</span>
-                                                        {type.is_system && (
-                                                            <span className="text-xs font-normal text-gray-400">Global</span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                        {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderEmpreendimentoTypeCell(key, type, {
+                                                    editingId, editName, setEditName, handleUpdate,
+                                                    editCategory, setEditCategory, editColor, setEditColor,
+                                                    selectCls, categoryLabel,
+                                                })}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('category') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {editingId === type.id ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <select value={editCategory} onChange={e => setEditCategory(e.target.value as EmpreendimentoMotorCategory)} className={selectCls}>
-                                                            {MOTOR_CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                                        </select>
-                                                        <select value={editColor} onChange={e => setEditColor(e.target.value)} className={selectCls}>
-                                                            {COLOR_OPTIONS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-                                                        </select>
-                                                    </div>
-                                                ) : categoryLabel(type.motor_category)}
-                                            </td>
-                                        )}
+                                        ))}
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

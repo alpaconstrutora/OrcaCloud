@@ -40,6 +40,49 @@ const MAP_COLUMNS: ColumnConfig[] = [
 ];
 const MAP_COL_WIDTHS: Record<string, number> = { name: 320, city: 220, status: 130, actions: 80 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa fora do drag).
+const MAP_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    name: { label: 'Mapa', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    city: { label: 'Cidade', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderMapCell(key: string, item: RegulatoryMapWithCity): React.ReactNode {
+    switch (key) {
+        case 'name':
+            return (
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <Map className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
+                        <p className="text-sm font-normal text-gray-400 truncate">{item.lei_referencia || '—'}</p>
+                    </div>
+                </div>
+            );
+        case 'city':
+            return (
+                <span className="text-sm font-medium text-gray-800 whitespace-nowrap">
+                    {item.city_name}{item.state_code ? ` - ${item.state_code}` : ''}
+                </span>
+            );
+        case 'status':
+            return (
+                <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
+                    {STATUS_LABELS[item.status]}
+                </span>
+            );
+        default:
+            return null;
+    }
+}
+
 export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
     const orgIdParam = isAllOrgs ? undefined : activeOrganizationId as string;
@@ -220,34 +263,34 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                     </p>
                 </div>
             ) : (() => {
-                const visible = MAP_COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
-                const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+                const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+                const tableWidth = orderedVisible.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
                 return (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
                             <colgroup>
-                                {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                                {orderedVisible.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
                                 <col />
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                             </colgroup>
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader colKey="name" label="Mapa" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                                            <cols.ResizeHandle colKey="name" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('city') && (
-                                        <SortableHeader colKey="city" label="Cidade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="city" />
-                                        </SortableHeader>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="status" />
-                                        </SortableHeader>
-                                    )}
+                                    {orderedVisible.map(key => {
+                                        const def = MAP_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -261,31 +304,11 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                                         onClick={() => setSelected(item)}
                                         className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                     >
-                                        {tableColumns.visibleColumns.includes('name') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                                        <Map className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
-                                                        <p className="text-sm font-normal text-gray-400 truncate">{item.lei_referencia || '—'}</p>
-                                                    </div>
-                                                </div>
+                                        {orderedVisible.map(key => (
+                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                {renderMapCell(key, item)}
                                             </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('city') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 whitespace-nowrap">
-                                                {item.city_name}{item.state_code ? ` - ${item.state_code}` : ''}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
-                                                    {STATUS_LABELS[item.status]}
-                                                </span>
-                                            </td>
-                                        )}
+                                        ))}
                                         <td aria-hidden="true"></td>
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">

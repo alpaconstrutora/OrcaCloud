@@ -27,6 +27,49 @@ const COLUMNS: ColumnConfig[] = [
 ];
 const COL_WIDTHS: Record<string, number> = { name: 260, status: 130, technicalLead: 200, createdAt: 150, actions: 130 };
 
+// Metadados de header por coluna — usados para renderizar o <thead> a partir de
+// `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
+// uma sequência fixa de JSX. 'actions' fica fora (coluna estrutural fixa fora do drag).
+const ELECTRICAL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+  name: { label: 'Nome do Projeto', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  technicalLead: { label: 'Líder Técnico', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  createdAt: { label: 'Data de Criação', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
+// repetir um bloco condicional fixo por coluna.
+function renderElectricalCell(key: string, proj: OpuraElectricalProject): React.ReactNode {
+  switch (key) {
+    case 'name':
+      return (
+        <>
+          <div className="truncate text-sm font-normal text-gray-700">{proj.name}</div>
+          <div className="text-xs text-gray-400">{proj.tensionType || 'Tensão não definida'}</div>
+        </>
+      );
+    case 'status':
+      return <span className="text-sm font-normal text-amber-700">{proj.status.toUpperCase()}</span>;
+    case 'technicalLead':
+      return (
+        <div className="flex items-center gap-2 min-w-0 text-sm font-normal text-gray-600">
+          <User className="w-4 h-4 text-gray-400 shrink-0" />
+          <span className="truncate">{proj.technicalLead || 'Não atribuído'}</span>
+        </div>
+      );
+    case 'createdAt':
+      return (
+        <div className="flex items-center gap-2 text-sm font-normal text-gray-600">
+          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+          {new Date(proj.createdAt).toLocaleDateString('pt-BR')}
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
 const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organizationId, projectId, obras, setProjectId, onChangeView, onSelectProject }) => {
   const [projects, setProjects] = useState<OpuraElectricalProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,8 +185,8 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
 
   const semLiderCount = projects.filter(p => !p.technicalLead).length;
 
-  const visible = COLUMNS.filter(c => c.key !== 'actions' && tableColumns.visibleColumns.includes(c.key));
-  const tableWidth = visible.reduce((s, c) => s + cols.getWidth(c.key), 0) + cols.getWidth('actions');
+  const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+  const tableWidth = orderedVisible.reduce((s, key) => s + cols.getWidth(key), 0) + cols.getWidth('actions');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -254,32 +297,27 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
           <div className="overflow-x-auto">
             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth }}>
               <colgroup>
-                {visible.map(c => <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />)}
+                {orderedVisible.map(key => (
+                  <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                ))}
                 <col />
                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
               </colgroup>
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                  {tableColumns.visibleColumns.includes('name') && (
-                    <SortableHeader colKey="name" label="Nome do Projeto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="name" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('status') && (
-                    <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="status" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('technicalLead') && (
-                    <SortableHeader colKey="technicalLead" label="Líder Técnico" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="technicalLead" />
-                    </SortableHeader>
-                  )}
-                  {tableColumns.visibleColumns.includes('createdAt') && (
-                    <SortableHeader colKey="createdAt" label="Data de Criação" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
-                      <cols.ResizeHandle colKey="createdAt" />
-                    </SortableHeader>
-                  )}
+                  {orderedVisible.map(key => {
+                    const def = ELECTRICAL_COLUMN_HEADERS[key];
+                    if (!def) return null;
+                    return (
+                      <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                        onSort={tableColumns.handleColumnSort}
+                        onMoveColumn={tableColumns.moveColumn}
+                        className={def.className}>
+                        <cols.ResizeHandle colKey={key} />
+                      </SortableHeader>
+                    );
+                  })}
                   <th aria-hidden="true" className="border-r border-gray-100" />
                   {tableColumns.visibleColumns.includes('actions') && (
                     <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -289,33 +327,11 @@ const ElectricalProjectsView: React.FC<ElectricalProjectsViewProps> = ({ organiz
               <tbody className="divide-y divide-gray-100">
                 {filteredProjects.map((proj) => (
                   <tr key={proj.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer" onClick={() => openEditor(proj.id)}>
-                    {tableColumns.visibleColumns.includes('name') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                        <div className="truncate">{proj.name}</div>
-                        <div className="text-xs text-gray-400">{proj.tensionType || 'Tensão não definida'}</div>
+                    {orderedVisible.map(key => (
+                      <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                        {renderElectricalCell(key, proj)}
                       </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('status') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-amber-700">
-                        {proj.status.toUpperCase()}
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('technicalLead') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <User className="w-4 h-4 text-gray-400 shrink-0" />
-                          <span className="truncate">{proj.technicalLead || 'Não atribuído'}</span>
-                        </div>
-                      </td>
-                    )}
-                    {tableColumns.visibleColumns.includes('createdAt') && (
-                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-                          {new Date(proj.createdAt).toLocaleDateString('pt-BR')}
-                        </div>
-                      </td>
-                    )}
+                    ))}
                     <td aria-hidden="true"></td>
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>

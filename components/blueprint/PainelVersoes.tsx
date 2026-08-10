@@ -85,6 +85,20 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
   // papel, então ligar cota pode fazer uma escala que cabia deixar de caber.
   const enq = modelo ? enquadrar(modelo, denominador, papel, cotas) : null;
 
+  /**
+   * Quanto o desenho ocuparia NA ESCALA SUGERIDA.
+   *
+   * Sem isto a sugestão mente por omissão. `escalaSugerida` é a primeira da
+   * lista que CABE, e para um desenho minúsculo isso é sempre 1:20 — a menor
+   * da lista. Dizer "em 1:20 ele preenche a folha" seria falso: ele fica cinco
+   * vezes maior e continua um risco no meio do branco, porque o problema não é
+   * a escala, é não haver o que desenhar.
+   */
+  const ocupacaoNaSugerida =
+    modelo && enq?.escalaSugerida
+      ? enquadrar(modelo, enq.escalaSugerida, papel, cotas).ocupacao
+      : null;
+
   function opcoes(): OpcoesExportacao {
     return {
       denominador,
@@ -256,10 +270,18 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
               <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
                 O desenho vai ocupar {(enq.ocupacao * 100).toFixed(0)}% da folha em 1:
                 {denominador} — ele mede {enq.desenhoLarguraMm.toFixed(0)} ×{' '}
-                {enq.desenhoAlturaMm.toFixed(0)} mm no papel.
-                {enq.escalaSugerida && enq.escalaSugerida !== denominador
-                  ? ` Em 1:${enq.escalaSugerida} ele preenche a folha.`
-                  : ''}
+                {enq.desenhoAlturaMm.toFixed(0)} mm no papel.{' '}
+                {/* Se nem a maior escala da lista resolve, o problema NÃO é a
+                    escala — é o tamanho do que foi desenhado. Mandar trocar de
+                    escala aqui faria a pessoa exportar de novo e encontrar a
+                    mesma folha quase branca. */}
+                {ocupacaoNaSugerida !== null && ocupacaoNaSugerida < 0.25
+                  ? `Nem em 1:${enq.escalaSugerida}, a maior da lista, ele passaria de ` +
+                    `${(ocupacaoNaSugerida * 100).toFixed(0)}% — o desenho é pequeno para ` +
+                    `esta folha. Confira se é isto que você quer exportar.`
+                  : enq.escalaSugerida && enq.escalaSugerida !== denominador
+                    ? `Em 1:${enq.escalaSugerida} ele preenche a folha.`
+                    : ''}
               </p>
             )}
 

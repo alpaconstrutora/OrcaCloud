@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { refPrefixOrFilter, originIdFromRef } from '../lib/receivableRef';
 import { PropertyStatus } from '../types';
 // Mesma conta de carteira usada pela aba Análise (components/RentalsModule.tsx):
 // os dois lugares mostram os mesmos KPIs e já divergiram por terem cópias dela.
@@ -156,20 +157,31 @@ export const rentalsDashboardService = {
               (rentalContracts || []).map(c => [c.id as string, (c.title as string) || ''])
           );
 
-          if (contractIds.length > 0) {
-              // vw_receivables já calcula effective_status='VENCIDO' dinamicamente
+          const refFiltro = refPrefixOrFilter(contractIds);
+          if (contractIds.length > 0 && refFiltro) {
+              // vw_receivables já calcula effective_status='VENCIDO' dinamicamente.
+              //
+              // ⚠️ Era `.in('reference_id', contractIds)`, que NUNCA casava: o
+              // `reference_id` é composto (`{contract_id}-p{vencimento}`), então
+              // o UUID puro não bate com nada e a consulta voltava vazia SEM
+              // erro. Efeito: inadimplência sempre 0 e "próximos vencimentos"
+              // sempre vazio em Locações, silenciosamente. Ver lib/receivableRef.ts.
               const { data: receivables } = await supabase
                   .from('vw_receivables')
                   .select('id, reference_id, due_date, amount, party_name, description, effective_status')
                   .eq('organization_id', organizationId)
-                  .in('reference_id', contractIds)
+                  .or(refFiltro)
                   .order('due_date', { ascending: true, nullsFirst: false });
 
               const rows = receivables || [];
 
-              // Contratos distintos com ao menos 1 parcela vencida
+              // Contratos distintos com ao menos 1 parcela vencida.
+              // `originIdFromRef` é obrigatório: `reference_id` traz o sufixo da
+              // parcela, então agrupar pelo valor cru contaria PARCELAS vencidas
+              // (uma por mês) em vez de contratos inadimplentes.
               const overdue = new Set(
-                  rows.filter(r => r.effective_status === 'VENCIDO').map(r => r.reference_id)
+                  rows.filter(r => r.effective_status === 'VENCIDO')
+                      .map(r => originIdFromRef(r.reference_id as string))
               );
               unidadesInadimplentes = overdue.size;
 
@@ -182,7 +194,7 @@ export const rentalsDashboardService = {
                   .map(r => ({
                       id: r.id as string,
                       client: (r.party_name as string) || '—',
-                      property: contractTitleById.get(r.reference_id as string) || (r.description as string) || '—',
+                      property: contractTitleById.get(originIdFromRef(r.reference_id as string)) || (r.description as string) || '—',
                       value: Number(r.amount) || 0,
                       dueDate: r.due_date as string,
                   }));

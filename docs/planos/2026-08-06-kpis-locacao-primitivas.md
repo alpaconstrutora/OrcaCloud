@@ -321,7 +321,61 @@ atuais. O usuário não vê o que está trocando.
 
 ---
 
-## Fase 3 — O painel, depois das primitivas
+## Fase 3 — O painel, depois das primitivas ✅ (2026-08-10)
+
+**Decisão do usuário sobre o layout:** painel **executivo (8 no topo) +
+detalhamento recolhível**, e não 18 cards seguidos.
+
+**Nenhuma primitiva nova foi necessária** — diferente das Fases 1 e 2, o dado já
+existia (`contracts.end_date`/`current_value`, `vw_receivables.due_date`,
+`commercial_properties.rental_price`). Faltava a conta.
+
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `lib/rentalExecutive.ts` (novo) | Matemática pura: ocupação financeira, arrecadação e atraso por faixa, WALE ponderado por receita, taxa de renovação | 27 testes, incluindo o caso que motiva a ocupação financeira (2 de 3 alugadas = 66% física, mas 20% financeira quando a vazia é a cara) |
+| `lib/receivableRef.ts` (novo) | `reference_id` é COMPOSTO (`{contract_id}-p{vencimento}`) — helpers para extrair a origem e montar o filtro | 11 testes |
+| `services/rentalExecutiveService.ts` (novo) | Busca contratos de `domain=LOCACAO` + recebíveis | Rodado contra o banco real com sessão autenticada |
+| `services/rentalsDashboardService.ts` | **Correção de bug pré-existente** (abaixo) | `billed` passou de 0 para R$ 241.900 |
+| `components/RentalsModule.tsx` | Painel executivo (8) + detalhamento recolhível; ocupação financeira alinhada à base da Receita mensal; 4 avisos condicionais | Verificado no navegador com sessão real |
+
+### O bug que a Fase 3 revelou
+
+`rentalsDashboardService` filtrava `.in('reference_id', contractIds)` com UUIDs
+puros. Como `reference_id` é composto, **nunca casava** — devolvia vazio sem
+erro. Efeito: **inadimplência sempre 0** e "próximos vencimentos" sempre vazio
+em Locações, silenciosamente, desde sempre. Corrigido com `or` de prefixos; o
+agrupamento por contrato também precisou de `originIdFromRef`, senão o `Set`
+contaria parcelas vencidas (uma por mês) em vez de contratos inadimplentes.
+
+### Números reais medidos (2026-08-10)
+
+Ocupação física 33,3% · financeira 85,4% · vacância média 19 dias · receita
+R$ 50.900 · vencido +90d 85,9% · NOI R$ 406.397 · WALE 1,7 anos · renovação
+`—`.
+
+⚠️ **Quatro avisos condicionais** existem porque três desses números seriam
+lidos errado sem contexto — e número mal lido destrói a confiança no painel
+inteiro (a lição da Fase 0):
+
+1. **3 de 15 unidades sem aluguel de referência** ficam fora da ocupação
+   financeira — 85,4% fala de 12, não de 15.
+2. **0,8% de arrecadação** mede *conciliação no sistema*, não atraso do
+   locatário: só 2 de 121 recebíveis estão baixados.
+3. **1 contrato vencido e ainda em vigor** fica fora do WALE (prazo negativo
+   distorceria a média) e é problema de cadastro, não da carteira.
+4. **Taxa de renovação `—`**, não 0%: nenhum contrato terminou no período.
+
+### Coerência entre cards vizinhos
+
+A ocupação financeira nasceu contando deals `!== CANCELLED` (incluindo
+negociação), enquanto a "Receita mensal" ao lado conta só `COMPLETED`. Dois
+cards vizinhos mediriam "contratado" de formas diferentes. Alinhado para
+`COMPLETED`: a taxa caiu de 98,3% para **85,4%** — a diferença era negociação
+que ainda pode não fechar.
+
+---
+
+## Fase 3 — o desenho original
 
 O catálogo sugere um "dashboard executivo" com 20 KPIs. **20 não é dashboard, é
 relatório.** Com as Fases 1 e 2 no lugar, 8 indicadores respondem praticamente tudo:
@@ -408,7 +462,11 @@ eliminou (proprietário).
       - **PENDENTE: reapropriar** — trocar imóvel ou modo de um lançamento já
         apropriado. A RPC substitui atomicamente, mas a Sheet sempre abre em
         branco: não lê `getAllocations` para pré-selecionar o que já está lá.
-- [ ] Fase 3 — não iniciada
+- [x] **Fase 3 — CONCLUÍDA (2026-08-10).** Painel executivo com os 8
+      indicadores + detalhamento recolhível. Nenhuma primitiva nova foi
+      necessária. 38 testes novos (27 da matemática + 11 do `reference_id`),
+      verificado no navegador com sessão real. Revelou e corrigiu um bug
+      pré-existente que zerava a inadimplência de Locações silenciosamente.
 
 ## Verificação
 

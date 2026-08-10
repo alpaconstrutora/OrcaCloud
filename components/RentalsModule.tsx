@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3, Clock } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3, Clock, Calendar, Check } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { supabase } from '../lib/supabase';
@@ -45,6 +45,8 @@ import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus } fro
 import { sumPortfolioValue, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 import { rentalVacancyService, type RentalVacancyMetrics } from '../services/rentalVacancyService';
 import { rentalNoiService, type RentalNoiMetrics } from '../services/rentalNoiService';
+import { rentalExecutiveService, type RentalExecutiveMetrics } from '../services/rentalExecutiveService';
+import { financialOccupancy } from '../lib/rentalExecutive';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -458,6 +460,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // `null` = apropriação de despesa por imóvel ainda não existe no banco.
     // Sem ela o "NOI" seria a receita disfarçada de resultado — pior que ocultar.
     const [noi, setNoi] = useState<RentalNoiMetrics | null>(null);
+    // WALE, renovação e cobrança (Fase 3). `null` = não foi possível medir.
+    const [executive, setExecutive] = useState<RentalExecutiveMetrics | null>(null);
+    // O painel executivo são 8 indicadores; o resto fica recolhido. "20 não é
+    // dashboard, é relatório" — decisão registrada no plano da Fase 3.
+    const [showDetail, setShowDetail] = usePersistedState('rentals:analysisDetail', false);
     // A aba Renovações é só a FILA. Contrato, vigência, renovações e documentos
     // moram todos em Gerenciar Negociação › Contrato e Assinatura — abrir um
     // detalhe de contrato aqui dentro criaria um segundo caminho para a mesma
@@ -1036,6 +1043,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return () => { alive = false; };
     }, [activeTab, effectiveOrganizationId]);
 
+    // WALE, taxa de renovação e cobrança (Fase 3). Vem de `contracts` +
+    // `vw_receivables`, não de `deals` — por isso não cabe no `stats`.
+    useEffect(() => {
+        if (activeTab !== 'analysis') return;
+        let alive = true;
+        rentalExecutiveService
+            .load(effectiveOrganizationId)
+            .then(data => { if (alive) setExecutive(data); });
+        return () => { alive = false; };
+    }, [activeTab, effectiveOrganizationId]);
+
     const stats = useMemo(() => {
         // Patrimônio: cada imóvel entra UMA vez, por rollup. As unidades mandam
         // quando têm preço; senão vale o preço do próprio edifício — que em
@@ -1128,8 +1146,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // valor mensal é `installment_value`). Uma unidade tem no máximo um
     // contrato ativo (regra de unicidade do commercialService), então o
     // primeiro achado já é o certo.
-    const getContractedRentalValue = (propertyId: string): number | null => {
-        const deal = deals.find(d => d.type === 'RENTAL' && d.status !== 'CANCELLED' &&
+    /**
+     * @param onlyCompleted quando true, considera SÓ contrato fechado
+     *   (`COMPLETED`). A coluna da tabela quer o contrato vigente em qualquer
+     *   estágio; já a **ocupação financeira** precisa da mesma definição de
+     *   "contratado" que a Receita mensal usa — senão dois cards vizinhos
+     *   medem coisas diferentes com o mesmo nome, e a ocupação financeira
+     *   incorpora negociação que ainda pode não fechar.
+     */
+    const getContractedRentalValue = (propertyId: string, onlyCompleted = false): number | null => {
+        const deal = deals.find(d => d.type === 'RENTAL' &&
+            (onlyCompleted ? d.status === 'COMPLETED' : d.status !== 'CANCELLED') &&
             (d.units && d.units.length > 0
                 ? d.units.some(u => u.property_id === propertyId)
                 : d.property_id === propertyId));
@@ -1150,6 +1177,35 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         if (!unit || !(deal.value > 0)) return deal.installment_value;
         return deal.installment_value * (unit.value / deal.value);
     };
+
+    /**
+     * Ocupação FINANCEIRA (Fase 3) — quanto da receita possível está contratada.
+     *
+     * Mede coisa diferente da ocupação física, e a diferença é o que interessa:
+     * 90% das unidades alugadas com as caras vazias pode ser 60% financeiro. Uma
+     * esconde o problema que a outra mostra.
+     *
+     * Base: as MESMAS folhas da ocupação física e do patrimônio (`leafNodes`),
+     * para as três não divergirem — foi por cópias da fórmula que patrimônio e
+     * receita já mostraram números diferentes em telas diferentes.
+     */
+    const financialOcc = useMemo(() => {
+        const folhas = leafNodes(properties);
+        const resultado = financialOccupancy(
+            folhas.map(p => ({
+                id: p.id,
+                rental_price: rentalValueOf(p),
+                // `true` = só contrato fechado, a MESMA base da Receita mensal.
+                contracted: getContractedRentalValue(p.id, true) ?? 0,
+            })),
+        );
+        // Unidade sem preço não entra no potencial (não dá para supor preço de
+        // quem não tem). Mas isso INFLA a taxa: com metade da carteira sem
+        // preço, 98% de ocupação financeira fala de meia carteira. Quem exibe
+        // precisa poder avisar.
+        const semPreco = folhas.filter(p => rentalValueOf(p) <= 0).length;
+        return { ...resultado, leafCount: folhas.length, withoutPrice: semPreco };
+    }, [properties, deals]);
 
     // Soma do valor gerado pela Inteligência de Aluguéis (rentalValueOf) de
     // cada unidade do contrato — baseline para comparar com a parcela
@@ -1426,13 +1482,81 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
+            {/* ── PAINEL EXECUTIVO (Fase 3) ───────────────────────────────────
+                Os 8 indicadores que respondem praticamente tudo. O catálogo
+                original sugeria 20 no topo; 20 não é dashboard, é relatório —
+                o resto foi para o detalhamento recolhível abaixo.
+                `—` onde a conta não tem base: "não medido" nunca vira zero. */}
             {!currentBuilding && activeTab === 'analysis' && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                    <KpiCard shadow={false} size="sm" label="Ocupação física" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
+                    {/* Ao lado da física de propósito: a diferença entre as duas
+                        é que denuncia carteira cheia de unidade barata. */}
+                    <KpiCard shadow={false} size="sm" label="Ocupação financeira" value={financialOcc.rate != null ? `${(financialOcc.rate * 100).toFixed(1)}%` : '—'} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Vacância média" value={vacancy ? `${vacancy.averageDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="indigo" />
+                    <KpiCard shadow={false} size="sm" label="Vencido há mais de 90 dias" value={executive?.collection.overdue90Rate != null ? `${(executive.collection.overdue90Rate * 100).toFixed(1)}%` : '—'} icon={<AlertCircle className="w-4 h-4" />} color="red" />
+                    <KpiCard shadow={false} size="sm" label="NOI" value={noi ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.noi) : '—'} icon={<TrendingUp className="w-4 h-4" />} color={noi && noi.noi < 0 ? 'red' : 'teal'} />
+                    <KpiCard shadow={false} size="sm" label="WALE da carteira" value={executive?.wale.years != null ? `${executive.wale.years.toFixed(1)} anos` : '—'} icon={<Calendar className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} size="sm" label="Taxa de renovação" value={executive?.renewal.rate != null ? `${(executive.renewal.rate * 100).toFixed(0)}%` : '—'} icon={<RefreshCw className="w-4 h-4" />} color="violet" />
+                </div>
+            )}
+
+            {/* Avisos que impedem leitura errada dos números acima. Cada um só
+                aparece quando o caso existe — aviso permanente vira ruído. */}
+            {!currentBuilding && activeTab === 'analysis' && (executive || financialOcc.withoutPrice > 0) && (
+                <div className="space-y-1 -mt-1 mb-3">
+                    {/* Sem isto, "98% de ocupação financeira" parece carteira
+                        rentabilizada quando pode ser meia carteira sem preço. */}
+                    {financialOcc.withoutPrice > 0 && (
+                        <p className="text-xs text-gray-400">
+                            {financialOcc.withoutPrice} de {financialOcc.leafCount} unidades não têm aluguel de
+                            referência cadastrado e ficam fora da <strong>ocupação financeira</strong> — a taxa
+                            fala apenas das {financialOcc.leafCount - financialOcc.withoutPrice} precificadas.
+                        </p>
+                    )}
+                    {/* Sem este aviso, "0,8% recebido" é lido como inadimplência
+                        de 99% — quando o que falta é baixa no sistema. */}
+                    {executive && executive.collection.collectionRate != null && executive.collection.collectionRate < 0.5 && (
+                        <p className="text-xs text-gray-400">
+                            Apenas {(executive.collection.collectionRate * 100).toFixed(1)}% dos aluguéis lançados
+                            estão baixados como recebidos. O indicador mede <strong>conciliação no sistema</strong>,
+                            não necessariamente atraso do locatário.
+                        </p>
+                    )}
+                    {executive && executive.wale.expiredStillActive > 0 && (
+                        <p className="text-xs text-gray-400">
+                            {executive.wale.expiredStillActive} contrato{executive.wale.expiredStillActive > 1 ? 's' : ''} com
+                            data de término já vencida e ainda em vigor — fora do WALE, porque prazo negativo
+                            distorceria a média. Renove ou encerre para o número refletir a carteira.
+                        </p>
+                    )}
+                    {executive && executive.renewal.rate == null && executive.contractsConsidered > 0 && (
+                        <p className="text-xs text-gray-400">
+                            Taxa de renovação sem base: nenhum contrato terminou no período. Não é 0%.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Detalhamento — recolhido por padrão (§ decisão da Fase 3). */}
+            {!currentBuilding && activeTab === 'analysis' && (
+                <button
+                    onClick={() => setShowDetail(!showDetail)}
+                    className="flex items-center gap-1.5 h-9 px-3.5 mb-3 bg-white border border-gray-100 rounded-[10px] shadow-sm text-sm font-medium text-gray-600 hover:text-gray-900 transition-all"
+                >
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showDetail ? 'rotate-180' : ''}`} />
+                    {showDetail ? 'Ocultar detalhamento' : 'Ver detalhamento'}
+                </button>
+            )}
+
+            {!currentBuilding && activeTab === 'analysis' && showDetail && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
                     <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                    <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
                     <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
-                    <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
                     <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} size="sm" label="Receita potencial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(financialOcc.potential)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Aluguéis recebidos" value={executive ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(executive.collection.received) : '—'} icon={<Check className="w-4 h-4" />} color="teal" />
                 </div>
             )}
 
@@ -1440,7 +1564,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 `null` significa "não medido" (migration ainda não aplicada), que
                 é diferente de zero; mostrar "0 dias" sem ter medido seria pior
                 que não mostrar nada. */}
-            {!currentBuilding && activeTab === 'analysis' && vacancy && (
+            {!currentBuilding && activeTab === 'analysis' && showDetail && vacancy && (
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
                         <KpiCard shadow={false} size="sm" label="Unidades vagas" value={vacancy.vacantCount} icon={<HomeIcon className="w-4 h-4" />} color="blue" />
@@ -1470,7 +1594,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             {/* Rentabilidade (Fase 2) — o bloco que responde "quanto RENDE", e
                 não "quanto fatura". Só existe com despesa apropriada por imóvel;
                 sem ela o NOI seria a receita com outro nome. */}
-            {!currentBuilding && activeTab === 'analysis' && noi && (
+            {!currentBuilding && activeTab === 'analysis' && showDetail && noi && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
                     <KpiCard shadow={false} size="sm" label="Receita no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.revenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
                     <KpiCard shadow={false} size="sm" label="Despesa no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.expense)} icon={<Briefcase className="w-4 h-4" />} color="orange" />

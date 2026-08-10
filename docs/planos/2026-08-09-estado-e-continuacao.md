@@ -26,8 +26,8 @@ não.
 | E5 parcial — quantitativos | ✅ verificado |
 | RF-122 — de-para para o orçamento | ✅ confirmado no navegador |
 | E4 — exportação, diff, DXF, IFC, cotas | ✅ PDF e DXF confirmados |
-| Planta de fundo calibrada | ✅ **verificada no navegador** — e um espelhamento vertical foi corrigido ali |
-| Medições (formas traçadas) | ✅ núcleo + UI; **falta aplicar a migration 000014** |
+| Planta de fundo calibrada | ✅ **verificada com projeto real** — 0,3–0,6% contra a área do projetista |
+| Medições (formas traçadas) | ✅ núcleo + UI + verificadas no navegador |
 | E1/E2 — Digitalizador automático | ✖ travado no bloqueio semântico do Spike C |
 | E6 — Gerador | ✖ não existe em lugar nenhum como o PRD define |
 
@@ -86,14 +86,50 @@ Conferência esperada: `policies=4 · cegas=0 · com_update=1`.
 porque a antiga poderia estar viva ao lado dela valendo em OR — foi assim que o
 `TEMP_BYPASS` vazou `internal_transactions` para `anon`.
 
-### 2.1.2 Conferir com dado real — o roteiro
+### 2.1.2 Conferir com dado real — ✅ FEITO em 09/08/2026
 
-**Não é reteste.** A conferência de 09/08 mostrou 1 estudo, 0 pranchas, 2
-medições: prancha e medição **nunca coexistiram** no banco. O caminho importar →
-aferir → traçar roda pela primeira vez, e o harness não alcança nada disto —
-ele prova geometria, não ida e volta ao Supabase.
+Rodado pelo usuário no navegador, sobre um PDF de projeto real
+(`PROJETO INICIAL-REGULARIZACAO`), duas páginas como duas pranchas.
 
-Cada passo abaixo existe porque prova uma coisa que nenhum teste prova:
+**A precisão bate com o projeto.** As áreas traçadas foram conferidas contra a
+área que o próprio projetista escreveu na planta:
+
+| forma | medida | a planta declara | erro |
+|---|---|---|---|
+| SALA 301 | 19,38 m² | `a=19.49 m²` | 0,56% |
+| SALA 203 | 17,64 m² | `a=17.58 m²` | 0,34% |
+
+O resíduo é o clique no canto, não a conta.
+
+**As duas aferições concordam entre si.** Cotas diferentes da mesma planta —
+5,52 m e 14,15 m — deram 16,90 e 16,94 mm/px: 0,24% de diferença, e as duas em
+1:100. É a conferência que o `AVISO_RASTER` pede, e ela passou.
+
+**O recorte por prancha funciona:** cada uma mostra só a forma traçada nela, com
+o aviso "1 medição fora da lista".
+
+**RECALIBRAR — a prova que motivou a `000014`:**
+
+| | antes | depois | |
+|---|---|---|---|
+| SALA 203 (recalibrada de 14,15 para 28,30 m) | 17,64 m² | **70,49 m²** | acompanhou |
+| SALA 301 (outra prancha) | 19,38 m² | **19,38 m²** | **não se mexeu** |
+
+Previsto 70,56; a diferença de 0,1% é o arredondamento para milímetro inteiro em
+`regravarPontos`.
+
+**Defeito encontrado e corrigido na hora:** o seletor mostrava
+`PROJETO INICIAL-REGULARIZ…` nas duas entradas. A página, que é o que distingue,
+estava no FIM do nome — exatamente onde a truncagem corta. Passou para a frente
+(`p.3 · PROJETO…`), e o nome completo foi para o `title`.
+
+**Continua não testado:** reimportar o MESMO arquivo (é o que exercita a policy
+de UPDATE da `000015`; páginas diferentes geram objetos diferentes no bucket) e a
+exportação em PDF depois da correção do espelho vertical.
+
+#### O roteiro, para quem precisar repetir
+
+Cada passo existe porque prova uma coisa que nenhum teste prova:
 
 | # | Fazer | O que só isto prova |
 |---|---|---|
@@ -311,14 +347,15 @@ CI: **1119 testes**, `tsc` limpo.
 
 **O que fica pendente, em ordem:**
 
-1. ~~Aplicar a `aplicar_20270905000015`~~ — ✅ feita em 09/08/2026.
-2. **Conferir com dado real no navegador.** Não é reteste: a conferência de
-   09/08 mostrou que **prancha e medição nunca coexistiram no banco**, então o
-   caminho importar → aferir → traçar roda pela PRIMEIRA vez. Roteiro: duas
-   pranchas no mesmo nível, uma cota diferente em cada, uma forma em cada,
-   alternar entre elas e **recalibrar só uma** — é essa última que prova que a
-   aferição de uma não mexe no traçado da outra, que é a razão de a `000014`
-   existir. O harness prova a geometria; ele não prova a ida e volta ao banco.
-3. **Reabrir uma exportação** e conferir a orientação depois da correção do
-   espelho vertical.
-4. Só então o item 2.4 — excluir o Medição Inteligente.
+1. ~~Aplicar `000014` e `000015`~~ — ✅ 09/08/2026.
+2. ~~Conferir com dado real no navegador~~ — ✅ 09/08/2026, ver 2.1.2.
+3. **Reabrir uma exportação em PDF** e conferir a orientação depois da correção
+   do espelho vertical. As confirmações anteriores olharam o canto fechado, não
+   a orientação.
+4. **Reimportar o MESMO arquivo** uma vez — é o único caminho que exercita a
+   policy de UPDATE da `000015`, e páginas diferentes não servem: elas geram
+   objetos diferentes no bucket.
+5. **Renomear prancha** — decisão em aberto. O nome automático (`p.3 · arquivo`)
+   resolve a ambiguidade, mas "Térreo" e "Cobertura" seriam melhores. Ficou fora
+   do escopo de propósito.
+6. Só então o item 2.4 — excluir o Medição Inteligente.

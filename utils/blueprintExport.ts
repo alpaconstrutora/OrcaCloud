@@ -68,6 +68,13 @@ export const FAIXA_COTA_MM = 14;
 
 export interface Enquadramento {
   cabe: boolean;
+  /** Não há geometria publicada — a folha sairia só com o carimbo. */
+  vazio: boolean;
+  /**
+   * Fração da área útil que o desenho ocupa, na dimensão mais apertada. `1` é
+   * um desenho que preenche a folha; `0,02` é um risco no meio do branco.
+   */
+  ocupacao: number;
   /** Tamanho que o desenho ocupa no papel, já na escala pedida. */
   desenhoLarguraMm: number;
   desenhoAlturaMm: number;
@@ -134,6 +141,9 @@ export function enquadrar(
 
   const cabe = desenhoLarguraMm <= utilLarguraMm && desenhoAlturaMm <= utilAlturaMm;
 
+  // A lista está em ordem crescente de denominador, então a PRIMEIRA que cabe é
+  // a que produz o MAIOR desenho possível. Serve para as duas direções: sugerir
+  // quando não cabe, e sugerir quando sobra folha demais.
   const escalaSugerida =
     ESCALAS.find(
       (d) => larguraRealMm / d <= utilLarguraMm && alturaRealMm / d <= utilAlturaMm,
@@ -141,6 +151,20 @@ export function enquadrar(
 
   return {
     cabe,
+    // Sem geometria publicada não há desenho nenhum, e "ocupa 0% da folha"
+    // mandaria a pessoa mexer na escala para resolver um problema que não é de
+    // escala. São dois avisos diferentes.
+    vazio: bb === null,
+    // Quanto da área útil o desenho usa, na dimensão mais apertada das duas.
+    //
+    // Existe porque o painel só sabia reclamar numa direção. Desenho grande
+    // demais recebia aviso e sugestão; desenho pequeno demais saía numa folha
+    // quase branca, calado — e quem exporta não tem como adivinhar que bastava
+    // trocar 1:100 por 1:20.
+    ocupacao:
+      utilLarguraMm > 0 && utilAlturaMm > 0
+        ? Math.max(desenhoLarguraMm / utilLarguraMm, desenhoAlturaMm / utilAlturaMm)
+        : 0,
     desenhoLarguraMm,
     desenhoAlturaMm,
     utilLarguraMm,

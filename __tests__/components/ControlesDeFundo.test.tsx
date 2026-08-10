@@ -150,6 +150,16 @@ describe('ControlesDeFundo · seletor de prancha', () => {
     expect(screen.getByRole('option', { name: 'Cobertura' })).toBeInTheDocument();
   });
 
+  it('O NOME COMPLETO FICA NO TOOLTIP, porque o campo trunca', () => {
+    // Nome de prancha é longo por natureza — vem de nome de arquivo de projeto.
+    // Sem o tooltip, ler o nome inteiro exigiria abrir o menu.
+    montar({ linhas: [A, B], linha: A, underlay: UNDERLAY });
+    expect(screen.getByLabelText(/prancha ativa/i)).toHaveAttribute(
+      'title',
+      expect.stringContaining('Térreo'),
+    );
+  });
+
   it('trocar de prancha chega ao pai', () => {
     const props = montar({ linhas: [A, B], linha: A, underlay: UNDERLAY });
     fireEvent.change(screen.getByLabelText(/prancha ativa/i), {

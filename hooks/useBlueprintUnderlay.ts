@@ -141,9 +141,12 @@ export function useBlueprintUnderlay(
           level_id: levelId,
           storage_path: storagePath,
           nome_arquivo: arquivo.name,
-          // A página entra no nome: um PDF de quatro pranchas geraria quatro
-          // linhas chamadas "planta.pdf", e a lista não distinguiria nenhuma.
-          nome: paginaGravada ? `${arquivo.name} · p.${paginaGravada}` : arquivo.name,
+          // A PÁGINA VEM NA FRENTE. Ela é o que distingue uma prancha da outra
+          // num PDF de quatro páginas, e o seletor da barra trunca o fim do
+          // nome — com a página no fim, as quatro entradas apareciam como
+          // "PROJETO INICIAL-REGULARIZ…", idênticas. O discriminador tem de
+          // ficar do lado que sobrevive à truncagem.
+          nome: paginaGravada ? `p.${paginaGravada} · ${arquivo.name}` : arquivo.name,
           ordem: linhas.length,
           file_sha256: sha256,
           pdf_pagina: paginaGravada,

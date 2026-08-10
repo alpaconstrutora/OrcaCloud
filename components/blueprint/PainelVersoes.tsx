@@ -236,6 +236,33 @@ export default function PainelVersoes({ study }: { study: BlueprintStudy }) {
               </p>
             )}
 
+            {/* SEM GEOMETRIA não é problema de escala, e mandar a pessoa mexer
+                na escala seria mandá-la resolver a coisa errada. Medição
+                traçada à mão NÃO entra na folha: a exportação desenha o
+                modelo — paredes, ambientes, aberturas. */}
+            {enq?.vazio && (
+              <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+                Esta versão não tem geometria publicada — a folha sai só com o
+                carimbo. As medições traçadas sobre a planta de fundo não entram na
+                exportação; elas chegam ao orçamento pela aba Medições.
+              </p>
+            )}
+
+            {/* O AVISO SIMÉTRICO. O painel só sabia reclamar de desenho grande
+                demais; desenho pequeno demais saía numa folha quase branca, sem
+                uma palavra — e o número que resolvia (`escalaSugerida`) já
+                estava calculado, só não era mostrado nesta direção. */}
+            {enq && !enq.vazio && enq.cabe && enq.ocupacao < 0.25 && (
+              <p className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">
+                O desenho vai ocupar {(enq.ocupacao * 100).toFixed(0)}% da folha em 1:
+                {denominador} — ele mede {enq.desenhoLarguraMm.toFixed(0)} ×{' '}
+                {enq.desenhoAlturaMm.toFixed(0)} mm no papel.
+                {enq.escalaSugerida && enq.escalaSugerida !== denominador
+                  ? ` Em 1:${enq.escalaSugerida} ele preenche a folha.`
+                  : ''}
+              </p>
+            )}
+
             {/* O aviso vem ANTES do botão: descobrir que não cabe depois de
                 clicar em exportar é descobrir tarde. */}
             {enq && !enq.cabe && (

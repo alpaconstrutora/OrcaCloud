@@ -70,7 +70,10 @@ export default function ControlesDeFundo({
             value={linha?.id ?? ''}
             onChange={(e) => onSelecionar(e.target.value)}
             aria-label="Prancha ativa"
-            title="Cada prancha tem a própria aferição, e mostra só as medições traçadas nela"
+            // O nome COMPLETO no tooltip: o campo trunca, e nome de prancha é
+            // longo por natureza (nome de arquivo de projeto). Sem isto, a
+            // única forma de ler o nome inteiro seria abrir o menu.
+            title={`${linha?.nome || linha?.nome_arquivo || 'Prancha'} — cada prancha tem a própria aferição, e mostra só as medições traçadas nela`}
             className="max-w-44 rounded-md border border-slate-300 px-2 py-1 text-xs"
           >
             {linhas.map((l) => (

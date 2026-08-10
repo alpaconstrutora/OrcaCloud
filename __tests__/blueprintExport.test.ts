@@ -133,6 +133,40 @@ describe('exportação · a escala é entrada, não resultado', () => {
     expect(noSugerido.cabe, 'a escala sugerida tem que caber de verdade').toBe(true);
   });
 
+  it('AVISA TAMBÉM QUANDO SOBRA FOLHA DEMAIS, não só quando falta', () => {
+    // O painel só sabia reclamar numa direção. Desenho grande demais recebia
+    // aviso e sugestão; desenho pequeno demais saía numa folha quase branca,
+    // calado — e quem exportava não tinha como adivinhar que bastava trocar a
+    // escala. Aconteceu em uso real em 09/08/2026.
+    const minusculo = planta(0.4, 0.3);
+    const enq = enquadrar(minusculo, 100, A4);
+
+    expect(enq.cabe, 'cabe de sobra — o problema é o oposto').toBe(true);
+    expect(enq.ocupacao).toBeLessThan(0.05);
+
+    // A mesma `escalaSugerida` serve nas duas direções: a lista é crescente em
+    // denominador, então a primeira que cabe é a que produz o maior desenho.
+    expect(enq.escalaSugerida).toBe(20);
+    expect(enquadrar(minusculo, 20, A4).ocupacao).toBeGreaterThan(enq.ocupacao);
+  });
+
+  it('desenho que preenche a folha NÃO dispara o aviso', () => {
+    // Sem esta metade o aviso apareceria sempre, e um aviso que aparece sempre
+    // não avisa nada.
+    const enq = enquadrar(planta(18, 24), 100, A4);
+    expect(enq.cabe).toBe(true);
+    expect(enq.ocupacao).toBeGreaterThan(0.9);
+  });
+
+  it('MODELO SEM GEOMETRIA é `vazio`, e não um problema de escala', () => {
+    // Mandar mexer na escala aqui seria mandar resolver a coisa errada: não há
+    // desenho nenhum. Foi o caso real — o levantamento tinha só medições
+    // traçadas à mão, que não entram na folha.
+    const enq = enquadrar(emptyModel(), 100, A4);
+    expect(enq.vazio).toBe(true);
+    expect(enq.ocupacao).toBe(0);
+  });
+
   it('papel maior faz caber a mesma escala', () => {
     const m = planta(20, 14);
     expect(enquadrar(m, 100, A4).cabe).toBe(false);

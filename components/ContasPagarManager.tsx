@@ -209,6 +209,9 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
     const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('contasPagarManagerFilters:status', 'all');
     const [vencDe, setVencDe] = usePersistedState('contasPagarManagerFilters:vencDe', '');
     const [vencAte, setVencAte] = usePersistedState('contasPagarManagerFilters:vencAte', '');
+    // Competência mensal (vencimento) — atalho de 1 campo para o range vencDe/vencAte;
+    // os dois ficam mutuamente exclusivos (mesmo padrão de ContasReceberManager.tsx/BankReconciliation.tsx).
+    const [competencia, setCompetencia] = usePersistedState('contasPagarManagerFilters:competencia', '');
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarManagerColWidths');
     // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
@@ -260,6 +263,31 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
     // Sem vencDe/vencAte nas deps: o período é recorte de cliente nas duas visões,
     // recarregar do servidor a cada mudança de data seria consulta jogada fora.
     useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, visao]);
+
+    /** competência 'YYYY-MM' → { from: 'YYYY-MM-01', to: 'YYYY-MM-<último dia>' } */
+    function competenciaToRange(comp: string): { from: string; to: string } {
+        const [y, m] = comp.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        return { from: `${comp}-01`, to: `${comp}-${String(lastDay).padStart(2, '0')}` };
+    }
+
+    /** Competência e range manual (vencDe/vencAte) são mutuamente exclusivos —
+     *  mesmo padrão de ContasReceberManager.tsx/BankReconciliation.tsx: escolher
+     *  a competência preenche vencDe/vencAte; editar o range manual limpa a competência. */
+    function handleCompetenciaChange(value: string) {
+        setCompetencia(value);
+        if (value) {
+            const { from, to } = competenciaToRange(value);
+            setVencDe(from);
+            setVencAte(to);
+        } else {
+            setVencDe('');
+            setVencAte('');
+        }
+    }
+    function handleVencDeChange(value: string) { setVencDe(value); setCompetencia(''); }
+    function handleVencAteChange(value: string) { setVencAte(value); setCompetencia(''); }
+    function clearVencRange() { setVencDe(''); setVencAte(''); setCompetencia(''); }
 
     async function handleMarcarPago(inv: InvoiceRow) {
         setMarcandoPago(inv.id);
@@ -575,7 +603,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                             sub={`${summary.qtdVenc7} conta${summary.qtdVenc7 !== 1 ? 's' : ''} próximas`}
                             icon={<Clock className="w-5 h-5" />}
                             color="amber"
-                            onClick={() => { setStatusFilter('all'); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); }}
+                            onClick={() => { setStatusFilter('all'); setCompetencia(''); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); }}
                         />
                         <KpiCard
                             label="Em Atraso"
@@ -627,23 +655,37 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                             </div>
 
                             {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
-                            <span className="text-sm font-medium text-gray-400 pl-1">Vencimento</span>
+
+                            {/* Competência mensal — atalho de 1 campo para o range vencDe/vencAte
+                                logo ao lado (mutuamente exclusivo com ele, mesmo padrão de
+                                TributosAPagarManager.tsx/BankReconciliation.tsx). */}
+                            <span className="text-sm font-medium text-gray-400 pl-1">Competência</span>
+                            <input
+                                type="month"
+                                value={competencia}
+                                onChange={e => handleCompetenciaChange(e.target.value)}
+                                className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                            />
+
+                            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                            <span className="text-sm font-medium text-gray-400">Vencimento</span>
                             <input
                                 type="date"
                                 value={vencDe}
-                                onChange={e => setVencDe(e.target.value)}
+                                onChange={e => handleVencDeChange(e.target.value)}
                                 className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             />
                             <span className="text-sm font-medium text-gray-400">até</span>
                             <input
                                 type="date"
                                 value={vencAte}
-                                onChange={e => setVencAte(e.target.value)}
+                                onChange={e => handleVencAteChange(e.target.value)}
                                 className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             />
                             {(vencDe || vencAte) && (
                                 <button
-                                    onClick={() => { setVencDe(''); setVencAte(''); }}
+                                    onClick={clearVencRange}
                                     className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all"
                                     title="Limpar período"
                                 >

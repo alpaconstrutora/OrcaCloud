@@ -521,8 +521,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         </colgroup>
     );
     const [showGenerateModal, setShowGenerateModal] = useState(false);
-    const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
-    const [generateInstallmentCount, setGenerateInstallmentCount] = useState(1);
+    // `generateInstallmentType`/`generateInstallmentCount` saíram em 10/08/2026:
+    // eram controles do gerador da NEGOCIAÇÃO, extinto em 02/08 (série única).
+    // Ficavam na tela sem alimentar nada. Quantidade vem de formData.installments.
     const [generateFirstDueDate, setGenerateFirstDueDate] = useState('');
     /** Rascunho da data em edição na tabela de parcelas do contrato (id + valor).
      *  Cada tecla ali seria um UPDATE no banco — ver a nota na própria célula. */
@@ -565,6 +566,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     /** Contrato (ou aditivo) que vai faturar. Vazio = nenhum carregado ainda. */
     const [generateTarget, setGenerateTarget] = useState<string>('');
     const [generateTargets, setGenerateTargets] = useState<GenerateTarget[]>([]);
+    /** Motivo REAL de a lista de alvos ter vindo vazia por erro de leitura —
+     *  distinguido de "esta negociação ainda não tem contrato". */
+    const [falhaAlvos, setFalhaAlvos] = useState<string | null>(null);
     const alvoSelecionado = generateTargets.find(t => t.id === generateTarget);
     const [generateResult, setGenerateResult] = useState<{ ok: boolean; msg: string } | null>(null);
     // Parcelas que os CONTRATOS do negócio já lançaram em Contas a Receber.
@@ -705,10 +709,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         </div>
     );
 
-    const handleGenerateContract = async () => {
-        if (!formData.id) return;
+    /** Gera o contrato formal a partir da negociação. Devolve o contrato para
+     *  quem precisa seguir usando ele na mesma ação (ver
+     *  handleGerarContratoEParcelas) — o `setLinkedContract` é assíncrono e o
+     *  estado ainda não valeria na linha seguinte. */
+    const handleGenerateContract = async (): Promise<Contract | null> => {
+        if (!formData.id) return null;
         const isRental = formData.type === 'RENTAL';
-        if (!formData.client_id) { setContractError(`Selecione o ${isRental ? 'locatário' : 'comprador'} antes de gerar o contrato.`); return; }
+        if (!formData.client_id) { setContractError(`Selecione o ${isRental ? 'locatário' : 'comprador'} antes de gerar o contrato.`); return null; }
         setGeneratingContract(true);
         setContractError(null);
         try {
@@ -736,9 +744,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 installment_value: formData.installment_value,
             }, isRental ? 'LOCACAO' : 'VENDAS');
             setLinkedContract(contract);
+            return contract;
         } catch (err: any) {
             console.error('[DealModal] Erro ao gerar contrato:', err);
             setContractError(err?.message || 'Erro ao gerar contrato.');
+            return null;
         } finally {
             setGeneratingContract(false);
         }
@@ -1083,9 +1093,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      *  onde abrir em "Negociação" obrigaria o usuário a reescolher o que ele
      *  acabou de escolher no seletor de cima. */
     const handleOpenGenerateModal = (targetId?: string) => {
-        setGenerateInstallmentType('MENSAL');
-        setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
         setGenerateFirstDueDate(formData.payment_due_date || formData.date || new Date().toISOString().split('T')[0]);
+        setFalhaAlvos(null);
         // Sem 'DEAL': a negociação não é alvo de geração. Se o chamador não
         // disse qual contrato, carregarAlvosDeGeracao escolhe o primeiro.
         setGenerateTarget(targetId || '');
@@ -1099,11 +1108,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * período de um ADITIVO de prorrogação. A negociação NÃO é alvo — parcela
      * é do contrato (2026-08-02).
      */
-    const carregarAlvosDeGeracao = async () => {
-        if (!linkedContract) { setGenerateTargets([]); return; }
+    const carregarAlvosDeGeracao = async (base?: Contract): Promise<GenerateTarget[]> => {
+        // `base` é o contrato recém-criado por handleGerarContratoEParcelas:
+        // `linkedContract` só existiria no próximo render, e a ação não pode
+        // esperar por isso.
+        const raiz = base ?? linkedContract;
+        setFalhaAlvos(null);
+        if (!raiz) { setGenerateTargets([]); return []; }
         try {
-            const cadeia = await contractRenewalService.getRenewalChain(linkedContract.id);
-            const contratos = cadeia.length > 0 ? cadeia : [linkedContract];
+            const cadeia = await contractRenewalService.getRenewalChain(raiz.id);
+            const contratos = cadeia.length > 0 ? cadeia : [raiz];
             const listas = await Promise.all(contratos.map(c => contractService.listAddendums(c.id)));
 
             const alvos: GenerateTarget[] = contratos.map(c => ({
@@ -1140,9 +1154,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // existir no select, sem isto `alvoSelecionado` ficava indefinido e
             // o botão "Gerar no contrato" travava mesmo com contrato gerado.
             setGenerateTarget(prev => (alvos.some(a => a.id === prev) ? prev : (alvos[0]?.id ?? '')));
+            return alvos;
         } catch (e) {
             console.error('[DealModal] Erro ao carregar alvos de geração:', e);
             setGenerateTargets([]);
+            // Sem isto o modal culpava o usuário ("gere o contrato primeiro")
+            // por uma falha de leitura — o contrato podia existir e a mensagem
+            // mandava criar outro. O erro real só aparecia no console.
+            setFalhaAlvos(e instanceof Error ? e.message : 'Erro ao ler o contrato desta negociação.');
+            return [];
         }
     };
 
@@ -1173,6 +1193,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      */
     const handleGenerateForContract = async (target: GenerateTarget) => {
         const { amount, maxCount } = geracaoContrato(target);
+
+        // Sem fim de vigência E sem Nº de Parcelas a série não tem onde parar:
+        // o gerador devolveria zero vencimentos e um erro genérico de cadência.
+        // Dizer qual dos dois campos falta evita a caça ao tesouro.
+        if (!target.toDate && !maxCount) {
+            setGenerateResult({
+                ok: false,
+                msg: 'O contrato não tem data de fim de vigência e o "Nº de Parcelas" está vazio — sem um dos dois a série não tem onde terminar. '
+                    + 'Preencha o Nº de Parcelas na aba Forma de Pagamento, ou a data de fim na aba Contrato.',
+            });
+            return;
+        }
 
         // Regerar refaz a série. Como isso apaga as parcelas ainda PREVISTAS
         // (perdendo descontos e ajustes manuais nelas), pergunta antes — §14.
@@ -1256,6 +1288,63 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         } finally {
             setLoading(false);
         }
+    };
+
+    /**
+     * Por que "Gerar contrato e parcelas" não pode rodar. `null` = pode.
+     * São pré-requisitos de DADO da negociação — nada a ver com status,
+     * assinatura ou emissão do contrato, que não gateiam geração desde
+     * 05/08/2026 (ver generateRecurringInstallmentsForPeriod).
+     */
+    const motivoSemContrato = !canGenerateContract
+        ? 'Só negociação de Locação ou de Venda gera contrato.'
+        : !formData.id
+            ? 'Salve a negociação antes de gerar o contrato.'
+            : !formData.client_id
+                ? `Selecione o ${formData.type === 'RENTAL' ? 'locatário' : 'comprador'} na aba Dados antes de gerar.`
+                : null;
+
+    /**
+     * Não ter contrato deixou de ser bloqueio (10/08/2026). A parcela continua
+     * sendo do CONTRATO — série única, ver project_deal_installments_serie_unica
+     * — mas o contrato passa a ser criado por esta mesma ação, em vez de o
+     * usuário ter que ir na aba "Contrato e Assinatura" antes e voltar. O modal
+     * dizia "Gere o contrato primeiro" e não oferecia como.
+     */
+    const handleGerarContratoEParcelas = async () => {
+        if (motivoSemContrato) { setGenerateResult({ ok: false, msg: motivoSemContrato }); return; }
+        setGenerateResult(null);
+        const contrato = await handleGenerateContract();
+        if (!contrato) {
+            // O motivo foi para `contractError`, mas ler essa variável aqui daria
+            // o valor do render anterior (closure) — apontar onde ele aparece é
+            // mais honesto do que exibir um valor velho.
+            setGenerateResult({ ok: false, msg: 'Não foi possível gerar o contrato desta negociação — o motivo está na aba "Contrato e Assinatura".' });
+            return;
+        }
+        const alvos = await carregarAlvosDeGeracao(contrato);
+
+        // VENDA: o contrato não é recorrente, então não há série a gerar por
+        // período — as parcelas saem do plano de pagamento do próprio contrato,
+        // lançadas por createContract. Chamar o gerador recorrente aqui daria
+        // "só se aplica a contrato recorrente" logo depois de criar o contrato.
+        if (!contrato.is_recurring) {
+            const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
+            setGenerateResult({
+                ok: lancadas.length > 0,
+                msg: lancadas.length > 0
+                    ? `Contrato ${contrato.number} criado com ${lancadas.length} parcela(s) em Contas a Receber, pelo plano de pagamento do contrato. Elas aparecem nesta mesma tabela.`
+                    : `Contrato ${contrato.number} criado, mas sem parcelas: contrato de venda cobra pelo plano de pagamento do contrato, que está vazio. Preencha-o na aba Forma de Pagamento.`,
+            });
+            return;
+        }
+
+        const alvo = alvos.find(a => a.id === contrato.id) ?? alvos[0];
+        if (!alvo) {
+            setGenerateResult({ ok: false, msg: `Contrato ${contrato.number} criado, mas não foi possível lê-lo de volta para gerar as parcelas. Tente "Gerar parcelas" de novo.` });
+            return;
+        }
+        await handleGenerateForContract(alvo);
     };
 
     /* A NEGOCIAÇÃO NÃO GERA PARCELA (2026-08-02, ordem do usuário).
@@ -3178,69 +3267,72 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     );
                                 })()}
 
-                                {!alvoSelecionado && (
-                                <>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Nº de Parcelas</label>
-                                        <input
-                                            type="number"
-                                            min="1" max="120"
-                                            value={generateInstallmentCount}
-                                            onChange={(e) => setGenerateInstallmentCount(parseInt(e.target.value) || 1)}
-                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Data do 1º Pagamento</label>
-                                        <input
-                                            type="date"
-                                            value={generateFirstDueDate}
-                                            onChange={(e) => setGenerateFirstDueDate(e.target.value)}
-                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-gray-400 -mt-2">
-                                    Data sugerida pelo sistema (o mesmo campo "Data do 1º Pagamento" da aba) — troque se quiser ancorar a série em outra data.
-                                </p>
-
-                                <div>
-                                    <label className="text-xs font-semibold text-slate-500 mb-1 block">Tipo de Pagamento</label>
-                                    <select
-                                        value={generateInstallmentType}
-                                        onChange={(e) => setGenerateInstallmentType(e.target.value as NonNullable<PaymentInstallment['installmentType']>)}
-                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    >
-                                        {generatorTypes.map(t => (
-                                            <option key={t.code || t.id} value={t.code}>{t.name}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        Define o espaçamento entre as parcelas geradas (ex: trimestral = 1 a cada 3 meses).
-                                        Um Plano de Pagamento pode combinar vários tipos — gerar um tipo novo não apaga os
-                                        outros já existentes.
-                                    </p>
-                                </div>
-
-                                {(() => {
-                                    const existing = formData.custom_installments || [];
-                                    const sameTypeCount = existing.filter(i => i.installmentType === generateInstallmentType).length;
-                                    const otherTypesCount = existing.filter(i => i.installmentType !== 'AVULSA' && i.installmentType !== generateInstallmentType).length;
-                                    if (sameTypeCount === 0 && otherTypesCount === 0) return null;
+                                {/* SEM CONTRATO — deixou de ser beco sem saída (10/08/2026).
+                                    Os campos que ficavam aqui (Nº de Parcelas, Tipo de
+                                    Pagamento) eram do gerador da NEGOCIAÇÃO, extinto em
+                                    02/08: não alimentavam mais nada, e o botão do rodapé
+                                    ficava desabilitado mandando "gerar o contrato primeiro"
+                                    sem oferecer como. Agora o rodapé cria o contrato e
+                                    emenda as parcelas, e este painel mostra o que vai ser
+                                    criado. */}
+                                {!alvoSelecionado && (() => {
+                                    const mensal = Number(formData.installment_value) || 0;
+                                    const parcelas = Math.floor(Number(formData.installments) || 0);
+                                    const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
                                     return (
-                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-[6px] text-xs text-amber-800 space-y-1">
-                                            {sameTypeCount > 0 && (
-                                                <p>Substitui as {sameTypeCount} parcela(s) de "{typeLabel(generateInstallmentType)}" atuais — ajustes manuais nelas (descontos, valores editados, forma de pagamento e observações) serão perdidos.</p>
+                                        <div className="space-y-4">
+                                            {falhaAlvos ? (
+                                                <div className="p-3 bg-amber-50 border border-amber-100 rounded-[6px] text-xs text-amber-800">
+                                                    Não foi possível ler o contrato desta negociação: {falhaAlvos} Feche e reabra a
+                                                    negociação; se persistir, o contrato precisa ser conferido em Comercial › Contratos
+                                                    (gerar outro aqui poderia duplicar a cobrança).
+                                                </div>
+                                            ) : (
+                                                <div className="p-3 bg-blue-50 border border-blue-100 rounded-[6px] text-xs text-blue-800">
+                                                    Esta negociação ainda não tem contrato. A parcela é sempre do contrato, então
+                                                    "Gerar contrato e parcelas" cria o contrato de
+                                                    {formData.type === 'RENTAL' ? ' locação' : ' venda'} a partir desta negociação e,
+                                                    na sequência, lança a série em Contas a Receber — sem passar pela aba Contrato.
+                                                </div>
                                             )}
-                                            {otherTypesCount > 0 && (
-                                                <p>As {otherTypesCount} parcela(s) de outro(s) tipo(s) são mantidas (só o valor é recalculado para a soma continuar batendo com o Valor Total).</p>
+
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {[
+                                                    { label: 'Valor mensal', value: mensal > 0 ? fmt(mensal) : '—' },
+                                                    { label: 'Nº de parcelas', value: parcelas > 0 ? String(parcelas) : 'Toda a vigência' },
+                                                    { label: 'Valor total', value: mensal > 0 && parcelas > 0 ? fmt(mensal * parcelas) : '—' },
+                                                ].map(c => (
+                                                    <div key={c.label} className="p-3 bg-gray-50 rounded-[6px] border border-gray-100">
+                                                        <p className="text-xs font-semibold text-slate-500">{c.label}</p>
+                                                        <p className="text-sm font-medium text-gray-800 mt-0.5">{c.value}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-gray-400 -mt-2">
+                                                Valores da aba Forma de Pagamento — altere lá para gerar diferente.
+                                            </p>
+
+                                            <div>
+                                                <label className="text-xs font-semibold text-slate-500 mb-1 block">Data do 1º Pagamento</label>
+                                                <input
+                                                    type="date"
+                                                    value={generateFirstDueDate}
+                                                    onChange={(e) => setGenerateFirstDueDate(e.target.value)}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                                />
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    Ancora a série: a 1ª parcela cai exatamente neste dia, e o dia do mês das seguintes passa a ser o dela.
+                                                </p>
+                                            </div>
+
+                                            {motivoSemContrato && (
+                                                <p className="text-xs text-red-600 flex items-center gap-1">
+                                                    <AlertCircle className="w-3 h-3 shrink-0" /> {motivoSemContrato}
+                                                </p>
                                             )}
                                         </div>
                                     );
                                 })()}
-                                </>
-                                )}
                             </div>
 
                             {generateResult && (
@@ -3264,15 +3356,36 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 >
                                     {generateResult?.ok ? 'Fechar' : 'Cancelar'}
                                 </button>
-                                <button
-                                    type="button"
-                                    disabled={loading || !alvoSelecionado}
-                                    title={alvoSelecionado ? undefined : 'Gere o contrato primeiro — parcela é do contrato, não da negociação.'}
-                                    onClick={() => alvoSelecionado && handleGenerateForContract(alvoSelecionado)}
-                                    className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 ${loading || !alvoSelecionado ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-                                >
-                                    {loading ? 'Gerando...' : 'Gerar no contrato'}
-                                </button>
+                                {/* Sem contrato o botão não bloqueia mais: ele CRIA o contrato
+                                    e gera as parcelas na sequência. Só fica desabilitado por
+                                    falta de dado da negociação (motivoSemContrato) ou por
+                                    falha de leitura do contrato existente (falhaAlvos) — aí
+                                    gerar outro duplicaria a cobrança. */}
+                                {(() => {
+                                    const ocupado = loading || generatingContract;
+                                    const travado = alvoSelecionado
+                                        ? null
+                                        : falhaAlvos
+                                            ? 'Não foi possível ler o contrato desta negociação — confira em Comercial › Contratos antes de gerar.'
+                                            : motivoSemContrato;
+                                    const desabilitado = ocupado || !!travado;
+                                    const rotulo = ocupado
+                                        ? (generatingContract ? 'Gerando contrato...' : 'Gerando...')
+                                        : alvoSelecionado ? 'Gerar no contrato' : 'Gerar contrato e parcelas';
+                                    return (
+                                        <button
+                                            type="button"
+                                            disabled={desabilitado}
+                                            title={travado ?? undefined}
+                                            onClick={() => (alvoSelecionado
+                                                ? handleGenerateForContract(alvoSelecionado)
+                                                : handleGerarContratoEParcelas())}
+                                            className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-white transition-all active:scale-95 ${desabilitado ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                        >
+                                            {rotulo}
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>

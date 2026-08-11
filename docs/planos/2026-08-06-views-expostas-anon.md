@@ -109,7 +109,29 @@ lote com as outras.
 | **Leitor único, agregação simples** | `pipeline_health`, `vw_commercial_tax_payables`, `vw_communication_read_rate`, `vw_company_consolidated`, `vw_esocial_status_panel`, `vw_incentive_event_months`, `vw_journal_entries`, `tts_apuracao_view` | abrir a tela de cada uma e conferir que o número **bate com antes**, não só que aparece |
 | **Agregação multi-tabela** (mais delicado) | `vw_fpa_budget_vs_actual`, `vw_fpa_cashflow_projection`, `vw_hr_*` (3), `vw_project_cost_comparison`, `vw_team_hourly_cost` | anotar o total ANTES, aplicar, conferir que é idêntico. Diferença = RLS de alguma tabela base cortando demais |
 
-### Fase 3 — impedir a reincidência
+### Fase 3 — impedir a reincidência ✅ (2026-08-11)
+
+⚠️ **Feita como TESTE, não como shell script — divergindo do desenho abaixo, de
+propósito.** O plano previa `scripts/check-view-security.sh` + passo no
+`ci.yml`. Esse formato **já falhou neste repositório**: os `check-*.sh`
+dependiam de alguém lembrar de rodar, e foi exatamente por isso que a trava do
+seletor de organização virou teste (ver o histórico em CLAUDE.md REGRA #5).
+`npx vitest run` já é passo do CI, então a checagem roda sozinha.
+
+| Arquivo | O que faz | Como sei que terminou |
+|---|---|---|
+| `__tests__/viewSecurityGuard.test.ts` (novo) | Varre `supabase/migrations/**/*.sql`; falha se migration **fora do BASELINE** criar view sem `security_invoker = on` e sem `REVOKE ... FROM anon` nominal. Ignora comentários antes de casar `CREATE VIEW` | **Provado nos dois sentidos**: criei uma migration com view desprotegida → falhou apontando a view; troquei pelo formato correto → passou. Suíte completa 1166 passando |
+
+- **BASELINE: 25 arquivos** — a dívida de higiene fechada em 2026-08-11. É
+  catraca: só anda para baixo, e o segundo teste falha se uma entrada deixar de
+  violar sem ser removida.
+- **ALLOWLIST: `geography_columns`, `geometry_columns`** — catálogo do PostGIS,
+  exceção permanente (REVOKE pode quebrar a extensão).
+- As views do baseline **já estão fechadas no banco** (`aplicar_20270903000002`
+  e `...03`). O baseline registra que o ARQUIVO original não trazia a proteção —
+  dívida de higiene, não exposição viva.
+
+### Fase 3 — desenho original (mantido como registro)
 
 Toda view nova nasce com `security_invoker = off` e com `GRANT` a `anon`: o
 default do Postgres e o default do Supabase, respectivamente. Sem trava, isto
@@ -184,7 +206,7 @@ Migration original abaixo, mantida como registro do que foi medido antes:
       As outras 6 com dados não mudam (uma organização só), e 9 estão vazias.
       **Nenhuma zera** — foi essa medição que autorizou aplicar as 24 de uma
       vez em vez de ir view a view.
-- [ ] Fase 3 — trava no CI
+- [x] **Fase 3 — CONCLUÍDA (2026-08-11).** Trava como TESTE (`__tests__/viewSecurityGuard.test.ts`), não shell script — o formato que já falhou aqui. Baseline de 25 arquivos, provada nos dois sentidos.
 
 ## Verificação
 

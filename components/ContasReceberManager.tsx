@@ -688,6 +688,9 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('contasReceberManagerFilters:status', 'all');
     const [dueFrom, setDueFrom]         = usePersistedState('contasReceberManagerFilters:dueFrom', '');
     const [dueTo, setDueTo]             = usePersistedState('contasReceberManagerFilters:dueTo', '');
+    // Competência mensal (vencimento) — atalho de 1 campo para o range dueFrom/dueTo;
+    // os dois ficam mutuamente exclusivos (mesmo padrão de BankReconciliation.tsx).
+    const [competencia, setCompetencia] = usePersistedState('contasReceberManagerFilters:competencia', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [showInad, setShowInad]        = useState(false);
     // storageKey explícito — antes usava o default 'tableColumns' e colidia com
@@ -773,6 +776,31 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     }, [effectiveOrgId, search, statusFilter, dueFrom, dueTo]);
 
     useEffect(() => { load(); }, [load]);
+
+    /** competência 'YYYY-MM' → { from: 'YYYY-MM-01', to: 'YYYY-MM-<último dia>' } */
+    function competenciaToRange(comp: string): { from: string; to: string } {
+        const [y, m] = comp.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        return { from: `${comp}-01`, to: `${comp}-${String(lastDay).padStart(2, '0')}` };
+    }
+
+    /** Competência e range manual (painel "Filtros") são mutuamente exclusivos —
+     *  mesmo padrão de BankReconciliation.tsx: escolher a competência preenche
+     *  dueFrom/dueTo; editar o range manual limpa a competência. */
+    function handleCompetenciaChange(value: string) {
+        setCompetencia(value);
+        if (value) {
+            const { from, to } = competenciaToRange(value);
+            setDueFrom(from);
+            setDueTo(to);
+        } else {
+            setDueFrom('');
+            setDueTo('');
+        }
+    }
+    function handleDueFromChange(value: string) { setDueFrom(value); setCompetencia(''); }
+    function handleDueToChange(value: string) { setDueTo(value); setCompetencia(''); }
+    function clearDueRange() { setDueFrom(''); setDueTo(''); setCompetencia(''); }
 
     async function handleBaixa(receivable: Receivable) {
         const ok = await confirm({
@@ -1122,18 +1150,40 @@ export default function ContasReceberManager({ organizationId, organizations }: 
 
                     {showFilters && (
                         <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-4 flex items-center gap-3 flex-wrap">
+                            {/* Competência mensal — atalho de 1 campo para o range de vencimento
+                                (mutuamente exclusivo com o range manual ao lado, mesmo padrão de
+                                BankReconciliation.tsx). */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 font-semibold">Competência</span>
+                                <input
+                                    type="month"
+                                    value={competencia}
+                                    onChange={e => handleCompetenciaChange(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all"
+                                />
+                                {competencia && (
+                                    <button onClick={() => handleCompetenciaChange('')}
+                                        className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-[4px] p-1 transition-all"
+                                        title="Limpar competência">
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="w-px h-6 bg-gray-200 shrink-0"></div>
+
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-gray-500 font-semibold">Venc. de</span>
-                                <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
+                                <input type="date" value={dueFrom} onChange={e => handleDueFromChange(e.target.value)}
                                     className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-gray-500 font-semibold">até</span>
-                                <input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)}
+                                <input type="date" value={dueTo} onChange={e => handleDueToChange(e.target.value)}
                                     className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
                             </div>
                             {(dueFrom || dueTo) && (
-                                <button onClick={() => { setDueFrom(''); setDueTo(''); }}
+                                <button onClick={clearDueRange}
                                     className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">
                                     <X className="w-3 h-3" /> Limpar datas
                                 </button>

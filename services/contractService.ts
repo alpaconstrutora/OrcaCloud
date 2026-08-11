@@ -770,6 +770,49 @@ async function syncRecurringToFinance(contract: Contract) {
 }
 
 /**
+ * Faz o valor do CONTRATO acompanhar o aluguel que acabou de ser gerado.
+ *
+ * `contracts.original_value` de uma locação é o valor da PARCELA, gravado uma
+ * única vez por `createFromDeal` — e quando a negociação ainda não tinha
+ * `installment_value`, ele saiu de `value ÷ installments`. Depois que alguém
+ * preencheu o valor mensal na aba Forma de Pagamento, nada propagava a
+ * correção: em 11/08/2026 o CL-2026-005 dizia 38,88 (= 933 ÷ 24) enquanto
+ * cobrava 1.100,00 por mês, e o CL-2026-004 dizia 4.346,00 cobrando 3.000,00.
+ * Como `current_value` é a BASE DO REAJUSTE, a fila de reajuste reajustaria
+ * 38,88 — as parcelas já lançadas não mudam, mas o aluguel vigente do contrato
+ * (e toda renovação/aditivo que parte dele) nasce errado.
+ *
+ * Só roda na geração por CLIQUE, e nunca em contrato com reajuste já aplicado:
+ *   • `current_value != original_value` = alguém já reajustou. A partir daí a
+ *     negociação deixou de ser a autoridade sobre o aluguel, e sobrescrever
+ *     apagaria o reajuste acumulado — mesmo motivo pelo qual `updateContract`
+ *     não recalcula `current_value` de contrato recorrente.
+ *   • Falha aqui não derruba a geração: as parcelas, que são o que o cliente
+ *     paga, já estão lançadas.
+ */
+async function syncContractValueToGeneratedAmount(
+    contract: Contract, amount: number,
+): Promise<{ from: number; to: number } | undefined> {
+    if (contract.domain !== 'LOCACAO') return undefined;
+    const original = Number(contract.original_value ?? 0);
+    const vigente = Number(contract.current_value ?? contract.original_value ?? 0);
+    if (Math.abs(vigente - original) > 0.01) return undefined;   // já reajustado
+    if (Math.abs(original - amount) < 0.01) return undefined;    // já bate
+    try {
+        const { error } = await supabase
+            .from('contracts')
+            .update({ original_value: amount, current_value: amount })
+            .eq('id', contract.id);
+        if (error) throw error;
+        console.log(`[CONTRACTS] Valor do contrato ${contract.number || contract.id} atualizado de ${original} para ${amount} pela geração de parcelas.`);
+        return { from: original, to: amount };
+    } catch (e) {
+        console.error('[CONTRACTS] Falha ao atualizar o valor do contrato após a geração:', e);
+        return undefined;
+    }
+}
+
+/**
  * Gera parcelas de um contrato recorrente APENAS na janela [fromDate, toDate],
  * com o valor informado explicitamente.
  *
@@ -805,7 +848,11 @@ export async function generateRecurringInstallmentsForPeriod(
          *  ancorada em start_date + due_day (regressão relatada em 02/08/2026). */
         firstDueDate?: string;
     },
-): Promise<{ inserted: number; skipped: number; removed: number; dueDates: string[] }> {
+): Promise<{
+    inserted: number; skipped: number; removed: number; dueDates: string[];
+    /** Preenchido quando o valor do contrato foi corrigido para o da geração. */
+    contractValueUpdated?: { from: number; to: number };
+}> {
     const { fromDate, toDate, amount, maxCount, replaceExisting } = opts;
     const cycle = opts.cycleOverride || contract.billing_cycle;
     if (!contract.is_recurring) throw new Error('Geração por período só se aplica a contrato recorrente.');
@@ -883,7 +930,13 @@ export async function generateRecurringInstallmentsForPeriod(
                 notes: `[contract:${contract.id}] Gerado pela prorrogação de vigência`,
             })));
         }
-        return { inserted: novos.length, skipped: dueDates.length - novos.length, removed: 0, dueDates };
+        const valorCorrigido = novos.length > 0
+            ? await syncContractValueToGeneratedAmount(contract, amount)
+            : undefined;
+        return {
+            inserted: novos.length, skipped: dueDates.length - novos.length, removed: 0, dueDates,
+            contractValueUpdated: valorCorrigido,
+        };
     }
 
     if (!contract.organization_id) {
@@ -960,7 +1013,11 @@ export async function generateRecurringInstallmentsForPeriod(
     if (error) throw error;
 
     console.log(`[CONTRACTS] Prorrogação: ${novos.length} parcela(s) geradas para ${contract.number} (${fromDate} → ${toDate})`);
-    return { inserted: novos.length, skipped: dueDates.length - novos.length, removed, dueDates };
+    const valorCorrigido = await syncContractValueToGeneratedAmount(contract, amount);
+    return {
+        inserted: novos.length, skipped: dueDates.length - novos.length, removed, dueDates,
+        contractValueUpdated: valorCorrigido,
+    };
 }
 
 // Generate a single financial entry for a À Vista (non-parcelado, non-recurring) contract.

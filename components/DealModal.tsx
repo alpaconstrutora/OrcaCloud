@@ -1257,13 +1257,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // repetir a janela pedida aqui mentiria sobre o que foi lançado.
             const ini = r.dueDates[0] ?? target.fromDate;
             const fim = r.dueDates[r.dueDates.length - 1] ?? target.toDate;
+            // Escrever no valor do contrato sem avisar é o tipo de coisa que vira
+            // surpresa depois — ver o plano 2026-08-11-valor-do-contrato-*.
+            const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+            const avisoValor = r.contractValueUpdated
+                ? ` Valor do contrato atualizado de ${fmtBRL(r.contractValueUpdated.from)} para ${fmtBRL(r.contractValueUpdated.to)} — é ele que serve de base para o reajuste.`
+                : '';
             setGenerateResult(r.inserted > 0
                 ? {
                     ok: true,
                     msg: `${r.inserted} parcela(s) geradas em Contas a Receber para ${target.label}, de ${fmtDateBR(ini)} a ${fmtDateBR(fim)}.`
                         + (r.removed > 0 ? ` ${r.removed} parcela(s) previstas foram refeitas.` : '')
                         + (r.skipped > 0 ? ` ${r.skipped} já paga(s)/conciliada(s) foram mantidas.` : '')
-                        + ' Elas aparecem nesta mesma tabela, com Origem = ' + target.label + '.',
+                        + ' Elas aparecem nesta mesma tabela, com Origem = ' + target.label + '.'
+                        + avisoValor,
                 }
                 : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(ini)} a ${fmtDateBR(fim)}) já estão pagas ou conciliadas e não são refeitas.` });
             // A tabela na tela ficou desatualizada depois do refazimento.

@@ -37,7 +37,7 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
             <button
                 onClick={onClick}
                 type="button"
-                className={`flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-blue-200 transition-all ${onClick ? 'hover:bg-blue-200 hover:border-blue-300 active:scale-95 cursor-pointer' : ''}`}
+                className={`flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-[6px] font-semibold border border-blue-200 transition-all ${onClick ? 'hover:bg-blue-200 hover:border-blue-300 active:scale-95 cursor-pointer' : ''}`}
                 title={onClick ? "Ver detalhes da composi莽茫o" : undefined}
             >
                 <Layers className="w-3 h-3" />
@@ -47,14 +47,14 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
     }
     if (type === SinapiType.SERVICE) {
         return (
-            <span className="flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-purple-200">
+            <span className="flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-1.5 py-0.5 rounded-[6px] font-semibold border border-purple-200">
                 <Loader2 className="w-3 h-3" />
                 SERVI脟O
             </span>
         );
     }
     return (
-        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded font-semibold border border-amber-200">
+        <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-xs px-1.5 py-0.5 rounded-[6px] font-semibold border border-amber-200">
             <Box className="w-3 h-3" />
             INSUMO
         </span>
@@ -159,11 +159,11 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                     {subIdDisplay}{(itemIndex + 1).toString().padStart(2, '0')}
                 </div>
                 <div className="text-xs text-center flex justify-center">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${item.sinapiItem?.source === 'Pr贸pria' || item.sinapiItem?.isOverride ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                    <span className={`px-1.5 py-0.5 rounded-[6px] text-[9px] font-bold border ${item.sinapiItem?.source === 'Pr贸pria' || item.sinapiItem?.isOverride ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                         {item.sinapiItem?.source === 'Pr贸pria' || item.sinapiItem?.isOverride ? 'PR脫PRIA' : 'SINAPI'}
                     </span>
                 </div>
-                <div className="text-xs font-mono text-gray-600 bg-gray-50 px-1 py-0.5 rounded border border-gray-100 text-center">{item.sinapiItem?.code || '---'}</div>
+                <div className="text-xs font-mono text-gray-600 bg-gray-50 px-1 py-0.5 rounded-[6px] border border-gray-100 text-center">{item.sinapiItem?.code || '---'}</div>
                 <div className="text-sm text-gray-600 leading-tight">
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -185,13 +185,13 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         value={item.quantity}
                         onChange={(e) => onUpdateQuantity(item.id, Number(e.target.value))}
                         disabled={isLocked}
-                        className={`w-full text-center text-sm border rounded py-0.5 focus:ring-1 focus:ring-blue-500 ${isLocked ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
+                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-1 focus:ring-blue-500 ${isLocked ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
                 </div>
                 <div className="text-center text-form-input text-gray-500">{item.sinapiItem?.unit || '---'}</div>
 
                 <div className="text-center text-form-label text-gray-600">
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <span className="text-xs text-gray-400">R$</span>
                         <input
                             type="number"
@@ -214,7 +214,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </div>
 
                 <div className="text-center text-form-label text-gray-600">
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded px-1 transition-colors ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <input
                             type="number"
                             step="0.1"
@@ -237,14 +237,14 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
 
                 <div className="flex justify-end items-center relative group/total">
                     <span className="text-sm font-black text-gray-900">R$ {((item.quantity * (item.sinapiItem?.price || 0)) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    <div className="absolute right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 shadow-sm rounded border border-gray-100 px-1 z-10">
+                    <div className="absolute right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 shadow-sm rounded-[6px] border border-gray-100 px-1 z-10">
                         {onMoveItem && (
                             <div className="flex flex-col border-r border-gray-100 pr-1 mr-0.5">
                                 {!isFirst && (
                                     <button
                                         type="button"
                                         onClick={(e) => onMoveItem(e, item.id, 'UP')}
-                                        className="text-gray-400 hover:text-blue-600 p-0.5 hover:bg-blue-50 rounded transition-all"
+                                        className="text-gray-400 hover:text-blue-600 p-0.5 hover:bg-blue-50 rounded-[6px] transition-all"
                                         title="Mover para Cima"
                                     >
                                         <ArrowUp className="w-3 h-3" />
@@ -254,7 +254,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                     <button
                                         type="button"
                                         onClick={(e) => onMoveItem(e, item.id, 'DOWN')}
-                                        className="text-gray-400 hover:text-blue-600 p-0.5 hover:bg-blue-50 rounded transition-all"
+                                        className="text-gray-400 hover:text-blue-600 p-0.5 hover:bg-blue-50 rounded-[6px] transition-all"
                                         title="Mover para Baixo"
                                     >
                                         <ArrowDown className="w-3 h-3" />
@@ -263,45 +263,29 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             </div>
                         )}
                         <button
-
                             type="button"
-
                             onClick={(e) => {
-
                                 e.stopPropagation();
-
                                 onOpenDetails?.(item);
-
                             }}
-
-                            className={`p-1 rounded transition-all ${hasCalculationMemory ? 'text-emerald-600 hover:bg-emerald-50' : 'text-amber-500 hover:bg-amber-50'}`}
-
-                            title={hasCalculationMemory ? "Editar mem髍ia de c醠culo" : "Item sem mem髍ia de c醠culo"}
-
+                            className={`p-1 rounded-[6px] transition-all ${hasCalculationMemory ? 'text-emerald-600 hover:bg-emerald-50' : 'text-amber-500 hover:bg-amber-50'}`}
+                            title={hasCalculationMemory ? "Editar mem贸ria de c谩lculo" : "Item sem mem贸ria de c谩lculo"}
                         >
-
                             <ClipboardList className="w-3.5 h-3.5" />
-
                         </button>
 
                         <button
-
                             onClick={(e) => onDuplicateItem(e, item.id)}
-
-                            className="text-gray-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-all"
-
+                            className="text-gray-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded-[6px] transition-all"
                             title="Duplicar Item"
-
                         >
-
                             <Copy className="w-3.5 h-3.5" />
-
                         </button>
                         <button
                             type="button"
                             onClick={handleSave}
                             disabled={isSavingCustom || isLocked}
-                            className={`p-1 rounded transition-all ${isSavingCustom || isLocked ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                            className={`p-1 rounded-[6px] transition-all ${isSavingCustom || isLocked ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
                             title="Salvar na Base Pr贸pria"
                         >
                             {isSavingCustom ? <Loader2 className="w-3 h-4 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
@@ -310,7 +294,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             type="button"
                             onClick={(e) => onDeleteItem(e, item.id)}
                             disabled={isLocked}
-                            className={`p-1 rounded transition-all ${isLocked ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                            className={`p-1 rounded-[6px] transition-all ${isLocked ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
                             title="Excluir item"
                         >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -320,9 +304,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
 
                 {showNatureBreakdown && natureBreakdown && (
                     <>
-                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border-y border-r border-l-2 border-blue-100/60 font-bold ml-2 shadow-sm">{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded-[6px] px-1 border-y border-r border-l-2 border-blue-100/60 font-bold ml-2 shadow-sm">{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                     </>
                 )}
             </div>
@@ -352,11 +336,11 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             const displaySubtotal = item.quantity * (comp.quantity || 0) * displayPrice;
 
                             return (
-                                <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-xs text-gray-600 hover:bg-gray-100 py-1.5 px-4 rounded">
+                                <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-xs text-gray-600 hover:bg-gray-100 py-1.5 px-4 rounded-[6px]">
                                     <div className="col-span-1"></div>
                                     <div className="col-span-1 text-center font-mono text-xs text-gray-500 text-center">{comp.code}</div>
                                     <div className="col-span-4 flex items-center gap-2">
-                                        <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                        <span className={`shrink-0 px-1.5 py-0.5 rounded-[6px] text-[9px] font-semibold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                             {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
                                         </span>
                                         <span className="leading-tight text-xs" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
@@ -367,12 +351,12 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                             step="0.0001"
                                             value={comp.quantity || 0}
                                             onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
-                                            className="w-full text-center outline-none bg-white border border-gray-200 rounded py-0.5 text-xs focus:ring-1 focus:ring-blue-400"
+                                            className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-xs focus:ring-1 focus:ring-blue-400"
                                         />
                                     </div>
                                     <div className="col-span-1 text-center text-gray-400 text-xs">{comp.unit || '-'}</div>
                                     <div className="col-span-1 text-center">
-                                        <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded px-1 focus-within:ring-1 focus-within:ring-blue-400">
+                                        <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
                                             <span className="text-[9px] text-gray-400">R$</span>
                                             <input
                                                 type="number"

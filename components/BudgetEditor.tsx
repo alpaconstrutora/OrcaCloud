@@ -1,7 +1,8 @@
 ﻿import React from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
-import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList } from 'lucide-react';
+import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
@@ -1886,27 +1887,17 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         </div>
       )}
-      <div className="flex justify-between items-center mb-2">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
-          <p className="text-gray-500 text-sm">Composição detalhada com WBS (Work Breakdown Structure).</p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
+        <p className="text-gray-400 text-sm mt-1.5 font-medium">Composição detalhada com WBS (Work Breakdown Structure).</p>
+      </div>
 
-        {/* Statistics Card */}
-        <div className="flex items-stretch bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden divide-x divide-gray-100">
-          <div className="px-5 py-2.5 flex flex-col justify-center">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">Custo Direto</span>
-            <span className="font-bold text-gray-700 text-lg">R$ {totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div className="px-5 py-2.5 flex flex-col justify-center bg-blue-50/30">
-            <span className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-0.5 whitespace-nowrap">BDI ({settings.bdi}%)</span>
-            <span className="font-bold text-blue-600 text-lg">+ R$ {(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div className="px-6 py-2.5 flex flex-col justify-center bg-gray-50/50">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">Preço Venda</span>
-            <span className="font-black text-emerald-600 text-2xl">R$ {totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-          </div>
-        </div>
+      {/* Statistics — KpiCard (§4). Preço Venda é o total do qual os outros dois são a
+          decomposição (Custo Direto + BDI = Preço Venda) — quebra de simetria (§4.2). */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+        <KpiCard size="lg" className="col-span-2" label="Preço Venda" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
+        <KpiCard size="sm" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
+        <KpiCard size="sm" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
       </div>
 
       {/* Banner de nova competência SINAPI + rebase */}
@@ -1927,33 +1918,33 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       />
 
       {/* Main Toolbar */}
-      <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-3 items-center justify-between">
+      <div className="bg-white p-2 rounded-[10px] shadow-sm border border-gray-200 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap items-center gap-3">
           {isLocked && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg border border-amber-200 text-xs font-bold animate-pulse">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-[6px] border border-amber-200 text-xs font-bold animate-pulse">
               <AlertTriangle className="w-4 h-4" />
               BLOQUEADO
             </div>
           )}
 
           {/* Grupo 1: Visualização & Configurações */}
-          <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 rounded-lg border border-gray-100 pr-4">
+          <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 rounded-[10px] border border-gray-100 pr-4">
             <div className="flex items-center gap-2 pl-1">
               <label className="text-xs font-bold text-gray-400 uppercase whitespace-nowrap">BDI (%):</label>
               <input
                 type="number"
                 value={settings.bdi}
                 onChange={(e) => onUpdateSettings({ ...settings, bdi: Number(e.target.value) })}
-                className="w-14 h-8 rounded-md border border-gray-200 bg-white text-center text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="w-14 h-8 rounded-[6px] border border-gray-200 bg-white text-center text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
 
             <div className="h-6 w-px bg-gray-200 mx-1" />
 
-            <div className="flex bg-gray-200/50 rounded-lg p-0.5">
+            <div className="flex bg-gray-200/50 rounded-[6px] p-0.5">
               <button
                 onClick={() => onUpdateSettings({ ...settings, cpuViewMode: 'inline' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${settings.cpuViewMode === 'inline' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${settings.cpuViewMode === 'inline' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 title="Ver CPU abaixo do item"
               >
                 <Layers className="w-3.5 h-3.5" />
@@ -1961,7 +1952,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               </button>
               <button
                 onClick={() => onUpdateSettings({ ...settings, cpuViewMode: 'modal' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${(!settings.cpuViewMode || settings.cpuViewMode === 'modal') ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${(!settings.cpuViewMode || settings.cpuViewMode === 'modal') ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 title="Ver CPU em janela flutuante"
               >
                 <Monitor className="w-3.5 h-3.5" />
@@ -1974,7 +1965,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             <button
               onClick={expandedGroups.length > 0 ? handleCollapseAll : handleExpandAll}
               title={expandedGroups.length > 0 ? 'Recolher tudo' : 'Expandir tudo'}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-button font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-[6px] text-button font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
             >
               {expandedGroups.length > 0 ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
               {expandedGroups.length > 0 ? 'Recolher' : 'Expandir'}
@@ -1984,7 +1975,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
             <button
               onClick={() => setShowNatureBreakdown(!showNatureBreakdown)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] text-xs font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
               title="Mostrar detalhamento de custos (Mão de Obra, Material, Equipamento)"
             >
               <Layers className="w-3.5 h-3.5" />
@@ -1995,17 +1986,17 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           <div className="h-8 w-px bg-gray-100 mx-1" />
 
           {/* Grupo 2: Versões & Histórico */}
-          <div className="flex items-center gap-1.5 bg-gray-50/80 p-1.5 rounded-lg border border-gray-100">
+          <div className="flex items-center gap-1.5 bg-gray-50/80 p-1.5 rounded-[10px] border border-gray-100">
             <button
               onClick={() => setShowHistory(!showHistory)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all text-button font-bold border ${showHistory ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] transition-all text-button font-bold border ${showHistory ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
             >
               <History className="w-3.5 h-3.5" />
               Histórico ({settings.versions?.length || 0})
             </button>
             <button
               onClick={() => setIsVersionModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50 transition-all text-button font-bold"
+              className="flex items-center gap-2 px-3 py-1.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all text-button font-bold"
               title="Salvar uma nova versão (snapshot) deste orçamento"
             >
               <Save className="w-3.5 h-3.5" />
@@ -2015,7 +2006,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               const activeVersion = settings.versions?.find(v => v.id === settings.activeVersionId);
               if (!activeVersion) return null;
               return (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-md" title={`Versão ativa: ${activeVersion.description}`}>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-[6px]" title={`Versão ativa: ${activeVersion.description}`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
                   <span className="text-xs font-bold text-amber-700 max-w-[120px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
                 </div>
@@ -2029,7 +2020,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           <div className="relative">
             <button
               onClick={() => setToolsMenuOpen(!toolsMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-bold border transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-[6px] text-button font-bold border transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               title="Ferramentas de análise, importação e exportação"
             >
               <Wrench className="w-3.5 h-3.5" />
@@ -2040,7 +2031,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             {toolsMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setToolsMenuOpen(false)}></div>
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   <p className="px-4 pt-1 pb-1.5 text-xs font-black text-gray-400 uppercase tracking-wider">Análise</p>
                   <button
                     onClick={() => { handleOpenParametric(); setToolsMenuOpen(false); }}

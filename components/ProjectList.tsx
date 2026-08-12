@@ -1,7 +1,7 @@
 import React from 'react';
 import { projectService, ProjectData } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TipoObra } from '../types/project';
 
@@ -22,6 +22,17 @@ const TIPO_OBRA_COLORS: Record<TipoObra, string> = {
     galpao: 'bg-amber-100 text-amber-700 border-amber-200',
     reforma: 'bg-rose-100 text-rose-700 border-rose-200',
     outro: 'bg-gray-100 text-gray-600 border-gray-200',
+};
+// Célula de tabela: texto colorido simples, sem pílula (ui_ux_guia_unificado.md §7/§8).
+// TIPO_OBRA_COLORS (pílula) segue em uso na visão em blocos (grid), linguagem visual à parte.
+const TIPO_OBRA_TEXT_COLORS: Record<TipoObra, string> = {
+    residencial_multifamiliar: 'text-blue-600',
+    casa: 'text-emerald-600',
+    loja: 'text-orange-600',
+    sala: 'text-purple-600',
+    galpao: 'text-amber-600',
+    reforma: 'text-rose-600',
+    outro: 'text-gray-600',
 };
 import { HugeiconsIcon } from '@hugeicons/react';
 import { FileDownloadIcon } from '@hugeicons/core-free-icons';
@@ -185,6 +196,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // o vínculo mora no módulo de Empreendimentos, não em `projects.settings`.
     const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [isLoading, setIsLoading] = React.useState(true);
+    // §13 — toast em vez de alert() nativo.
+    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('projectListFilters:search', '');
     const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
@@ -192,7 +209,27 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [activeTab, setActiveTab] = React.useState<'budgets' | 'templates'>(
         classificationFilter === 'OBRA' ? 'templates' : 'budgets'
     );
-    const tableColumns = useTableColumns(COLUMNS, 'projectListColumns');
+    const isObraContext = classificationFilter === 'OBRA' || (!classificationFilter && activeTab === 'templates');
+    const isPlanejamentoContext = classificationFilter === 'PLANEJAMENTO';
+    const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
+    const isDiaryContext = isDiarioContext;
+
+    // Colunas ocultas por padrão conforme o contexto — evita tabela larga com colunas
+    // sempre vazias (ui_ux_guia_unificado.md, avaliação 2026-08-12):
+    // - organization: nenhum chamador de ProjectList passa `organizations` hoje —
+    //   coluna estruturalmente morta em todo contexto.
+    // - empreendimento: o mapa (empreendimentoService.mapObrasToEmpreendimentos) é
+    //   indexado pelo project_id da OBRA — nunca bate com o id de um Orçamento/
+    //   Planejamento (id de outro registro). Em Diário permanece visível: linhas
+    //   nesse contexto podem ser o próprio projeto OBRA (settings.classification
+    //   'OBRA' + diaryEntries).
+    const contextColumns = COLUMNS.map(c => {
+        if (c.key === 'organization') return { ...c, defaultHidden: true };
+        if (c.key === 'empreendimento' && !isObraContext && !isDiarioContext) return { ...c, defaultHidden: true };
+        return c;
+    });
+
+    const tableColumns = useTableColumns(contextColumns, 'projectListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'projectListFilters:advanced');
     const confirm = useConfirm();
     const {
@@ -205,11 +242,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
         toggleColumn,
         resetColumns,
     } = tableColumns;
-
-    const isObraContext = classificationFilter === 'OBRA' || (!classificationFilter && activeTab === 'templates');
-    const isPlanejamentoContext = classificationFilter === 'PLANEJAMENTO';
-    const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
-    const isDiaryContext = isDiarioContext;
 
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'projectListColWidths');
     // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — usada para
@@ -271,7 +303,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 );
             case 'tipo-obra':
                 return project.settings?.tipoObra ? (
-                    <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                    <span className={`text-sm font-normal ${TIPO_OBRA_TEXT_COLORS[project.settings.tipoObra as TipoObra] || 'text-gray-600'}`}>
                         {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
                     </span>
                 ) : (
@@ -516,7 +548,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const handleDelete = async (id: string, name: string) => {
         const effectiveOrders = getEffectiveOrderCount(id);
         if (effectiveOrders > 0) {
-            alert(`Não é possível excluir "${name}" pois existem ${effectiveOrders} pedido(s) vinculados a esta obra ou orçamentos relacionados.`);
+            notify(`Não é possível excluir "${name}" pois existem ${effectiveOrders} pedido(s) vinculados a esta obra ou orçamentos relacionados.`, 'error');
             return;
         }
 
@@ -535,7 +567,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         } catch (error: unknown) {
             console.error("Erro ao excluir orçamento:", error);
             const err = error as Error;
-            alert(err.message || "Erro ao excluir o orçamento.");
+            notify(err.message || "Erro ao excluir o orçamento.", 'error');
         }
     };
 
@@ -838,27 +870,29 @@ const ProjectList: React.FC<ProjectListProps> = ({
             )}
 
             {!classificationFilter && (
-                <div className="flex gap-1 bg-gray-100/50 p-1 rounded-[10px] w-fit">
-                    <button
-                        onClick={() => setActiveTab('budgets')}
-                        className={`flex items-center h-9 px-4 text-sm font-medium rounded-[6px] transition-all ${activeTab === 'budgets'
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
-                            }`}
-                    >
-                        <FolderOpen className="w-4 h-4 mr-2" />
-                        Orçamentos
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('templates')}
-                        className={`flex items-center h-9 px-4 text-sm font-medium rounded-[6px] transition-all ${activeTab === 'templates'
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
-                            }`}
-                    >
-                        <Copy className="w-4 h-4 mr-2" />
-                        Obras / Modelos
-                    </button>
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        <button
+                            onClick={() => setActiveTab('budgets')}
+                            className={`flex items-center px-3 h-7 text-sm font-medium rounded-[6px] whitespace-nowrap transition-all ${activeTab === 'budgets'
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                        >
+                            <FolderOpen className="w-4 h-4 mr-2" />
+                            Orçamentos
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('templates')}
+                            className={`flex items-center px-3 h-7 text-sm font-medium rounded-[6px] whitespace-nowrap transition-all ${activeTab === 'templates'
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                        >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Obras / Modelos
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -866,7 +900,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 (Planejamento usa PlanningDashboard, Diário usa DiaryDashboard, ambos com
                 hideHeader=true; mostrar os dois juntos duplicava a informação). */}
             {!hideHeader && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard label="Total" value={stats.total} sub="Registros visíveis" icon={<FolderOpen className="w-5 h-5" />} color="blue" />
                     <KpiCard label="Em Andamento" value={stats.inProgress} sub="Ativos no momento" icon={<Clock className="w-5 h-5" />} color="amber" />
                     <KpiCard label="Concluídos" value={stats.concluded} sub="Finalizados / fechados" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
@@ -922,7 +956,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
-                        columns={COLUMNS.filter(c => c.key !== 'actions')}
+                        columns={contextColumns.filter(c => c.key !== 'actions')}
                         visibleColumns={tableColumns.visibleColumns}
                         showColumnConfig={tableColumns.showColumnConfig}
                         onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
@@ -989,8 +1023,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </div>
             ) : (
                 viewMode === 'list' ? (
-                        <div className="overflow-x-auto">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                        <div className="overflow-auto max-h-[70vh]">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
                             <colgroup>
                                 {displayColumns.map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
@@ -1001,9 +1035,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                             </colgroup>
                             {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
-                                força uppercase internamente por padrão. */}
+                                força uppercase internamente por padrão. Sticky (§6.5) — bg opaco senão
+                                as linhas aparecem "por trás" ao rolar. */}
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {displayColumns.map(key => {
                                         const def = PROJECT_COLUMN_HEADERS[key];
                                         if (!def) return null;
@@ -1211,6 +1246,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     setIsImportModalOpen(false);
                 }}
             />
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
         </div>
     );
 };

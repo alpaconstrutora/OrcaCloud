@@ -20,6 +20,12 @@ interface Props {
   /** Vazio quando o usuário está com "Todas as organizações" — o painel pede a org num seletor. */
   organizationId: string;
   editing?: Empreendimento | null;
+  /**
+   * Duplicação: abre em modo CRIAR com os campos pré-preenchidos a partir deste
+   * empreendimento. A estrutura (torres/pavimentos/unidades/áreas comuns) só é
+   * copiada ao salvar — ver `empreendimentoService.copyStructure`.
+   */
+  duplicateFrom?: Empreendimento | null;
   onClose: () => void;
   onSaved: (e: Empreendimento) => void;
 }
@@ -42,7 +48,10 @@ const FALLBACK_TIPO_OPTIONS: { value: EmpreendimentoTipo; label: string }[] = [
   { value: 'COND_INDUSTRIAL', label: 'Condomínio Industrial' },
 ];
 
-export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, onClose, onSaved }) => {
+export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, duplicateFrom, onClose, onSaved }) => {
+  // Editar preenche a partir do próprio registro; duplicar preenche a partir do
+  // ORIGEM, mas continua sendo um cadastro novo (`editing` segue null).
+  const base = editing ?? duplicateFrom ?? null;
   // `projects` do store já vem só com obras reais (sem projeto de sistema, sem
   // orçamento/planejamento/diário) — ver CLAUDE.md regras #2 e #3.
   const { projects } = useStore();
@@ -59,7 +68,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   // com "Todas as organizações" a prop chega vazia e o usuário escolhe aqui. Ao editar, o
   // campo continua visível (e editável) — antes só aparecia ao criar sem org de contexto,
   // então não tinha como ver nem corrigir a organização de um empreendimento já existente.
-  const [orgId, setOrgId] = React.useState<string>(editing?.organization_id || organizationId || '');
+  const [orgId, setOrgId] = React.useState<string>(base?.organization_id || organizationId || '');
   const [organizations, setOrganizations] = React.useState<Organization[]>([]);
   const [companies, setCompanies] = React.useState<{ id: string; razao_social: string; nome_fantasia?: string | null; regime_tributario?: string | null }[]>([]);
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -68,34 +77,39 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
     setTimeout(() => setNotification(null), 4500);
   };
   const [form, setForm] = React.useState({
-    name: editing?.name ?? '',
-    company_id: editing?.company_id ?? '',
-    code: editing?.code ?? '',
-    status: (editing?.status ?? 'PLANEJAMENTO') as EmpreendimentoStatus,
-    tipo: (editing?.tipo ?? '') as EmpreendimentoTipo | '',
-    imovib_study_id: editing?.imovib_study_id ?? '',
-    planta_ai_study_id: editing?.planta_ai_study_id ?? '',
-    project_id: editing?.project_id ?? '',
-    matricula: editing?.matricula ?? '',
-    construtora: editing?.construtora ?? '',
-    responsavel_tecnico: editing?.responsavel_tecnico ?? '',
-    crea_cau: editing?.crea_cau ?? '',
-    numero_processo: editing?.numero_processo ?? '',
-    endereco_street: editing?.endereco_street ?? '',
-    endereco_number: editing?.endereco_number ?? '',
-    endereco_neighborhood: editing?.endereco_neighborhood ?? '',
-    endereco_city: editing?.endereco_city ?? '',
-    endereco_state: editing?.endereco_state ?? '',
-    endereco_zip_code: editing?.endereco_zip_code ?? '',
-    spe_razao_social: editing?.spe_razao_social ?? '',
-    spe_cnpj: editing?.spe_cnpj ?? '',
-    spe_nome_fantasia: editing?.spe_nome_fantasia ?? '',
-    developer_name: editing?.developer_name ?? '',
-    manager: editing?.manager ?? '',
-    launch_date: editing?.launch_date ?? '',
-    expected_delivery_date: editing?.expected_delivery_date ?? '',
-    terreno_area: editing?.terreno_area?.toString() ?? '',
-    vgv_total: editing?.vgv_total?.toString() ?? '',
+    // Duplicando: nome ganha sufixo, e código/matrícula/CNPJ ficam vazios — são
+    // identificadores únicos do registro de origem, não características dele.
+    name: duplicateFrom ? `${duplicateFrom.name} (cópia)` : (base?.name ?? ''),
+    company_id: base?.company_id ?? '',
+    code: duplicateFrom ? '' : (base?.code ?? ''),
+    // A cópia volta para o começo do ciclo, mesmo que a origem já esteja em obras.
+    status: (duplicateFrom ? 'PLANEJAMENTO' : (base?.status ?? 'PLANEJAMENTO')) as EmpreendimentoStatus,
+    tipo: (base?.tipo ?? '') as EmpreendimentoTipo | '',
+    // Vínculos vivos não se duplicam: dois empreendimentos apontando para o mesmo
+    // estudo/obra fariam o sync de um sobrescrever o outro.
+    imovib_study_id: duplicateFrom ? '' : (base?.imovib_study_id ?? ''),
+    planta_ai_study_id: duplicateFrom ? '' : (base?.planta_ai_study_id ?? ''),
+    project_id: duplicateFrom ? '' : (base?.project_id ?? ''),
+    matricula: duplicateFrom ? '' : (base?.matricula ?? ''),
+    construtora: base?.construtora ?? '',
+    responsavel_tecnico: base?.responsavel_tecnico ?? '',
+    crea_cau: base?.crea_cau ?? '',
+    numero_processo: duplicateFrom ? '' : (base?.numero_processo ?? ''),
+    endereco_street: base?.endereco_street ?? '',
+    endereco_number: base?.endereco_number ?? '',
+    endereco_neighborhood: base?.endereco_neighborhood ?? '',
+    endereco_city: base?.endereco_city ?? '',
+    endereco_state: base?.endereco_state ?? '',
+    endereco_zip_code: base?.endereco_zip_code ?? '',
+    spe_razao_social: base?.spe_razao_social ?? '',
+    spe_cnpj: duplicateFrom ? '' : (base?.spe_cnpj ?? ''),
+    spe_nome_fantasia: base?.spe_nome_fantasia ?? '',
+    developer_name: base?.developer_name ?? '',
+    manager: base?.manager ?? '',
+    launch_date: duplicateFrom ? '' : (base?.launch_date ?? ''),
+    expected_delivery_date: duplicateFrom ? '' : (base?.expected_delivery_date ?? ''),
+    terreno_area: base?.terreno_area?.toString() ?? '',
+    vgv_total: base?.vgv_total?.toString() ?? '',
   });
 
   React.useEffect(() => {
@@ -250,11 +264,44 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         expected_delivery_date: form.expected_delivery_date || undefined,
         terreno_area: form.terreno_area ? Number(form.terreno_area) : undefined,
         vgv_total: form.vgv_total ? Number(form.vgv_total) : undefined,
+        // Duplicando: os campos do terreno que este painel não edita (o endereço do
+        // terreno foi removido da UI, ver bloco "Terreno") viriam vazios e a cópia
+        // perderia dado em silêncio. Copiamos explicitamente.
+        ...(duplicateFrom ? {
+          terreno_street: duplicateFrom.terreno_street,
+          terreno_number: duplicateFrom.terreno_number,
+          terreno_complement: duplicateFrom.terreno_complement,
+          terreno_neighborhood: duplicateFrom.terreno_neighborhood,
+          terreno_city: duplicateFrom.terreno_city,
+          terreno_state: duplicateFrom.terreno_state,
+          terreno_zip_code: duplicateFrom.terreno_zip_code,
+          terreno_tipo: duplicateFrom.terreno_tipo,
+          terreno_frente: duplicateFrom.terreno_frente,
+          terreno_fundos: duplicateFrom.terreno_fundos,
+          terreno_profundidade: duplicateFrom.terreno_profundidade,
+          terreno_lateral_direita: duplicateFrom.terreno_lateral_direita,
+          terreno_lateral_esquerda: duplicateFrom.terreno_lateral_esquerda,
+          endereco_complement: duplicateFrom.endereco_complement,
+          metadata: duplicateFrom.metadata,
+        } : {}),
       };
 
       const saved = editing
         ? await empreendimentoService.update(editing.id, payload)
         : await empreendimentoService.create(payload as EmpreendimentoInsert);
+
+      // Estrutura só depois do cadastro existir. Se a cópia falhar, o empreendimento
+      // já foi criado — avisa e mantém o painel aberto, em vez de fingir sucesso.
+      if (duplicateFrom && !editing) {
+        try {
+          await empreendimentoService.copyStructure(duplicateFrom.id, saved.id);
+        } catch (err: any) {
+          notify(`Empreendimento criado, mas a cópia da estrutura falhou: ${err.message}`, 'error');
+          setSaving(false);
+          return;
+        }
+      }
+
       onSaved(saved);
     } catch (err: any) {
       notify(`Erro ao salvar empreendimento: ${err.message}`, 'error');
@@ -274,10 +321,14 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
       <SheetHeader onClose={onClose}>
         <SheetTitle className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-blue-600" />
-          {editing ? 'Editar Empreendimento' : 'Novo Empreendimento'}
+          {editing ? 'Editar Empreendimento' : duplicateFrom ? 'Duplicar Empreendimento' : 'Novo Empreendimento'}
         </SheetTitle>
         <SheetDescription>
-          {editing ? editing.name : 'Cadastre a incorporação e seus vínculos.'}
+          {editing
+            ? editing.name
+            : duplicateFrom
+              ? `Cópia de "${duplicateFrom.name}". Torres, pavimentos, unidades e áreas comuns são copiados ao salvar; vínculos com obra, estudos e Comercial não.`
+              : 'Cadastre a incorporação e seus vínculos.'}
         </SheetDescription>
       </SheetHeader>
 
@@ -555,7 +606,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
           >
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {editing ? 'Salvar' : 'Criar'}
+            {editing ? 'Salvar' : duplicateFrom ? 'Criar cópia' : 'Criar'}
           </button>
         </SheetFooter>
       </form>

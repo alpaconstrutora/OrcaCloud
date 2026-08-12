@@ -1,15 +1,17 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal } from 'lucide-react';
+import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal, HardHat } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
-import { KpiCard } from '../ui/KpiCard';
+import { InlineActionTray } from '../ui/InlineActionTray';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
+import { useStore } from '../../store/useStore';
 import { empreendimentoService, EmpreendimentoOrphanSummary } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import EmpreendimentoForm from './EmpreendimentoForm';
 import EmpreendimentoDetail from './EmpreendimentoDetail';
+import CriarObraDoEmpreendimento from './CriarObraDoEmpreendimento';
 
 interface Props {
   activeOrganizationId: string | null;
@@ -39,18 +41,24 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'code', label: 'Código', sortable: true },
   { key: 'name', label: 'Empreendimento', sortable: true },
   { key: 'tipo', label: 'Tipo', sortable: true },
+  { key: 'organization', label: 'Organização', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'vgv', label: 'VGV Total', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Chaves de dado na ordem do COLUMNS — usadas na soma de `tableTotalWidth`, para
+// não repetir a lista à mão a cada coluna nova (era assim que a soma ficava para trás).
+const DATA_COLUMN_KEYS = COLUMNS.filter(c => c.key !== 'actions').map(c => c.key);
+
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
   code: 120,
   name: 320,
   tipo: 160,
+  organization: 200,
   status: 140,
   vgv: 160,
-  actions: 90,
+  actions: 150,
 };
 
 // Reordenar colunas por arraste (estilo ClickUp) — mesmos label/sortable/className que
@@ -59,6 +67,7 @@ const EMPREENDIMENTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: 
   code: { label: 'Código', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   name: { label: 'Empreendimento', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   tipo: { label: 'Tipo', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  organization: { label: 'Organização', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   status: { label: 'Status', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   vgv: { label: 'VGV total', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
@@ -66,7 +75,7 @@ const EMPREENDIMENTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: 
 function renderEmpreendimentoCell(
   key: string,
   item: Empreendimento,
-  ctx: { tipoLabel: (slug?: string | null) => string },
+  ctx: { tipoLabel: (slug?: string | null) => string; orgName: (id?: string | null) => string },
 ): React.ReactNode {
   switch (key) {
     case 'code':
@@ -85,6 +94,8 @@ function renderEmpreendimentoCell(
       );
     case 'tipo':
       return <div className="text-sm font-normal text-gray-600 whitespace-nowrap truncate">{ctx.tipoLabel(item.tipo)}</div>;
+    case 'organization':
+      return <div className="text-sm font-normal text-gray-700 whitespace-nowrap truncate">{ctx.orgName(item.organization_id)}</div>;
     case 'status':
       return (
         <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
@@ -117,6 +128,12 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
   const orgIdParam = isAllOrgs ? undefined : (activeOrganizationId as string);
 
+  const { organizations } = useStore();
+  const orgName = React.useCallback(
+    (id?: string | null) => (id ? (organizations.find(o => o.id === id)?.name ?? '—') : '—'),
+    [organizations],
+  );
+
   const [items, setItems] = React.useState<Empreendimento[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = usePersistedState<string>('empreendimentoList:search', '');
@@ -125,15 +142,19 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   // table-layout:fixed + largura total explícita — mesma razão do padrão em SupplierList
   // (ver comentário lá): evita o navegador redistribuir espaço sobrando entre colunas
   // com <col> de largura fixa ao arrastar uma borda.
-  const tableTotalWidth = (tableColumns.visibleColumns.includes('code') ? cols.getWidth('code') : 0)
-    + (tableColumns.visibleColumns.includes('name') ? cols.getWidth('name') : 0)
-    + (tableColumns.visibleColumns.includes('tipo') ? cols.getWidth('tipo') : 0)
-    + (tableColumns.visibleColumns.includes('status') ? cols.getWidth('status') : 0)
-    + (tableColumns.visibleColumns.includes('vgv') ? cols.getWidth('vgv') : 0)
-    + cols.getWidth('actions');
+  const tableTotalWidth = DATA_COLUMN_KEYS.reduce(
+    (sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0),
+    0,
+  ) + cols.getWidth('actions');
   const [selected, setSelected] = React.useState<Empreendimento | null>(null);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Empreendimento | null>(null);
+  // Duplicação: o formulário abre em modo CRIAR, pré-preenchido a partir deste
+  // empreendimento; a estrutura (torres/pavimentos/unidades/áreas) só é copiada
+  // quando o usuário salva.
+  const [duplicating, setDuplicating] = React.useState<Empreendimento | null>(null);
+  // Criar obra a partir do empreendimento — abre o ProjectModal pré-preenchido.
+  const [creatingObraFor, setCreatingObraFor] = React.useState<Empreendimento | null>(null);
   const confirm = useConfirm();
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -181,9 +202,22 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const handleSaved = async (saved: Empreendimento) => {
     setIsFormOpen(false);
     setEditing(null);
+    setDuplicating(null);
     await load();
     // Se estávamos no detalhe, refletir a edição
     if (selected && selected.id === saved.id) setSelected(saved);
+  };
+
+  const handleDuplicate = (item: Empreendimento) => {
+    setEditing(null);
+    setDuplicating(item);
+    setIsFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setIsFormOpen(false);
+    setEditing(null);
+    setDuplicating(null);
   };
 
   const handleDelete = async (e: React.MouseEvent, item: Empreendimento) => {
@@ -203,17 +237,13 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     }
   };
 
-  const kpis = React.useMemo(() => {
-    const emObras = items.filter(i => i.status === 'EM_OBRAS').length;
-    const vgvTotal = items.reduce((sum, i) => sum + (i.vgv_total || 0), 0);
-    return { total: items.length, emObras, vgvTotal };
-  }, [items]);
-
   const filtered = React.useMemo(() => {
+    const term = search.toLowerCase();
     const result = items.filter(i =>
-      i.name.toLowerCase().includes(search.toLowerCase()) ||
-      (i.code || '').toLowerCase().includes(search.toLowerCase()) ||
-      (i.spe_razao_social || '').toLowerCase().includes(search.toLowerCase())
+      i.name.toLowerCase().includes(term) ||
+      (i.code || '').toLowerCase().includes(term) ||
+      (i.spe_razao_social || '').toLowerCase().includes(term) ||
+      orgName(i.organization_id).toLowerCase().includes(term)
     );
 
     return result.sort((a, b) => {
@@ -231,6 +261,10 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             return tableColumns.sortDirection === 'asc'
               ? tipoLabel(a.tipo).localeCompare(tipoLabel(b.tipo))
               : tipoLabel(b.tipo).localeCompare(tipoLabel(a.tipo));
+          case 'organization':
+            return tableColumns.sortDirection === 'asc'
+              ? orgName(a.organization_id).localeCompare(orgName(b.organization_id))
+              : orgName(b.organization_id).localeCompare(orgName(a.organization_id));
           case 'status':
             return tableColumns.sortDirection === 'asc'
               ? STATUS_LABELS[a.status].localeCompare(STATUS_LABELS[b.status])
@@ -246,7 +280,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
       // Sem coluna clicada, ordenação default é nome A-Z (§6.4: sem dropdown redundante).
       return a.name.localeCompare(b.name);
     });
-  }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection, tipoLabel]);
+  }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection, tipoLabel, orgName]);
 
   // ── Detalhe ────────────────────────────────────────────────────────────────
   if (selected) {
@@ -270,9 +304,10 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
         />
         {isFormOpen && (
           <EmpreendimentoForm
-            organizationId={editing?.organization_id || selected.organization_id || orgIdParam || ''}
+            organizationId={editing?.organization_id || duplicating?.organization_id || selected.organization_id || orgIdParam || ''}
             editing={editing}
-            onClose={() => { setIsFormOpen(false); setEditing(null); }}
+            duplicateFrom={duplicating}
+            onClose={closeForm}
             onSaved={handleSaved}
           />
         )}
@@ -318,14 +353,6 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           </div>
         </div>
       )}
-
-      {/* KPIs — mesmo nível de importância (contagem × contagem × soma financeira), grade simétrica.
-          mb-3: ritmo de 12px até a toolbar acoplada (ui_ux_guia_unificado.md §20.1). */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-        <KpiCard shadow={false} label="Total de Empreendimentos" value={kpis.total} icon={<Building2 className="w-5 h-5" />} color="blue" />
-        <KpiCard shadow={false} label="Em Obras" value={kpis.emObras} icon={<Building2 className="w-5 h-5" />} color="amber" />
-        <KpiCard shadow={false} label="VGV Total" value={`R$ ${kpis.vgvTotal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={<Building2 className="w-5 h-5" />} color="emerald" />
-      </div>
 
       {/* Tabela com toolbar de busca acoplada (ui_ux_guia_unificado.md §5.2) — busca, refresh, colunas
           e o botão primário (sem barra de escopo/§4: não há controles de conta/competência
@@ -445,15 +472,27 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                   >
                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                       <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                        {renderEmpreendimentoCell(key, item, { tipoLabel })}
+                        {renderEmpreendimentoCell(key, item, { tipoLabel, orgName })}
                       </td>
                     ))}
                     <td aria-hidden="true" className="border-r border-gray-100" />
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">
-                        {/* Abrir = clique na linha (ação dominante, §9.1). Ações restantes: só Excluir. */}
-                        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
-                          <ActionIconButton kind="delete" onClick={(e) => handleDelete(e, item)} />
+                        {/* Abrir = clique na linha (ação dominante, §9.1). Editar e Duplicar ficam
+                            visíveis (as frequentes); as raras vão para a bandeja (§9/§9.2: 3+
+                            ações secundárias não ficam soltas na fileira). */}
+                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <ActionIconButton kind="edit" onClick={() => { setDuplicating(null); setEditing(item); setIsFormOpen(true); }} />
+                          <ActionIconButton kind="duplicate" onClick={() => handleDuplicate(item)} />
+                          <InlineActionTray>
+                            <ActionIconButton
+                              kind="move"
+                              title="Criar obra para este empreendimento"
+                              icon={<HardHat className="w-4 h-4" />}
+                              onClick={() => setCreatingObraFor(item)}
+                            />
+                            <ActionIconButton kind="delete" onClick={(e) => handleDelete(e, item)} />
+                          </InlineActionTray>
                         </div>
                       </td>
                     )}
@@ -467,10 +506,24 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
 
       {isFormOpen && (
         <EmpreendimentoForm
-          organizationId={editing?.organization_id || orgIdParam || ''}
+          organizationId={editing?.organization_id || duplicating?.organization_id || orgIdParam || ''}
           editing={editing}
-          onClose={() => { setIsFormOpen(false); setEditing(null); }}
+          duplicateFrom={duplicating}
+          onClose={closeForm}
           onSaved={handleSaved}
+        />
+      )}
+
+      {creatingObraFor && (
+        <CriarObraDoEmpreendimento
+          empreendimento={creatingObraFor}
+          target={{ kind: 'EMPREENDIMENTO' }}
+          onClose={() => setCreatingObraFor(null)}
+          onCreated={(_, projectName) => {
+            setCreatingObraFor(null);
+            notify(`Obra "${projectName}" criada e vinculada ao empreendimento.`);
+          }}
+          onError={message => { setCreatingObraFor(null); notify(message, 'error'); }}
         />
       )}
 

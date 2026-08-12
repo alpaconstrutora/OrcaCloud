@@ -7,9 +7,11 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
+import EmpreendimentoCell, { resolveOrderEmpreendimento } from './empreendimento/EmpreendimentoCell';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'orcamento', label: 'Orçamento', sortable: true },
     { key: 'supplier', label: 'Fornecedor', sortable: true },
@@ -22,7 +24,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, obra: 160, orcamento: 144, supplier: 200, status: 140, date: 171, value: 141, items: 102, actions: 220,
+    number: 123, empreendimento: 184, obra: 160, orcamento: 144, supplier: 200, status: 140, date: 171, value: 141, items: 102, actions: 220,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -31,6 +33,7 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'number', label: 'Número', type: 'text' },
     { key: 'supplier', label: 'Fornecedor', type: 'text' },
     { key: 'obra', label: 'Obra', type: 'text' },
+    { key: 'empreendimento', label: 'Empreendimento', type: 'text' },
     { key: 'status', label: 'Status', type: 'select', options: [
         'Rascunho', 'Enviado', 'Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido', 'Divergência', 'Cancelado',
     ].map(s => ({ value: s, label: s })) },
@@ -44,6 +47,7 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
 // drag (ver filter abaixo, no componente).
 const ORDER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     number: { label: 'Número', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     orcamento: { label: 'Orçamento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     supplier: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -77,10 +81,16 @@ const StatusBadge = ({ status }: { status: string }) => {
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderOrderCell(key: string, order: any, ctx: { linkedNfeOrderIds: Set<string> }): React.ReactNode {
+function renderOrderCell(
+    key: string,
+    order: any,
+    ctx: { linkedNfeOrderIds: Set<string>; empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }> },
+): React.ReactNode {
     switch (key) {
         case 'number':
             return <span className="text-sm font-normal text-gray-600">{order.number || order.id.slice(0, 8)}</span>;
+        case 'empreendimento':
+            return <EmpreendimentoCell value={resolveOrderEmpreendimento(order, ctx.empreendimentoByProject)} />;
         case 'obra':
             return (
                 <span className="text-sm font-normal text-gray-700">
@@ -113,11 +123,16 @@ function renderOrderCell(key: string, order: any, ctx: { linkedNfeOrderIds: Set<
     }
 }
 
-function getAdvancedFilterValue(order: any, key: string): unknown {
+function getAdvancedFilterValue(
+    order: any,
+    key: string,
+    empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }> = {},
+): unknown {
     switch (key) {
         case 'number': return order.number ?? '';
         case 'supplier': return order.supplierName ?? '';
         case 'obra': return order.projectClassification === 'ORCAMENTO' ? (order.linkedProjectName || '') : (order.projectName || '');
+        case 'empreendimento': return resolveOrderEmpreendimento(order, empreendimentoByProject)?.name ?? '';
         case 'status': return order.status;
         case 'value': return order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
         case 'date': return order.created_at ? String(order.created_at).slice(0, 10) : null;
@@ -129,6 +144,8 @@ import { Copy01Icon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { orderService } from '../services/orderService';
 import { kpiService } from '../services/kpiService';
+import { empreendimentoService } from '../services/empreendimentoService';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { PurchaseOrder } from '../types';
 
 interface SupplyChainOrderListProps {
@@ -141,6 +158,11 @@ interface SupplyChainOrderListProps {
 
 const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew, onViewDetails, onViewLogistics, onEdit, version }) => {
     const [orders, setOrders] = React.useState<any[]>([]);
+    // A tela não recebe organização por prop — `useOrgContext` é a fonte oficial
+    // (CLAUDE.md regra #5). `orgId` nulo = "Todas": não bloqueia, a RLS recorta.
+    const { orgId } = useOrgContext();
+    // Obra → empreendimento: o pedido não tem FK para empreendimento.
+    const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [loading, setLoading] = React.useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState<string>('supplyChainOrderFilters:search', '');
@@ -151,8 +173,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     // table-layout:fixed (§6.1). Checkbox de 40px é largura fixa, não redimensionável
     // — autoFit() já desconta colunas sem data-col-key da distribuição de folga.
     const tableTotalWidth = 40
-        + (['number', 'obra', 'orcamento', 'supplier', 'status', 'date', 'value', 'items'] as const)
-            .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + COLUMNS.filter(c => c.key !== 'actions')
+            .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
         + cols.getWidth('actions');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainOrderFilters:advanced');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -173,12 +195,13 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         (async () => {
             try {
                 setLoading(true);
-                const [data, nfeRes] = await Promise.all([
+                const [data, nfeRes, empMap] = await Promise.all([
                     orderService.listOrders(),
                     supabase
                         .from('nfe_invoices')
                         .select('purchase_order_id')
                         .not('purchase_order_id', 'is', null),
+                    empreendimentoService.mapObrasToEmpreendimentos(orgId).catch(() => ({})),
                 ]);
                 if (!cancelled) {
                     setOrders(data);
@@ -187,6 +210,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                             .map(r => r.purchase_order_id)
                     );
                     setLinkedNfeOrderIds(ids);
+                    setEmpreendimentoByProject(empMap);
                 }
             } catch (error) {
                 console.error("Erro ao carregar pedidos:", error);
@@ -195,7 +219,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             }
         })();
         return () => { cancelled = true; };
-    }, [version]);
+    }, [version, orgId]);
 
     const loadOrders = async () => {
         try {
@@ -262,13 +286,19 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             return matchSearch && matchNf;
         });
 
-        filtered = applyFilterRules(filtered, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        filtered = applyFilterRules(filtered, advancedFilters.rules, ADVANCED_FILTER_FIELDS,
+            (order, key) => getAdvancedFilterValue(order, key, empreendimentoByProject));
 
         // TableUtils sort takes priority when set
         if (tableColumns.sortColumn) {
             const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
             return [...filtered].sort((a, b) => {
                 if (tableColumns.sortColumn === 'number') return (a.number || '').localeCompare(b.number || '') * dir;
+                if (tableColumns.sortColumn === 'empreendimento') {
+                    const na = resolveOrderEmpreendimento(a, empreendimentoByProject)?.name || '';
+                    const nb = resolveOrderEmpreendimento(b, empreendimentoByProject)?.name || '';
+                    return na.localeCompare(nb) * dir;
+                }
                 if (tableColumns.sortColumn === 'obra') {
                     const na = a.projectClassification === 'ORCAMENTO' ? (a.linkedProjectName || '') : a.projectName || '';
                     const nb = b.projectClassification === 'ORCAMENTO' ? (b.linkedProjectName || '') : b.projectName || '';
@@ -298,7 +328,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         }
 
         return filtered;
-    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, linkedNfeOrderIds, advancedFilters.rules]);
+    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, linkedNfeOrderIds, advancedFilters.rules, empreendimentoByProject]);
 
     const selectableVisible = React.useMemo(
         () => filteredOrders.filter(o => canDeleteOrder(o.status)),
@@ -636,7 +666,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         </td>
                                         {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {renderOrderCell(key, order, { linkedNfeOrderIds })}
+                                                {renderOrderCell(key, order, { linkedNfeOrderIds, empreendimentoByProject })}
                                             </td>
                                         ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -713,8 +743,13 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                 <h3 className="text-lg font-bold text-gray-900 mb-1">
                                     {order.number || order.id.slice(0, 8)}
                                 </h3>
-                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-6">
+                                {/* Estilo herdado do card legado (uppercase/bold) — mantido para o
+                                    bloco não ficar com duas tipografias; migração do card é outro escopo. */}
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">
                                     Fornecedor: {order.supplierName || 'Não especificado'}
+                                </p>
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-6">
+                                    Empreendimento: {resolveOrderEmpreendimento(order, empreendimentoByProject)?.name || 'Não vinculado'}
                                 </p>
 
                                 <div className="grid grid-cols-2 gap-4 py-4 border-t border-gray-50 mb-6">

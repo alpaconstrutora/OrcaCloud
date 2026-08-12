@@ -286,7 +286,6 @@ export const EspelhoLocacoesTab: React.FC<Props> = ({ empreendimento: e }) => {
     LOCADO:     units.filter(u => rs(u) === 'LOCADO').length,
     MANUTENCAO: units.filter(u => rs(u) === 'MANUTENCAO').length,
   };
-  const occupancy = totalUnits > 0 ? Math.round((byRentalStatus.LOCADO / totalUnits) * 100) : 0;
   // Receita contratada = aluguéis das unidades efetivamente locadas; vaga = o resto.
   const rentContracted = linkedUnits
     .filter(u => rs(u) === 'LOCADO')
@@ -321,14 +320,6 @@ export const EspelhoLocacoesTab: React.FC<Props> = ({ empreendimento: e }) => {
           </button>
         </div>
       )}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Total Unidades" value={String(totalUnits)} sub={`${linkedCount} em Locações`} />
-        <KpiCard label="Receita Mensal Potencial" value={monthlyRevenue > 0 ? fmt(monthlyRevenue) : '—'} color="text-teal-600" />
-        <KpiCard label="Receita Contratada" value={rentContracted > 0 ? fmt(rentContracted) : '—'} color="text-emerald-600" />
-        <KpiCard label="Ocupação" value={`${occupancy}%`} color={occupancy >= 80 ? 'text-emerald-600' : occupancy >= 50 ? 'text-amber-600' : 'text-gray-600'} />
-      </div>
 
       {/* Ações */}
       <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm">
@@ -518,14 +509,6 @@ export const EspelhoLocacoesTab: React.FC<Props> = ({ empreendimento: e }) => {
 };
 
 // ── Helpers visuais ──────────────────────────────────────────────────────────
-const KpiCard: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color = 'text-gray-800' }) => (
-  <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm">
-    <span className="text-xs font-semibold text-gray-500 block mb-1">{label}</span>
-    <span className={`text-lg font-bold block ${color}`}>{value}</span>
-    {sub && <span className="text-xs text-gray-400 font-medium">{sub}</span>}
-  </div>
-);
-
 const StatusPill: React.FC<{ label: string; count: number; total: number; color: string }> = ({ label, count, total, color }) => (
   <div className="flex items-center gap-2">
     <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${color}`} />

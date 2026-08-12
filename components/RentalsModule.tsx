@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3, Clock, Calendar, Check } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
+import { empreendimentoService } from '../services/empreendimentoService';
+import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
 import { supabase } from '../lib/supabase';
 import { brokerService } from '../services/brokerService';
 import { Property, PropertyStatus, PropertyDeal, Client, BrokerProfile } from '../types';
@@ -67,6 +69,7 @@ const rentalValueOf = (p: Partial<Property>): number =>
 // checa qual modo está ativo antes de aplicar `visibleColumns`.
 const PROPERTY_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Imóvel', sortable: true },
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'address', label: 'Endereço', sortable: true },
     { key: 'occupancy', label: 'Ocupação', sortable: false },
     { key: 'block', label: 'Bloco', sortable: true },
@@ -99,14 +102,14 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
 // linhas ou estourar o container no modo Unidades. A chave de storage continua
 // única — o que o usuário arrastar vale nos dois modos, como antes.
 const BUILDING_MODE_COL_WIDTHS: Record<string, number> = {
-    name: 210, address: 330, price: 145, occupancy: 120, status: 115, actions: 210,
+    name: 210, empreendimento: 184, address: 330, price: 145, occupancy: 120, status: 115, actions: 210,
 };
 // Soma 1141 num container de 1130: os 11px que sobram são comidos pelo padding
 // direito da última célula (24px), então nenhum ícone de ação some. Não dá para
 // baixar mais sem cortar cabeçalho — 9 colunas com `px-6` não cabem em 1130.
 // Quem quiser ajuste ao dado real tem o autofit (§6.1.2) na régua de controles.
 const UNIT_MODE_COL_WIDTHS: Record<string, number> = {
-    name: 115, block: 108, floor: 98, private_area: 118,
+    name: 115, empreendimento: 184, block: 108, floor: 98, private_area: 118,
     rental_analysis: 100, rental_value: 138, price: 141, status: 113, actions: 210,
 };
 
@@ -114,13 +117,14 @@ const UNIT_MODE_COL_WIDTHS: Record<string, number> = {
 // edifício) — usado para somar a largura total (§6.1) e montar o colgroup.
 // rental_analysis/rental_value só existem no modo Unidades (dentro de um
 // edifício) — building-mode não tem "valor de aluguel" próprio da unidade.
-const buildingModeColumnKeys = ['name', 'address', 'price', 'occupancy', 'status'] as const;
-const unitModeColumnKeys = ['name', 'block', 'floor', 'private_area', 'rental_analysis', 'rental_value', 'price', 'status'] as const;
+const buildingModeColumnKeys = ['name', 'empreendimento', 'address', 'price', 'occupancy', 'status'] as const;
+const unitModeColumnKeys = ['name', 'empreendimento', 'block', 'floor', 'private_area', 'rental_analysis', 'rental_value', 'price', 'status'] as const;
 
 // Colunas da aba Contratos (§5.2/§6.1).
 const DEAL_COLUMNS: ColumnConfig[] = [
     { key: 'id', label: 'ID', sortable: true },
     { key: '_propertyName', label: 'Imóvel', sortable: true },
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: '_clientName', label: 'Cliente', sortable: true },
     { key: 'type', label: 'Tipo', sortable: true },
     { key: 'value', label: 'Valor', sortable: true },
@@ -137,7 +141,7 @@ const DEAL_COLUMNS: ColumnConfig[] = [
 // tela inteira esconde coluna pela engrenagem (§3). O que foi corrigido é o
 // excesso gratuito (1560 → 1410) e a folga da coluna de ação.
 const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 95, _propertyName: 150, _clientName: 200, type: 100, value: 130, date: 115,
+    id: 95, _propertyName: 150, empreendimento: 184, _clientName: 200, type: 100, value: 130, date: 115,
     rental_analysis: 110, rental_value: 137, rental_base: 130, status: 120, actions: 130,
 };
 
@@ -173,6 +177,7 @@ interface UnitsHeaderDef { label: string; sortable?: boolean; className: string 
 
 const UNITS_BUILDING_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     name:      { label: 'Imóvel',                sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento: { label: 'Empreendimento',   sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     address:   { label: 'Endereço / referência',  sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     price:     { label: 'Patrimônio',             sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     occupancy: { label: 'Ocupação',               sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
@@ -181,6 +186,7 @@ const UNITS_BUILDING_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
 
 const UNITS_UNIT_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     name:            { label: 'Imóvel',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento:  { label: 'Empreendimento', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     block:           { label: 'Bloco',         sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     floor:           { label: 'Pav.',          sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     private_area:    { label: 'Á. priv.',      sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden' },
@@ -195,6 +201,7 @@ const UNITS_UNIT_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
 // <td>. 'price' usa as mesmas classes nos dois modos (só o valor formatado muda).
 const UNITS_TD_CLASS: Record<string, string> = {
     name: '',
+    empreendimento: '',
     address: 'text-sm font-normal text-gray-600',
     price: 'text-sm font-medium text-gray-800 text-right',
     occupancy: 'text-center',
@@ -211,6 +218,8 @@ interface UnitsRowCtx {
     properties: Property[];
     getContractedRentalValue: (propertyId: string) => number | null;
     getUnitStatusDisplay: (property: Property) => { label: string; color: string };
+    /** Imóvel → empreendimento (unidade via rental_property_id; edifício via commercial_rental_building_id). */
+    empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
 }
 
 function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): React.ReactNode {
@@ -226,6 +235,8 @@ function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): Rea
                     <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{property.name}</span>
                 </div>
             );
+        case 'empreendimento':
+            return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} />;
         case 'address':
             return property.address;
         case 'price':
@@ -292,6 +303,7 @@ function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): Rea
 const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     id:              { label: 'ID',            sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     _propertyName:   { label: 'Imóvel',         sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento:  { label: 'Empreendimento', sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     _clientName:     { label: 'Cliente',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     type:            { label: 'Tipo',           sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     value:           { label: 'Valor',          sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -305,6 +317,7 @@ const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
 const DEAL_TD_CLASS: Record<string, string> = {
     id: 'text-sm font-normal text-blue-600 truncate',
     _propertyName: 'text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors truncate',
+    empreendimento: '',
     _clientName: 'text-sm font-normal text-gray-600 truncate',
     type: 'text-sm font-normal text-gray-600',
     value: 'text-sm font-medium text-gray-800 truncate',
@@ -324,6 +337,7 @@ interface DealRowCtx {
     clients: Client[];
     getDealBaseValue: (deal: PropertyDeal) => number;
     getDealStatusDisplay: (status?: string) => { label: string; color: string };
+    empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
 }
 
 function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.ReactNode {
@@ -341,6 +355,8 @@ function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.R
                 </span>
             );
         }
+        case 'empreendimento':
+            return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} />;
         case '_clientName': {
             const client = ctx.clients.find(c => c.id === deal.client_id);
             return client?.name || 'Não vinculado';
@@ -471,6 +487,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // coisa. Por isso "Ver contrato" e "Renovar" levam para lá.
     const [dealModalTab, setDealModalTab] = useState<string | undefined>(undefined);
     const [properties, setProperties] = useState<Property[]>([]);
+    // Imóvel → empreendimento. O vínculo não é FK na tabela do Comercial: vem de
+    // `empreendimento_units.rental_property_id` (unidade) ou de
+    // `empreendimentos.commercial_rental_building_id` (edifício-pai).
+    const [empreendimentoByProperty, setEmpreendimentoByProperty] = useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
@@ -549,14 +569,19 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         console.log('[Commercial] Loading data for organization:', organizationId);
         setLoading(true);
         try {
-            const [propsData, dealsData, clientsData] = await Promise.all([
+            const [propsData, dealsData, clientsData, empMap] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 clientService.listClients(),
+                // Imóvel → empreendimento pelo eixo de LOCAÇÃO (rental_property_id) —
+                // a unidade pode estar publicada em Vendas e Locações ao mesmo tempo,
+                // e os dois eixos são independentes.
+                empreendimentoService.mapPropertiesToEmpreendimentos(organizationId, 'RENTAL').catch(() => ({})),
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'RENTAL'));
             setClients(clientsData);
+            setEmpreendimentoByProperty(empMap);
         } catch (err) {
             console.error('[Commercial] Error loading data:', err);
         } finally {
@@ -894,8 +919,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
         if (sortConfig) {
             result.sort((a: any, b: any) => {
-                let aValue = a[sortConfig.key];
-                let bValue = b[sortConfig.key];
+                // "empreendimento" é derivado (não é campo do imóvel), então o lookup
+                // genérico por `a[key]` devolveria undefined para todas as linhas.
+                let aValue = sortConfig.key === 'empreendimento'
+                    ? (empreendimentoByProperty[a.id]?.name ?? '')
+                    : a[sortConfig.key];
+                let bValue = sortConfig.key === 'empreendimento'
+                    ? (empreendimentoByProperty[b.id]?.name ?? '')
+                    : b[sortConfig.key];
 
                 if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
                 if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
@@ -907,7 +938,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         }
 
         return result;
-    }, [properties, searchTerm, selectedBuildingId, sortConfig]);
+    }, [properties, searchTerm, selectedBuildingId, sortConfig, empreendimentoByProperty]);
 
     // Contratos ordenáveis (§6.3) — Imóvel/Cliente não são campos diretos do
     // negócio, então resolvemos o nome uma vez antes de comparar.
@@ -962,8 +993,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         if (!dealSortConfig) return filtered;
         const { key, direction } = dealSortConfig;
         return [...filtered].sort((a: any, b: any) => {
-            let aValue = a[key];
-            let bValue = b[key];
+            // "empreendimento" é derivado do imóvel do negócio, não é campo dele.
+            const derive = (d: any) => (d.property_id ? (empreendimentoByProperty[d.property_id]?.name ?? '') : '');
+            let aValue = key === 'empreendimento' ? derive(a) : a[key];
+            let bValue = key === 'empreendimento' ? derive(b) : b[key];
             // "status" cru (IN_NEGOTIATION/PENDING/RESERVA/...) não tem ordem
             // alfabética que bata com a progressão mostrada em tela
             // (getDealStatusDisplay) — dessincroniza ordenação × rótulo exibido.
@@ -979,7 +1012,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             if (aValue > bValue) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [deals, properties, clients, dealSortConfig, selectedBuildingId, dealSearchTerm]);
+    }, [deals, properties, clients, dealSortConfig, selectedBuildingId, dealSearchTerm, empreendimentoByProperty]);
 
     // Corretores ordenáveis (§6.3) — busca própria (§5.2): o searchTerm global
     // pertence à aba Unidades e não tem input visível aqui, então a aba
@@ -1360,6 +1393,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             </div>
             <div className="p-8">
+                {empreendimentoByProperty[property.id] && (
+                    /* Tipografia conforme §21/§7 (sentence case, peso normal) — o resto
+                       deste card é legado "gritado" e está pendente de migração; código novo
+                       não reproduz o estilo deprecado. */
+                    <div className="flex flex-col mb-4">
+                        <span className="text-xs font-semibold text-slate-500 mb-1">Empreendimento</span>
+                        <EmpreendimentoCell value={empreendimentoByProperty[property.id]} />
+                    </div>
+                )}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex flex-col">
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Aluguel Sugerido</span>
@@ -1811,7 +1853,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
                                             {filteredProperties.map((property) => {
-                                                const unitsRowCtx: UnitsRowCtx = { selectedBuildingId, properties, getContractedRentalValue, getUnitStatusDisplay };
+                                                const unitsRowCtx: UnitsRowCtx = { selectedBuildingId, properties, getContractedRentalValue, getUnitStatusDisplay, empreendimentoByProperty };
                                                 return (
                                                     <tr
                                                     key={property.id}
@@ -2166,7 +2208,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
                                         {sortedDeals.map(deal => {
-                                            const dealRowCtx: DealRowCtx = { properties, clients, getDealBaseValue, getDealStatusDisplay };
+                                            const dealRowCtx: DealRowCtx = { properties, clients, getDealBaseValue, getDealStatusDisplay, empreendimentoByProperty };
                                             return (
                                                 <tr key={deal.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
                                                     {dealTableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (

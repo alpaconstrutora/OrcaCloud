@@ -154,7 +154,7 @@ export const orderService = {
 
         // Fetch projects separately — same reason: avoid implicit FK join 404
         const uniqueProjectIds = Array.from(new Set((orders || []).map(o => o.project_id).filter(Boolean)));
-        let projectMap: Record<string, { name: string; settings: { classification?: string; linkedProjectName?: string } }> = {};
+        let projectMap: Record<string, { name: string; settings: { classification?: string; linkedProjectName?: string; linkedProjectId?: string } }> = {};
         if (uniqueProjectIds.length > 0) {
             const { data: projs } = await supabase
                 .from('projects')
@@ -174,6 +174,10 @@ export const orderService = {
                 projectName: project?.name || '-',
                 projectClassification: project?.settings?.classification,
                 linkedProjectName: project?.settings?.linkedProjectName,
+                // Id da obra-pai quando o pedido foi lançado num ORÇAMENTO. Sem ele,
+                // a coluna Empreendimento (resolvida por id de OBRA) mostraria "—"
+                // para todo pedido de orçamento, mesmo tendo empreendimento.
+                linkedProjectId: project?.settings?.linkedProjectId,
                 supplierId: item.supplier_id,
                 supplierName: supplierMap[item.supplier_id] ? getSupplierDisplayName(supplierMap[item.supplier_id], nameMode) : '-', // From manual map
                 deliveryDate: item.delivery_date,

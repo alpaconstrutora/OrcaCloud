@@ -4,7 +4,7 @@ import {
     FileText, Calendar, Building2, DollarSign,
     ArrowRight, Clock, Shield, LayoutDashboard,
     Table2, RefreshCw, Copy,
-    AlertCircle, MoveHorizontal
+    AlertCircle, MoveHorizontal, Landmark
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { contractService } from '../services/contractService';
@@ -12,6 +12,8 @@ import { supplierService, getSupplierDisplayName } from '../services/supplierSer
 import { appSettingsService } from '../services/appSettingsService';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
+import { empreendimentoService } from '../services/empreendimentoService';
+import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
 import { Contract } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
@@ -20,13 +22,14 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, title: 260, project: 180, supplier: 230, date: 170, status: 130, value: 150, actions: 200,
+    number: 123, title: 260, project: 180, empreendimento: 184, supplier: 230, date: 170, status: 130, value: 150, actions: 200,
 };
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
     { key: 'title', label: 'Contrato', sortable: true },
     { key: 'project', label: 'Obra', sortable: true },
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'supplier', label: 'Contratada/Contratante', sortable: true },
     { key: 'date', label: 'Vigência', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
@@ -43,6 +46,7 @@ const CONTRACT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     number: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     title: { label: 'Contrato', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     project: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     supplier: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     date: { label: 'Vigência', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -73,7 +77,13 @@ const ContractStatusBadge = ({ status }: { status: string }) => {
 function renderContractCell(
     key: string,
     contract: Contract,
-    ctx: { direction: 'INCOMING' | 'OUTGOING'; projectMap: Record<string, string>; supplierMap: Record<string, string>; clientMap: Record<string, string> },
+    ctx: {
+        direction: 'INCOMING' | 'OUTGOING';
+        projectMap: Record<string, string>;
+        supplierMap: Record<string, string>;
+        clientMap: Record<string, string>;
+        empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }>;
+    },
 ): React.ReactNode {
     switch (key) {
         case 'number':
@@ -82,6 +92,8 @@ function renderContractCell(
             return <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{contract.title}</span>;
         case 'project':
             return <span className="text-sm font-normal text-gray-700">{contract.project_id ? (ctx.projectMap[contract.project_id] ?? '—') : '—'}</span>;
+        case 'empreendimento':
+            return <EmpreendimentoCell value={contract.project_id ? ctx.empreendimentoByProject[contract.project_id] : undefined} />;
         case 'supplier':
             return (
                 <span className="text-sm font-normal text-gray-700">
@@ -147,6 +159,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     const nameMode = React.useMemo(() => appSettingsService.get().supplierNameDisplay, []);
     const [clientMap, setClientMap] = React.useState<Record<string, string>>({});
     const [projectMap, setProjectMap] = React.useState<Record<string, string>>({});
+    // Obra → empreendimento. Contrato não tem FK para empreendimento: o vínculo
+    // chega pela obra (empreendimentos.project_id ou empreendimento_towers.project_id).
+    const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [loading, setLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = usePersistedState('supplyChainContractFilters:search', '');
     const [statusFilter, setStatusFilter] = usePersistedState('supplyChainContractFilters:status', 'all');
@@ -157,8 +172,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed: o navegador redistribuiria a sobra entre as colunas e
     // arrastar uma borda moveria a vizinha errada (§6.1).
-    const tableTotalWidth = (['number', 'title', 'project', 'supplier', 'date', 'status', 'value'] as const)
-        .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+    const tableTotalWidth = COLUMNS.filter(c => c.key !== 'actions')
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
         + cols.getWidth('actions');
 
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -177,16 +192,20 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         try {
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
-            const [data, suppliers, clients, projects] = await Promise.all([
+            const [data, suppliers, clients, projects, empMap] = await Promise.all([
                 contractService.listContracts(targetProjectId, organizationId, undefined, direction, domain),
                 supplierService.listSuppliers(organizationId).catch(() => []),
                 clientService.listClients(organizationId).catch(() => []),
                 projectService.listProjects(undefined, organizationId).catch(() => []),
+                // Sem organização ("Todas") o mapa não é bloqueado — o service não filtra
+                // e a RLS recorta (CLAUDE.md regra #5).
+                empreendimentoService.mapObrasToEmpreendimentos(organizationId).catch(() => ({})),
             ]);
             setContracts(data);
             setSupplierMap(Object.fromEntries(suppliers.map(s => [s.id, getSupplierDisplayName(s, nameMode)])));
             setClientMap(Object.fromEntries(clients.map((c: { id: string; name: string }) => [c.id, c.name])));
             setProjectMap(Object.fromEntries(projects.map((p: { id: string; name: string }) => [p.id, p.name])));
+            setEmpreendimentoByProject(empMap);
         } catch (error) {
             console.error("ERRO CRÍTICO AO CARREGAR CONTRATOS:", error);
             notify("Erro ao carregar contratos. Verifique a conexão com o banco de dados.", "error");
@@ -256,13 +275,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 if (field === 'number')   cmp = (a.number || '').localeCompare(b.number || '', undefined, { numeric: true });
                 if (field === 'title')    cmp = (a.title || '').localeCompare(b.title || '');
                 if (field === 'project')  cmp = (projectMap[a.project_id || ''] || '').localeCompare(projectMap[b.project_id || ''] || '');
+                if (field === 'empreendimento') cmp = (empreendimentoByProject[a.project_id || '']?.name || '').localeCompare(empreendimentoByProject[b.project_id || '']?.name || '');
                 if (field === 'supplier') cmp = (supplierMap[a.supplier_id || ''] || '').localeCompare(supplierMap[b.supplier_id || ''] || '');
                 if (field === 'date')     cmp = new Date(a.start_date || '').getTime() - new Date(b.start_date || '').getTime();
                 if (field === 'status')   cmp = (a.status || '').localeCompare(b.status || '');
                 if (field === 'value')    cmp = a.current_value - b.current_value;
                 return dir === 'asc' ? cmp : -cmp;
             });
-    }, [contracts, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, statusFilter, supplierMap, projectMap]);
+    }, [contracts, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, statusFilter, supplierMap, projectMap, empreendimentoByProject]);
 
     // Dashboard data
     const stats = {
@@ -470,6 +490,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
                                     </span>
                                 </div>
+                                {contract.project_id && empreendimentoByProject[contract.project_id] && (
+                                    <div className="flex items-center gap-3 text-gray-500">
+                                        <Landmark className="w-4 h-4 text-gray-400" />
+                                        <span className="text-xs font-medium truncate">
+                                            {empreendimentoByProject[contract.project_id].name}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Calendar className="w-4 h-4 text-gray-400" />
                                     <span className="text-xs font-medium">Vigência: {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}</span>
@@ -543,7 +571,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                     >
                                         {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {renderContractCell(key, contract, { direction, projectMap, supplierMap, clientMap })}
+                                                {renderContractCell(key, contract, { direction, projectMap, supplierMap, clientMap, empreendimentoByProject })}
                                             </td>
                                         ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

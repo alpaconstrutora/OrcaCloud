@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
+import { empreendimentoService } from '../services/empreendimentoService';
+import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
 import { Property, PropertyStatus, PropertyDeal, Client, HedonicPricingConfig } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
 
@@ -52,6 +54,7 @@ interface SalesModuleProps {
 // `context: 'all'` aparece nas duas visões (mestre e detalhe).
 const INVENTORY_COLUMNS: (ColumnConfig & { context: 'all' | 'building' })[] = [
     { key: 'name', label: 'Imóvel', sortable: true, context: 'all' },
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true, context: 'all' },
     { key: 'address', label: 'Endereço / referência', sortable: true, context: 'all' },
     { key: 'block', label: 'Bloco', sortable: true, context: 'building' },
     { key: 'private_area', label: 'Á. priv.', sortable: true, context: 'building' },
@@ -67,6 +70,7 @@ const INVENTORY_COLUMNS: (ColumnConfig & { context: 'all' | 'building' })[] = [
 const DEALS_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'property', label: 'Imóvel', sortable: true },
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'block', label: 'Bloco', sortable: true },
     { key: 'private_area', label: 'Á. priv.', sortable: true },
     { key: 'price_base', label: 'Preço base', sortable: true },
@@ -92,11 +96,11 @@ const BROKERS_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_INVENTORY_COL_WIDTHS: Record<string, number> = {
-    name: 200, address: 220, block: 107, private_area: 117, price: 140, price_per_m2: 130,
+    name: 200, empreendimento: 184, address: 220, block: 107, private_area: 117, price: 140, price_per_m2: 130,
     position_weight: 135, sun_weight: 130, floor: 110, status: 130, actions: 200,
 };
 const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
-    code: 118, property: 220, block: 107, private_area: 117, price_base: 145, price_per_m2_base: 149,
+    code: 118, property: 220, empreendimento: 184, block: 107, private_area: 117, price_base: 145, price_per_m2_base: 149,
     floor: 110, sale_value: 134, sale_value_per_m2: 158, variance: 128, variance_pct: 123, status: 130, actions: 160,
 };
 
@@ -108,6 +112,7 @@ const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
 // dentro do render da tabela de Unidades, abaixo).
 const INVENTORY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     name: { label: 'Imóvel', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     address: { label: 'Endereço / referência', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     block: { label: 'Bloco', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     private_area: { label: 'Á. priv.', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
@@ -122,6 +127,7 @@ const INVENTORY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boole
 const DEALS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     property: { label: 'Imóvel', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     block: { label: 'Bloco', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     private_area: { label: 'Á. priv.', className: 'px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden' },
     price_base: { label: 'Preço base', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
@@ -147,10 +153,20 @@ const BROKERS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
 // aberto) — extraído para função pura para que o <tbody> possa mapear
 // `orderedVisibleColumns` (ordem arrastável) em vez de repetir um bloco
 // condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
-function renderInventoryDetailCell(key: string, property: Property, ctx: { getStatusColor: (s: PropertyStatus) => string; getStatusLabel: (s: PropertyStatus) => string }): React.ReactNode {
+function renderInventoryDetailCell(
+    key: string,
+    property: Property,
+    ctx: {
+        getStatusColor: (s: PropertyStatus) => string;
+        getStatusLabel: (s: PropertyStatus) => string;
+        empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
+    },
+): React.ReactNode {
     switch (key) {
         case 'name':
             return <span className="text-sm font-normal text-gray-700">{property.name}</span>;
+        case 'empreendimento':
+            return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} />;
         case 'address':
             return <span className="text-sm font-normal text-gray-600">{property.address || 'Resumo do Empreendimento'}</span>;
         case 'block':
@@ -207,10 +223,20 @@ const INVENTORY_MASTER_CELL_TEXT_CLASS: Record<string, string> = {
 // renderInventoryDetailCell, para a outra "forma" da mesma tabela (master view
 // só mostra name/address/price/price_per_m2/status — as demais colunas são
 // context: 'building' e já saem filtradas por `isVisible` antes de chegar aqui).
-function renderInventoryMasterCell(key: string, property: Property, ctx: { getStatusColor: (s: PropertyStatus) => string; getStatusLabel: (s: PropertyStatus) => string }): React.ReactNode {
+function renderInventoryMasterCell(
+    key: string,
+    property: Property,
+    ctx: {
+        getStatusColor: (s: PropertyStatus) => string;
+        getStatusLabel: (s: PropertyStatus) => string;
+        empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
+    },
+): React.ReactNode {
     switch (key) {
         case 'name':
             return property.name;
+        case 'empreendimento':
+            return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} />;
         case 'address':
             return property.address || 'Resumo do Empreendimento';
         case 'price':
@@ -260,6 +286,7 @@ function renderDealCell(
         m2Venda: number;
         variancia: number;
         varianciaPct: number;
+        empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
     },
 ): React.ReactNode {
     const { property, client, unitLabel, m2, basePrice, m2Base, m2Venda, variancia, varianciaPct } = ctx;
@@ -280,6 +307,8 @@ function renderDealCell(
                     </span>
                 </div>
             );
+        case 'empreendimento':
+            return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} />;
         case 'block':
             return property?.block || '-';
         case 'private_area':
@@ -364,6 +393,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'sales-plans' | 'brokers' | 'contracts') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
+    // Imóvel → empreendimento. O vínculo não é FK na tabela do Comercial: vem de
+    // `empreendimento_units.commercial_property_id` (unidade) ou de
+    // `empreendimentos.commercial_building_id` (edifício-pai).
+    const [empreendimentoByProperty, setEmpreendimentoByProperty] = useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [brokerAccess, setBrokerAccess] = useState<Record<string, boolean>>({});
 
@@ -422,16 +455,19 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         console.log('[Commercial] Loading data for organization:', organizationId);
         setLoading(true);
         try {
-            const [propsData, dealsData, clientsData, projectsData] = await Promise.all([
+            const [propsData, dealsData, clientsData, projectsData, empMap] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 clientService.listClients(),
                 projectService.listProjects(),
+                // Eixo de VENDA (commercial_property_id) — independente do de locação.
+                empreendimentoService.mapPropertiesToEmpreendimentos(organizationId, 'SALE').catch(() => ({})),
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'SALE' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'SALE'));
             setClients(clientsData);
             setProjects(projectsData.map(proj => ({ ...proj, budget: [] })));
+            setEmpreendimentoByProperty(empMap);
 
         } catch (err) {
             console.error('[Commercial] Error loading data:', err);
@@ -812,6 +848,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const getInventorySortValue = (p: Property, key: string): string | number => {
         switch (key) {
             case 'name': return (p.name || '').toLowerCase();
+            // Derivado do imóvel (não é campo dele) — ver empreendimentoByProperty.
+            case 'empreendimento': return (empreendimentoByProperty[p.id]?.name || '').toLowerCase();
             case 'address': return (p.address || '').toLowerCase();
             case 'block': return (p.block || '').toLowerCase();
             case 'private_area': return p.private_area || 0;
@@ -855,7 +893,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         }
 
         return result;
-    }, [properties, searchTerm, selectedBuildingId, inventoryColumns.sortColumn, inventoryColumns.sortDirection]);
+    }, [properties, searchTerm, selectedBuildingId, inventoryColumns.sortColumn, inventoryColumns.sortDirection, empreendimentoByProperty]);
 
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
@@ -935,6 +973,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         switch (key) {
             case 'code': return deal.code || '';
             case 'property': return (property?.name || '').toLowerCase();
+            // Derivado do imóvel do negócio — ver empreendimentoByProperty.
+            case 'empreendimento': return (deal.property_id ? (empreendimentoByProperty[deal.property_id]?.name || '') : '').toLowerCase();
             case 'block': return (property?.block || '').toLowerCase();
             case 'private_area': return dealAreaOf(deal);
             case 'price_base': return basePrice;
@@ -963,7 +1003,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [buildingDeals, properties, dealsColumns.sortColumn, dealsColumns.sortDirection]);
+    }, [buildingDeals, properties, dealsColumns.sortColumn, dealsColumns.sortDirection, empreendimentoByProperty]);
 
     const stats = useMemo(() => {
         // Filtrar unidades vendáveis (excluir permutas da base estratégica)
@@ -1103,6 +1143,15 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 </div>
             </div>
             <div className="p-8">
+                {empreendimentoByProperty[property.id] && (
+                    /* Tipografia conforme §21/§7 (sentence case, peso normal) — o resto
+                       deste card é legado "gritado" e está pendente de migração; código novo
+                       não reproduz o estilo deprecado. */
+                    <div className="flex flex-col mb-4">
+                        <span className="text-xs font-semibold text-slate-500 mb-1">Empreendimento</span>
+                        <EmpreendimentoCell value={empreendimentoByProperty[property.id]} />
+                    </div>
+                )}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex flex-col">
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Preço Sugerido</span>
@@ -1492,7 +1541,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             </td>
                                                             {orderedVisible.map(key => (
                                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                    {renderInventoryDetailCell(key, property, { getStatusColor, getStatusLabel })}
+                                                                    {renderInventoryDetailCell(key, property, { getStatusColor, getStatusLabel, empreendimentoByProperty })}
                                                                 </td>
                                                             ))}
                                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -1535,7 +1584,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             <td key={key}
                                                                 className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 cursor-pointer ${INVENTORY_MASTER_CELL_TEXT_CLASS[key] || ''}`}
                                                                 onClick={() => setSelectedBuildingId(property.id)}>
-                                                                {renderInventoryMasterCell(key, property, { getStatusColor, getStatusLabel })}
+                                                                {renderInventoryMasterCell(key, property, { getStatusColor, getStatusLabel, empreendimentoByProperty })}
                                                             </td>
                                                         ))}
                                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -1933,6 +1982,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     <colgroup>
                                         {dv.includes('code') && <col data-col-key="code" style={{ width: `${dealsResize.getWidth('code')}px` }} />}
                                         {dv.includes('property') && <col data-col-key="property" style={{ width: `${dealsResize.getWidth('property')}px` }} />}
+                                        {dv.includes('empreendimento') && <col data-col-key="empreendimento" style={{ width: `${dealsResize.getWidth('empreendimento')}px` }} />}
                                         {dv.includes('block') && <col data-col-key="block" style={{ width: `${dealsResize.getWidth('block')}px` }} />}
                                         {dv.includes('private_area') && <col data-col-key="private_area" style={{ width: `${dealsResize.getWidth('private_area')}px` }} />}
                                         {dv.includes('price_base') && <col data-col-key="price_base" style={{ width: `${dealsResize.getWidth('price_base')}px` }} />}
@@ -1953,6 +2003,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                             {dv.includes('code') && <SortableHeader colKey="code" label="Código" {...dSortProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="code" /></SortableHeader>}
                                             {dv.includes('property') && <SortableHeader colKey="property" label="Imóvel" {...dSortProps} className="px-6 py-2 border-r border-gray-100 overflow-hidden"><dealsResize.ResizeHandle colKey="property" /></SortableHeader>}
+                                            {dv.includes('empreendimento') && <SortableHeader colKey="empreendimento" label="Empreendimento" {...dSortProps} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="empreendimento" /></SortableHeader>}
                                             {dv.includes('block') && <SortableHeader colKey="block" label="Bloco" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"><dealsResize.ResizeHandle colKey="block" /></SortableHeader>}
                                             {dv.includes('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="private_area" /></SortableHeader>}
                                             {dv.includes('price_base') && <SortableHeader colKey="price_base" label="Preço base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden"><dealsResize.ResizeHandle colKey="price_base" /></SortableHeader>}
@@ -2003,6 +2054,11 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                     {client?.name || 'Não vinculado'}
                                                                 </span>
                                                             </div>
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('empreendimento') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <EmpreendimentoCell value={deal.property_id ? empreendimentoByProperty[deal.property_id] : undefined} />
                                                         </td>
                                                     )}
                                                     {dv.includes('block') && (

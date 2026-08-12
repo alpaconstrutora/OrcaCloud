@@ -33,6 +33,27 @@ export interface CommercialDivergenceSummary {
     orphans: number;
 }
 
+// Empreendimento resolvido a partir de um imóvel do Comercial — ver
+// mapPropertiesToEmpreendimentos.
+export interface EmpreendimentoPropertyLink {
+    id: string;
+    name: string;
+    /** Só quando o imóvel é uma unidade de torre nomeada. */
+    towerName?: string;
+    /** Obra do vínculo (torre tem precedência sobre o empreendimento). */
+    projectId?: string;
+    /** true = o imóvel é o EDIFÍCIO-pai do empreendimento, não uma unidade. */
+    isBuilding?: boolean;
+}
+
+// Contagem do que a duplicação copiou — ver copyStructure.
+export interface EmpreendimentoCopyReport {
+    towers: number;
+    floors: number;
+    units: number;
+    commonAreas: number;
+}
+
 // Um empreendimento com unidade(s) apontando para commercial_property_id/
 // rental_property_id que não existe(m) mais — ver getOrphanLinksSummary.
 export interface EmpreendimentoOrphanSummary {
@@ -236,6 +257,71 @@ export const empreendimentoService = {
         return map;
     },
 
+    /**
+     * Imóvel do Comercial (`commercial_properties.id`) → empreendimento. É o
+     * espelho de `mapObrasToEmpreendimentos` para as telas cuja chave é o imóvel
+     * (Venda de Ativos, Gestão de Locações), não a obra.
+     *
+     * Lê a view `vw_unit_property_map` (migration 20270842000000, `security_invoker=on`),
+     * que já resolve unidade → torre → empreendimento numa consulta só — em vez da
+     * cadeia manual de 4 queries.
+     *
+     * `purpose` recorta o eixo: 'SALE' usa `commercial_property_id`, 'RENTAL' usa
+     * `rental_property_id`. Omitido, traz os dois.
+     *
+     * Cobre também o EDIFÍCIO-pai (o modo mestre das duas telas): edifício não é
+     * unidade, então não está na view — vem de
+     * `empreendimentos.commercial_building_id`/`commercial_rental_building_id`.
+     */
+    async mapPropertiesToEmpreendimentos(
+        organizationId?: string | null,
+        purpose?: 'SALE' | 'RENTAL',
+    ): Promise<Record<string, EmpreendimentoPropertyLink>> {
+        const map: Record<string, EmpreendimentoPropertyLink> = {};
+
+        // organizationId ausente = "Todas as organizações": não filtra, a RLS recorta
+        // (CLAUDE.md regra #5).
+        let unitsQuery = supabase
+            .from('vw_unit_property_map')
+            .select('property_id, purpose, empreendimento_id, empreendimento_name, tower_name, project_id');
+        if (organizationId) unitsQuery = unitsQuery.eq('organization_id', organizationId);
+        if (purpose) unitsQuery = unitsQuery.eq('purpose', purpose);
+
+        const { data: rows, error } = await unitsQuery;
+        if (error) throw new Error(`Failed to map properties to empreendimentos: ${error.message}`);
+
+        for (const r of (rows || []) as {
+            property_id: string; empreendimento_id: string; empreendimento_name: string;
+            tower_name: string | null; project_id: string | null;
+        }[]) {
+            if (!r.property_id) continue;
+            map[r.property_id] = {
+                id: r.empreendimento_id,
+                name: r.empreendimento_name,
+                towerName: r.tower_name ?? undefined,
+                projectId: r.project_id ?? undefined,
+            };
+        }
+
+        // Edifícios-pai. Uma linha por empreendimento, então é uma consulta barata.
+        let buildingsQuery = supabase
+            .from('empreendimentos')
+            .select('id, name, commercial_building_id, commercial_rental_building_id, project_id');
+        if (organizationId) buildingsQuery = buildingsQuery.eq('organization_id', organizationId);
+
+        const { data: emps } = await buildingsQuery;
+        for (const e of (emps || []) as {
+            id: string; name: string; commercial_building_id: string | null;
+            commercial_rental_building_id: string | null; project_id: string | null;
+        }[]) {
+            const entry = { id: e.id, name: e.name, projectId: e.project_id ?? undefined, isBuilding: true };
+            if (purpose !== 'RENTAL' && e.commercial_building_id) map[e.commercial_building_id] = entry;
+            if (purpose !== 'SALE' && e.commercial_rental_building_id) map[e.commercial_rental_building_id] = entry;
+        }
+
+        return map;
+    },
+
     async getById(id: string, opts?: { includeChildren?: boolean }): Promise<Empreendimento | EmpreendimentoWithChildren | null> {
         const { data: empreendimento, error } = await supabase
             .from('empreendimentos')
@@ -290,6 +376,119 @@ export const empreendimentoService = {
         });
 
         return created;
+    },
+
+    /**
+     * Copia a ESTRUTURA de um empreendimento para outro já criado — torres,
+     * pavimentos, unidades e áreas comuns. Usado pelo "Duplicar" da lista, depois
+     * que o usuário confere o cadastro no formulário e salva.
+     *
+     * A cópia nasce SEM vínculo nenhum: não leva `project_id` da torre,
+     * proveniência de estudo (`imovib_*`/`planta_ai_*`) nem as pontes com o
+     * Comercial/Locações (`commercial_property_id`/`rental_property_id`). As
+     * unidades entram DISPONIVEL nos dois eixos — copiar um "VENDIDO" para um
+     * empreendimento que ainda não existe comercialmente seria dado falso.
+     */
+    async copyStructure(sourceId: string, targetId: string): Promise<EmpreendimentoCopyReport> {
+        const report: EmpreendimentoCopyReport = { towers: 0, floors: 0, units: 0, commonAreas: 0 };
+
+        const sourceTowers = await this.listTowers(sourceId);
+        const towerIdMap = new Map<string, string>();
+
+        for (const tower of sourceTowers) {
+            const created = await this.createTower({
+                empreendimento_id: targetId,
+                name: tower.name,
+                floors_count: tower.floors_count,
+                units_per_floor: tower.units_per_floor,
+                construction_cost_sqm: tower.construction_cost_sqm,
+                sales_price_sqm: tower.sales_price_sqm,
+                sort_order: tower.sort_order,
+                // project_id / imovib_block_id / planta_ai_scenario_id ficam de fora
+                // de propósito: vínculo e proveniência não se duplicam.
+            });
+            towerIdMap.set(tower.id, created.id);
+            report.towers += 1;
+
+            // Pavimentos primeiro — a unidade referencia `floor_id`, então o mapa
+            // velho→novo precisa existir antes de copiar as unidades.
+            const floorIdMap = new Map<string, string>();
+            for (const floor of await this.listFloors(tower.id)) {
+                const newFloor = await this.createFloor({
+                    tower_id: created.id,
+                    name: floor.name,
+                    tipo: floor.tipo,
+                    floor_number: floor.floor_number,
+                    repeat_count: floor.repeat_count,
+                    units_per_floor: floor.units_per_floor,
+                    prefix: floor.prefix,
+                    sort_order: floor.sort_order,
+                });
+                floorIdMap.set(floor.id, newFloor.id);
+                report.floors += 1;
+            }
+
+            const sourceUnits = await this.listUnits(tower.id);
+            if (sourceUnits.length > 0) {
+                const copies: EmpreendimentoUnitInsert[] = sourceUnits.map(u => ({
+                    tower_id: created.id,
+                    floor_id: u.floor_id ? (floorIdMap.get(u.floor_id) ?? null) : null,
+                    floor_tipo: u.floor_tipo,
+                    name: u.name,
+                    floor: u.floor,
+                    typology: u.typology,
+                    private_area: u.private_area,
+                    common_area: u.common_area,
+                    total_area: u.total_area,
+                    bedrooms: u.bedrooms,
+                    bathrooms: u.bathrooms,
+                    suites: u.suites,
+                    parking_spaces: u.parking_spaces,
+                    position_type: u.position_type,
+                    sun_orientation: u.sun_orientation,
+                    view_type: u.view_type,
+                    price: u.price,
+                    rental_price: u.rental_price,
+                    is_vendavel: u.is_vendavel,
+                    sort_order: u.sort_order,
+                    // Estado comercial NÃO se copia — a cópia nasce disponível nos dois eixos.
+                    status: 'DISPONIVEL',
+                    rental_status: 'DISPONIVEL',
+                    commercial_property_id: null,
+                    rental_property_id: null,
+                }));
+                await this.bulkUpsertUnits(copies);
+                report.units += copies.length;
+            }
+        }
+
+        const sourceAreas = await this.listCommonAreas(sourceId);
+        if (sourceAreas.length > 0) {
+            const areaCopies: EmpreendimentoCommonAreaInsert[] = sourceAreas.map(a => ({
+                empreendimento_id: targetId,
+                // Área comum ligada a uma torre acompanha a torre correspondente da cópia.
+                tower_id: a.tower_id ? (towerIdMap.get(a.tower_id) ?? null) : null,
+                name: a.name,
+                category: a.category,
+                area: a.area,
+                floor: a.floor,
+                description: a.description,
+                is_vendavel: a.is_vendavel,
+                sort_order: a.sort_order,
+            }));
+            await this.upsertCommonAreas(areaCopies);
+            report.commonAreas += areaCopies.length;
+        }
+
+        await empreendimentoAuditService.record({
+            empreendimentoId: targetId,
+            entityType: 'empreendimento',
+            entityId: targetId,
+            action: 'create',
+            metadata: { duplicadoDe: sourceId, ...report },
+        });
+
+        return report;
     },
 
     async update(id: string, updates: EmpreendimentoUpdate): Promise<Empreendimento> {

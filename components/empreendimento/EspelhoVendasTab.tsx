@@ -333,14 +333,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     VENDIDO:    units.filter(u => u.status === 'VENDIDO').length,
     PERMUTADO:  units.filter(u => u.status === 'PERMUTADO').length,
   };
-  const vgvTotal = units.reduce((s, u) => s + (u.price ?? 0), 0);
   const vgvVendido = units.filter(u => u.status === 'VENDIDO' || u.status === 'PERMUTADO')
     .reduce((s, u) => s + (u.price ?? 0), 0);
   const vgvDisponivel = units.filter(u => u.status === 'DISPONIVEL')
     .reduce((s, u) => s + (u.price ?? 0), 0);
-  const pctComercializado = totalUnits > 0
-    ? Math.round(((byStatus.VENDIDO + byStatus.PERMUTADO + byStatus.RESERVADO) / totalUnits) * 100)
-    : 0;
   const linkedCount = units.filter(u => !!u.commercial_property_id).length;
 
   // ── Coluna "Publicar": diferença entre desejado (switch) e real (banco) ────
@@ -390,14 +386,6 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
           </button>
         </div>
       )}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Total Unidades" value={String(totalUnits)} sub={`${linkedCount} no Comercial`} />
-        <KpiCard label="VGV Total" value={vgvTotal > 0 ? fmt(vgvTotal) : '—'} color="text-gray-800" />
-        <KpiCard label="VGV Comercializado" value={vgvVendido > 0 ? fmt(vgvVendido) : '—'} color="text-blue-600" />
-        <KpiCard label="% Comercializado" value={`${pctComercializado}%`} color={pctComercializado >= 80 ? 'text-emerald-600' : pctComercializado >= 50 ? 'text-amber-600' : 'text-gray-600'} />
-      </div>
 
       {/* Barras de status */}
       <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm">
@@ -629,14 +617,6 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
 };
 
 // ── Helpers visuais ──────────────────────────────────────────────────────────
-const KpiCard: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color = 'text-gray-800' }) => (
-  <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm">
-    <span className="text-xs font-semibold text-gray-500 block mb-1">{label}</span>
-    <span className={`text-lg font-bold block ${color}`}>{value}</span>
-    {sub && <span className="text-xs text-gray-400 font-medium">{sub}</span>}
-  </div>
-);
-
 const StatusPill: React.FC<{ label: string; count: number; total: number; color: string }> = ({ label, count, total, color }) => (
   <div className="flex items-center gap-2">
     <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${color}`} />

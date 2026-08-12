@@ -2,10 +2,9 @@
 //
 // Aba Histórico do Empreendimento — trilha de auditoria (empreendimento_audit_logs).
 // Só leitura: a tabela é imutável por RLS (só SELECT/INSERT, nenhuma policy de
-// UPDATE/DELETE). UI segue docs/ui_ux_guia_unificado.md §4/§5.2/§6/§7/§8/§11/§12.
+// UPDATE/DELETE). UI segue docs/ui_ux_guia_unificado.md §5.2/§6/§7/§8/§11/§12.
 import React from 'react';
-import { History, Search, RefreshCw, Activity, Pencil, ArrowLeftRight, Clock } from 'lucide-react';
-import { KpiCard } from '../ui/KpiCard';
+import { History, Search, RefreshCw } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import {
   ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
@@ -261,18 +260,6 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
     }
   };
 
-  // KPIs derivados da página carregada — a contagem exata exigiria uma query por
-  // filtro, e o valor informativo (o que andou por aqui) é o mesmo.
-  const kpis = React.useMemo(() => {
-    const limite = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return {
-      ultimos30: logs.filter(l => new Date(l.created_at).getTime() >= limite).length,
-      alteracoes: logs.filter(l => l.action === 'update' && l.field_name).length,
-      sincronizacoes: logs.filter(l => l.action === 'sync' || l.action === 'publish' || l.action === 'pull').length,
-      ultimo: logs[0] ? formatDateTime(logs[0].created_at) : '—',
-    };
-  }, [logs]);
-
   const sorted = React.useMemo(() => {
     const col = tableColumns.sortColumn;
     if (!col) return logs;
@@ -298,13 +285,6 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
           {error}
         </div>
       )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-        <KpiCard label="EVENTOS (30 DIAS)" value={kpis.ultimos30} icon={<Activity className="w-5 h-5" />} color="blue" />
-        <KpiCard label="ALTERAÇÕES DE CAMPO" value={kpis.alteracoes} icon={<Pencil className="w-5 h-5" />} color="indigo" />
-        <KpiCard label="SINCRONIZAÇÕES" value={kpis.sincronizacoes} icon={<ArrowLeftRight className="w-5 h-5" />} color="violet" />
-        <KpiCard label="ÚLTIMO EVENTO" value={kpis.ultimo} icon={<Clock className="w-5 h-5" />} color="gray" />
-      </div>
 
       {/* Toolbar acoplada à tabela — §5.2 */}
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

@@ -4,23 +4,26 @@
 // Orçamento, Planejamento, Áreas NBR 12721, Planta IA / Viabilidade, Contratos e
 // Financeiro — com navegação para o módulo de destino e gestão do vínculo.
 //
-// UI: docs/ui_ux_guia_unificado.md §4 (KpiCard), §8 (badge = texto colorido),
+// UI: docs/ui_ux_guia_unificado.md §8 (badge = texto colorido),
 // §9.2 (ActionIconButton), §11/§12 (loading/empty), §14 (useConfirm), §16 (radius).
 import React from 'react';
 import {
   Building2, Calculator, CalendarRange, Ruler, LayoutGrid,
-  FileSignature, Wallet, AlertCircle, RefreshCw, Plus,
+  FileSignature, Wallet, AlertCircle, RefreshCw, Plus, Search, HardHat,
 } from 'lucide-react';
-import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
+import { usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import { useStore } from '../../store/useStore';
 import { Empreendimento, EmpreendimentoTower } from '../../types';
+import { onlyObras } from '../../utils/projectClassification';
+import { projectService } from '../../services/projectService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import {
   empreendimentoLinksService, EmpreendimentoLinksSnapshot, EmpreendimentoLink,
 } from '../../services/empreendimentoLinksService';
+import CriarObraDoEmpreendimento, { CriarObraTarget } from './CriarObraDoEmpreendimento';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -35,6 +38,26 @@ interface Props {
 const formatMoney = (v: number): string =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
+/** Linha crua de `projects` como o `projectService.listProjects` devolve. */
+type ClassifiableProjectRow = {
+  id?: string;
+  name: string;
+  code?: string | null;
+  organization_id?: string | null;
+  settings?: Record<string, unknown> | null;
+};
+
+/** Obra candidata ao vínculo, já resolvida (organização + vínculo existente). */
+interface LinkableObra {
+  id: string;
+  name: string;
+  code: string | null;
+  organizationId: string | null;
+  /** Preenchido quando a obra já pertence a OUTRO empreendimento. */
+  linkedEmpreendimentoId: string | null;
+  linkedEmpreendimentoName: string | null;
+}
+
 // Situação de contrato / lançamento — texto colorido puro (§8).
 const STATUS_COLORS: Record<string, string> = {
   ATIVO: 'text-emerald-700',
@@ -47,8 +70,6 @@ const STATUS_COLORS: Record<string, string> = {
   PREVISTO: 'text-blue-700',
   VENCIDO: 'text-red-600',
 };
-
-const ACTIVE_CONTRACT_STATUSES = new Set(['ATIVO', 'VIGENTE']);
 
 /** Uma linha de vínculo. A ação "Abrir" é texto azul; desvincular é ícone (§9). */
 const LinkRow: React.FC<{
@@ -124,7 +145,9 @@ const LinkSection: React.FC<{
 export const VinculacoesTab: React.FC<Props> = ({
   empreendimento: emp, organizationId, onOpenProject, onChangeView, onLinksChanged,
 }) => {
-  const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (regras #2/#3)
+  // `organizations` = todas as organizações de que o usuário é membro — usado para
+  // rotular a obra no painel de vínculo (a obra pode ser de outra org que não a SPE).
+  const { organizations } = useStore();
   const confirm = useConfirm();
 
   const [snapshot, setSnapshot] = React.useState<EmpreendimentoLinksSnapshot | null>(null);
@@ -134,6 +157,8 @@ export const VinculacoesTab: React.FC<Props> = ({
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [linkSheetOpen, setLinkSheetOpen] = React.useState(false);
   const [linkTarget, setLinkTarget] = React.useState<{ towerId: string | null; towerName: string | null }>({ towerId: null, towerName: null });
+  // Criar obra a partir daqui — abre o ProjectModal pré-preenchido pelo empreendimento.
+  const [creatingObra, setCreatingObra] = React.useState<CriarObraTarget | null>(null);
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -165,14 +190,77 @@ export const VinculacoesTab: React.FC<Props> = ({
 
   React.useEffect(() => { load(); }, [load]);
 
-  // Obras da org que ainda não estão vinculadas a este empreendimento.
+  // ── Obras candidatas ao vínculo ────────────────────────────────────────────
+  // NÃO sai de `useStore().projects`: aquela lista já vem recortada pelo seletor
+  // de organização do topo, e o empreendimento costuma ser uma SPE própria
+  // enquanto as obras vivem na organização do grupo — a interseção dava zero e a
+  // tela dizia "nenhuma obra disponível" com obras cadastradas. Aqui a busca é
+  // sem filtro de org: a RLS recorta pelas organizações de que o usuário é
+  // membro (mesmo precedente do dropdown de Corretor).
+  const [linkableObras, setLinkableObras] = React.useState<LinkableObra[]>([]);
+  const [linkableLoading, setLinkableLoading] = React.useState(false);
+  const [linkableError, setLinkableError] = React.useState<string | null>(null);
+  // §3: busca persistida. Não é zerada ao reabrir o painel de propósito — o termo
+  // continua visível no campo, então o recorte nunca fica escondido do usuário.
+  const [obraSearch, setObraSearch] = usePersistedState<string>('vinculacoes:obraSearch', '');
+
+  const loadLinkableObras = React.useCallback(async () => {
+    setLinkableLoading(true);
+    setLinkableError(null);
+    try {
+      const [rows, empByProject] = await Promise.all([
+        projectService.listProjects(undefined, undefined, true),
+        // Mapa obra → empreendimento: é o que permite dizer "já vinculada a X"
+        // em vez de afirmar em branco que todas já estão vinculadas.
+        empreendimentoService.mapObrasToEmpreendimentos(undefined),
+      ]);
+      const obras = onlyObras(rows as ClassifiableProjectRow[]);
+      setLinkableObras(obras
+        .filter((p): p is ClassifiableProjectRow & { id: string } => !!p.id)
+        .map(p => {
+          const vinculo = empByProject[p.id];
+          return {
+            id: p.id,
+            name: p.name,
+            code: p.code ?? (p.settings as { code?: string } | null)?.code ?? null,
+            organizationId: p.organization_id ?? (p.settings as { organizationId?: string } | null)?.organizationId ?? null,
+            linkedEmpreendimentoId: vinculo?.id ?? null,
+            linkedEmpreendimentoName: vinculo?.name ?? null,
+          };
+        }));
+    } catch (err: any) {
+      console.error('[VinculacoesTab] erro ao carregar obras vinculáveis:', err);
+      setLinkableError(err?.message || 'Não foi possível carregar as obras.');
+      setLinkableObras([]);
+    } finally {
+      setLinkableLoading(false);
+    }
+  }, []);
+
+  const orgLabel = React.useCallback(
+    (id?: string | null) => (id ? (organizations.find(o => o.id === id)?.name ?? 'Organização desconhecida') : 'Sem organização'),
+    [organizations],
+  );
+
   const availableObras = React.useMemo(() => {
+    // Obras já vinculadas a ESTE empreendimento saem da lista; as vinculadas a
+    // OUTRO ficam visíveis, porém desabilitadas e com o motivo à mostra.
     const used = new Set(snapshot?.obras.map(o => o.id) ?? []);
-    return projects
-      .filter(p => !effectiveOrgId || (p.organization_id ?? (p.settings as any)?.organizationId) === effectiveOrgId)
-      // `Project.id` é opcional no tipo do store (projeto ainda não persistido).
-      .filter((p): p is typeof p & { id: string } => !!p.id && !used.has(p.id));
-  }, [projects, effectiveOrgId, snapshot]);
+    const term = obraSearch.trim().toLowerCase();
+    return linkableObras
+      .filter(o => !used.has(o.id))
+      .filter(o => !term
+        || o.name.toLowerCase().includes(term)
+        || (o.code ?? '').toLowerCase().includes(term)
+        || orgLabel(o.organizationId).toLowerCase().includes(term))
+      .sort((a, b) => {
+        // Organização do empreendimento primeiro — é o caso normal.
+        const aSame = a.organizationId === effectiveOrgId ? 0 : 1;
+        const bSame = b.organizationId === effectiveOrgId ? 0 : 1;
+        if (aSame !== bSame) return aSame - bSame;
+        return a.name.localeCompare(b.name);
+      });
+  }, [linkableObras, snapshot, obraSearch, effectiveOrgId, orgLabel]);
 
   const openProject = (projectId: string, view: string) => {
     if (!onOpenProject) {
@@ -282,6 +370,7 @@ export const VinculacoesTab: React.FC<Props> = ({
   const openLinkSheet = (towerId: string | null, towerName: string | null) => {
     setLinkTarget({ towerId, towerName });
     setLinkSheetOpen(true);
+    void loadLinkableObras();
   };
 
   if (loading) {
@@ -308,26 +397,12 @@ export const VinculacoesTab: React.FC<Props> = ({
     );
   }
 
-  const contratosAtivos = snapshot.contratos.filter(c => ACTIVE_CONTRACT_STATUSES.has(String(c.meta?.status ?? ''))).length;
   const semObra = snapshot.obras.length === 0;
   // Torres multi-torre sem obra própria: o vínculo por torre é o correto nesse caso.
   const towersSemObra = towers.filter(t => !t.project_id);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-        <KpiCard label="OBRAS VINCULADAS" value={snapshot.obras.length} icon={<Building2 className="w-5 h-5" />} color="blue" />
-        <KpiCard label="CONTRATOS ATIVOS" value={contratosAtivos} sub={`${snapshot.contratos.length} no total`} icon={<FileSignature className="w-5 h-5" />} color="indigo" />
-        <KpiCard label="LANÇAMENTOS EM ABERTO" value={snapshot.financeiro.open} sub={formatMoney(snapshot.financeiro.totalCredit - snapshot.financeiro.totalDebit)} icon={<Wallet className="w-5 h-5" />} color="emerald" />
-        <KpiCard
-          label="VÍNCULOS QUEBRADOS"
-          value={snapshot.orphanCount}
-          sub={snapshot.orphanCount > 0 ? 'Registro apontado não existe mais' : undefined}
-          icon={<AlertCircle className="w-5 h-5" />}
-          color={snapshot.orphanCount > 0 ? 'amber' : 'gray'}
-        />
-      </div>
-
       {/* Obras */}
       <LinkSection
         title="Obras"
@@ -337,13 +412,23 @@ export const VinculacoesTab: React.FC<Props> = ({
         emptyTitle="Nenhuma obra vinculada"
         emptyHint="Vincule uma obra para ver orçamento, planejamento, contratos e financeiro aqui."
         action={
-          <button
-            onClick={() => openLinkSheet(null, null)}
-            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-          >
-            <Plus className="w-[15px] h-[15px]" />
-            Vincular obra
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Secundário: a obra ainda não existe. Primário continua sendo vincular. */}
+            <button
+              onClick={() => setCreatingObra({ kind: 'EMPREENDIMENTO' })}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+            >
+              <HardHat className="w-[15px] h-[15px]" />
+              Criar obra
+            </button>
+            <button
+              onClick={() => openLinkSheet(null, null)}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+            >
+              <Plus className="w-[15px] h-[15px]" />
+              Vincular obra
+            </button>
+          </div>
         }
       >
         {snapshot.obras.map(o => (
@@ -368,6 +453,12 @@ export const VinculacoesTab: React.FC<Props> = ({
           {towersSemObra.map(t => (
             <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-b-0 hover:bg-blue-50/50 transition-colors">
               <p className="text-sm font-normal text-gray-700 flex-1 truncate">Torre {t.name}</p>
+              <button
+                onClick={() => setCreatingObra({ kind: 'TORRE', towerId: t.id, towerName: t.name })}
+                className="text-gray-500 hover:text-gray-700 text-sm font-medium p-1.5 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                Criar obra
+              </button>
               <button
                 onClick={() => openLinkSheet(t.id, t.name)}
                 className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
@@ -555,35 +646,119 @@ export const VinculacoesTab: React.FC<Props> = ({
               : 'A obra principal é usada quando o empreendimento tem uma obra só.'}
           </SheetDescription>
         </SheetHeader>
-        <SheetPanel>
-          {availableObras.length === 0 ? (
+        {/* p-6: o SheetPanel não traz padding próprio — sem isso a busca cola na borda. */}
+        <SheetPanel className="p-6 space-y-4">
+          {/* Busca — a lista cobre todas as organizações do usuário, então pode ser longa. */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={obraSearch}
+              onChange={e => setObraSearch(e.target.value)}
+              placeholder="Buscar por nome, código ou organização..."
+              className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            />
+          </div>
+
+          {linkableError && (
+            <div className="bg-red-50 border border-red-100 rounded-[10px] p-4 flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <p className="text-sm font-normal text-red-700 flex-1">{linkableError}</p>
+              <button
+                onClick={() => void loadLinkableObras()}
+                className="text-red-700 hover:text-red-900 text-sm font-medium p-1.5 hover:bg-red-100 rounded-lg transition-all"
+              >
+                Tentar de novo
+              </button>
+            </div>
+          )}
+
+          {linkableLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-500">Carregando obras...</p>
+            </div>
+          ) : availableObras.length === 0 ? (
             <div className="text-center py-12">
               <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma obra disponível</h3>
+              {/* A mensagem distingue os três casos reais — antes afirmava "todas já
+                  vinculadas" sem saber, porque só conhecia os vínculos DESTE empreendimento. */}
               <p className="text-sm text-gray-500">
-                Todas as obras desta organização já estão vinculadas, ou ainda não há obras cadastradas.
+                {obraSearch.trim()
+                  ? 'Nenhuma obra corresponde à busca.'
+                  : linkableObras.length === 0
+                    ? 'Você ainda não tem obras cadastradas nas suas organizações.'
+                    : 'Todas as suas obras já estão vinculadas a este empreendimento.'}
               </p>
+              {!obraSearch.trim() && (
+                <button
+                  onClick={() => {
+                    setLinkSheetOpen(false);
+                    setCreatingObra(linkTarget.towerId
+                      ? { kind: 'TORRE', towerId: linkTarget.towerId, towerName: linkTarget.towerName ?? '' }
+                      : { kind: 'EMPREENDIMENTO' });
+                  }}
+                  className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                >
+                  <HardHat className="w-[15px] h-[15px]" />
+                  Criar obra
+                </button>
+              )}
             </div>
           ) : (
             <div className="rounded-[10px] border border-gray-100 overflow-hidden">
-              {availableObras.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => handleLinkObra(p.id)}
-                  disabled={busyId === p.id}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-b-0 hover:bg-blue-50/50 transition-colors text-left disabled:opacity-50"
-                >
-                  <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm font-normal text-gray-700 flex-1 truncate">{p.name}</span>
-                  <span className="text-blue-600 text-sm font-medium">
-                    {busyId === p.id ? 'Vinculando...' : 'Vincular'}
-                  </span>
-                </button>
-              ))}
+              {availableObras.map(p => {
+                // Uma obra em dois empreendimentos deixaria o mapa obra→empreendimento
+                // ambíguo (quem lê depois vê só um dos dois) — por isso é bloqueio, não aviso.
+                const jaVinculada = !!p.linkedEmpreendimentoId;
+                const outraOrg = p.organizationId !== effectiveOrgId;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleLinkObra(p.id)}
+                    disabled={busyId === p.id || jaVinculada}
+                    title={jaVinculada ? `Já vinculada a "${p.linkedEmpreendimentoName}"` : undefined}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-b-0 hover:bg-blue-50/50 transition-colors text-left disabled:opacity-50 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                  >
+                    <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-normal text-gray-700 truncate">
+                        {p.name}{p.code ? ` · ${p.code}` : ''}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-normal text-gray-400 truncate">{orgLabel(p.organizationId)}</span>
+                        {outraOrg && <span className="text-sm font-normal text-amber-600 shrink-0">outra organização</span>}
+                      </div>
+                    </div>
+                    <span className={`text-sm font-medium shrink-0 ${jaVinculada ? 'text-gray-400' : 'text-blue-600'}`}>
+                      {busyId === p.id
+                        ? 'Vinculando...'
+                        : jaVinculada
+                          ? `Em "${p.linkedEmpreendimentoName}"`
+                          : 'Vincular'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </SheetPanel>
       </Sheet>
+
+      {creatingObra && (
+        <CriarObraDoEmpreendimento
+          empreendimento={emp}
+          target={creatingObra}
+          onClose={() => setCreatingObra(null)}
+          onCreated={async (_, projectName) => {
+            setCreatingObra(null);
+            notify(`Obra "${projectName}" criada e vinculada.`);
+            await load();
+            onLinksChanged?.();
+          }}
+          onError={message => { setCreatingObra(null); notify(message, 'error'); }}
+        />
+      )}
 
       {notification && (
         <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${

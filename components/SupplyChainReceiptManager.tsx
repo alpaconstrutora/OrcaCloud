@@ -2,6 +2,9 @@ import React from 'react';
 import { Truck, Search, RefreshCw, AlertTriangle, Clock, Camera, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { orderService } from '../services/orderService';
+import { empreendimentoService } from '../services/empreendimentoService';
+import { useOrgContext } from '../hooks/useOrgContext';
+import EmpreendimentoCell, { resolveOrderEmpreendimento } from './empreendimento/EmpreendimentoCell';
 import { PurchaseOrder } from '../types';
 import OrderReceiptModal from './OrderReceiptModal';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -10,6 +13,7 @@ import { useToast } from '../hooks/useToast';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
+    { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'orcamento', label: 'Orçamento', sortable: true },
     { key: 'supplier', label: 'Fornecedor', sortable: true },
@@ -20,7 +24,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, obra: 180, orcamento: 160, supplier: 200, status: 178, date: 150, actions: 180,
+    number: 123, empreendimento: 184, obra: 180, orcamento: 160, supplier: 200, status: 178, date: 150, actions: 180,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -28,6 +32,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // uma sequência fixa de JSX. 'actions' fica de fora: é renderizada fixa fora do drag.
 const RECEIPT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     number: { label: 'Número', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     orcamento: { label: 'Orçamento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     supplier: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -56,10 +61,16 @@ const ReceiptStatusBadge = ({ status }: { status: string }) => {
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderReceiptCell(key: string, order: PurchaseOrder): React.ReactNode {
+function renderReceiptCell(
+    key: string,
+    order: PurchaseOrder,
+    ctx: { empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }> },
+): React.ReactNode {
     switch (key) {
         case 'number':
             return <span className="text-sm font-normal text-gray-600">#{order.number || order.id.slice(0, 8)}</span>;
+        case 'empreendimento':
+            return <EmpreendimentoCell value={resolveOrderEmpreendimento(order, ctx.empreendimentoByProject)} />;
         case 'obra':
             return (
                 <span className="text-sm font-normal text-gray-700">
@@ -92,6 +103,11 @@ interface SupplyChainReceiptManagerProps {
 
 const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ onViewOrder }) => {
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
+    // A tela não recebe organização por prop — `useOrgContext` é a fonte oficial
+    // (CLAUDE.md regra #5). `orgId` nulo = "Todas": não bloqueia, a RLS recorta.
+    const { orgId } = useOrgContext();
+    // Obra → empreendimento: o pedido não tem FK para empreendimento.
+    const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [loading, setLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = usePersistedState<string>('supplyChainReceiptFilters:search', '');
     const [filterStatus, setFilterStatus] = usePersistedState<string>('supplyChainReceiptFilters:status', 'all');
@@ -102,8 +118,8 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplyChainReceiptColWidths');
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1).
-    const tableTotalWidth = (['number', 'obra', 'orcamento', 'supplier', 'status', 'date'] as const)
-        .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+    const tableTotalWidth = COLUMNS.filter(c => c.key !== 'actions')
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
         + cols.getWidth('actions');
 
     const loadOrders = async () => {
@@ -125,6 +141,14 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
     React.useEffect(() => {
         loadOrders();
     }, []);
+
+    React.useEffect(() => {
+        let cancelled = false;
+        empreendimentoService.mapObrasToEmpreendimentos(orgId)
+            .then(map => { if (!cancelled) setEmpreendimentoByProject(map); })
+            .catch(() => { if (!cancelled) setEmpreendimentoByProject({}); });
+        return () => { cancelled = true; };
+    }, [orgId]);
 
     const filteredOrders = React.useMemo(() => {
         const calculateTotal = (order: PurchaseOrder) =>
@@ -155,6 +179,11 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     const nameB = b.projectClassification === 'ORCAMENTO' ? (b.linkedProjectName || '') : (b.projectName || '');
                     return nameA.localeCompare(nameB) * dir;
                 }
+                if (tableColumns.sortColumn === 'empreendimento') {
+                    const nameA = resolveOrderEmpreendimento(a, empreendimentoByProject)?.name || '';
+                    const nameB = resolveOrderEmpreendimento(b, empreendimentoByProject)?.name || '';
+                    return nameA.localeCompare(nameB) * dir;
+                }
                 if (tableColumns.sortColumn === 'orcamento') {
                     const nameA = a.projectClassification === 'ORCAMENTO' ? (a.projectName || '') : '';
                     const nameB = b.projectClassification === 'ORCAMENTO' ? (b.projectName || '') : '';
@@ -181,7 +210,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                 };
                 return (priorityOrder[a.status] || 99) - (priorityOrder[b.status] || 99);
             });
-    }, [orders, searchTerm, filterStatus, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [orders, searchTerm, filterStatus, tableColumns.sortColumn, tableColumns.sortDirection, empreendimentoByProject]);
 
     return (
         <div className="space-y-6">
@@ -319,7 +348,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                 >
                                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                         <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            {renderReceiptCell(key, order)}
+                                            {renderReceiptCell(key, order, { empreendimentoByProject })}
                                         </td>
                                     ))}
                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

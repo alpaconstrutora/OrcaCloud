@@ -13,7 +13,7 @@ import { useStore } from '../store/useStore';
 import CityStateSelect from './CityStateSelect';
 import Button from './ui/Button';
 
-interface NewProjectData {
+export interface NewProjectData {
   id?: string;
   name: string;
   client: string;

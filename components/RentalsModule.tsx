@@ -63,6 +63,31 @@ type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' 
 const rentalValueOf = (p: Partial<Property>): number =>
     (p.rental_price != null ? Number(p.rental_price) : (p.price != null ? Number(p.price) : 0));
 
+// Total do contrato (aba Contratos, coluna "Total do Contrato"). Locação:
+// `contract_total_value` já é `installment_value * installments`, mantido pela
+// UI (ver types/imovib.ts); sem ele (contrato legado/ainda sem parcelamento
+// definido), calcula na hora a partir da parcela efetiva. Venda: `value` já é
+// o total negociado.
+const dealContractTotal = (deal: PropertyDeal): number => {
+    if (deal.type !== 'RENTAL') return Number(deal.value) || 0;
+    if (deal.contract_total_value) return Number(deal.contract_total_value);
+    const mensal = getDealInstallmentValue(deal);
+    const parcelas = deal.installments || 0;
+    return parcelas > 0 ? mensal * parcelas : mensal;
+};
+
+// Soma da área privativa das unidades do contrato — mesmo padrão de
+// propertyIds usado por getDealBaseValue, para a coluna "Valor/m²".
+const dealPrivateArea = (deal: PropertyDeal, properties: Property[]): number => {
+    const propertyIds = deal.units && deal.units.length > 0
+        ? deal.units.map(u => u.property_id)
+        : (deal.property_id ? [deal.property_id] : []);
+    return propertyIds.reduce((sum, id) => {
+        const property = properties.find(p => p.id === id);
+        return sum + (property?.private_area ? Number(property.private_area) : 0);
+    }, 0);
+};
+
 // Colunas da tabela de Unidades (§2/§5.2) — a mesma tabela troca de contexto
 // (edifícios × unidades de um edifício, ver `selectedBuildingId`), então esta
 // lista cobre as colunas dos dois modos; cada célula de cabeçalho/dado já
@@ -127,11 +152,12 @@ const DEAL_COLUMNS: ColumnConfig[] = [
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: '_clientName', label: 'Cliente', sortable: true },
     { key: 'type', label: 'Tipo', sortable: true },
-    { key: 'value', label: 'Valor', sortable: true },
+    { key: 'value', label: 'Total do Contrato', sortable: true },
     { key: 'date', label: 'Data', sortable: true },
     { key: 'rental_analysis', label: 'Análise', sortable: false },
     { key: 'rental_value', label: 'Valor aluguel', sortable: false },
-    { key: 'rental_base', label: 'Valor base', sortable: false },
+    { key: 'rental_base', label: 'Valor de Referência', sortable: false },
+    { key: 'value_per_sqm', label: 'Valor/m²', sortable: false },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
@@ -141,8 +167,8 @@ const DEAL_COLUMNS: ColumnConfig[] = [
 // tela inteira esconde coluna pela engrenagem (§3). O que foi corrigido é o
 // excesso gratuito (1560 → 1410) e a folga da coluna de ação.
 const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 95, _propertyName: 150, empreendimento: 184, _clientName: 200, type: 100, value: 130, date: 115,
-    rental_analysis: 110, rental_value: 137, rental_base: 130, status: 120, actions: 130,
+    id: 95, _propertyName: 150, empreendimento: 184, _clientName: 200, type: 100, value: 150, date: 115,
+    rental_analysis: 110, rental_value: 137, rental_base: 150, value_per_sqm: 120, status: 120, actions: 130,
 };
 
 // Colunas da aba Corretores (§5.2/§6.1).
@@ -306,11 +332,12 @@ const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     empreendimento:  { label: 'Empreendimento', sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     _clientName:     { label: 'Cliente',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     type:            { label: 'Tipo',           sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    value:           { label: 'Valor',          sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    value:           { label: 'Total do Contrato', sortable: true, className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden whitespace-nowrap' },
     date:            { label: 'Data',           sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     rental_analysis: { label: 'Análise',        sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden whitespace-nowrap' },
     rental_value:    { label: 'Valor aluguel',  sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden whitespace-nowrap' },
-    rental_base:     { label: 'Valor base',     sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden whitespace-nowrap' },
+    rental_base:     { label: 'Valor de Referência', sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden whitespace-nowrap' },
+    value_per_sqm:   { label: 'Valor/m²',       sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden whitespace-nowrap' },
     status:          { label: 'Status',         sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
@@ -320,11 +347,12 @@ const DEAL_TD_CLASS: Record<string, string> = {
     empreendimento: '',
     _clientName: 'text-sm font-normal text-gray-600 truncate',
     type: 'text-sm font-normal text-gray-600',
-    value: 'text-sm font-medium text-gray-800 truncate',
+    value: 'text-sm font-medium text-gray-800 text-right',
     date: 'text-sm font-normal text-gray-600',
     rental_analysis: 'text-right',
     rental_value: 'text-sm font-medium text-gray-800 text-right',
     rental_base: 'text-sm font-medium text-gray-800 text-right',
+    value_per_sqm: 'text-sm font-medium text-gray-800 text-right',
     status: '',
 };
 
@@ -364,7 +392,7 @@ function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.R
         case 'type':
             return deal.type === 'SALE' ? 'Venda' : 'Locação';
         case 'value':
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value);
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dealContractTotal(deal));
         case 'date':
             return new Date(deal.date).toLocaleDateString('pt-BR');
         case 'rental_analysis': {
@@ -388,6 +416,12 @@ function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.R
             return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(getDealInstallmentValue(deal));
         case 'rental_base':
             return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ctx.getDealBaseValue(deal));
+        case 'value_per_sqm': {
+            const area = dealPrivateArea(deal, ctx.properties);
+            if (area <= 0) return <span className="text-sm text-gray-400">—</span>;
+            const valorM2 = getDealInstallmentValue(deal) / area;
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorM2);
+        }
         case 'status':
             return (
                 <span className={`text-sm font-normal ${ctx.getDealStatusDisplay(deal.status).color}`}>

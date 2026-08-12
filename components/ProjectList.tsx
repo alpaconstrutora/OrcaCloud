@@ -223,13 +223,25 @@ const ProjectList: React.FC<ProjectListProps> = ({
     //   Planejamento (id de outro registro). Em Diário permanece visível: linhas
     //   nesse contexto podem ser o próprio projeto OBRA (settings.classification
     //   'OBRA' + diaryEntries).
-    const contextColumns = COLUMNS.map(c => {
-        if (c.key === 'organization') return { ...c, defaultHidden: true };
-        if (c.key === 'empreendimento' && !isObraContext && !isDiarioContext) return { ...c, defaultHidden: true };
-        return c;
-    });
+    // Colunas SEM fonte de dado neste contexto. É filtro estrutural, não preferência:
+    // `defaultHidden` não serviria, porque ele só vale no primeiro carregamento — quem já
+    // abriu a tela tem a coluna salva em `visibleColumns`/`knownColumns` no localStorage e
+    // continuaria vendo a coluna vazia para sempre (TableUtils.tsx, loadPersistedTableState).
+    // - organization: depende da prop `organizations`, que nenhum chamador passa hoje.
+    //   Condicionada ao dado (não ao contexto): se algum dia a prop for passada, a coluna
+    //   volta sozinha, sem precisar mexer aqui.
+    // - empreendimento: o mapa de empreendimentoService é indexado pelo project_id da OBRA,
+    //   nunca bate com o id de um Orçamento/Planejamento.
+    const columnsWithoutData = React.useMemo(() => {
+        const hidden = new Set<string>();
+        if (organizations.length === 0) hidden.add('organization');
+        if (!isObraContext && !isDiarioContext) hidden.add('empreendimento');
+        return hidden;
+    }, [organizations.length, isObraContext, isDiarioContext]);
 
-    const tableColumns = useTableColumns(contextColumns, 'projectListColumns');
+    const contextColumns = COLUMNS.filter(c => !columnsWithoutData.has(c.key));
+
+    const tableColumns = useTableColumns(COLUMNS, 'projectListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'projectListFilters:advanced');
     const confirm = useConfirm();
     const {
@@ -248,7 +260,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // colgroup/thead/tbody. As 2 colunas extras do contexto Diário (obra-vinculada,
     // planejamento-vinculada) não fazem parte de COLUMNS (não são configuráveis/arrastáveis)
     // — entram sempre logo após 'linked', igual à posição fixa que já tinham antes.
-    const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions');
+    const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions' && !columnsWithoutData.has(key));
     const displayColumns = isDiaryContext
         ? (() => {
             const idx = orderedVisible.indexOf('linked');

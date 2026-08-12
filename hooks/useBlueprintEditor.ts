@@ -56,7 +56,10 @@ export interface UseBlueprintEditor {
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
 
-  run: (command: Command) => void;
+  /** Aplica um comando. Devolve os ids CRIADOS — vazio se o kernel recusou. */
+  run: (command: Command) => string[];
+  /** Vários comandos, UM passo de histórico. Devolve os ids criados no lote. */
+  runBatch: (commands: Command[]) => string[];
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -198,23 +201,45 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
   );
 
   // ── Comandos ──────────────────────────────────────────────────────────────
-  const run = useCallback(
-    (command: Command) => {
+  //
+  // O RETORNO É OS IDS CRIADOS, e isso não é conveniência.
+  //
+  // Quem precisa do id do que acabou de criar não pode ler `model` depois de
+  // chamar: `model` é estado de React e, dentro do mesmo tratador de evento, ele
+  // ainda é o modelo ANTERIOR. Foi assim que "fechar vão com porta" ficou sem
+  // porta — a parede era criada, a leitura seguinte devolvia `undefined` e o
+  // comando da abertura simplesmente não acontecia, sem erro nenhum na tela.
+  const aplicar = useCallback(
+    (executar: () => { model: BlueprintModel; diff: { created: string[] } }): string[] => {
       try {
-        const resultado = historyRef.current.apply(command);
+        const resultado = executar();
         setModel(resultado.model);
         setLastError(null);
         agendarAutosave(resultado.model);
+        force((n) => n + 1);
+        return resultado.diff.created;
       } catch (e) {
         // KernelError é recusa esperada (parede degenerada, abertura fora da
         // parede). Vira mensagem, não quebra a tela.
         setLastError(
           e instanceof KernelError ? e.message : e instanceof Error ? e.message : String(e),
         );
+        force((n) => n + 1);
+        return [];
       }
-      force((n) => n + 1);
     },
     [agendarAutosave],
+  );
+
+  const run = useCallback(
+    (command: Command) => aplicar(() => historyRef.current.apply(command)),
+    [aplicar],
+  );
+
+  const runBatch = useCallback(
+    (commands: Command[]) =>
+      commands.length === 0 ? [] : aplicar(() => historyRef.current.applyMany(commands)),
+    [aplicar],
   );
 
   const undo = useCallback(() => {
@@ -280,6 +305,7 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
     selectedId,
     setSelectedId,
     run,
+    runBatch,
     undo,
     redo,
     canUndo: historyRef.current.canUndo,

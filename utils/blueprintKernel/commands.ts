@@ -413,6 +413,27 @@ export class ModelHistory {
     return result;
   }
 
+  /**
+   * Aplica vários comandos como UM passo do histórico.
+   *
+   * Existe porque um gesto do usuário pode precisar de mais de um comando para
+   * deixar o modelo coerente: desenhar um trecho encadeado pela face cria a
+   * parede nova E corrige a ponta da anterior para o canto mitrado. Aplicados
+   * separadamente, um "desfazer" desfaria só metade do gesto e deixaria o canto
+   * pela metade — estado que o usuário nunca pediu e não sabe nomear.
+   *
+   * Aborta inteiro no primeiro erro (`applyBatch`), então o histórico nunca
+   * recebe um lote parcial.
+   */
+  applyMany(commands: Command[]): CommandResult {
+    const result = applyBatch(this.current, commands);
+
+    this.states.splice(this.cursor + 1);
+    this.states.push(result.model);
+    this.cursor = this.states.length - 1;
+    return result;
+  }
+
   undo(): BlueprintModel {
     if (!this.canUndo) throw new KernelError('NOTHING_TO_UNDO', 'Nada a desfazer');
     this.cursor -= 1;

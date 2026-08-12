@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import {
   travarOrtogonal,
   isFreeWallEnd,
+  cantosDaParede,
+  eixoDaParede,
+  type AlinhamentoParede,
   type BlueprintModel,
   type Opening,
   type Point,
@@ -87,13 +90,122 @@ const LINHA_PAREDE_PX = 1.2;
 /** Mesmo teto do kernel (MAX_COORD_MM). Ver o comentário em `capturar`. */
 const LIMITE_MM = 1_000_000;
 
+/** Folga entre a borda do desenho e o rótulo, em pixels de tela. */
+const FOLGA_ROTULO_PX = 11;
+
+interface PontoTela {
+  x: number;
+  y: number;
+}
+
+/**
+ * Escreve um valor no desenho, com fundo claro atrás.
+ *
+ * O fundo não é enfeite: sobre a planta de fundo, número sem fundo se mistura às
+ * linhas do escaneamento e deixa de ser legível justamente onde ele importa —
+ * conferindo a cota do projetista contra a que se está traçando.
+ *
+ * `x`/`y` são o CENTRO do rótulo, não o canto do texto: só assim quem chama pode
+ * posicionar a partir de uma conta geométrica (meio do traço, deslocado pela
+ * normal) sem precisar adivinhar a largura do texto.
+ */
+function escreverRotulo(
+  ctx: CanvasRenderingContext2D,
+  texto: string,
+  x: number,
+  y: number,
+  cor: string,
+  tamanhoPx = 12,
+): void {
+  ctx.save();
+  ctx.font = `600 ${tamanhoPx}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const largura = ctx.measureText(texto).width;
+  const altura = tamanhoPx + 5;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+  ctx.fillRect(x - largura / 2 - 4, y - altura / 2, largura + 8, altura);
+  ctx.fillStyle = cor;
+  ctx.fillText(texto, x, y);
+  ctx.restore();
+}
+
+/**
+ * Rótulo de comprimento ao lado de um traço, FORA da faixa desenhada.
+ *
+ * O afastamento é PERPENDICULAR ao traço e proporcional à espessura em tela, não
+ * um deslocamento fixo em diagonal. Com os 8 px fixos que havia aqui, o número
+ * caía dentro da própria parede assim que a espessura desenhada passava de 16 px
+ * — e sobre a planta de fundo, em zoom, é exatamente o que acontecia: a medida
+ * ficava ilegível por cima do trecho que ela mede.
+ *
+ * O lado é escolhido por regra fixa (acima do traço; à direita, no traço
+ * vertical) em vez de acompanhar o cursor: rótulo que troca de lado durante o
+ * gesto pisca e desloca o olhar de quem está mirando o clique.
+ */
+function rotuloDoTraco(
+  ctx: CanvasRenderingContext2D,
+  texto: string,
+  a: PontoTela,
+  b: PontoTela,
+  espessuraPx: number,
+  cor: string,
+): void {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp = Math.hypot(dx, dy) || 1;
+  let nx = -dy / comp;
+  let ny = dx / comp;
+  if (ny > 0 || (Math.abs(ny) < 1e-6 && nx < 0)) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const afastamento = Math.max(espessuraPx, 2) / 2 + FOLGA_ROTULO_PX;
+  escreverRotulo(
+    ctx,
+    texto,
+    (a.x + b.x) / 2 + nx * afastamento,
+    (a.y + b.y) / 2 + ny * afastamento,
+    cor,
+  );
+}
+
+/** Correção de uma ponta já criada, para o canto fechar mitrado. */
+export interface AjustePonta {
+  wallId: string;
+  end: 'a' | 'b';
+  to: Point;
+}
+
 interface Props {
   model: BlueprintModel;
   tool: BlueprintTool;
   levelId: string | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onAddWall: (a: Point, b: Point) => void;
+  /**
+   * Confirma um trecho de parede, com o eixo JÁ resolvido pelo alinhamento.
+   *
+   * `ajustes` corrige a ponta de paredes já criadas — é o que mitra o canto no
+   * traçado pela face (ver `eixoDaParede`). Deve entrar no MESMO passo de
+   * histórico do trecho novo, senão um "desfazer" desfaz meio gesto.
+   *
+   * O retorno é o id da parede criada. Sem ele o trecho seguinte não tem como
+   * corrigir o canto deste, e a junção fica com folga de meia espessura — por
+   * isso quem não souber informar deve devolver `null` explicitamente.
+   */
+  onAddWall: (a: Point, b: Point, ajustes?: AjustePonta[]) => string | null | void;
+  /** Onde o clique cai: no eixo da parede ou na face (canto). */
+  alinhamento?: AlinhamentoParede;
+  /**
+   * Inverte o lado do traçado. Chamado pela BARRA DE ESPAÇO, como no Revit.
+   *
+   * A tecla é tratada aqui, e não num ouvinte de `window`, por dois motivos: o
+   * canvas é quem tem o foco enquanto se desenha, e espaço no `window` seria um
+   * sequestro — é ele que aciona botão e abre select, e a barra de ferramentas
+   * desta tela É a camada acessível por teclado.
+   */
+  onInverterLado?: () => void;
   /** Coloca abertura na parede indicada, com o offset ja medido a partir de `a`. */
   onAddOpening: (wallId: string, offsetMm: number) => void;
   onDelete: () => void;
@@ -146,6 +258,8 @@ export default function BlueprintCanvas({
   selectedId,
   onSelect,
   onAddWall,
+  alinhamento = 'EIXO',
+  onInverterLado,
   onAddOpening,
   onDelete,
   larguraAberturaMm,
@@ -174,7 +288,32 @@ export default function BlueprintCanvas({
   /** A origem já foi levada para o rodapé? Só na primeira medida do container. */
   const enquadrado = useRef(false);
   const [tamanho, setTamanho] = useState({ w: 800, h: 600 });
-  const [inicio, setInicio] = useState<Point | null>(null);
+  /**
+   * Traçado em curso, na ordem dos cliques. É uma POLILINHA, não só o último
+   * ponto: para mitrar o canto, o trecho que está sendo desenhado precisa saber
+   * de onde veio (o ponto anterior) e, ao fechar o contorno, para onde o primeiro
+   * trecho foi. Guardando só `inicio`, o canto de fechamento ficaria sempre com
+   * folga de meia espessura — e é justamente ele que fecha o ambiente.
+   */
+  const [cadeia, setCadeia] = useState<Point[]>([]);
+  /**
+   * Trechos já criados nesta cadeia, na ordem: a parede e o LADO com que ela foi
+   * traçada. É por eles que o canto é corrigido.
+   *
+   * O lado entra aqui porque a barra de espaço pode invertê-lo no meio do
+   * contorno. Duas paredes de lados diferentes não têm canto para mitrar — a
+   * interseção das faces seria calculada com um lado só, e corrigir a ponta da
+   * anterior por essa conta a deixaria TORTA, com o eixo fora de paralelo com a
+   * linha que a pessoa traçou. Guardado o lado, a junção onde o lado mudou
+   * simplesmente não mitra: fica um degrau, que é a consequência honesta de
+   * mudar de lado ali.
+   */
+  const [trechos, setTrechos] = useState<{ wallId: string; lado: AlinhamentoParede }[]>([]);
+  const inicio = cadeia.length > 0 ? cadeia[cadeia.length - 1] : null;
+  const antesDoInicio = cadeia.length > 1 ? cadeia[cadeia.length - 2] : null;
+  const ultimoTrecho = trechos.length > 0 ? trechos[trechos.length - 1] : null;
+  /** Dá para mitrar a junção com o trecho anterior? Só se o lado não mudou. */
+  const mesmoLado = !ultimoTrecho || ultimoTrecho.lado === alinhamento;
   const [cursor, setCursor] = useState<Point | null>(null);
   const [arrastando, setArrastando] = useState(false);
   const [previaAbertura, setPreviaAbertura] = useState<{ wallId: string; offsetMm: number } | null>(null);
@@ -227,26 +366,63 @@ export default function BlueprintCanvas({
   );
 
   /**
-   * Captura em duas etapas: primeiro extremidade de parede existente, depois
-   * grade. Extremidade tem prioridade porque é o que fecha ambiente — cair na
-   * grade a 1 mm de distância deixa um vão que não fecha e o usuário não vê.
+   * Captura em três etapas: extremidade de EIXO, CANTO do corpo da parede e, por
+   * último, grade. Geometria existente sempre ganha da grade — cair na grade a
+   * 1 mm de distância deixa um vão que não fecha e o usuário não vê.
+   *
+   * O canto existe porque a extremidade do eixo fica no MEIO da espessura: quem
+   * copia uma planta de fundo aponta o canto que está na tela, e ali não havia
+   * ponto de encaixe nenhum. Quando o clique também está sendo interpretado como
+   * face (`preferirCanto`), o canto passa na frente do eixo; desenhando pelo
+   * eixo, a ordem se inverte. Assim o ímã sempre puxa para o mesmo tipo de ponto
+   * que o traçado está produzindo.
    */
   const capturar = useCallback(
-    (mundo: { x: number; y: number }): Point => {
+    (mundo: { x: number; y: number }, preferirCanto = false): Point => {
       const limite = SNAP_PX / vista.escala;
-      let melhor: Point | null = null;
-      let melhorDist = Infinity;
+      let melhorEixo: Point | null = null;
+      let distEixo = Infinity;
+      let melhorCanto: Point | null = null;
+      let distCanto = Infinity;
 
       for (const w of paredesDoNivel) {
-        for (const extremo of [w.a, w.b]) {
+        for (const end of ['a', 'b'] as const) {
+          const extremo = w[end];
           const d = Math.hypot(extremo.x - mundo.x, extremo.y - mundo.y);
-          if (d < limite && d < melhorDist) {
-            melhor = extremo;
-            melhorDist = d;
+          if (d < limite && d < distEixo) {
+            melhorEixo = extremo;
+            distEixo = d;
+          }
+
+          // PORTÃO DE DISTÂNCIA antes de qualquer conta de canto. `isFreeWallEnd`
+          // varre todas as paredes, então chamá-la para cada ponta seria
+          // quadrático a cada movimento do mouse — com 20 mil paredes é o que
+          // trava a aba (Spike B). O canto mais afastado da ponta do eixo está a
+          // uma espessura dela, então nada além disso pode ganhar.
+          if (d > limite + w.thicknessMm) continue;
+
+          const junta = !isFreeWallEnd(paredesDoNivel, extremo, w.id);
+          const cantos = cantosDaParede(
+            w.a,
+            w.b,
+            w.thicknessMm,
+            end === 'a' && junta,
+            end === 'b' && junta,
+          );
+          for (const c of cantos) {
+            const dc = Math.hypot(c.x - mundo.x, c.y - mundo.y);
+            if (dc < limite && dc < distCanto) {
+              melhorCanto = c;
+              distCanto = dc;
+            }
           }
         }
       }
-      if (melhor) return point(melhor.x, melhor.y);
+
+      const primeiro = preferirCanto ? melhorCanto : melhorEixo;
+      const segundo = preferirCanto ? melhorEixo : melhorCanto;
+      const achado = primeiro ?? segundo;
+      if (achado) return point(achado.x, achado.y);
 
       // LIMITAR antes de chamar `point()`. O kernel recusa coordenada fora de
       // ±1.000.000 mm com KernelError, e `capturar` roda a cada movimento do
@@ -260,6 +436,36 @@ export default function BlueprintCanvas({
       );
     },
     [paredesDoNivel, vista.escala, passoEfetivo],
+  );
+
+  /**
+   * Ponto do traçado de parede: a captura normal, mais o FECHAMENTO do contorno.
+   *
+   * Sem tratar o fechamento, voltar ao ponto de partida dependeria de acertar o
+   * mesmo milímetro duas vezes — e 1 mm de diferença não se vê na tela, mas deixa
+   * o contorno aberto e o ambiente sem aparecer. Grudar no primeiro ponto da
+   * cadeia também é o que permite mitrar o canto de fechamento.
+   */
+  const capturarTracado = useCallback(
+    (mundo: { x: number; y: number }): Point => {
+      const p = capturar(mundo, alinhamento !== 'EIXO');
+      const zero = cadeia[0];
+      if (
+        zero &&
+        cadeia.length >= 3 &&
+        Math.hypot(zero.x - p.x, zero.y - p.y) < SNAP_PX / vista.escala
+      ) {
+        return zero;
+      }
+      return p;
+    },
+    [capturar, alinhamento, cadeia, vista.escala],
+  );
+
+  /** O ponto fecha o contorno em curso? Exige triângulo — dois pontos não fecham. */
+  const fechandoContorno = useCallback(
+    (p: Point) => cadeia.length >= 3 && p.x === cadeia[0].x && p.y === cadeia[0].y,
+    [cadeia],
   );
 
   /**
@@ -631,12 +837,24 @@ export default function BlueprintCanvas({
       }
     }
 
-    // Prévia da parede em curso
+    // Prévia da parede em curso.
+    //
+    // A faixa é desenhada sobre o EIXO RESOLVIDO, não sobre o traçado: no
+    // alinhamento por face, mostrar a faixa em cima da linha clicada faria a
+    // parede "pular" meia espessura ao soltar o clique — e prévia que não bate
+    // com o resultado é prévia em que ninguém confia. A linha fina contínua marca
+    // o traçado em si, para o canto clicado continuar visível sob a faixa.
     if (inicio && cursor) {
-      const a = paraTela(inicio);
-      const b = paraTela(cursor);
+      const eixoPrevia = eixoDaParede({ a: inicio, b: cursor }, espessuraMm, alinhamento, {
+        antes: mesmoLado ? antesDoInicio : null,
+        depois: fechandoContorno(cursor) && trechos[0]?.lado === alinhamento ? cadeia[1] : null,
+      });
+      const a = paraTela(eixoPrevia.a);
+      const b = paraTela(eixoPrevia.b);
+      const espessuraPx = Math.max(1.5, espessuraMm * vista.escala);
+
       ctx.strokeStyle = COR_PREVIA;
-      ctx.lineWidth = Math.max(1.5, espessuraMm * vista.escala);
+      ctx.lineWidth = espessuraPx;
       ctx.setLineDash([6, 4]);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -644,14 +862,33 @@ export default function BlueprintCanvas({
       ctx.stroke();
       ctx.setLineDash([]);
 
+      const ta = paraTela(inicio);
+      const tb = paraTela(cursor);
+      if (alinhamento !== 'EIXO') {
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ta.x, ta.y);
+        ctx.lineTo(tb.x, tb.y);
+        ctx.stroke();
+      }
+
+      // A medida é a do TRAÇADO, não a do eixo. É a distância entre os dois
+      // pontos clicados, que é a cota que se está conferindo contra a planta de
+      // fundo; o eixo mitrado é mais curto ou mais longo por causa do canto.
+      // Nada de "0,00 m": entre o clique e o primeiro movimento do mouse o cursor
+      // ainda está sobre o ponto de partida, e um rótulo zerado no meio do desenho
+      // só polui.
       const comprimento = Math.round(Math.hypot(cursor.x - inicio.x, cursor.y - inicio.y));
-      ctx.fillStyle = COR_PREVIA;
-      ctx.font = '600 12px system-ui, sans-serif';
-      ctx.fillText(
-        `${(comprimento / 1000).toFixed(2)} m`,
-        (a.x + b.x) / 2 + 8,
-        (a.y + b.y) / 2 - 8,
-      );
+      if (comprimento > 0) {
+        rotuloDoTraco(
+          ctx,
+          `${(comprimento / 1000).toFixed(2)} m`,
+          ta,
+          tb,
+          espessuraPx,
+          COR_PREVIA,
+        );
+      }
     }
 
     // ── Formas MEDIDAS ───────────────────────────────────────────────────────
@@ -693,13 +930,18 @@ export default function BlueprintCanvas({
       const m = medir(f);
       const cx = pts.reduce((soma, t) => soma + t.x, 0) / pts.length;
       const cy = pts.reduce((soma, t) => soma + t.y, 0) / pts.length;
-      ctx.fillStyle = f.cor;
-      ctx.font = `${selecionada ? '600 12px' : '11px'} system-ui, sans-serif`;
       const rotulo =
         DIMENSAO_POR_TIPO[f.tipo] === 'UN'
           ? `${m.valor} un`
           : `${m.valor.toFixed(2).replace('.', ',')} ${DIMENSAO_POR_TIPO[f.tipo] === 'M2' ? 'm²' : 'm'}`;
-      ctx.fillText(f.nome ? `${f.nome}: ${rotulo}` : rotulo, cx + 6, cy - 6);
+      escreverRotulo(
+        ctx,
+        f.nome ? `${f.nome}: ${rotulo}` : rotulo,
+        cx,
+        cy,
+        f.cor,
+        selecionada ? 12 : 11,
+      );
     }
 
     // Forma medida em curso.
@@ -750,9 +992,10 @@ export default function BlueprintCanvas({
       if (w) {
         const fixa = paraTela(movendo.end === 'a' ? w.b : w.a);
         const solta = paraTela(destinoPonta);
+        const espessuraPx = Math.max(1, w.thicknessMm * vista.escala);
 
         ctx.strokeStyle = COR_SELECIONADA;
-        ctx.lineWidth = Math.max(1, w.thicknessMm * vista.escala);
+        ctx.lineWidth = espessuraPx;
         ctx.globalAlpha = 0.35;
         ctx.beginPath();
         ctx.moveTo(fixa.x, fixa.y);
@@ -764,12 +1007,13 @@ export default function BlueprintCanvas({
         // conferi-la depois de soltar seria tarde.
         const comp = Math.hypot(destinoPonta.x - (movendo.end === 'a' ? w.b.x : w.a.x),
                                 destinoPonta.y - (movendo.end === 'a' ? w.b.y : w.a.y));
-        ctx.fillStyle = COR_SELECIONADA;
-        ctx.font = '600 12px system-ui, sans-serif';
-        ctx.fillText(
+        rotuloDoTraco(
+          ctx,
           `${(comp / 1000).toFixed(2)} m`,
-          (fixa.x + solta.x) / 2 + 8,
-          (fixa.y + solta.y) / 2 - 8,
+          fixa,
+          solta,
+          espessuraPx,
+          COR_SELECIONADA,
         );
 
         ctx.fillStyle = '#ffffff';
@@ -831,9 +1075,7 @@ export default function BlueprintCanvas({
       ctx.stroke();
       ctx.setLineDash([]);
 
-      ctx.fillStyle = COR_ALERTA;
-      ctx.font = '600 11px system-ui, sans-serif';
-      ctx.fillText(`${(v.mm / 1000).toFixed(2)} m`, (a.x + b.x) / 2 + 6, (a.y + b.y) / 2 - 6);
+      rotuloDoTraco(ctx, `${(v.mm / 1000).toFixed(2)} m`, a, b, 2, COR_ALERTA);
     }
 
     // Prévia da abertura sob o cursor
@@ -874,6 +1116,12 @@ export default function BlueprintCanvas({
     tamanho,
     vista,
     inicio,
+    antesDoInicio,
+    cadeia,
+    trechos,
+    mesmoLado,
+    fechandoContorno,
+    alinhamento,
     cursor,
     selectedId,
     tool,
@@ -958,8 +1206,9 @@ export default function BlueprintCanvas({
     }
     // A PRÉVIA TEM QUE APLICAR A MESMA TRAVA DO CLIQUE. Se ela mostrasse o traço
     // livre e o clique gravasse o travado, a linha "pularia" ao soltar — e o
-    // usuário aprenderia a não confiar na prévia.
-    let alvo = capturar(paraMundo(px, py));
+    // usuário aprenderia a não confiar na prévia. Pela mesma razão ela usa o
+    // MESMO `capturarTracado` do clique, com fechamento e tudo.
+    let alvo = capturarTracado(paraMundo(px, py));
     if (inicio && ortoAtivo(e)) alvo = travarOrtogonal(inicio, alvo);
     setCursor(alvo);
   }
@@ -1063,18 +1312,58 @@ export default function BlueprintCanvas({
       return;
     }
 
-    let capturado = capturar(mundo);
+    let capturado = capturarTracado(mundo);
     if (!inicio) {
-      setInicio(capturado);
+      setCadeia([capturado]);
+      setTrechos([]);
       return;
     }
     if (ortoAtivo(e)) capturado = travarOrtogonal(inicio, capturado);
-    if (capturado.x !== inicio.x || capturado.y !== inicio.y) {
-      onAddWall(inicio, capturado);
-      // Encadeia: a ponta vira o início da próxima, que é como se desenha
-      // um contorno sem reclicar no mesmo vértice.
-      setInicio(capturado);
+    if (capturado.x === inicio.x && capturado.y === inicio.y) return;
+
+    // O EIXO sai do traçado pelo kernel, com os vizinhos da polilinha — é o que
+    // mitra o canto. No alinhamento `EIXO` isso devolve o próprio traçado, então
+    // o caminho antigo continua idêntico, sem ajuste nenhum.
+    const fecha = fechandoContorno(capturado);
+    // Mitrar o fechamento exige que o PRIMEIRO trecho tenha sido traçado do mesmo
+    // lado — senão a correção da ponta dele o deixaria torto.
+    const fechaMitrado = fecha && trechos[0]?.lado === alinhamento;
+    const eixo = eixoDaParede({ a: inicio, b: capturado }, espessuraMm, alinhamento, {
+      antes: mesmoLado ? antesDoInicio : null,
+      depois: fechaMitrado ? cadeia[1] : null,
+    });
+
+    // As paredes já criadas terminam onde a ponta foi deslocada em RETA, porque na
+    // hora em que nasceram o trecho seguinte não existia. Agora existe: corrigir a
+    // ponta é o que faz as duas se encontrarem no mesmo vértice em vez de ficarem
+    // a meia espessura uma da outra.
+    const ajustes: AjustePonta[] = [];
+    const empurrar = (wallId: string | undefined, end: 'a' | 'b', to: Point) => {
+      if (!wallId) return;
+      const w = model.walls.find((x) => x.id === wallId);
+      if (!w || (w[end].x === to.x && w[end].y === to.y)) return;
+      ajustes.push({ wallId, end, to });
+    };
+    if (mesmoLado) empurrar(ultimoTrecho?.wallId, 'b', eixo.a);
+    if (fechaMitrado) empurrar(trechos[0]?.wallId, 'a', eixo.b);
+
+    const criada = onAddWall(eixo.a, eixo.b, ajustes.length > 0 ? ajustes : undefined);
+    const idCriado = typeof criada === 'string' ? criada : null;
+
+    if (fecha) {
+      // Contorno fechado encerra a polilinha: o clique seguinte começa outra, e
+      // não um trecho pendurado no vértice de fechamento.
+      setCadeia([]);
+      setTrechos([]);
+      return;
     }
+    // Encadeia: a ponta vira o início da próxima, que é como se desenha
+    // um contorno sem reclicar no mesmo vértice.
+    setCadeia((c) => [...c, capturado]);
+    // Entra sempre, mesmo sem id — a lista tem que ficar em passo com `cadeia`.
+    // Pular a posição faria o trecho seguinte corrigir a ponta de uma parede que
+    // não é sua vizinha, mexendo em geometria que ninguém pediu para mexer.
+    setTrechos((t) => [...t, { wallId: idCriado ?? '', lado: alinhamento }]);
   }
 
   /** Duplo clique encerra a forma em curso — a saída para quem não quer fechar. */
@@ -1126,8 +1415,17 @@ export default function BlueprintCanvas({
   }
 
   function aoTeclar(e: React.KeyboardEvent) {
+    // Espaço INVERTE o lado, e vale no meio do gesto: a prévia troca de lado na
+    // hora, sem soltar o traçado em curso. `preventDefault` porque espaço rola a
+    // página por padrão — a planta sairia de vista a cada inversão.
+    if ((e.key === ' ' || e.code === 'Space') && tool === 'parede' && onInverterLado) {
+      e.preventDefault();
+      onInverterLado();
+      return;
+    }
     if (e.key === 'Escape') {
-      setInicio(null);
+      setCadeia([]);
+      setTrechos([]);
       setMovendo(null);
       setDestinoPonta(null);
       setCalibP1(null);
@@ -1167,11 +1465,19 @@ export default function BlueprintCanvas({
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
         {tool === 'parede'
           ? inicio
-            ? 'Clique para fechar o trecho · Esc cancela'
+            ? cadeia.length >= 3
+              ? 'Clique para fechar o trecho · volte ao 1º ponto para fechar o contorno · Esc cancela'
+              : 'Clique para fechar o trecho · Esc cancela'
             : 'Clique para iniciar a parede'
           : 'Clique numa parede para selecionar · Delete remove'}
         <span className="ml-2 text-slate-400">
-          · grade {rotuloPasso(passoEfetivo)}{ortogonal ? ' · orto (Shift libera)' : ' · Shift trava em 90°'} · botão direito arrasta · roda dá zoom
+          · grade {rotuloPasso(passoEfetivo)}
+          {tool === 'parede'
+            ? alinhamento === 'EIXO'
+              ? ' · clique no eixo (espaço desenha pela face)'
+              : ` · clique na face, parede ${alinhamento === 'DIREITA' ? 'à direita' : 'à esquerda'} (espaço inverte)`
+            : ''}
+          {ortogonal ? ' · orto (Shift libera)' : ' · Shift trava em 90°'} · botão direito arrasta · roda dá zoom
         </span>
       </div>
     </div>

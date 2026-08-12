@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
-import BlueprintCanvas, { rotuloPasso } from './BlueprintCanvas';
+import BlueprintCanvas, { rotuloPasso, type AjustePonta } from './BlueprintCanvas';
 import PainelOrcamento from './PainelOrcamento';
 import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
@@ -43,6 +43,8 @@ import {
   computeQuantities,
   formatarQuantidade,
   wallLength,
+  type AlinhamentoParede,
+  type Command,
   type Point,
 } from '../../utils/blueprintKernel';
 
@@ -54,6 +56,15 @@ import {
  * do salvamento são DOM de verdade — navegáveis por teclado e anunciáveis. O
  * canvas cuida da massa de geometria; o DOM cuida de tudo que precisa ter foco.
  */
+
+/**
+ * Inverte o lado do traçado. Do EIXO ele passa a desenhar pela face, porque "o
+ * outro lado do eixo" não existe: quem aperta a tecla está pedindo um lado, e
+ * devolver o mesmo estado faria a tecla parecer quebrada.
+ */
+function inverterLado(atual: AlinhamentoParede): AlinhamentoParede {
+  return atual === 'ESQUERDA' ? 'DIREITA' : atual === 'DIREITA' ? 'ESQUERDA' : 'DIREITA';
+}
 
 const ESPESSURA_PADRAO_MM = 150;
 const ALTURA_PADRAO_MM = 2800;
@@ -84,6 +95,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [aba, setAba] = useState<AbaDoPainel>('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [ortogonal, setOrtogonal] = useState(true);
+  /**
+   * Onde o clique cai: no eixo ou na face da parede.
+   *
+   * O padrão é a FACE À DIREITA porque o trabalho real aqui é copiar planta de
+   * fundo: quem copia aponta o canto que está desenhado, e contornando o perímetro
+   * no sentido do relógio a parede nasce para dentro. Desenhar pelo eixo continua
+   * a um clique de distância, para quem está criando planta nova.
+   */
+  const [alinhamento, setAlinhamento] = useState<AlinhamentoParede>('DIREITA');
   /** Aferição em curso: os dois pontos já clicados, esperando a distância. */
   const [afericao, setAfericao] = useState<{ p1: PontoPx; p2: PontoPx } | null>(null);
   const [distanciaDigitada, setDistanciaDigitada] = useState('');
@@ -220,16 +240,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     }
   }
 
-  function adicionarParede(a: Point, b: Point) {
-    if (!levelId) return;
-    editor.run({
+  /**
+   * Grava o trecho de parede e as correções de canto que ele exige.
+   *
+   * UM passo de histórico para o gesto todo (`runBatch`): a parede nova e a ponta
+   * mitrada da anterior são o mesmo ato do usuário, e desfazer metade dele
+   * deixaria um canto que ninguém desenhou.
+   *
+   * Se o lote for recusado — o caso real é abertura que não caberia mais na parede
+   * encurtada — a parede entra SEM a mitra. O canto fica com folga visível, que se
+   * arruma arrastando a ponta; perder o clique inteiro em silêncio seria pior.
+   */
+  function adicionarParede(a: Point, b: Point, ajustes?: AjustePonta[]): string | null {
+    if (!levelId) return null;
+    const nova: Command = {
       type: 'AddWall',
       levelId,
       a,
       b,
       thicknessMm: espessura,
       heightMm: ALTURA_PADRAO_MM,
-    });
+    };
+    const correcoes: Command[] = (ajustes ?? []).map((aj) => ({
+      type: 'MoveVertex',
+      wallId: aj.wallId,
+      end: aj.end,
+      to: aj.to,
+    }));
+
+    const criados = editor.runBatch([...correcoes, nova]);
+    if (criados.length === 0 && correcoes.length > 0) return adicionarParede(a, b);
+    return criados.find((id) => id.startsWith('wal')) ?? null;
   }
 
   const paredeSel = editor.model.walls.find((w) => w.id === editor.selectedId) ?? null;
@@ -379,8 +420,14 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   function fecharComPorta(vao: { a: Point; b: Point; mm: number }) {
     if (!levelId) return;
-    const antes = editor.model.walls.length;
-    editor.run({
+    // O ID VEM DO COMANDO, não de `editor.model`.
+    //
+    // Aqui estava `editor.model.walls[antes]` depois do `run`, e `editor.model` é
+    // estado de React: dentro deste mesmo tratador ele ainda é o modelo ANTERIOR,
+    // então a leitura devolvia `undefined`, o `if` não entrava e a porta nunca era
+    // criada. O vão fechava com alvenaria cheia e o quantitativo contava parede
+    // onde havia porta — em silêncio, que é o pior jeito de errar.
+    const [idParede] = editor.run({
       type: 'AddWall',
       levelId,
       a: vao.a,
@@ -388,19 +435,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       thicknessMm: espessura,
       heightMm: ALTURA_PADRAO_MM,
     });
-    // A parede recém-criada é a última; a abertura ocupa o vão inteiro.
-    const criada = editor.model.walls[antes];
-    if (criada) {
-      editor.run({
-        type: 'AddOpening',
-        wallId: criada.id,
-        kind: 'door',
-        offsetMm: 0,
-        widthMm: vao.mm,
-        heightMm: 2100,
-        sillMm: 0,
-      });
-    }
+    if (!idParede) return;
+    editor.run({
+      type: 'AddOpening',
+      wallId: idParede,
+      kind: 'door',
+      offsetMm: 0,
+      widthMm: vao.mm,
+      heightMm: 2100,
+      sillMm: 0,
+    });
   }
 
   /**
@@ -596,6 +640,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </label>
           </>
         ) : (
+        <>
         <label className="flex items-center gap-2 text-xs text-slate-600">
           Espessura
           <select
@@ -610,6 +655,26 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             ))}
           </select>
         </label>
+
+        {/* ONDE O CLIQUE CAI. O kernel guarda a parede pelo EIXO, mas quem copia
+            uma planta de fundo aponta o CANTO — e com o clique no eixo a parede
+            nascia meia espessura para fora do que estava desenhado. O canto de
+            junção é mitrado pelo kernel (`eixoDaParede`), senão o contorno não
+            fecharia e o ambiente não apareceria. */}
+        <label className="flex items-center gap-2 text-xs text-slate-600">
+          Clique
+          <select
+            value={alinhamento}
+            onChange={(e) => setAlinhamento(e.target.value as AlinhamentoParede)}
+            className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+            title="Onde o ponto clicado cai na parede. Pela face, o clique é o canto da parede e ela cresce toda para o lado escolhido — contorne no sentido do relógio com 'à direita' para a parede nascer para dentro. A BARRA DE ESPAÇO inverte o lado sem sair do desenho."
+          >
+            <option value="DIREITA">Na face · parede à direita</option>
+            <option value="ESQUERDA">Na face · parede à esquerda</option>
+            <option value="EIXO">No eixo (meio da parede)</option>
+          </select>
+        </label>
+        </>
         )}
 
         <ControlesDeFundo
@@ -814,6 +879,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               selectedId={editor.selectedId}
               onSelect={editor.setSelectedId}
               onAddWall={adicionarParede}
+              alinhamento={alinhamento}
+              onInverterLado={() => setAlinhamento(inverterLado)}
               onAddOpening={adicionarAbertura}
               larguraAberturaMm={larguraAbertura}
               onDelete={removerSelecionada}

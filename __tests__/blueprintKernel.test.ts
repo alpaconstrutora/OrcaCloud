@@ -22,6 +22,8 @@ import {
   areCollinear,
   buildArrangement,
   canonicalPayload,
+  cantosDaParede,
+  eixoDaParede,
   emptyModel,
   interiorPoint,
   modelFromCanonicalPayload,
@@ -913,5 +915,168 @@ describe('trava ortogonal', () => {
     const de = point(0, 0);
     const uma = travarOrtogonal(de, point(4000, 300));
     expect(travarOrtogonal(de, uma)).toEqual(uma);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Alinhamento do traçado: eixo × face
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('eixoDaParede', () => {
+  it('pelo EIXO devolve o traçado intacto', () => {
+    const t = { a: point(0, 0), b: point(4000, 0) };
+    expect(eixoDaParede(t, 200, 'EIXO')).toEqual(t);
+    // Com vizinhos também: no eixo não existe mitra a aplicar.
+    expect(eixoDaParede(t, 200, 'EIXO', { antes: point(0, 3000) })).toEqual(t);
+  });
+
+  it('pela FACE, o traçado é a face e a parede cresce para o lado pedido', () => {
+    // Y do modelo aponta para CIMA. Andando em +x, "à direita" é −y.
+    const t = { a: point(0, 0), b: point(4000, 0) };
+    expect(eixoDaParede(t, 200, 'DIREITA')).toEqual({
+      a: { x: 0, y: -100 },
+      b: { x: 4000, y: -100 },
+    });
+    expect(eixoDaParede(t, 200, 'ESQUERDA')).toEqual({
+      a: { x: 0, y: 100 },
+      b: { x: 4000, y: 100 },
+    });
+  });
+
+  it('o CLIQUE fica no canto do corpo da parede, não no meio da espessura', () => {
+    // É o pedido de uso: apontando o canto que está na planta de fundo, a parede
+    // tem de nascer inteira para dentro dele. Prova: o ponto clicado é um dos
+    // quatro cantos do corpo resultante.
+    const clicado = point(1000, 2000);
+    const eixo = eixoDaParede({ a: clicado, b: point(5000, 2000) }, 150, 'DIREITA');
+    const cantos = cantosDaParede(eixo.a, eixo.b, 150);
+
+    expect(cantos).toContainEqual({ x: clicado.x, y: clicado.y });
+  });
+
+  it('MITRA o canto: as duas paredes se encontram num único vértice', () => {
+    // Contorno pelo lado de fora, sentido do relógio na tela, parede à direita
+    // (= para dentro). O canto do eixo tem de recuar meia espessura nos DOIS
+    // eixos, senão as pontas ficam a meia espessura uma da outra.
+    const p0 = point(0, 3000);
+    const p1 = point(4000, 3000);
+    const p2 = point(4000, 0);
+
+    const primeiro = eixoDaParede({ a: p0, b: p1 }, 200, 'DIREITA');
+    const segundo = eixoDaParede({ a: p1, b: p2 }, 200, 'DIREITA', { antes: p0 });
+
+    expect(segundo.a).toEqual({ x: 3900, y: 2900 });
+    // A ponta do primeiro, corrigida pelo trecho seguinte, cai no MESMO ponto.
+    const primeiroCorrigido = eixoDaParede({ a: p0, b: p1 }, 200, 'DIREITA', { depois: p2 });
+    expect(primeiroCorrigido.b).toEqual(segundo.a);
+    // E sem a correção ela ficava fora — este é o defeito que a mitra evita.
+    expect(primeiro.b).not.toEqual(segundo.a);
+  });
+
+  it('O CONTORNO FECHA: quatro trechos mitrados formam um retângulo de eixos', () => {
+    // Sem mitra, cada canto sobra meia espessura e o arranjo planar não fecha
+    // ambiente nenhum — o sintoma é a lista de ambientes vazia depois de uma
+    // sala inteira desenhada.
+    const t = 200;
+    const p = [point(0, 3000), point(4000, 3000), point(4000, 0), point(0, 0)];
+    const eixos = p.map((_, i) =>
+      eixoDaParede(
+        { a: p[i], b: p[(i + 1) % 4] },
+        t,
+        'DIREITA',
+        { antes: p[(i + 3) % 4], depois: p[(i + 2) % 4] },
+      ),
+    );
+
+    for (let i = 0; i < 4; i++) {
+      expect(eixos[i].b, `canto ${i} não fechou`).toEqual(eixos[(i + 1) % 4].a);
+    }
+    // O eixo é o retângulo original encolhido em meia espessura de cada lado.
+    const xs = eixos.map((e) => e.a.x);
+    const ys = eixos.map((e) => e.a.y);
+    expect(Math.min(...xs)).toBe(100);
+    expect(Math.max(...xs)).toBe(3900);
+    expect(Math.min(...ys)).toBe(100);
+    expect(Math.max(...ys)).toBe(2900);
+  });
+
+  it('o modelo ACEITA o contorno mitrado e ele deriva um ambiente', () => {
+    // O teste de verdade: o kernel fecha ambiente com esses eixos. Prova que a
+    // conta não é só bonita — é topologicamente válida.
+    const t = 200;
+    const { model, levelId } = withLevel();
+    const p = [point(0, 3000), point(4000, 3000), point(4000, 0), point(0, 0)];
+    const comandos: Command[] = p.map((_, i) => {
+      const eixo = eixoDaParede(
+        { a: p[i], b: p[(i + 1) % 4] },
+        t,
+        'DIREITA',
+        { antes: p[(i + 3) % 4], depois: p[(i + 2) % 4] },
+      );
+      return {
+        type: 'AddWall',
+        levelId,
+        a: eixo.a,
+        b: eixo.b,
+        thicknessMm: t,
+        heightMm: H,
+      };
+    });
+
+    const pronto = applyBatch(model, comandos).model;
+
+    expect(pronto.spaces.length).toBe(1);
+    // 3800 × 2800 mm de eixo a eixo.
+    expect(pronto.spaces[0].areaMm2).toBe(3800 * 2800);
+  });
+
+  it('trecho colinear não inventa canto', () => {
+    // Continuar em linha reta: as faces deslocadas são a MESMA reta, não há
+    // interseção, e a ponta só pode ser deslocada em reta.
+    const eixo = eixoDaParede({ a: point(2000, 0), b: point(4000, 0) }, 200, 'DIREITA', {
+      antes: point(0, 0),
+    });
+    expect(eixo.a).toEqual({ x: 2000, y: -100 });
+  });
+
+  it('canto agudo demais NÃO produz farpa quilométrica', () => {
+    // A interseção das faces vai para longe quando a dobra é rasa. Com o teto da
+    // mitra, a ponta volta ao deslocamento em reta: falha visível de meia
+    // espessura em vez de coordenada absurda (que o kernel recusaria).
+    const q = point(0, 0);
+    const eixo = eixoDaParede({ a: q, b: point(10_000, 0) }, 200, 'DIREITA', {
+      antes: point(-10_000, 60),
+    });
+    expect(Math.hypot(eixo.a.x - q.x, eixo.a.y - q.y)).toBeLessThanOrEqual(100 * 4);
+  });
+
+  it('traço degenerado devolve o traçado, sem estourar', () => {
+    const t = { a: point(500, 500), b: point(500, 500) };
+    expect(eixoDaParede(t, 200, 'DIREITA')).toEqual(t);
+  });
+});
+
+describe('cantosDaParede', () => {
+  it('devolve os quatro cantos do corpo', () => {
+    expect(cantosDaParede(point(0, 0), point(4000, 0), 200)).toEqual([
+      { x: 0, y: 100 },
+      { x: 4000, y: 100 },
+      { x: 4000, y: -100 },
+      { x: 0, y: -100 },
+    ]);
+  });
+
+  it('ESTENDE a ponta que encontra outra parede — é lá que está o canto visível', () => {
+    // O desenho estende a pincelada em meia espessura na junção. Oferecer o
+    // canto sem a extensão colocaria o ímã meia espessura atrás do canto que
+    // está na tela.
+    const cantos = cantosDaParede(point(0, 0), point(4000, 0), 200, false, true);
+    expect(cantos).toContainEqual({ x: 4100, y: 100 });
+    expect(cantos).toContainEqual({ x: 4100, y: -100 });
+    expect(cantos).toContainEqual({ x: 0, y: 100 });
+  });
+
+  it('parede de comprimento zero não tem canto', () => {
+    expect(cantosDaParede(point(0, 0), point(0, 0), 200)).toEqual([]);
   });
 });

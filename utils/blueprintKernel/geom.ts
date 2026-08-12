@@ -291,6 +291,167 @@ export function travarOrtogonal(de: Point, para: Point): Point {
     : { x: de.x, y: para.y };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Alinhamento do traçado (eixo × face)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * De que lado do traçado o CORPO da parede cresce.
+ *
+ * `EIXO` é o que o kernel guarda (a parede é o eixo, espessura é propriedade), e
+ * era o único jeito de desenhar: o clique caía no MEIO da espessura. Quem copia
+ * uma planta de fundo, porém, aponta o CANTO da parede — a face — e esperava a
+ * parede nascer inteira para dentro daquele canto, não meia espessura para cada
+ * lado.
+ *
+ * `DIREITA`/`ESQUERDA` são relativos ao sentido do desenho e valem também para
+ * quem olha a tela: o Y do modelo aponta para cima e o da tela para baixo, e
+ * essa inversão troca o sinal do sentido e o da normal ao mesmo tempo — as duas
+ * trocas se cancelam. Andando para a direita na tela, "à direita" é para baixo,
+ * que é o mesmo lado que a mão direita de quem caminha aponta.
+ */
+export type AlinhamentoParede = 'EIXO' | 'DIREITA' | 'ESQUERDA';
+
+/**
+ * Teto da mitra, em múltiplos de meia espessura.
+ *
+ * Canto muito agudo joga a interseção das duas faces para longe — no limite, ao
+ * infinito. Sem teto, uma dobra de poucos graus produziria uma farpa de metros e
+ * a coordenada estouraria `MAX_COORD_MM`. Estourado o teto, o certo é desistir da
+ * mitra e deslocar a ponta em reta: o canto fica com uma falha visível de meia
+ * espessura, que se arruma arrastando, em vez de uma parede absurda.
+ */
+const MITRA_MAX = 4;
+
+/** Normal unitária do lado em que o corpo cresce. `null` em traço degenerado. */
+function normalDoLado(
+  a: Point,
+  b: Point,
+  lado: 'DIREITA' | 'ESQUERDA',
+): { x: number; y: number } | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return null;
+  return lado === 'DIREITA'
+    ? { x: dy / comp, y: -dx / comp }
+    : { x: -dy / comp, y: dx / comp };
+}
+
+/**
+ * Vértice do EIXO no canto `q`, entre os traços p→q e q→r.
+ *
+ * É a interseção das duas faces deslocadas — a mitra. Sem ela, cada trecho seria
+ * deslocado por conta própria e as pontas deixariam de coincidir: num canto reto
+ * elas ficariam a meia espessura uma da outra em cada eixo, o contorno não
+ * fecharia e o ambiente não apareceria. Esse é o defeito que o deslocamento
+ * ingênuo produz, e ele só aparece DEPOIS, na lista de ambientes vazia.
+ *
+ * `null` quando não há canto (colinear ou 180°: retas deslocadas paralelas) ou
+ * quando a mitra estoura `MITRA_MAX`. Nos dois casos quem chama desloca em reta.
+ */
+function mitra(
+  p: Point,
+  q: Point,
+  r: Point,
+  meia: number,
+  lado: 'DIREITA' | 'ESQUERDA',
+): Point | null {
+  const n1 = normalDoLado(p, q, lado);
+  const n2 = normalDoLado(q, r, lado);
+  if (!n1 || !n2) return null;
+
+  const d1 = { x: q.x - p.x, y: q.y - p.y };
+  const d2 = { x: r.x - q.x, y: r.y - q.y };
+  // Coordenadas são inteiras, então este determinante é EXATO: "tem canto ou não"
+  // nunca depende de epsilon.
+  const den = d1.x * d2.y - d1.y * d2.x;
+  if (den === 0) return null;
+
+  const a1 = { x: q.x + n1.x * meia, y: q.y + n1.y * meia };
+  const a2 = { x: q.x + n2.x * meia, y: q.y + n2.y * meia };
+  const t = ((a2.x - a1.x) * d2.y - (a2.y - a1.y) * d2.x) / den;
+  const cruz = { x: a1.x + t * d1.x, y: a1.y + t * d1.y };
+
+  if (Math.hypot(cruz.x - q.x, cruz.y - q.y) > meia * MITRA_MAX) return null;
+  return point(roundToMm(cruz.x), roundToMm(cruz.y));
+}
+
+/**
+ * Eixo da parede a partir do traçado, aplicando o alinhamento.
+ *
+ * `vizinhos.antes` e `vizinhos.depois` são os pontos do traçado que ladeiam este
+ * trecho — o anterior e o seguinte na mesma polilinha. Só com eles é possível
+ * mitrar o canto; sem eles a ponta é deslocada em reta, que é o certo para a
+ * primeira e a última ponta de um contorno aberto.
+ *
+ * Vive no kernel, e não no canvas, pela mesma razão que `travarOrtogonal` e
+ * `isFreeWallEnd`: é GEOMETRIA. A cópia que mora no renderizador é a cópia que
+ * diverge da exportação — já aconteceu uma vez, e o canto ficou certo na tela e
+ * aberto no papel.
+ */
+export function eixoDaParede(
+  tracado: Segment,
+  espessuraMm: number,
+  alinhamento: AlinhamentoParede,
+  vizinhos: { antes?: Point | null; depois?: Point | null } = {},
+): Segment {
+  const cru = { a: { ...tracado.a }, b: { ...tracado.b } };
+  if (alinhamento === 'EIXO') return cru;
+
+  const meia = espessuraMm / 2;
+  const n = normalDoLado(tracado.a, tracado.b, alinhamento);
+  if (!n) return cru;
+
+  const desloca = (p: Point): Point =>
+    point(roundToMm(p.x + n.x * meia), roundToMm(p.y + n.y * meia));
+
+  const antes = vizinhos.antes;
+  const depois = vizinhos.depois;
+
+  return {
+    a: (antes && mitra(antes, tracado.a, tracado.b, meia, alinhamento)) || desloca(tracado.a),
+    b: (depois && mitra(tracado.a, tracado.b, depois, meia, alinhamento)) || desloca(tracado.b),
+  };
+}
+
+/**
+ * Os quatro cantos do corpo da parede, no sentido do anel.
+ *
+ * `extenderA`/`extenderB` empurram a ponta em meia espessura, como o desenho faz
+ * na ponta que encontra outra parede — é lá que está o canto que se VÊ, e é nele
+ * que o clique precisa grudar. Sem a extensão, o encaixe ofereceria um canto meia
+ * espessura atrás daquele que está na tela.
+ */
+export function cantosDaParede(
+  a: Point,
+  b: Point,
+  espessuraMm: number,
+  extenderA = false,
+  extenderB = false,
+): Point[] {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return [];
+
+  const ux = dx / comp;
+  const uy = dy / comp;
+  const nx = -uy;
+  const ny = ux;
+  const meia = espessuraMm / 2;
+
+  const pa = { x: a.x - ux * (extenderA ? meia : 0), y: a.y - uy * (extenderA ? meia : 0) };
+  const pb = { x: b.x + ux * (extenderB ? meia : 0), y: b.y + uy * (extenderB ? meia : 0) };
+
+  return [
+    point(roundToMm(pa.x + nx * meia), roundToMm(pa.y + ny * meia)),
+    point(roundToMm(pb.x + nx * meia), roundToMm(pb.y + ny * meia)),
+    point(roundToMm(pb.x - nx * meia), roundToMm(pb.y - ny * meia)),
+    point(roundToMm(pa.x - nx * meia), roundToMm(pa.y - ny * meia)),
+  ];
+}
+
 /**
  * Um ponto garantidamente DENTRO do polígono, respeitando os buracos.
  *

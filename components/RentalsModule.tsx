@@ -148,7 +148,7 @@ const unitModeColumnKeys = ['name', 'empreendimento', 'block', 'floor', 'private
 // Colunas da aba Contratos (§5.2/§6.1).
 const DEAL_COLUMNS: ColumnConfig[] = [
     { key: 'id', label: 'ID', sortable: true },
-    { key: '_propertyName', label: 'Imóvel', sortable: true },
+    { key: '_propertyName', label: 'Unidade', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: '_clientName', label: 'Cliente', sortable: true },
     { key: 'type', label: 'Tipo', sortable: true },
@@ -328,7 +328,7 @@ function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): Rea
 // Header por coluna da tabela de Contratos (ver DEAL_COLUMNS acima).
 const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     id:              { label: 'ID',            sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    _propertyName:   { label: 'Imóvel',         sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    _propertyName:   { label: 'Unidade',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento:  { label: 'Empreendimento', sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     _clientName:     { label: 'Cliente',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     type:            { label: 'Tipo',           sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -2159,7 +2159,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             <div className="mb-6">
                                                 <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors"
                                                     title={deal._unitNames || undefined}>
-                                                    {deal._propertyName || property?.name || 'Imóvel em referência'}
+                                                    {deal._propertyName || property?.name || 'Unidade em referência'}
                                                     {deal._unitCount > 1 && (
                                                         <span className="ml-1.5 text-sm font-normal text-gray-400">+{deal._unitCount - 1}</span>
                                                     )}

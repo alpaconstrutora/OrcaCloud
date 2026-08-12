@@ -847,6 +847,12 @@ export async function generateRecurringInstallmentsForPeriod(
          *  Sem isto o campo ficava na tela sem efeito: a série era sempre
          *  ancorada em start_date + due_day (regressão relatada em 02/08/2026). */
         firstDueDate?: string;
+        /** Dimensões contábeis do cabeçalho da negociação (aba Forma de
+         *  Pagamento) — propagam para cada parcela em internal_transactions.
+         *  Sem elas, cai no cost_center_id do contrato (se houver) e fica
+         *  sem Plano de Contas — ver 20270846000000_commercial_deals_cost_center_plano_contas.sql. */
+        costCenterId?: string | null;
+        planoDeContasId?: string | null;
     },
 ): Promise<{
     inserted: number; skipped: number; removed: number; dueDates: string[];
@@ -1009,6 +1015,8 @@ export async function generateRecurringInstallmentsForPeriod(
         party_name: party.party_name,
         status: 'PENDING',
         business_status: 'PREVISTO',
+        cost_center_id: opts.costCenterId ?? contract.cost_center_id ?? null,
+        plano_de_contas_id: opts.planoDeContasId ?? null,
     })), { onConflict: 'organization_id,reference_id,entry_type' });
     if (error) throw error;
 

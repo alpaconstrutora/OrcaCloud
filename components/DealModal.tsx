@@ -283,6 +283,7 @@ interface DealModalProps {
  *  botão de auto-ajuste (§6.1.2) mede o conteúdo real e corrige. */
 const PARCELAS_COL_WIDTHS: Record<string, number> = {
     vencimento: 150,
+    cliente: 160,
     valor: 120,
     desconto: 170,
     valor_final: 120,
@@ -297,6 +298,9 @@ const PARCELAS_COL_WIDTHS: Record<string, number> = {
 
 const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'vencimento', label: 'Vencimento', sortable: false },
+    // Cliente da negociação (cabeçalho, mesmo valor em toda a série) — mesmo
+    // padrão de centro_custo/plano_contas abaixo.
+    { key: 'cliente', label: 'Cliente', sortable: false },
     { key: 'valor', label: 'Valor', sortable: false },
     { key: 'desconto', label: 'Desconto', sortable: false },
     { key: 'valor_final', label: 'Valor final', sortable: false },
@@ -323,6 +327,7 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
 // parcelas).
 const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     vencimento:   { label: 'Vencimento',      sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    cliente:      { label: 'Cliente',         sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     valor:        { label: 'Valor',           sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     desconto:     { label: 'Desconto',        sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     valor_final:  { label: 'Valor final',     sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
@@ -339,6 +344,7 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
 // 1:1 das classes que já estavam hardcoded em cada <td>.
 const PARCELAS_TD_CLASS: Record<string, string> = {
     vencimento: '',
+    cliente: 'text-sm font-normal text-gray-600 truncate',
     valor: '',
     desconto: '',
     valor_final: 'text-sm font-medium text-gray-800',
@@ -401,6 +407,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             });
             setSelectedEntryIds(new Set());
             setLastEntryIndex(null);
+            // A instância do modal não desmonta entre aberturas (RentalsModule
+            // sempre a renderiza, só alterna `isOpen`) — sem isso, reabrir depois
+            // de um salvamento anterior mostrava o aviso "salva com sucesso" de
+            // novo, sem o usuário ter clicado em Salvar.
+            setSavedNotice(false);
         }
     }, [initialData, isOpen]);
 
@@ -448,8 +459,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [loading, setLoading] = useState(false);
     // Aviso padrão de salvamento — mostrado dentro da própria tela "Gerenciar
-    // Negociação" (tela cheia) antes de fechar, já que o toast do módulo-pai só
-    // aparece depois que a tela some (o usuário não via confirmação nenhuma).
+    // Negociação" (tela cheia), que permanece aberta após salvar (o toast do
+    // módulo-pai só aparece depois que a tela some, e em modo edição ela não
+    // some mais). Some sozinho — ver handleSubmit.
     const [savedNotice, setSavedNotice] = useState(false);
     // Toast de erro (§13) — substitui os alert() nativos, que quebravam a
     // identidade visual e não são acessíveis (mesma razão do §14 p/ confirm()).
@@ -1247,6 +1259,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 // só pelo gerador da negociação, que foi removido — o campo
                 // ficou na tela sem efeito até esta correção (02/08/2026).
                 firstDueDate: generateFirstDueDate || undefined,
+                // Centro de Custo/Plano de Contas do cabeçalho da negociação
+                // (aba Forma de Pagamento) — propaga para cada parcela gerada.
+                costCenterId: formData.cost_center_id,
+                planoDeContasId: formData.plano_de_contas_id,
             });
             // O modal continua ABERTO com o resultado: as parcelas de contrato vão
             // para Contas a Receber (internal_transactions), NÃO para o plano de
@@ -1461,13 +1477,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             const savedDeal = await commercialService.saveDeal(payload);
             console.log('[DealModal] Negociação salva com sucesso:', savedDeal);
 
-            // Emite o aviso padrão de salvamento e dá um instante para o usuário
-            // vê-lo dentro da tela antes de propagar/fechar.
+            // "Gerenciar Negociação" (registro já existente) permanece aberta —
+            // o aviso some sozinho, igual ao padrão de notifySuccess/notifyError.
+            // Só "Nova Negociação Comercial" (criação) continua fechando, com um
+            // instante de espera para o usuário ver o aviso antes do modal sumir.
+            // Não usar `isEditMode` (declarado mais abaixo no componente, depois
+            // deste handler) — o dado que importa é o mesmo: já tinha id.
+            const isEditModeSave = !!formData.id;
             setSavedNotice(true);
-            await new Promise(resolve => setTimeout(resolve, 900));
+            if (isEditModeSave) {
+                setTimeout(() => setSavedNotice(false), 3000);
+            } else {
+                await new Promise(resolve => setTimeout(resolve, 900));
+            }
 
             if (onSave) onSave();
-            onClose();
+            if (!isEditModeSave) onClose();
         } catch (err: any) {
             console.error('[DealModal] Erro ao salvar:', err);
             notifyError(`Erro ao salvar negociação: ${err.message || 'Erro de conexão/banco'}`);
@@ -2205,6 +2230,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         valueField="id"
                                         placeholder="Nenhum centro de custo vinculado"
                                         hoverCls="hover:bg-blue-50"
+                                        // Painel lateral em vez do dropdown pequeno: a lista de
+                                        // Centro de Custo/Plano de Contas pode ser longa e o
+                                        // dropdown (max-h-56) atrapalhava a busca.
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Centro de Custo"
                                     />
                                 </div>
 
@@ -2217,6 +2247,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         valueField="id"
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Plano de Contas"
                                     />
                                 </div>
                             </div>
@@ -2367,7 +2399,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </select>
                                     );
                                 // Dimensões do CABEÇALHO: iguais em toda a série, por isso leitura —
-                                // mudar é na aba Forma de Pagamento.
+                                // mudar é na aba Forma de Pagamento (Cliente) ou na aba Dados do Cliente.
+                                case 'cliente': {
+                                    const clientLabel = selectedClient?.name ?? '—';
+                                    return <span className="block truncate text-table-body text-gray-600" title={clientLabel}>{clientLabel}</span>;
+                                }
                                 case 'centro_custo':
                                     return <span className="block truncate text-table-body text-gray-600" title={costCenterLabel}>{costCenterLabel}</span>;
                                 case 'plano_contas':

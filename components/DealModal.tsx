@@ -3022,7 +3022,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     />
                                     {(formData.payment_method === 'INSTALLMENTS' || formData.payment_method === 'FINANCING') && (
                                         <p className="text-xs font-normal text-gray-500 px-1 flex items-center gap-1">
-                                            <AlertCircle className="w-3 h-3" /> Status "Concluído" será ativado automaticamente após a baixa da última parcela.
+                                            <AlertCircle className="w-3 h-3" /> Status "{formData.type === 'RENTAL' ? 'Alugado' : 'Concluído'}" será ativado automaticamente após a baixa da última parcela.
                                         </p>
                                     )}
                                 </div>
@@ -3039,7 +3039,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         if (sigStatus === 'SIGNED' && formData.status === 'ASSINATURA') {
                                             confirm({
                                                 title: 'Contrato assinado!',
-                                                message: 'Deseja avançar a negociação para Concluído?',
+                                                message: `Deseja avançar a negociação para ${formData.type === 'RENTAL' ? 'Alugado' : 'Concluído'}?`,
                                                 variant: 'default',
                                                 confirmLabel: 'Avançar',
                                             }).then(ok => {

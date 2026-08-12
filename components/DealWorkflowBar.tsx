@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Circle, XCircle, ChevronRight } from 'lucide-react';
-import { WORKFLOW_STEPS, DealWorkflowStatus, getStepIndex, canTransition, validateTransition, normalizeStatus } from '../lib/dealWorkflow';
+import { WORKFLOW_STEPS, DealWorkflowStatus, getStepIndex, canTransition, validateTransition, normalizeStatus, getWorkflowStep } from '../lib/dealWorkflow';
 import { PropertyDeal } from '../types';
 import DealCancelModal from './DealCancelModal';
 
@@ -28,7 +28,10 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
     };
 
     // Rótulo do próximo passo — leva em conta deals legados em WAITING_PAYMENT
-    const nextStepFromCurrent = WORKFLOW_STEPS[currentIdx + 1];
+    // e o texto por tipo de negociação (COMPLETED vira "Alugado" na Locação).
+    const nextStepFromCurrent = WORKFLOW_STEPS[currentIdx + 1]
+        ? getWorkflowStep(WORKFLOW_STEPS[currentIdx + 1], deal.type)
+        : undefined;
 
     const handleCancel = () => {
         if (!canTransition(currentStatus, 'CANCELLED')) return;
@@ -82,7 +85,8 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
         <div className="space-y-3">
             {/* Steps */}
             <div className="flex items-center gap-1">
-                {WORKFLOW_STEPS.map((step, idx) => {
+                {WORKFLOW_STEPS.map((rawStep, idx) => {
+                    const step = getWorkflowStep(rawStep, deal.type);
                     const isPast = idx < currentIdx;
                     const isCurrent = idx === currentIdx;
                     const isFuture = idx > currentIdx;
@@ -109,7 +113,7 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
             {!disabled && (
                 <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-gray-500">
-                        {WORKFLOW_STEPS[currentIdx]?.description}
+                        {currentIdx >= 0 ? getWorkflowStep(WORKFLOW_STEPS[currentIdx], deal.type).description : ''}
                     </p>
                     <div className="flex gap-2 shrink-0">
                         {canTransition(currentStatus, 'CANCELLED') && (

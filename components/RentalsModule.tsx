@@ -38,7 +38,7 @@ import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
 import { contractRenewalService } from '../services/contractRenewalService';
-import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus } from '../lib/dealWorkflow';
+import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getWorkflowStep } from '../lib/dealWorkflow';
 // Conta de carteira compartilhada com services/rentalsDashboardService.ts — as
 // duas telas mostram os mesmos KPIs e já divergiram por terem cópias da fórmula.
 // getDealInstallmentValue trabalha na escala do CONTRATO (campos do próprio
@@ -1185,7 +1185,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const getDealStatusDisplay = (status?: string) => {
         if (status === 'CANCELLED') return { label: 'Cancelado', color: 'text-red-600' };
         const step = getStepByStatus((status || 'IN_NEGOTIATION') as DealWorkflowStatus);
-        return step ? { label: step.label, color: step.color } : { label: status || '', color: 'text-gray-600' };
+        // Locação: a etapa final (COMPLETED) é "Alugado", não "Concluído" — mesmo
+        // texto do stepper de Gerenciar Negociação (DealWorkflowBar).
+        if (!step) return { label: status || '', color: 'text-gray-600' };
+        const view = getWorkflowStep(step, 'RENTAL');
+        return { label: view.label, color: view.color };
     };
 
     // Status da UNIDADE no mesmo vocabulário da aba Contratos.

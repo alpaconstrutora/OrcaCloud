@@ -106,6 +106,21 @@ export function getStepByStatus(status: DealWorkflowStatus): WorkflowStep | unde
     return WORKFLOW_STEPS.find(s => s.status === normalized);
 }
 
+// A etapa final (COMPLETED) é redigida como "Venda" por padrão, mas Locação
+// não vende — a unidade fica ALUGADA. SALE/SERVICE mantêm o texto genérico.
+const COMPLETED_STEP_OVERRIDE: Partial<Record<NonNullable<PropertyDeal['type']>, { label: string; description: string }>> = {
+    RENTAL: { label: 'Alugado', description: 'Contrato de locação assinado. Unidade alugada.' },
+};
+
+// Aplica o texto por tipo de negociação a uma etapa (usado por
+// DealWorkflowBar e pelo vocabulário compartilhado de status em
+// RentalsModule — ver getDealStatusDisplay/getUnitStatusDisplay).
+export function getWorkflowStep(step: WorkflowStep, dealType?: PropertyDeal['type']): WorkflowStep {
+    if (step.status !== 'COMPLETED' || !dealType) return step;
+    const override = COMPLETED_STEP_OVERRIDE[dealType];
+    return override ? { ...step, ...override } : step;
+}
+
 // Pré-requisitos de negócio antes de avançar
 export function validateTransition(
     from: DealWorkflowStatus,

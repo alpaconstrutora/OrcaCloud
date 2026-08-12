@@ -32,7 +32,7 @@ import DealModal from './DealModal';
 import { RentalsDashboard } from './RentalsDashboard';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import { PriceTableManager } from './PriceTableManager';
-import RentalPricingIntelligenceModal from './RentalPricingIntelligenceModal';
+import RentalPricingIntelligencePanel from './RentalPricingIntelligencePanel';
 import { rentalPricingService } from '../services/rentalPricingService';
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
@@ -54,7 +54,7 @@ interface RentalsModuleProps {
     organizationId?: string;
 }
 
-type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables';
+type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables' | 'pricing-intelligence';
 
 // Valor de locação canônico da unidade: rental_price (gravado pela Inteligência
 // de Aluguéis e pela Tabela de aluguéis); fallback para price ("Aluguel base"
@@ -93,7 +93,7 @@ const dealPrivateArea = (deal: PropertyDeal, properties: Property[]): number => 
 // lista cobre as colunas dos dois modos; cada célula de cabeçalho/dado já
 // checa qual modo está ativo antes de aplicar `visibleColumns`.
 const PROPERTY_COLUMNS: ColumnConfig[] = [
-    { key: 'name', label: 'Imóvel', sortable: true },
+    { key: 'name', label: 'Unidade', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'address', label: 'Endereço', sortable: true },
     { key: 'occupancy', label: 'Ocupação', sortable: false },
@@ -202,7 +202,7 @@ const BROKER_DEFAULT_COL_WIDTHS: Record<string, number> = {
 interface UnitsHeaderDef { label: string; sortable?: boolean; className: string }
 
 const UNITS_BUILDING_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
-    name:      { label: 'Imóvel',                sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    name:      { label: 'Unidade',               sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento: { label: 'Empreendimento',   sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     address:   { label: 'Endereço / referência',  sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     price:     { label: 'Patrimônio',             sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
@@ -211,7 +211,7 @@ const UNITS_BUILDING_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
 };
 
 const UNITS_UNIT_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
-    name:            { label: 'Imóvel',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    name:            { label: 'Unidade',       sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento:  { label: 'Empreendimento', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     block:           { label: 'Bloco',         sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     floor:           { label: 'Pav.',          sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
@@ -536,7 +536,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [brokerSearchTerm, setBrokerSearchTerm] = usePersistedState('rentalsModuleFilters:brokerSearch', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list' | 'tower'>('rentalsModuleFilters:viewMode', 'list');
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
-    const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(() => {
         const saved = localStorage.getItem('rentals_selected_building_id');
         return (saved && saved !== 'undefined') ? saved : null;
@@ -1329,7 +1328,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 updated.filter(u => u.id != null).map(u => [u.id as string, Number(u.rental_price ?? 0)]),
             );
             const sync = await rentalPriceTableService.syncActiveTableItems(selectedBuildingId, rentByPropertyId);
-            setIsPricingModalOpen(false);
+            // Volta para "Unidades" — não há mais diálogo pra fechar, mas o
+            // usuário quer ver o resultado (aluguéis atualizados) na lista.
+            setActiveTab('inventory');
             notify(
                 sync.hadActiveTable
                     ? `${updated.length} unidades precificadas — tabela de aluguéis ativa também atualizada.`
@@ -1689,8 +1690,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1: card branco externo
                 envolvendo o trilho cinza interno onde ficam os botões das abas.
                 Antes só existia o trilho, sem o card — abas ficavam "soltas" na
-                página. "Inteligência de aluguéis" mora à direita, fora do trilho
-                (não é uma aba). */}
+                página. "Inteligência de aluguéis" era um botão à direita, fora do
+                trilho, abrindo um modal — virou aba (a pedido do usuário) igual
+                às demais. */}
             {selectedBuildingId && (
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                     <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
@@ -1741,17 +1743,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             <DollarSign className="w-3.5 h-3.5" />
                             Tabela de aluguéis
                         </button>
+                        <button
+                            onClick={() => setActiveTab('pricing-intelligence')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'pricing-intelligence' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        >
+                            <BrainCircuit className="w-3.5 h-3.5" />
+                            Inteligência de Aluguéis
+                        </button>
                     </div>
-                    {/* "Inteligência de aluguéis" migrou da toolbar de botões (removida —
-                        só tinha ela e o "Relatórios", que não tinha onClick nenhum, e
-                        "Novo imóvel", removido a pedido do usuário) para cá. */}
-                    <button
-                        onClick={() => setIsPricingModalOpen(true)}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-600 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                    >
-                        <BrainCircuit className="w-4 h-4" />
-                        Inteligência de aluguéis
-                    </button>
                 </div>
             )}
 
@@ -2428,6 +2427,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
+            {activeTab === 'pricing-intelligence' && selectedBuildingId && currentBuilding && (
+                <RentalPricingIntelligencePanel
+                    buildingName={currentBuilding.name}
+                    onApply={handleApplyRentalPricing}
+                    loading={loading}
+                />
+            )}
+
             <DealModal
                 isOpen={isDealModalOpen}
                 onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); setDealModalTab(undefined); }}
@@ -2439,13 +2446,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 // unidades DESTE edifício — sem isso o seletor de unidades listava
                 // as unidades de todos os imóveis misturadas (Vendas já passava).
                 buildingId={selectedBuildingId || undefined}
-            />
-
-            <RentalPricingIntelligenceModal
-                isOpen={isPricingModalOpen}
-                onClose={() => setIsPricingModalOpen(false)}
-                onApply={handleApplyRentalPricing}
-                buildingName={currentBuilding?.name || ''}
             />
 
             {notificationToast}

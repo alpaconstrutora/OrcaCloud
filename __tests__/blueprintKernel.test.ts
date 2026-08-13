@@ -25,6 +25,7 @@ import {
   cantosDaParede,
   eixoDaParede,
   emptyModel,
+  pontaEsticada,
   interiorPoint,
   modelFromCanonicalPayload,
   parseCanonicalPayload,
@@ -1078,5 +1079,89 @@ describe('cantosDaParede', () => {
 
   it('parede de comprimento zero não tem canto', () => {
     expect(cantosDaParede(point(0, 0), point(0, 0), 200)).toEqual([]);
+  });
+});
+
+describe('pontaEsticada', () => {
+  it('estica no eixo horizontal', () => {
+    expect(pontaEsticada(point(0, 0), point(4000, 0), 5000)).toEqual({ x: 5000, y: 0 });
+  });
+
+  it('encolhe: comprimento menor aproxima da âncora', () => {
+    expect(pontaEsticada(point(0, 0), point(4000, 0), 1500)).toEqual({ x: 1500, y: 0 });
+  });
+
+  it('preserva a DIREÇÃO em parede oblíqua — a parede não gira', () => {
+    // Direção 3-4-5, comprimento 5000. Esticando para 10000, o ponto fica no
+    // dobro da distância na mesma reta.
+    const de = point(0, 0);
+    const para = point(3000, 4000);
+    const esticado = pontaEsticada(de, para, 10_000);
+
+    expect(esticado).toEqual({ x: 6000, y: 8000 });
+    // Mesma direção: o produto vetorial com o segmento original é zero.
+    expect(areCollinear(de, para, esticado)).toBe(true);
+  });
+
+  it('comprimento zero devolve a própria âncora', () => {
+    expect(pontaEsticada(point(1000, 2000), point(5000, 2000), 0)).toEqual({
+      x: 1000,
+      y: 2000,
+    });
+  });
+
+  it('âncora e direção iguais não propagam NaN — devolvem a âncora', () => {
+    const p = point(2000, 3000);
+    expect(pontaEsticada(p, p, 4000)).toEqual(p);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Esticar parede pelo painel de propriedades — o LOTE que arrasta o canto
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('esticar parede arrastando o canto junto (decisão de produto de 12/08/2026)', () => {
+  it('sala fechada: esticar uma parede em lote com a vizinha mantém 1 ambiente', () => {
+    // Retângulo 4000×3000. `room()` cria, nesta ordem: sul, leste, norte, oeste.
+    // A parede SUL termina em (0,0) — encostada na OESTE — e em (4000,0) —
+    // encostada na LESTE. As duas pontas estão presas, então a regra "anda a
+    // final" manda mexer em `b` (4000,0), e a vizinha que compartilha esse
+    // vértice (LESTE, pela ponta `a`) tem que andar JUNTO, no MESMO lote —
+    // senão o canto abre e o ambiente desaparece.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    const [sul, leste] = built.model.walls;
+    expect(sul.b).toEqual({ x: 4000, y: 0 });
+    expect(leste.a).toEqual({ x: 4000, y: 0 });
+
+    const novaPonta = pontaEsticada(sul.a, sul.b, 5000);
+    const lote: Command[] = [
+      { type: 'MoveVertex', wallId: sul.id, end: 'b', to: novaPonta },
+      { type: 'MoveVertex', wallId: leste.id, end: 'a', to: novaPonta },
+    ];
+    const depois = applyBatch(built.model, lote).model;
+
+    expect(depois.spaces).toHaveLength(1);
+    // Trapézio (0,0)-(5000,0)-(4000,3000)-(0,3000): a parede LESTE, que ficou
+    // presa pela ponta oposta ao norte, saiu OBLÍQUA — é a consequência
+    // combinada, não um defeito. Área pelo laço do agrimensor.
+    expect(depois.spaces[0].areaMm2).toBe(13_500_000);
+  });
+
+  it('lote recusado (colapsaria a parede) não deixa o modelo pela metade', () => {
+    // `MoveVertex` para cima da OUTRA ponta é uma parede degenerada — o kernel
+    // recusa (`assertModelInvariants`/`DEGENERATE_WALL`). Isso tem de abortar o
+    // LOTE INTEIRO: se só a correção da vizinha entrasse, o canto ficaria pior
+    // do que estava antes do gesto.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    const [sul, leste] = built.model.walls;
+
+    const lote: Command[] = [
+      { type: 'MoveVertex', wallId: sul.id, end: 'b', to: sul.a }, // colapsa
+      { type: 'MoveVertex', wallId: leste.id, end: 'a', to: sul.a },
+    ];
+
+    expect(() => applyBatch(built.model, lote)).toThrow(KernelError);
   });
 });

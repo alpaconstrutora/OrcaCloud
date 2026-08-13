@@ -291,6 +291,38 @@ export function travarOrtogonal(de: Point, para: Point): Point {
     : { x: de.x, y: para.y };
 }
 
+/**
+ * Ponto a `comprimentoMm` de `de`, na direção de `de` → `para`.
+ *
+ * Serve ao painel de propriedades: quem digita "4,10 m" no comprimento da
+ * parede está pedindo para a ponta ANDAR NO PRÓPRIO EIXO, não para a parede
+ * girar — `para` só informa a direção (normalmente a ponta atual, do lado que
+ * fica). Encolher (`comprimentoMm` menor que o atual) é o mesmo cálculo, só que
+ * o ponto cai mais perto de `de`.
+ *
+ * Vive no kernel pela mesma razão de `eixoDaParede` e `cantosDaParede`: é
+ * geometria, e cópia no renderizador é cópia que diverge silenciosamente.
+ *
+ * `comprimentoMm` deve ser positivo — comprimento zero é parede degenerada, que
+ * o kernel já recusa em `AddWall`/`MoveVertex`, e esta função não duplica a
+ * validação: devolve o ponto matemático, ainda que degenerado, e deixa o
+ * comando recusar.
+ *
+ * `de` e `para` iguais não têm direção nenhuma para seguir; a chamada é um erro
+ * de quem chama (a parede já teria comprimento zero antes de qualquer edição), e
+ * a função devolve `de` em vez de propagar `NaN` para dentro do kernel.
+ */
+export function pontaEsticada(de: Point, para: Point, comprimentoMm: number): Point {
+  const dx = para.x - de.x;
+  const dy = para.y - de.y;
+  const comp = Math.hypot(dx, dy);
+  if (comp === 0) return point(de.x, de.y);
+
+  const ux = dx / comp;
+  const uy = dy / comp;
+  return point(roundToMm(de.x + ux * comprimentoMm), roundToMm(de.y + uy * comprimentoMm));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Alinhamento do traçado (eixo × face)
 // ─────────────────────────────────────────────────────────────────────────────

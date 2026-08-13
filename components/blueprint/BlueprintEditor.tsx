@@ -4,8 +4,6 @@ import {
   MousePointer2,
   Minus,
   DoorOpen,
-  Scissors,
-  Combine,
   Redo2,
   Undo2,
   Upload,
@@ -28,6 +26,7 @@ import PainelVersoes from './PainelVersoes';
 import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import AbasDoPainel from './AbasDoPainel';
 import PainelMedicoes from './PainelMedicoes';
+import PainelParedeSelecionada from './PainelParedeSelecionada';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
@@ -39,10 +38,12 @@ import {
 } from '../../services/blueprintService';
 import {
   POLITICA_PADRAO,
+  KernelError,
   areCollinear,
   computeQuantities,
   formatarQuantidade,
-  wallLength,
+  isFreeWallEnd,
+  pontaEsticada,
   type AlinhamentoParede,
   type Command,
   type Point,
@@ -342,6 +343,78 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (!paredeSel || !vizinhaParaUnir) return;
     editor.run({ type: 'MergeWalls', firstId: paredeSel.id, secondId: vizinhaParaUnir.id });
     editor.setSelectedId(null);
+  }
+
+  /**
+   * Qual ponta anda ao digitar um novo comprimento, e se isso arrasta o canto.
+   *
+   * Decisão de produto (12/08/2026): se uma das pontas está LIVRE, é ela que
+   * anda — a correção feita à mão, logo depois de desenhar, não deve mexer em
+   * nada já encaixado. Se as duas estão livres, ou as duas presas, anda a
+   * FINAL (`b`, a última clicada ao desenhar): é a regra mais fácil de prever
+   * quando não há uma ponta obviamente "solta".
+   */
+  const esticamento = useMemo(() => {
+    if (!paredeSel) return { pontaQueAnda: null as 'a' | 'b' | null, arrastaCanto: false };
+    const nivel = editor.model.walls.filter((w) => w.levelId === paredeSel.levelId);
+    const aLivre = isFreeWallEnd(nivel, paredeSel.a, paredeSel.id);
+    const bLivre = isFreeWallEnd(nivel, paredeSel.b, paredeSel.id);
+    const pontaQueAnda: 'a' | 'b' = aLivre && !bLivre ? 'a' : 'b';
+    return { pontaQueAnda, arrastaCanto: !(pontaQueAnda === 'a' ? aLivre : bLivre) };
+  }, [paredeSel, editor.model.walls]);
+
+  /**
+   * Aplica o comprimento digitado no painel.
+   *
+   * A ponta escolhida (`esticamento.pontaQueAnda`) anda ao longo do PRÓPRIO
+   * EIXO — `pontaEsticada` preserva a direção, a parede nunca gira.
+   *
+   * Se aquela ponta ENCONTRA outras paredes, elas andam JUNTO, no MESMO lote de
+   * histórico (`runBatch`): mover só a nossa abriria o canto e apagaria o
+   * ambiente e o quantitativo em silêncio — a mesma razão pela qual o traçado
+   * pela face mitra o canto num lote só. `runBatch` aborta o lote inteiro se
+   * alguma correção for recusada, então o canto nunca fica pior do que estava.
+   *
+   * LIMITAÇÃO CONHECIDA: numa junção em T, a ponta que morre no MEIO do corpo de
+   * outra parede não é vértice de ninguém — não há `MoveVertex` de vizinha para
+   * disparar, e o encontro simplesmente desencosta. O painel de pontas soltas
+   * acusa, e a lista de vãos oferece fechar; corrigido aqui seria refazer o
+   * `SplitWall` que a junção em T já resolve para o caso de desenhar.
+   */
+  function esticarParede(comprimentoMm: number) {
+    if (!paredeSel) return;
+    // `esticamento.pontaQueAnda` só é `null` quando `paredeSel` é `null` — mas o
+    // memo devolve um tipo próprio, e o TypeScript não enxerga essa relação
+    // entre as duas variáveis. A guarda é redundante em runtime, não em tipo.
+    const { pontaQueAnda } = esticamento;
+    if (!pontaQueAnda) return;
+    const nivel = editor.model.walls.filter((w) => w.levelId === paredeSel.levelId);
+    const ancora = pontaQueAnda === 'a' ? paredeSel.b : paredeSel.a;
+    const pontaAtual = pontaQueAnda === 'a' ? paredeSel.a : paredeSel.b;
+
+    let novaPonta: Point;
+    try {
+      novaPonta = pontaEsticada(ancora, pontaAtual, comprimentoMm);
+    } catch (e) {
+      // Coordenada fora de ±1.000.000 mm (alguém digitou metros achando que
+      // eram milímetros). Recusa silenciosa: o campo já ressincroniza com o
+      // valor atual no próximo render, então não há necessidade de expor o
+      // erro do kernel para um dígito a mais.
+      if (e instanceof KernelError) return;
+      throw e;
+    }
+
+    const lote: Command[] = [{ type: 'MoveVertex', wallId: paredeSel.id, end: pontaQueAnda, to: novaPonta }];
+    for (const w of nivel) {
+      if (w.id === paredeSel.id) continue;
+      if (w.a.x === pontaAtual.x && w.a.y === pontaAtual.y) {
+        lote.push({ type: 'MoveVertex', wallId: w.id, end: 'a', to: novaPonta });
+      }
+      if (w.b.x === pontaAtual.x && w.b.y === pontaAtual.y) {
+        lote.push({ type: 'MoveVertex', wallId: w.id, end: 'b', to: novaPonta });
+      }
+    }
+    editor.runBatch(lote);
   }
 
   /**
@@ -969,66 +1042,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             </p>
           </div>
 
-          {(paredeSel || aberturaSel) && (
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {paredeSel ? 'Parede selecionada' : 'Abertura selecionada'}
-              </h3>
-
-              {paredeSel && (
-                <>
-                  <p className="mt-2 text-xs text-slate-600">
-                    Comprimento{' '}
-                    <span className="font-medium text-slate-800">
-                      {(wallLength(paredeSel) / 1000).toFixed(2)} m
-                    </span>
-                  </p>
-                  <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
-                    Espessura
-                    <select
-                      value={paredeSel.thicknessMm}
-                      onChange={(e) =>
-                        editor.run({
-                          type: 'SetThickness',
-                          wallId: paredeSel.id,
-                          thicknessMm: Number(e.target.value),
-                        })
-                      }
-                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                    >
-                      {[100, 150, 200, 250].map((mm) => (
-                        <option key={mm} value={mm}>
-                          {mm} mm
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="mt-3 flex gap-2">
-                    <BotaoTexto icone={Scissors} rotulo="Dividir" onClick={dividirSelecionada} />
-                    <BotaoTexto
-                      icone={Combine}
-                      rotulo="Unir"
-                      onClick={unirSelecionada}
-                      disabled={!vizinhaParaUnir}
-                      titulo={
-                        vizinhaParaUnir
-                          ? 'Une com a parede colinear vizinha'
-                          : 'Só é possível unir com uma parede colinear, de mesma espessura, que compartilhe uma ponta'
-                      }
-                    />
-                  </div>
-                </>
-              )}
-
-              {aberturaSel && (
-                <p className="mt-2 text-xs text-slate-600">
-                  {aberturaSel.kind === 'door' ? 'Porta' : 'Janela'} de{' '}
-                  <span className="font-medium text-slate-800">{aberturaSel.widthMm} mm</span>, a{' '}
-                  {(aberturaSel.offsetMm / 1000).toFixed(2)} m do início da parede.
-                </p>
-              )}
-            </div>
-          )}
+          <PainelParedeSelecionada
+            parede={paredeSel}
+            abertura={aberturaSel}
+            pontaQueAnda={esticamento.pontaQueAnda}
+            arrastaCanto={esticamento.arrastaCanto}
+            onComprimento={esticarParede}
+            onEspessura={(mm) =>
+              paredeSel &&
+              editor.run({ type: 'SetThickness', wallId: paredeSel.id, thicknessMm: mm })
+            }
+            podeUnir={!!vizinhaParaUnir}
+            onDividir={dividirSelecionada}
+            onUnir={unirSelecionada}
+          />
 
           {vaosCandidatos.soltas.length > 0 && (
             <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">

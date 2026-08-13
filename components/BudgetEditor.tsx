@@ -396,16 +396,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       if (before && !after) fields.push('item removido');
       if (before && after) {
         if (before.quantity !== after.quantity) fields.push('quantidade');
-        if ((before.sinapiItem?.price || 0) !== (after.sinapiItem?.price || 0)) fields.push('pre�o');
+        if ((before.sinapiItem?.price || 0) !== (after.sinapiItem?.price || 0)) fields.push('preço');
         if ((before.bdi ?? baseBdi) !== (after.bdi ?? currentBdi)) fields.push('BDI');
-        if ((before.sinapiItem?.code || '') !== (after.sinapiItem?.code || '')) fields.push('c�digo');
-        if ((before.sinapiItem?.description || '') !== (after.sinapiItem?.description || '')) fields.push('descri��o');
-        if ((before.precisionClass || '') !== (after.precisionClass || '')) fields.push('classe de precis�o');
+        if ((before.sinapiItem?.code || '') !== (after.sinapiItem?.code || '')) fields.push('código');
+        if ((before.sinapiItem?.description || '') !== (after.sinapiItem?.description || '')) fields.push('descrição');
+        if ((before.precisionClass || '') !== (after.precisionClass || '')) fields.push('classe de precisão');
         if ((before.status || '') !== (after.status || '')) fields.push('status');
         if ((before.discipline || '') !== (after.discipline || '')) fields.push('disciplina');
-        if ((before.responsible || '') !== (after.responsible || '')) fields.push('respons�vel');
-        if ((before.calculationMemory?.formula || '') !== (after.calculationMemory?.formula || '')) fields.push('mem�ria de c�lculo');
-        if ((before.calculationMemory?.result ?? '') !== (after.calculationMemory?.result ?? '')) fields.push('resultado da mem�ria');
+        if ((before.responsible || '') !== (after.responsible || '')) fields.push('responsável');
+        if ((before.calculationMemory?.formula || '') !== (after.calculationMemory?.formula || '')) fields.push('memória de cálculo');
+        if ((before.calculationMemory?.result ?? '') !== (after.calculationMemory?.result ?? '')) fields.push('resultado da memória');
         if ((before.calculationMemory?.justification || '') !== (after.calculationMemory?.justification || '')) fields.push('justificativa');
       }
 
@@ -416,7 +416,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         status,
         fields,
         code: item?.sinapiItem?.code || '---',
-        description: item?.sinapiItem?.description || 'Sem descri��o',
+        description: item?.sinapiItem?.description || 'Sem descrição',
         beforeQty: before?.quantity ?? 0,
         afterQty: after?.quantity ?? 0,
         beforeTotal,
@@ -1875,14 +1875,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <ClipboardList className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-blue-900 font-bold text-sm">Mem�ria t�cnica pendente</p>
+                <p className="text-blue-900 font-bold text-sm">Memória técnica pendente</p>
                 <p className="text-blue-700 text-xs">
-                  {itemsWithoutCalculationMemory} item(s) sem mem�ria de c�lculo e {itemsWithoutPrecisionClass} item(s) sem classe de precis�o.
+                  {itemsWithoutCalculationMemory} item(s) sem memória de cálculo e {itemsWithoutPrecisionClass} item(s) sem classe de precisão.
                 </p>
               </div>
             </div>
             <span className="text-xs font-bold text-blue-700 bg-white border border-blue-100 rounded-full px-3 py-1 whitespace-nowrap">
-              Clique no �cone de prancheta em cada item
+              Clique no ícone de prancheta em cada item
             </span>
           </div>
         </div>
@@ -2204,7 +2204,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         <button
                           onClick={() => setCompareVersion(v)}
                           className="flex-none px-2.5 py-1.5 border border-slate-200 text-slate-600 bg-white rounded text-button font-bold hover:bg-slate-700 hover:text-white hover:border-slate-700 transition-colors"
-                          title="Comparar esta vers�o com o or�amento atual"
+                          title="Comparar esta versão com o orçamento atual"
                         >
                           Comparar
                         </button>
@@ -2235,10 +2235,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div>
                     <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
                       <History className="w-5 h-5 text-blue-600" />
-                      Comparativo de vers�o
+                      Comparativo de versão
                     </h3>
                     <p className="text-xs text-gray-500 mt-1">
-                      Vers�o {compareVersion.item} � {compareVersion.description} contra o or�amento atual
+                      Versão {compareVersion.item} · {compareVersion.description} contra o orçamento atual
                     </p>
                   </div>
                   <button onClick={() => setCompareVersion(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors" title="Fechar">
@@ -2250,7 +2250,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   {[
                     ['Base', fmtMoney(diff.baseTotal), 'text-gray-700'],
                     ['Atual', fmtMoney(diff.currentTotal), 'text-blue-700'],
-                    ['Varia��o', fmtMoney(diff.deltaTotal), diff.deltaTotal >= 0 ? 'text-red-600' : 'text-emerald-700'],
+                    ['Variação', fmtMoney(diff.deltaTotal), diff.deltaTotal >= 0 ? 'text-red-600' : 'text-emerald-700'],
                     ['Alterados', String(diff.changed), 'text-amber-700'],
                     ['Adic./Rem.', `${diff.added} / ${diff.removed}`, 'text-slate-700'],
                   ].map(([label, value, color]) => (
@@ -2264,20 +2264,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <div className="flex-1 overflow-auto">
                   {diff.rows.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
-                      Nenhuma diferen�a encontrada entre esta vers�o e o or�amento atual.
+                      Nenhuma diferença encontrada entre esta versão e o orçamento atual.
                     </div>
                   ) : (
                     <table className="w-full text-left text-sm">
                       <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
                         <tr>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Status</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">C�digo</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descri��o</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Código</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descrição</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Qtd. base</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Qtd. atual</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Total base</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Total atual</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Varia��o</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Variação</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Campos</th>
                         </tr>
                       </thead>
@@ -3294,7 +3294,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         )
       }
-      {/* Modal de mem�ria t�cnica do item */}
+      {/* Modal de memória técnica do item */}
       {
         selectedDetailsItem && (
           <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -3305,8 +3305,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <ClipboardList className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-extrabold text-gray-900">Mem�ria t�cnica do item</h3>
-                    <p className="text-xs text-gray-500 font-mono mt-1">{selectedDetailsItem.sinapiItem?.code || '---'} � {selectedDetailsItem.sinapiItem?.description || 'Sem descri��o'}</p>
+                    <h3 className="text-lg font-extrabold text-gray-900">Memória técnica do item</h3>
+                    <p className="text-xs text-gray-500 font-mono mt-1">{selectedDetailsItem.sinapiItem?.code || '---'} · {selectedDetailsItem.sinapiItem?.description || 'Sem descrição'}</p>
                   </div>
                 </div>
                 <button onClick={() => setSelectedDetailsItem(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors" title="Fechar">
@@ -3317,18 +3317,18 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classe de precis�o</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classe de precisão</label>
                     <select
                       value={selectedDetailsItem.precisionClass || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, precisionClass: e.target.value ? e.target.value as BudgetEntry['precisionClass'] : undefined } : prev)}
                       className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     >
-                      <option value="">N�o definida</option>
+                      <option value="">Não definida</option>
                       <option value="A">A - Projeto executivo</option>
-                      <option value="B">B - Projeto b�sico</option>
+                      <option value="B">B - Projeto básico</option>
                       <option value="C">C - Anteprojeto</option>
                       <option value="D">D - Estudo preliminar</option>
-                      <option value="E">E - Estimativa param�trica</option>
+                      <option value="E">E - Estimativa paramétrica</option>
                     </select>
                   </div>
                   <div>
@@ -3338,7 +3338,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, status: e.target.value as BudgetEntry['status'] } : prev)}
                       className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     >
-                      {['Rascunho', 'Em revis�o', 'Aguardando aprova��o', 'Aprovado', 'Congelado', 'Substitu�do', 'Cancelado'].map(status => <option key={status} value={status}>{status}</option>)}
+                      {['Rascunho', 'Em revisão', 'Aguardando aprovação', 'Aprovado', 'Congelado', 'Substituído', 'Cancelado'].map(status => <option key={status} value={status}>{status}</option>)}
                     </select>
                   </div>
                   <div>
@@ -3351,7 +3351,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Respons�vel</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Responsável</label>
                     <input
                       value={selectedDetailsItem.responsible || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, responsible: e.target.value } : prev)}
@@ -3381,13 +3381,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">F�rmula / mem�ria de c�lculo</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Fórmula / memória de cálculo</label>
                     <textarea
                       rows={4}
                       value={selectedDetailsItem.calculationMemory?.formula || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), formula: e.target.value } } : prev)}
                       className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono"
-                      placeholder="Ex: (comprimento x altura) - v�os"
+                      placeholder="Ex: (comprimento x altura) - vãos"
                     />
                   </div>
                   <div>
@@ -3398,7 +3398,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       value={selectedDetailsItem.calculationMemory?.result ?? ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), result: e.target.value === '' ? undefined : Number(e.target.value) } } : prev)}
                       className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Quantidade audit�vel"
+                      placeholder="Quantidade auditável"
                     />
                     <label className="mt-4 flex items-center gap-2 text-sm font-bold text-gray-600">
                       <input
@@ -3419,12 +3419,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     value={selectedDetailsItem.calculationMemory?.justification || ''}
                     onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), justification: e.target.value } } : prev)}
                     className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                    placeholder="Explique origem da quantidade, documentos usados, premissas, exclus�es ou baixa precis�o."
+                    placeholder="Explique origem da quantidade, documentos usados, premissas, exclusões ou baixa precisão."
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Observa��es internas</label>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Observações internas</label>
                   <textarea
                     rows={3}
                     value={selectedDetailsItem.notes || ''}
@@ -3436,12 +3436,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
               <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
                 <div className="text-xs text-gray-500">
-                  A quantidade principal do item continua em {selectedDetailsItem.quantity.toLocaleString('pt-BR')} {selectedDetailsItem.sinapiItem?.unit || ''}; o resultado calculado serve para auditoria e confer�ncia.
+                  A quantidade principal do item continua em {selectedDetailsItem.quantity.toLocaleString('pt-BR')} {selectedDetailsItem.sinapiItem?.unit || ''}; o resultado calculado serve para auditoria e conferência.
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setSelectedDetailsItem(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white font-medium transition-colors">Cancelar</button>
                   <button onClick={handleSaveDetails} className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-sm transition-all flex items-center gap-2">
-                    <Save className="w-4 h-4" /> Salvar mem�ria
+                    <Save className="w-4 h-4" /> Salvar memória
                   </button>
                 </div>
               </div>

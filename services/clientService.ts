@@ -59,55 +59,62 @@ const mapToDbClient = (client: Partial<Client>): DbClientRow => {
 
 export const clientService = {
     async listClients(organizationId?: string) {
-        let query = supabase
-            .from('clients')
-            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role, type, category, portal, status, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+        // Degraus do mais completo ao mais enxuto: cada `42703` (coluna
+        // inexistente) cai para o próximo. Uma LISTA, e não uma cascata de
+        // `if`s encadeados, porque a cascata tinha um defeito estrutural: os
+        // três degraus antigos pediam `status`, e o único que não pedia estava
+        // atrás de `if (organizationId)`. Com o topo em "Todas as organizações"
+        // e a migration 20270906000000 pendente, nenhum degrau resolvia — o
+        // erro chegava ao `throw` e derrubava a tela inteira de quem chama.
+        //
+        // Regra ao acrescentar coluna nova: ela entra APENAS no primeiro
+        // degrau, e ganha um degrau novo logo abaixo, sem ela.
+        const BASE = 'id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency';
+        const COMUM = 'type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)';
+        const QUALIFICACAO = 'nationality, profession, marital_status, marital_regime, spouse_name, spouse_document';
+        const REPRESENTANTE = 'legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role';
 
-        if (organizationId) {
-            query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
-        }
+        const DEGRAUS: { cols: string; aviso?: string }[] = [
+            { cols: `${BASE}, ${QUALIFICACAO}, ${REPRESENTANTE}, status, ${COMUM}` },
+            {
+                cols: `${BASE}, ${QUALIFICACAO}, status, ${COMUM}`,
+                aviso: 'Colunas de representante legal ausentes — aplique a migration 20270867000000.',
+            },
+            {
+                cols: `${BASE}, status, ${COMUM}`,
+                aviso: 'Colunas de qualificação civil ausentes — aplique a migration 20270842000000.',
+            },
+            {
+                cols: `${BASE}, ${COMUM}`,
+                aviso: 'Coluna status ausente — aplique a migration 20270906000000. Os clientes aparecem sem o status até lá.',
+            },
+            {
+                // Último recurso: sem `organization_id` nem o join. Diferente
+                // dos anteriores, roda SEMPRE — antes só rodava com uma
+                // organização selecionada, e era justamente em "Todas" que a
+                // tela quebrava.
+                cols: 'id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, address, neighborhood, city, state, created_at',
+                aviso: 'Coluna organization_id ausente — listando globalmente.',
+            },
+        ];
 
-        let { data, error } = await query.order('name', { ascending: true });
+        let data: any[] | null = null;
+        let error: { code?: string; message?: string } | null = null;
 
-        // Fallback 1a: representante legal PJ (migration 20270867000000) ainda não
-        // aplicada. Mesmo motivo do fallback de qualificação civil abaixo — colunas
-        // que só servem à minuta não podem derrubar a listagem.
-        if (error && error.code === '42703') {
-            console.warn('[CLIENT SERVICE] Colunas de representante legal ausentes — aplique a migration 20270867000000. Listando sem elas.');
-            let retryQuery = supabase
-                .from('clients')
-                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, type, category, portal, status, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
-            if (organizationId) {
-                retryQuery = retryQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+        for (const [i, degrau] of DEGRAUS.entries()) {
+            let query = supabase.from('clients').select(degrau.cols);
+            // O último degrau não tem `organization_id`, então não dá para
+            // filtrar por ela.
+            if (organizationId && degrau.cols.includes('organization_id')) {
+                query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
             }
-            const retry = await retryQuery.order('name', { ascending: true });
-            data = retry.data as any;
-            error = retry.error;
-        }
-
-        // Fallback 1b: qualificação civil (migration 20270842000000) ainda não
-        // aplicada. Sem isto, subir o código antes da migration derrubaria a
-        // tela de Clientes inteira — as colunas novas só servem à minuta, não
-        // podem custar a listagem.
-        if (error && error.code === '42703') {
-            console.warn('[CLIENT SERVICE] Colunas de qualificação civil ausentes — aplique a migration 20270842000000. Listando sem elas.');
-            let retryQuery = supabase
-                .from('clients')
-                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, portal, status, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
-            if (organizationId) {
-                retryQuery = retryQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
-            }
-            const retry = await retryQuery.order('name', { ascending: true });
-            data = retry.data as any;
-            error = retry.error;
-        }
-
-        // Fallback 2: a coluna organization_id ainda não existir no banco
-        if (error && error.code === '42703' && organizationId) {
-            console.warn("[CLIENT SERVICE] organization_id column missing, falling back to global list.");
-            const retry = await supabase.from('clients').select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, address, neighborhood, city, state, created_at, organization_id').order('name', { ascending: true });
-            data = retry.data as any;
-            error = retry.error;
+            const resultado = await query.order('name', { ascending: true });
+            data = resultado.data;
+            error = resultado.error;
+            if (!error) break;
+            if (error.code !== '42703') break;   // outro erro não é degrau, é falha
+            const proximo = DEGRAUS[i + 1];
+            if (proximo?.aviso) console.warn(`[CLIENT SERVICE] ${proximo.aviso}`);
         }
 
         if (error) {

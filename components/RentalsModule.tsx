@@ -694,7 +694,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             const [propsData, dealsData, clientsData, empMap] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
-                clientService.listClients(),
+                // Clientes alimentam a COLUNA de locatário e o modal — não a
+                // carteira nem a Análise. Dentro de um `Promise.all`, porém, uma
+                // falha aqui derrubava tudo: foi o que aconteceu com o `42703`
+                // de `clients.status` (migration 20270906000000 pendente), e a
+                // aba Análise abriu vazia por causa de uma coluna de outra tela.
+                clientService.listClients().catch(err => {
+                    console.warn('[Commercial] Clientes indisponíveis — a lista segue sem o nome do locatário:', err);
+                    return [] as Client[];
+                }),
                 // Imóvel → empreendimento pelo eixo de LOCAÇÃO (rental_property_id) —
                 // a unidade pode estar publicada em Vendas e Locações ao mesmo tempo,
                 // e os dois eixos são independentes.

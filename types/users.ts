@@ -50,6 +50,10 @@ export interface Client {
     /** Portais em que o cliente é exposto. 'Portal do Cliente' o faz aparecer na
      *  tabela do módulo Portal do Cliente; 'Nenhum' (default) o oculta de lá. */
     portal?: 'Nenhum' | 'Portal do Cliente';
+    /** Status do cadastro. 'Ativo' (default) o mantém disponível em seletores
+     *  de cliente pelo resto do app; 'Inativo' é só o rótulo de tela, não trava
+     *  vínculos/histórico já existentes. */
+    status?: 'Ativo' | 'Inativo';
     organization_name?: string;
     organization_id?: string;
     created_at?: string;

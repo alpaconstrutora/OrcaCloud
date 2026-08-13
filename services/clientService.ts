@@ -61,7 +61,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+            .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, legal_rep_name, legal_rep_document, legal_rep_rg, legal_rep_rg_uf, legal_rep_rg_issuing_agency, legal_rep_nationality, legal_rep_role, type, category, portal, status, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
@@ -76,7 +76,7 @@ export const clientService = {
             console.warn('[CLIENT SERVICE] Colunas de representante legal ausentes — aplique a migration 20270867000000. Listando sem elas.');
             let retryQuery = supabase
                 .from('clients')
-                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, nationality, profession, marital_status, marital_regime, spouse_name, spouse_document, type, category, portal, status, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
             if (organizationId) {
                 retryQuery = retryQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
             }
@@ -93,7 +93,7 @@ export const clientService = {
             console.warn('[CLIENT SERVICE] Colunas de qualificação civil ausentes — aplique a migration 20270842000000. Listando sem elas.');
             let retryQuery = supabase
                 .from('clients')
-                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, portal, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+                .select('id, code, name, email, phone, document, rg, rg_uf, rg_issuing_agency, type, category, portal, status, portal_tabs, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
             if (organizationId) {
                 retryQuery = retryQuery.or(`organization_id.eq.${organizationId},organization_id.is.null`);
             }

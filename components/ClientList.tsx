@@ -33,15 +33,17 @@ const CLIENT_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Cliente', sortable: true },
     { key: 'category', label: 'Tipo', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
     { key: 'contact', label: 'Contato', sortable: false },
     { key: 'document', label: 'Documento', sortable: true },
     { key: 'projects', label: 'Empreendimento Vinculado', sortable: false },
+    { key: 'portal', label: 'Portal do Cliente', sortable: true },
 ];
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 118, name: 220, category: 130, organization: 180, contact: 200, document: 150, projects: 236, actions: 190,
+    code: 118, name: 220, category: 130, status: 110, organization: 180, contact: 200, document: 150, projects: 236, portal: 150, actions: 190,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -52,10 +54,12 @@ const CLIENT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
     code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     name: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     category: { label: 'Tipo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     contact: { label: 'Contato', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     document: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     projects: { label: 'Empreendimento Vinculado', sortable: false, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    portal: { label: 'Portal do Cliente', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -93,10 +97,27 @@ const CategoryLabel: React.FC<{ category?: string }> = ({ category }) => (
     </span>
 );
 
-// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
+// Switch de tabela (padrão existente em PriceTableManager.tsx) — reaproveitado
+// aqui para as duas colunas booleanas de Clientes (Status, Portal do Cliente),
+// em vez de inventar um estilo novo.
+const TableSwitch: React.FC<{ checked: boolean; onChange: () => void; onLabel: string; offLabel: string; onColor?: string }> = ({ checked, onChange, onLabel, offLabel, onColor = 'peer-checked:bg-blue-600' }) => (
+    <label className="inline-flex items-center gap-2 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" className="sr-only peer" checked={checked} onChange={onChange} />
+        <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all relative ${onColor}`}></div>
+        <span className={`text-sm font-normal ${checked ? 'text-gray-700' : 'text-gray-400'}`}>{checked ? onLabel : offLabel}</span>
+    </label>
+);
+
+// Conteúdo de cada célula (TD) por coluna — extraído para função pura para que o corpo da tabela
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
-function renderClientCell(key: string, client: Client, clientEmpreendimentos: { id: string; name: string }[]): React.ReactNode {
+function renderClientCell(
+    key: string,
+    client: Client,
+    clientEmpreendimentos: { id: string; name: string }[],
+    onToggleStatus: (client: Client) => void,
+    onTogglePortal: (client: Client) => void,
+): React.ReactNode {
     switch (key) {
         case 'code':
             return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{client.code || '-'}</span>;
@@ -106,11 +127,21 @@ function renderClientCell(key: string, client: Client, clientEmpreendimentos: { 
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
                         <User className="w-4 h-4" />
                     </div>
-                    <span className="text-sm font-normal text-gray-900">{client.name}</span>
+                    <span className="text-sm font-normal text-gray-700">{client.name}</span>
                 </div>
             );
         case 'category':
             return <CategoryLabel category={client.category} />;
+        case 'status':
+            return (
+                <TableSwitch
+                    checked={client.status !== 'Inativo'}
+                    onChange={() => onToggleStatus(client)}
+                    onLabel="Ativo"
+                    offLabel="Inativo"
+                    onColor="peer-checked:bg-emerald-600"
+                />
+            );
         case 'organization':
             return <span className="text-sm font-normal text-gray-700">{client.organization_name || '-'}</span>;
         case 'contact':
@@ -144,6 +175,15 @@ function renderClientCell(key: string, client: Client, clientEmpreendimentos: { 
                         </div>
                     ))}
                 </div>
+            );
+        case 'portal':
+            return (
+                <TableSwitch
+                    checked={client.portal === 'Portal do Cliente'}
+                    onChange={() => onTogglePortal(client)}
+                    onLabel="Ativo"
+                    offLabel="Inativo"
+                />
             );
         default:
             return null;
@@ -192,7 +232,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     // sobrando entre as colunas de <col> fixo (arrastar uma borda "puxava" as
     // vizinhas). Fixar a largura total na soma exata das colunas elimina esse
     // espaço sobrando — mesma correção aplicada em SupplierList.tsx.
-    const tableTotalWidth = (['code', 'name', 'category', 'organization', 'contact', 'document', 'projects'] as const)
+    const tableTotalWidth = (['code', 'name', 'category', 'status', 'organization', 'contact', 'document', 'projects', 'portal'] as const)
         .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
     const confirm = useConfirm();
@@ -256,6 +296,30 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         });
         if (!ok) return;
         await performDelete(id);
+    };
+
+    // Switch inline de Status/Portal (colunas da tabela) — atualiza direto sem
+    // abrir o modal; array local atualizado em vez de recarregar a tabela (§22).
+    const handleToggleStatus = async (client: Client) => {
+        const nextStatus: Client['status'] = client.status === 'Inativo' ? 'Ativo' : 'Inativo';
+        try {
+            await clientService.saveClient({ id: client.id, status: nextStatus });
+            setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: nextStatus } : c));
+        } catch (error) {
+            console.error('Erro ao atualizar status do cliente:', error);
+            showToast('Erro ao atualizar o status.', 'error');
+        }
+    };
+
+    const handleTogglePortal = async (client: Client) => {
+        const nextPortal: Client['portal'] = client.portal === 'Portal do Cliente' ? 'Nenhum' : 'Portal do Cliente';
+        try {
+            await clientService.saveClient({ id: client.id, portal: nextPortal });
+            setClients(prev => prev.map(c => c.id === client.id ? { ...c, portal: nextPortal } : c));
+        } catch (error) {
+            console.error('Erro ao atualizar portal do cliente:', error);
+            showToast('Erro ao atualizar o portal.', 'error');
+        }
     };
 
     const handleOpenModal = (client?: Client) => {
@@ -381,6 +445,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                             return tableColumns.sortDirection === 'asc'
                                 ? (a.category || '').localeCompare(b.category || '')
                                 : (b.category || '').localeCompare(a.category || '');
+                        case 'status':
+                            return tableColumns.sortDirection === 'asc'
+                                ? (a.status || 'Ativo').localeCompare(b.status || 'Ativo')
+                                : (b.status || 'Ativo').localeCompare(a.status || 'Ativo');
+                        case 'portal':
+                            return tableColumns.sortDirection === 'asc'
+                                ? (a.portal || 'Nenhum').localeCompare(b.portal || 'Nenhum')
+                                : (b.portal || 'Nenhum').localeCompare(a.portal || 'Nenhum');
                         case 'organization':
                             return tableColumns.sortDirection === 'asc'
                                 ? (a.organization_name || '').localeCompare(b.organization_name || '')
@@ -477,7 +549,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 e quebra para 2 linhas — corrigido com nº de colunas calculado via CSS var, que o
                 Tailwind aceita como valor arbitrário estático (`grid-cols-[repeat(var(--kpi-cols),...)]`). */}
             <div
-                className="grid grid-cols-2 lg:grid-cols-[repeat(var(--kpi-cols),minmax(0,1fr))] gap-4"
+                className="grid grid-cols-2 lg:grid-cols-[repeat(var(--kpi-cols),minmax(0,1fr))] gap-4 mb-3"
                 style={{ ['--kpi-cols' as any]: 2 + categoryKpis.length }}
             >
                 {/* "Total" em destaque (2 colunas); os demais são a decomposição por categoria (§4.2) */}
@@ -495,22 +567,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 ))}
             </div>
 
-            {/* Toolbar de botões (§5.3) — ação primária isolada da barra de busca. */}
-            <div className="flex items-center justify-end bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" />
-                    Novo cliente
-                </button>
-            </div>
+            {/* Sem toolbar de botões (§5.3): Clientes não tem controle de escopo, então
+                vai direto de KPIs para a toolbar de busca — a ação primária ("Novo cliente")
+                mora dentro dela, ao lado do toggle grid/lista (mesmo padrão de InvestorList.tsx). */}
 
             {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
                 conteúdo dividem um único card; a única linha visível entre os dois é o
                 border-b abaixo, sem duas bordas concêntricas. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-gray-100 bg-white">
+            <div className="p-4 border-b border-gray-100 bg-white space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -596,6 +661,16 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
+
+                {/* Ação primária (§17, variante compacta) — sem toolbar de botões própria (§5.3),
+                    fica na régua junto do toggle grid/lista, igual InvestorList.tsx. */}
+                <button
+                    onClick={() => handleOpenModal()}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo cliente
+                </button>
             </div>
             </div>
 
@@ -649,15 +724,6 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             </SortableHeader>
                                         );
                                     })}
-                                    {tableColumns.visibleColumns.includes('projects') && (
-                                        // Empreendimento Vinculado = lista de 0..N empreendimentos — sem valor único pra ordenar (§6.3).
-                                        <SortableHeader colKey="projects" label="Empreendimento Vinculado" sortable={false} uppercase={false}
-                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
-                                            <cols.ResizeHandle colKey="projects" />
-                                        </SortableHeader>
-                                    )}
                                     {/* espaçador — casa com o <col /> sem largura do colgroup, na mesma ordem */}
                                     <th aria-hidden="true" className="border-r border-gray-100" />
                                     <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
@@ -673,19 +739,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         <tr key={client.id} className="hover:bg-blue-50/50 transition-colors group">
                                             {tableColumns.orderedVisibleColumns.map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderClientCell(key, client, clientEmpreendimentos)}
+                                                    {renderClientCell(key, client, clientEmpreendimentos, handleToggleStatus, handleTogglePortal)}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    <button
-                                                        onClick={() => handleOpenModal(client)}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
-                                                    >
-                                                        Editar
-                                                    </button>
+                                                    <ActionIconButton kind="edit" onClick={() => handleOpenModal(client)} />
                                                     {onSelectClient && (
                                                         <ActionIconButton
                                                             kind="view"

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Trash2, Save, Search, AlertCircle, Download, FileDown, Upload, Hash, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown, MoveHorizontal } from 'lucide-react';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -345,6 +345,20 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         rootItems.forEach(walk);
         return rows;
     }, [isFiltering, filteredItems, rootItems, childrenByParentCode, expandedIds]);
+
+    // Auto-ajuste único na 1ª visita (sem largura salva ainda): preenche o
+    // container de cara, em vez de deixar a tabela presa à soma dos defaults
+    // até o usuário clicar no botão manual (§6.1.2). Depois disso o controle
+    // volta a ser 100% manual — não recalcula mais a cada mudança de dado.
+    const didAutoFitOnMount = useRef(false);
+    useEffect(() => {
+        if (didAutoFitOnMount.current || visibleRows.length === 0) return;
+        didAutoFitOnMount.current = true;
+        const storageKey = `financialRegistry:${title}:colWidths`;
+        let hasSavedWidths = false;
+        try { hasSavedWidths = !!localStorage.getItem(storageKey); } catch { /* ignore */ }
+        if (!hasSavedWidths) cols.autoFit({ fill: true });
+    }, [visibleRows.length, title, cols]);
 
     const getLevel = (code?: string) => code ? code.split('.').length : 0;
 

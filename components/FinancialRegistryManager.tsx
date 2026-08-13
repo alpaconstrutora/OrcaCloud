@@ -61,7 +61,7 @@ function renderRegistryCell(
     switch (key) {
         case 'code':
             return (
-                <span className={`text-xs font-normal whitespace-nowrap ${lvl.codeCls}`}>
+                <span className={`text-sm font-normal whitespace-nowrap ${lvl.codeCls}`}>
                     {item.code || '-'}
                 </span>
             );
@@ -85,9 +85,9 @@ function renderRegistryCell(
         case 'details':
             return (
                 <div className="flex items-center gap-3 text-sm">
-                    {item.description && <p className="text-sm font-normal text-gray-500 line-clamp-1 flex-1">{item.description}</p>}
+                    {item.description && <p className="text-sm font-normal text-gray-600 line-clamp-1 flex-1">{item.description}</p>}
                     {showBankDetails && (item.bank || item.branch || item.account_number) && (
-                        <div className="flex items-center gap-2 whitespace-nowrap text-xs font-normal text-gray-400">
+                        <div className="flex items-center gap-2 whitespace-nowrap text-xs font-normal text-gray-500">
                             {item.bank && <span>Banco: {item.bank}</span>}
                             {item.branch && <span>Ag: {item.branch}</span>}
                             {item.account_number && <span>Cc: {item.account_number}</span>}
@@ -97,7 +97,7 @@ function renderRegistryCell(
             );
         case 'accounting_nature':
             return (
-                <span className={`text-sm font-normal ${item.accounting_nature ? NATURE_COLORS[item.accounting_nature] : 'text-gray-400'}`}>
+                <span className={`text-sm font-normal ${item.accounting_nature ? NATURE_COLORS[item.accounting_nature] : 'text-gray-500'}`}>
                     {item.accounting_nature ? NATURE_LABELS[item.accounting_nature] : '-'}
                 </span>
             );
@@ -177,7 +177,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     // §6.1 — larguras padrão por chave de coluna; `title` na storageKey evita colisão
     // entre as duas telas que reaproveitam este componente (Contas de Pagamento × Plano de Contas).
     const registryColWidths = useMemo<Record<string, number>>(() => ({
-        code: 130, name: 280, details: 320, accounting_nature: 130, actions: 100,
+        code: 140, name: 420, details: 480, accounting_nature: 160, actions: 120,
     }), []);
     const cols = useResizableColumns(registryColWidths, `financialRegistry:${title}:colWidths`);
 
@@ -348,8 +348,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
     const getLevel = (code?: string) => code ? code.split('.').length : 0;
 
-    // Hierarquia visual via cor/tamanho, nunca font-bold/font-black (ui_ux_guia_unificado.md §7) —
-    // o nível mais alto (1) ganha uma linha de fundo sutil pra se destacar sem precisar de peso.
+    // Hierarquia visual via cor (indentação marca o nível), nunca font-bold/font-black/text-xs
+    // fora do padrão de TD (ui_ux_guia_unificado.md §7) — o nível mais alto (1) ganha uma linha
+    // de fundo sutil pra se destacar sem precisar de peso.
     const LEVEL_STYLES = [
         // level 0 (sem código)
         { indent: 0,  nameCls: 'text-sm font-normal text-gray-900', codeCls: 'text-gray-500',   rowCls: '' },
@@ -358,9 +359,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         // level 2  (ex: 1.1)
         { indent: 16, nameCls: 'text-sm font-normal text-gray-800', codeCls: 'text-blue-700',   rowCls: '' },
         // level 3  (ex: 1.1.1)
-        { indent: 32, nameCls: 'text-xs font-normal text-gray-500', codeCls: 'text-gray-500',   rowCls: '' },
+        { indent: 32, nameCls: 'text-sm font-normal text-gray-600', codeCls: 'text-gray-600',   rowCls: '' },
         // level 4  (ex: 1.1.1.1)
-        { indent: 48, nameCls: 'text-xs font-normal text-gray-400', codeCls: 'text-gray-400',   rowCls: '' },
+        { indent: 48, nameCls: 'text-sm font-normal text-gray-500', codeCls: 'text-gray-500',   rowCls: '' },
     ];
 
     const getLevelStyle = (code?: string) => {
@@ -373,14 +374,15 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     return (
         <div className="space-y-6">
             {/* Header — mesma escala das demais abas de Minha Organização (h1 3xl, subtítulo mt-1.5) */}
-            <div className="flex items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
-                        <Icon className="w-6 h-6 text-blue-600" />
-                        {title}
-                    </h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{description}</p>
-                </div>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
+                    <Icon className="w-6 h-6 text-blue-600" />
+                    {title}
+                </h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">{description}</p>
+            </div>
+
+            <div className="grid grid-cols-1 mb-3">
                 <KpiCard shadow={false} size="sm" label="Total de Registros" value={totalItems} icon={<Hash className="w-4 h-4" />} color="blue" />
             </div>
 
@@ -443,21 +445,23 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
                     <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
-                    <ColumnConfigButton
-                        columns={registryColumns}
-                        visibleColumns={tableColumns.visibleColumns}
-                        showColumnConfig={tableColumns.showColumnConfig}
-                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                        onToggleColumn={tableColumns.toggleColumn}
-                        onReset={tableColumns.resetColumns}
-                    />
-                    <button
-                        onClick={() => cols.autoFit()}
-                        className="h-9 w-9 flex items-center justify-center text-gray-500 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95"
-                        title="Ajustar largura das colunas ao conteúdo"
-                    >
-                        <MoveHorizontal className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <ColumnConfigButton
+                            columns={registryColumns}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
+                        <button
+                            onClick={() => cols.autoFit()}
+                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            title="Ajustar largura das colunas ao conteúdo"
+                        >
+                            <MoveHorizontal className="w-4 h-4" />
+                        </button>
+                    </div>
 
                     <button
                         onClick={handleAdd}
@@ -636,7 +640,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                             {visibleRows.length === 0 ? (
                                 <tr>
                                     <td colSpan={orderedVisible.length + 2} className="px-6 py-12 text-center">
-                                        <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                                        <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum registro encontrado</h3>
                                         <p className="text-sm text-gray-500">Tente ajustar sua busca ou cadastre o primeiro registro.</p>
                                     </td>

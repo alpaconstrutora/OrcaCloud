@@ -179,7 +179,10 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     const registryColWidths = useMemo<Record<string, number>>(() => ({
         code: 140, name: 420, details: 480, accounting_nature: 160, actions: 120,
     }), []);
-    const cols = useResizableColumns(registryColWidths, `financialRegistry:${title}:colWidths`);
+    // max maior que o padrão (500): esta tela só tem 3-4 colunas e "Nome" é a única
+    // que pode absorver a folga do container — com o teto padrão, o autofit/arraste
+    // batia em 500px e sobrava espaço em branco sem para onde ir.
+    const cols = useResizableColumns(registryColWidths, `financialRegistry:${title}:colWidths`, { max: 900 });
 
     // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Campos variam
     // com as mesmas props que já controlam as colunas (showCode/showDescription/

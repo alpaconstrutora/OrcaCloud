@@ -2,8 +2,9 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
-import { Layers, Box, Loader2, ChevronDown, ChevronRight, Maximize2, Star, Copy, Database, Trash2, Pencil, ArrowUp, ArrowDown, ClipboardList } from 'lucide-react';
+import { Layers, Box, Loader2, ChevronDown, ChevronRight, Maximize2, Star, Pencil, ArrowUp, ArrowDown, ClipboardList, Database } from 'lucide-react';
 import { BudgetEntry, SinapiItem, SinapiType, CompositionComponent } from '../types';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface BudgetRowProps {
     item: BudgetEntry;
@@ -129,13 +130,16 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
 
     return (
         <div ref={setNodeRef} style={style} className={`border-t border-gray-50 hover:bg-blue-50/20 group ${isDragging ? 'z-50 relative bg-white shadow-xl ring-2 ring-blue-500' : ''}`}>
-            <div className={`group relative grid ${showNatureBreakdown ? 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 py-2 hover:bg-gray-50/80 transition-all items-center border-b border-gray-100 ${isExpanded ? 'bg-blue-50/20' : ''}`}>
+            {/* divide-x = separador vertical entre colunas (§6.6). px-6 literal do guia
+                estouraria colunas de 20px/0.6fr desse grid denso — a borda no meio do
+                gap-2 já existente cumpre a mesma função sem quebrar a largura fixa. */}
+            <div className={`group relative grid divide-x divide-gray-100 ${showNatureBreakdown ? 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 py-2.5 hover:bg-gray-50/80 transition-all items-center border-b border-gray-100 ${isExpanded ? 'bg-blue-50/20' : ''}`}>
                                 <div className="flex items-center gap-1 pr-1">
                     <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0">
                         <GripVertical className="w-3.5 h-3.5" />
                     </button>
                 </div>
-                <div className="text-xs font-mono font-black text-gray-400 flex items-center gap-1.5">
+                <div className="text-sm font-normal text-gray-400 flex items-center gap-1.5">
                     {canOpenCPU && (
                         <button
                             onClick={(e) => {
@@ -163,7 +167,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         {item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'PRÓPRIA' : 'SINAPI'}
                     </span>
                 </div>
-                <div className="text-xs font-mono text-gray-600 bg-gray-50 px-1 py-0.5 rounded-[6px] border border-gray-100 text-center">{item.sinapiItem?.code || '---'}</div>
+                <div className="text-sm font-mono text-gray-600 bg-gray-50 px-1 py-0.5 rounded-[6px] border border-gray-100 text-center">{item.sinapiItem?.code || '---'}</div>
                 <div className="text-sm text-gray-600 leading-tight">
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -199,7 +203,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
                             onChange={(e) => onUpdatePrice(item.id, Number(e.target.value))}
                             disabled={isLocked}
-                            className={`w-full text-center outline-none bg-transparent py-0.5 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700 font-semibold' : ''}`}
+                            className={`w-full text-center outline-none bg-transparent py-0.5 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : ''}`}
                         />
                         {item.sinapiItem?.isOverride && (
                             <span title="Item editado pelo usuário">
@@ -209,7 +213,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                     </div>
                 </div>
 
-                <div className="text-center text-xs font-medium text-gray-500 italic">
+                <div className="text-center text-sm font-medium text-gray-500">
                     R$ {(item.quantity * (item.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
 
@@ -227,86 +231,78 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             disabled={isLocked}
                             className={`w-full text-center outline-none bg-transparent py-0.5 placeholder:text-gray-300 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''}`}
                         />
-                        <span className="text-xs text-gray-400 font-bold">%</span>
+                        <span className="text-xs text-gray-400">%</span>
                     </div>
                 </div>
 
-                <div className="text-center text-xs font-bold text-blue-600">
+                <div className="text-center text-sm font-medium text-blue-600">
                     R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </div>
 
-                <div className="flex justify-end items-center relative group/total">
+                <div className="flex flex-col items-end gap-1 py-0.5">
                     <span className="text-sm font-black text-gray-900">R$ {((item.quantity * (item.sinapiItem?.price || 0)) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    <div className="absolute right-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 shadow-sm rounded-[6px] border border-gray-100 px-1 z-10">
+                    {/* Ações sempre visíveis (§9) — antes ficavam em overlay absoluto sobre o
+                        total, reveladas só no hover; agora empilhadas abaixo dele. */}
+                    <div className="flex items-center gap-1.5">
                         {onMoveItem && (
-                            <div className="flex flex-col border-r border-gray-100 pr-1 mr-0.5">
+                            <div className="flex items-center border-r border-gray-100 pr-0.5 mr-0.5">
                                 {!isFirst && (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => onMoveItem(e, item.id, 'UP')}
-                                        className="text-gray-400 hover:text-blue-600 p-0.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                                    <ActionIconButton
+                                        kind="move"
+                                        size="sm"
+                                        icon={<ArrowUp className="w-3.5 h-3.5" />}
                                         title="Mover para Cima"
-                                    >
-                                        <ArrowUp className="w-3 h-3" />
-                                    </button>
+                                        onClick={(e) => onMoveItem(e, item.id, 'UP')}
+                                    />
                                 )}
                                 {!isLast && (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => onMoveItem(e, item.id, 'DOWN')}
-                                        className="text-gray-400 hover:text-blue-600 p-0.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                                    <ActionIconButton
+                                        kind="move"
+                                        size="sm"
+                                        icon={<ArrowDown className="w-3.5 h-3.5" />}
                                         title="Mover para Baixo"
-                                    >
-                                        <ArrowDown className="w-3 h-3" />
-                                    </button>
+                                        onClick={(e) => onMoveItem(e, item.id, 'DOWN')}
+                                    />
                                 )}
                             </div>
                         )}
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenDetails?.(item);
-                            }}
-                            className={`p-1 rounded-[6px] transition-all ${hasCalculationMemory ? 'text-emerald-600 hover:bg-emerald-50' : 'text-amber-500 hover:bg-amber-50'}`}
+                        <ActionIconButton
+                            kind="annotate"
+                            size="sm"
+                            tone={hasCalculationMemory ? 'neutral' : 'attention'}
+                            icon={<ClipboardList className={`w-3.5 h-3.5 ${hasCalculationMemory ? 'text-emerald-600' : 'text-amber-500'}`} />}
                             title={hasCalculationMemory ? "Editar memória de cálculo" : "Item sem memória de cálculo"}
-                        >
-                            <ClipboardList className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                            onClick={(e) => onDuplicateItem(e, item.id)}
-                            className="text-gray-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded-[6px] transition-all"
+                            onClick={(e) => { e.stopPropagation(); onOpenDetails?.(item); }}
+                        />
+                        <ActionIconButton
+                            kind="duplicate"
+                            size="sm"
                             title="Duplicar Item"
-                        >
-                            <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleSave}
-                            disabled={isSavingCustom || isLocked}
-                            className={`p-1 rounded-[6px] transition-all ${isSavingCustom || isLocked ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                            onClick={(e) => onDuplicateItem(e, item.id)}
+                        />
+                        <ActionIconButton
+                            kind="download"
+                            size="sm"
+                            icon={isSavingCustom ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
                             title="Salvar na Base Própria"
-                        >
-                            {isSavingCustom ? <Loader2 className="w-3 h-4 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={(e) => onDeleteItem(e, item.id)}
-                            disabled={isLocked}
-                            className={`p-1 rounded-[6px] transition-all ${isLocked ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                            disabled={isSavingCustom || isLocked}
+                            onClick={handleSave}
+                        />
+                        <ActionIconButton
+                            kind="delete"
+                            size="sm"
                             title="Excluir item"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                            disabled={isLocked}
+                            onClick={(e) => onDeleteItem(e, item.id)}
+                        />
                     </div>
                 </div>
 
                 {showNatureBreakdown && natureBreakdown && (
                     <>
-                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded-[6px] px-1 border-y border-r border-l-2 border-blue-100/60 font-bold ml-2 shadow-sm">{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-xs text-blue-700 font-mono italic bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 font-bold shadow-sm">{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-sm text-blue-700 font-medium bg-blue-50/30 rounded-[6px] px-1 border-y border-r border-l-2 border-blue-100/60 ml-2 shadow-sm">{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-sm text-blue-700 font-medium bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 shadow-sm">{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-right text-sm text-blue-700 font-medium bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 shadow-sm">{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                     </>
                 )}
             </div>
@@ -336,14 +332,14 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             const displaySubtotal = item.quantity * (comp.quantity || 0) * displayPrice;
 
                             return (
-                                <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-xs text-gray-600 hover:bg-gray-100 py-1.5 px-4 rounded-[6px]">
+                                <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 divide-x divide-gray-100 items-center text-sm text-gray-600 hover:bg-gray-100 py-2.5 px-4 rounded-[6px]">
                                     <div className="col-span-1"></div>
-                                    <div className="col-span-1 text-center font-mono text-xs text-gray-500 text-center">{comp.code}</div>
+                                    <div className="col-span-1 text-center font-mono text-sm text-gray-500 text-center">{comp.code}</div>
                                     <div className="col-span-4 flex items-center gap-2">
                                         <span className={`shrink-0 px-1.5 py-0.5 rounded-[6px] text-[9px] font-semibold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                             {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
                                         </span>
-                                        <span className="leading-tight text-xs" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
+                                        <span className="leading-tight text-sm" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
                                     </div>
                                     <div className="col-span-1 text-center">
                                         <input
@@ -351,10 +347,10 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                             step="0.0001"
                                             value={comp.quantity || 0}
                                             onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
-                                            className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-xs focus:ring-1 focus:ring-blue-400"
+                                            className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400"
                                         />
                                     </div>
-                                    <div className="col-span-1 text-center text-gray-400 text-xs">{comp.unit || '-'}</div>
+                                    <div className="col-span-1 text-center text-gray-400 text-sm">{comp.unit || '-'}</div>
                                     <div className="col-span-1 text-center">
                                         <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
                                             <span className="text-[9px] text-gray-400">R$</span>
@@ -363,12 +359,12 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                                 step="0.01"
                                                 value={displayPrice}
                                                 onChange={(e) => onUpdateComposition(item.id, idx, { price: Number(e.target.value) })}
-                                                className="w-full text-center outline-none bg-transparent py-0.5 text-xs"
+                                                className="w-full text-center outline-none bg-transparent py-0.5 text-sm"
                                             />
                                         </div>
                                     </div>
                                     <div className="col-span-1"></div>
-                                    <div className="col-span-2 text-right font-medium text-gray-800 text-xs">
+                                    <div className="col-span-2 text-right font-medium text-gray-800 text-sm">
                                         R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </div>
                                 </div>

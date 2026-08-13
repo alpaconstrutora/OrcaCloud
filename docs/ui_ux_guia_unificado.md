@@ -180,6 +180,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`
+- [ ] §7.3 Planilha densa de itens (exceção — exige os 3 critérios)
 - [ ] §8 Status Badge
 - [ ] §8.1 Rótulo de diagrama (exceção — exige os 3 critérios)
 - [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, §9.2 `<ActionIconButton>`)
@@ -969,6 +970,49 @@ no mesmo módulo.
 > empilhadas) — a régua é sobre o **padding**, não trava altura fixa em px.
 > ❌ Não é exceção "esta tabela é mais densa"/"tem menos colunas" — se houver
 > motivo real, documente aqui como seção própria antes de aplicar.
+
+### 7.3 Exceção — planilha densa de itens (grid CSS, não `<table>`)
+
+O §6/§7 governam **tabela de listagem de registros** (uma linha = um registro,
+texto em prosa, `<table>`/`<td>`). Existe uma segunda família de tela no app —
+`BudgetEditor.tsx`/`BudgetRow.tsx` (Orçamento Analítico), e qualquer tela
+equivalente de composição de custos (WBS/CPU) — que é **planilha de
+engenharia**, não lista de registros: 12-15 colunas numéricas fixas por linha
+(`grid grid-cols-[20px_0.8fr_...]`, não `<table>`), onde cada célula é um valor
+calculado, não um atributo de entidade. Aplicar §6/§7/§8 ao pé da letra nessa
+tela **piora** a leitura em vez de padronizar — instrumentos de takeoff
+(Excel, AutoCAD QTO) usam exatamente as convenções que o §7 proíbe, e por bom
+motivo: é o vocabulário que profissional de orçamento já lê.
+
+**O que continua diferente do padrão de lista, e por quê:**
+
+| Item | Nesta planilha | §6/§7/§8 pediria | Por quê foge |
+|---|---|---|---|
+| Código do item/insumo | `font-mono` | proibido em TD comum | dígitos/pontos alinham em coluna só em fonte monoespaçada — sem isso, código de 6 dígitos "dança" entre linhas |
+| Total da linha | `font-black` | só `font-medium` | é o único valor que a linha existe pra mostrar; description column (`7fr`) já domina a largura, o total precisa competir visualmente na coluna estreita ao lado |
+| Badge de tipo (COMPOSIÇÃO/SERVIÇO/INSUMO) e origem (PRÓPRIA/SINAPI) | pílula com fundo | texto colorido simples | com 12-15 colunas na mesma linha, texto solto sem contraste se perde no ruído — a pílula é o que dá ao olho um ponto de ancoragem pra achar "que tipo de item é esse" em 0,5s |
+| Separador entre colunas | `divide-x divide-gray-100` no container do grid | `border-r` + `px-6` por `<td>` | `px-6` (24px de cada lado) é maior que várias colunas inteiras (a de drag-handle tem 20px) — a mesma sobra de espaço que o `px-6` cria numa lista normal aqui estouraria a largura fixa. `divide-x` cumpre a mesma função visual (linha entre colunas) sem exigir padding incompatível com a largura da coluna. |
+
+**Critério (os três, juntos) — mesmo molde do §8.1:**
+1. A tela é uma planilha de cálculo com colunas numéricas fixas (`grid-cols-[...]`
+   com frações), não `<table>` com linhas de registro;
+2. Cada "célula" é um valor derivado (quantidade × preço × BDI), não um atributo
+   solto de uma entidade (nome, status, data);
+3. O padrão do guia, aplicado literalmente, **quebraria a largura da coluna**
+   (padding maior que o espaço disponível) ou **removeria a única pista visual**
+   que diferencia tipos de linha numa grade de 12+ colunas.
+
+> ❌ Não é exceção: "é uma tabela grande", "tem muita informação", "o usuário é
+> avançado". Falhou qualquer um dos três critérios → §6/§7/§8 se aplicam inteiro.
+> ✅ **O que NÃO é exceção mesmo nessa tela** — aplicado normalmente: tamanho de
+> texto (`text-sm`, não `text-xs`), `py-2.5` de altura de linha, `gap-1.5` entre
+> ícones de ação (§9.2), ações sempre visíveis (§9). A densidade da planilha
+> come largura, não altura nem peso de fonte fora dos dois itens da tabela acima.
+> ℹ️ `scripts/check-ui-standard.sh` e a verificação estrutural **continuam
+> acusando** essas linhas — o checador é textual/heurístico. A saída correta é
+> apontar para esta seção, não silenciar o check nem reverter a exceção.
+> Ocorrências: `BudgetRow.tsx` (código do item/insumo, total da linha, badges
+> de tipo/origem/composição, `divide-x` no lugar de `border-r`/`px-6`).
 
 ---
 

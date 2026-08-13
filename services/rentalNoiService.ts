@@ -12,6 +12,16 @@ import { propertyExpenseService } from './propertyExpenseService';
  * que não mostrar nada. Mesmo contrato da Fase 1: `null` ≠ zero.
  */
 
+/** Imóvel como o cálculo de NOI o enxerga. Compatível de propósito com
+ *  `Property` da tela — é ela quem passa a lista quando já a tem em mãos. */
+export interface NoiPropertyRow {
+    id: string;
+    parent_id?: string | null;
+    price?: number | null;
+    initial_price?: number | null;
+    purpose?: string | null;
+}
+
 export interface RentalNoiMetrics {
     revenue: number;
     expense: number;
@@ -36,7 +46,18 @@ export const rentalNoiService = {
     async getNoiMetrics(
         organizationId?: string | null,
         from?: string,
-        to?: string
+        to?: string,
+        /**
+         * Carteira a considerar, quando quem chama já a tem em mãos.
+         *
+         * Não é só economia de uma consulta: a aba Análise soma o NOI **por
+         * empreendimento** a partir de `byProperty`, e as linhas só fecham com o
+         * total se as duas contas partirem da MESMA lista de imóveis. A
+         * listagem da tela aplica `visible_in_sales is not false`, que a
+         * consulta daqui não aplicava — bastava um imóvel oculto para a soma
+         * das linhas divergir do KPI do topo sem nenhum sinal na tela.
+         */
+        carteira?: NoiPropertyRow[],
     ): Promise<RentalNoiMetrics | null> {
         try {
             const expenseByProperty = await propertyExpenseService.expenseByProperty(
@@ -45,15 +66,19 @@ export const rentalNoiService = {
             // null = migration não aplicada. Sem despesa apropriada não há NOI.
             if (expenseByProperty === null) return null;
 
-            let propertiesQuery = supabase
-                .from('commercial_properties')
-                .select('id, parent_id, price, initial_price, purpose');
-            if (organizationId) propertiesQuery = propertiesQuery.eq('organization_id', organizationId);
+            let propertiesData: NoiPropertyRow[] = carteira ?? [];
+            if (!carteira) {
+                let propertiesQuery = supabase
+                    .from('commercial_properties')
+                    .select('id, parent_id, price, initial_price, purpose');
+                if (organizationId) propertiesQuery = propertiesQuery.eq('organization_id', organizationId);
 
-            const { data: propertiesData, error: propertiesError } = await propertiesQuery;
-            if (propertiesError) throw propertiesError;
+                const { data, error: propertiesError } = await propertiesQuery;
+                if (propertiesError) throw propertiesError;
+                propertiesData = (data || []) as unknown as NoiPropertyRow[];
+            }
 
-            const properties = (propertiesData || []).filter(
+            const properties = propertiesData.filter(
                 p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH'
             );
 

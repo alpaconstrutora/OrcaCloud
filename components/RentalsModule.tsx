@@ -47,8 +47,18 @@ import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getW
 import { sumPortfolioValue, leafNodes, getDealInstallmentValue } from '../lib/rentalPortfolio';
 import { rentalVacancyService, type RentalVacancyMetrics } from '../services/rentalVacancyService';
 import { rentalNoiService, type RentalNoiMetrics } from '../services/rentalNoiService';
-import { rentalExecutiveService, type RentalExecutiveMetrics } from '../services/rentalExecutiveService';
+import { rentalExecutiveService, type RentalExecutiveMetrics, type RentalExecutiveRaw } from '../services/rentalExecutiveService';
 import { financialOccupancy } from '../lib/rentalExecutive';
+import type { StatusEvent } from '../lib/rentalVacancy';
+// Recorte da aba Análise por empreendimento. O agrupamento é no cliente, sobre
+// o MESMO bruto que os KPIs do topo já carregam — ver
+// docs/planos/2026-08-12-locacoes-analise-por-empreendimento.md.
+import {
+    groupRentalAnalysis,
+    SEM_EMPREENDIMENTO,
+    type RentalAnalysisScope,
+} from '../lib/rentalByEmpreendimento';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -184,6 +194,69 @@ const BROKER_COLUMNS: ColumnConfig[] = [
 ];
 const BROKER_DEFAULT_COL_WIDTHS: Record<string, number> = {
     name: 200, email: 220, phone: 140, agency_name: 180, commission_rate: 136, creci: 111, is_active: 100, access: 140,
+};
+
+// Colunas da tabela "Por empreendimento" da aba Análise. Sem coluna de ações: a
+// única ação é filtrar, e ela mora no clique da linha (§9.1).
+const ANALYSIS_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Empreendimento', sortable: true },
+    { key: 'unitsCount', label: 'Unidades', sortable: true },
+    { key: 'occupancyRate', label: 'Ocupação física', sortable: true },
+    { key: 'financialRate', label: 'Ocupação financeira', sortable: true },
+    { key: 'monthlyRevenue', label: 'Receita mensal', sortable: true },
+    { key: 'vacancyDays', label: 'Vacância média', sortable: true },
+    { key: 'noi', label: 'NOI', sortable: true },
+    { key: 'waleYears', label: 'WALE', sortable: true },
+    { key: 'overdue90Rate', label: 'Vencido > 90 dias', sortable: true },
+];
+const ANALYSIS_DEFAULT_COL_WIDTHS: Record<string, number> = {
+    name: 230, unitsCount: 100, occupancyRate: 130, financialRate: 155,
+    monthlyRevenue: 140, vacancyDays: 130, noi: 130, waleYears: 90, overdue90Rate: 145,
+};
+
+const moneyBRL = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+
+/** `—` para "não medido". Zero é uma afirmação sobre o negócio; `null` é a
+ *  ausência de base para afirmar — a aba inteira depende dessa distinção. */
+const orDash = (v: number | null | undefined, formata: (n: number) => string) =>
+    v == null ? '—' : formata(v);
+
+const percent1 = (v: number) => `${(v * 100).toFixed(1)}%`;
+
+/**
+ * Célula da tabela "Por empreendimento".
+ *
+ * Cada coluna lê o MESMO campo do escopo que o KPI equivalente do topo — o
+ * `RentalAnalysisScope` é uma fonte só, de propósito.
+ */
+const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactNode => {
+    switch (key) {
+        case 'name':
+            return row.empreendimentoId === SEM_EMPREENDIMENTO
+                // O balde dos não vinculados existe para as colunas fecharem com
+                // o topo — mas ele é resíduo de cadastro, não um empreendimento.
+                ? <span className="text-gray-400">{row.name}</span>
+                : row.name;
+        case 'unitsCount':
+            return `${row.rentedCount}/${row.unitsCount}`;
+        case 'occupancyRate':
+            return orDash(row.occupancyRate, percent1);
+        case 'financialRate':
+            return orDash(row.financial.rate, percent1);
+        case 'monthlyRevenue':
+            return moneyBRL(row.monthlyRevenue);
+        case 'vacancyDays':
+            return row.vacancy ? `${row.vacancy.averageDays} dias` : '—';
+        case 'noi':
+            return row.noi ? moneyBRL(row.noi.noi) : '—';
+        case 'waleYears':
+            return orDash(row.executive?.wale.years, anos => `${anos.toFixed(1)} anos`);
+        case 'overdue90Rate':
+            return orDash(row.executive?.collection.overdue90Rate, percent1);
+        default:
+            return null;
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -504,14 +577,23 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     );
     // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
     const [renewalsBadge, setRenewalsBadge] = useState(0);
-    // `null` = não medido (log de status ainda não existe no banco), que é
-    // diferente de zero. Ver services/rentalVacancyService.ts.
-    const [vacancy, setVacancy] = useState<RentalVacancyMetrics | null>(null);
     // `null` = apropriação de despesa por imóvel ainda não existe no banco.
     // Sem ela o "NOI" seria a receita disfarçada de resultado — pior que ocultar.
+    // Aqui interessa sobretudo o `byProperty`: é dele que sai o NOI de cada
+    // empreendimento, sem uma segunda consulta por balde.
     const [noi, setNoi] = useState<RentalNoiMetrics | null>(null);
-    // WALE, renovação e cobrança (Fase 3). `null` = não foi possível medir.
-    const [executive, setExecutive] = useState<RentalExecutiveMetrics | null>(null);
+    // Os insumos CRUS da aba Análise. Ela agrupa por empreendimento no cliente —
+    // uma consulta, muitos baldes — em vez de uma chamada de serviço por
+    // empreendimento; guardar o agregado aqui criaria uma segunda fórmula para
+    // divergir da tabela. Quem agrega é `groupRentalAnalysis`.
+    // `null` = não medido (log de status / contratos indisponíveis), nunca zero.
+    const [vacancyEvents, setVacancyEvents] = useState<StatusEvent[] | null>(null);
+    const [executiveRaw, setExecutiveRaw] = useState<RentalExecutiveRaw | null>(null);
+    // Recorte da aba Análise. 'ALL' = a carteira inteira (o comportamento
+    // original da aba). Persistido pelo mesmo motivo do `showDetail`: o usuário
+    // volta para a tela querendo o recorte em que estava.
+    const [analysisEmpId, setAnalysisEmpId] = usePersistedState('rentals:analysisEmpreendimento', 'ALL');
+    const [analysisSearch, setAnalysisSearch] = usePersistedState('rentals:analysisSearch', '');
     // O painel executivo são 8 indicadores; o resto fica recolhido. "20 não é
     // dashboard, é relatório" — decisão registrada no plano da Fase 3.
     const [showDetail, setShowDetail] = usePersistedState('rentals:analysisDetail', false);
@@ -582,6 +664,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const brokersTableTotalWidth = BROKER_COLUMNS
         .filter(c => brokerTableColumns.visibleColumns.includes(c.key))
         .reduce((sum, c) => sum + brokerCols.getWidth(c.key), 0);
+
+    // Colunas + ordenação + redimensionamento da tabela "Por empreendimento".
+    const analysisTableColumns = useTableColumns(ANALYSIS_COLUMNS, 'rentalsAnalysisColumns');
+    const analysisCols = useResizableColumns(ANALYSIS_DEFAULT_COL_WIDTHS, 'rentalsAnalysisColWidths');
+    const analysisTableTotalWidth = ANALYSIS_COLUMNS
+        .filter(c => analysisTableColumns.visibleColumns.includes(c.key))
+        .reduce((sum, c) => sum + analysisCols.getWidth(c.key), 0);
 
     // Modals Control
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -1086,17 +1175,26 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // e não faz sentido pagar essa consulta em quem está mexendo no inventário.
     // `selectedBuildingId` entra na chave porque dentro de um edifício a métrica
     // é só das unidades dele.
+    //
+    // Traz os eventos CRUS: os mesmos alimentam o KPI do topo e a coluna de
+    // vacância da tabela por empreendimento, sem uma segunda consulta. O
+    // agrupamento é `groupRentalAnalysis`. `analysisEmpId` de propósito **não**
+    // entra nas dependências — trocar o recorte não dispara rede.
     useEffect(() => {
         if (activeTab !== 'analysis') return;
         let alive = true;
         rentalVacancyService
-            .getVacancyMetrics(effectiveOrganizationId, selectedBuildingId)
-            .then(data => { if (alive) setVacancy(data); });
+            .getVacancyEvents(effectiveOrganizationId, selectedBuildingId)
+            .then(eventos => { if (alive) setVacancyEvents(eventos); });
         return () => { alive = false; };
     }, [activeTab, effectiveOrganizationId, selectedBuildingId]);
 
     // NOI (Fase 2). Janela: ano corrente até o mês atual — a despesa é somada no
     // período, e o cap rate é anualizado a partir dela.
+    //
+    // `properties` é passado de propósito: sem isso o serviço lista a carteira
+    // por conta própria, SEM o `visible_in_sales is not false` que a tela aplica,
+    // e a soma do NOI por empreendimento não fecharia com o KPI do topo.
     useEffect(() => {
         if (activeTab !== 'analysis') return;
         let alive = true;
@@ -1104,55 +1202,23 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         rentalNoiService
-            .getNoiMetrics(effectiveOrganizationId, `${year}-01-01`, `${year}-${month}-28`)
+            .getNoiMetrics(effectiveOrganizationId, `${year}-01-01`, `${year}-${month}-28`, properties)
             .then(data => { if (alive) setNoi(data); });
         return () => { alive = false; };
-    }, [activeTab, effectiveOrganizationId]);
+    }, [activeTab, effectiveOrganizationId, properties]);
 
     // WALE, taxa de renovação e cobrança (Fase 3). Vem de `contracts` +
     // `vw_receivables`, não de `deals` — por isso não cabe no `stats`.
+    // `loadRaw` (e não `load`): o agrupamento por empreendimento precisa saber a
+    // qual contrato cada parcela pertence, e as contas rodam por balde.
     useEffect(() => {
         if (activeTab !== 'analysis') return;
         let alive = true;
         rentalExecutiveService
-            .load(effectiveOrganizationId)
-            .then(data => { if (alive) setExecutive(data); });
+            .loadRaw(effectiveOrganizationId)
+            .then(data => { if (alive) setExecutiveRaw(data); });
         return () => { alive = false; };
     }, [activeTab, effectiveOrganizationId]);
-
-    const stats = useMemo(() => {
-        // Patrimônio: cada imóvel entra UMA vez, por rollup. As unidades mandam
-        // quando têm preço; senão vale o preço do próprio edifício — que em
-        // locação é o caso comum, porque a unidade carrega `rental_price` e
-        // deixa `price` vazio (ver sumPortfolioValue).
-        const totalValue = sumPortfolioValue(properties, p => p.price || 0);
-
-        // Receita mensal é a soma das PARCELAS contratadas. Usava `deal.value`,
-        // que no aluguel é o valor mensal SUGERIDO pela Inteligência — o KPI
-        // mostrava preço de tabela no lugar de receita (e contaminava o yield).
-        const activeRentals = deals.filter(d => d.type === 'RENTAL' && d.status === 'COMPLETED');
-        const monthlyRevenue = activeRentals.reduce((acc, d) => acc + getDealInstallmentValue(d), 0);
-
-        // Unidades locáveis = folhas da carteira, a mesma base do patrimônio.
-        // Antes era `type !== 'BUILDING'`, que descartava o edifício locado
-        // INTEIRO (galpão, loja de rua) — ele não tem unidade filha, então
-        // sumia da conta e a ocupação ficava cega para ele. Edifício COM
-        // unidades continua fora: quem ocupa são as unidades.
-        const leaseableUnits = leafNodes(properties);
-        const totalUnitsCount = leaseableUnits.length;
-        const rentedCount = leaseableUnits.filter(p => p.status === PropertyStatus.RENTED).length;
-
-        const occupancyRate = totalUnitsCount > 0 ? ((rentedCount / totalUnitsCount) * 100).toFixed(1) : '0.0';
-        const yieldValue = totalValue > 0 ? ((monthlyRevenue / totalValue) * 100).toFixed(2) : '0.00';
-
-        return {
-            activeAssets: properties.filter(p => p.type === 'BUILDING' || !p.parent_id).length,
-            monthlyRevenue,
-            monthlyYield: yieldValue,
-            occupancyRate,
-            totalValue
-        };
-    }, [properties, deals]);
 
     // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
     const getStatusColor = (status: PropertyStatus) => {
@@ -1249,33 +1315,79 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     };
 
     /**
-     * Ocupação FINANCEIRA (Fase 3) — quanto da receita possível está contratada.
+     * A aba Análise inteira, agrupada por empreendimento — **uma consulta,
+     * muitos baldes**.
      *
-     * Mede coisa diferente da ocupação física, e a diferença é o que interessa:
-     * 90% das unidades alugadas com as caras vazias pode ser 60% financeiro. Uma
-     * esconde o problema que a outra mostra.
+     * Todos os indicadores da aba (ocupação física e financeira, receita,
+     * patrimônio, vacância, NOI, WALE, renovação, cobrança) saem daqui, tanto
+     * para os KPIs do topo quanto para as linhas da tabela. É de propósito uma
+     * fonte só: os dois blocos exibem os mesmos nomes, e mantê-los em contas
+     * separadas é exatamente como patrimônio e receita já divergiram entre
+     * telas antes da Fase 0.
      *
-     * Base: as MESMAS folhas da ocupação física e do patrimônio (`leafNodes`),
-     * para as três não divergirem — foi por cópias da fórmula que patrimônio e
-     * receita já mostraram números diferentes em telas diferentes.
+     * Ver lib/rentalByEmpreendimento.ts e
+     * docs/planos/2026-08-12-locacoes-analise-por-empreendimento.md.
      */
-    const financialOcc = useMemo(() => {
-        const folhas = leafNodes(properties);
-        const resultado = financialOccupancy(
-            folhas.map(p => ({
-                id: p.id,
-                rental_price: rentalValueOf(p),
-                // `true` = só contrato fechado, a MESMA base da Receita mensal.
-                contracted: getContractedRentalValue(p.id, true) ?? 0,
-            })),
-        );
-        // Unidade sem preço não entra no potencial (não dá para supor preço de
-        // quem não tem). Mas isso INFLA a taxa: com metade da carteira sem
-        // preço, 98% de ocupação financeira fala de meia carteira. Quem exibe
-        // precisa poder avisar.
-        const semPreco = folhas.filter(p => rentalValueOf(p) <= 0).length;
-        return { ...resultado, leafCount: folhas.length, withoutPrice: semPreco };
-    }, [properties, deals]);
+    const analysis = useMemo(() => groupRentalAnalysis({
+        properties,
+        deals,
+        empreendimentoByProperty,
+        rentalValueOf,
+        // `true` = só contrato fechado, a MESMA base da Receita mensal.
+        contractedValueOf: (id: string) => getContractedRentalValue(id, true) ?? 0,
+        contracts: executiveRaw?.contracts ?? null,
+        receivablesByContract: executiveRaw?.receivablesByContract ?? null,
+        vacancyEvents,
+        noiByProperty: noi?.byProperty ?? null,
+    }), [properties, deals, empreendimentoByProperty, executiveRaw, vacancyEvents, noi]);
+
+    /** O recorte ativo: um empreendimento, ou a carteira inteira em "Todos".
+     *  Empreendimento que sumiu da carteira (filtro salvo apontando para o que
+     *  não existe mais) cai no total em vez de zerar a tela. */
+    const scope = (analysisEmpId !== 'ALL' && analysis.byId.get(analysisEmpId)) || analysis.total;
+    const isAllEmpreendimentos = scope.empreendimentoId === 'ALL';
+
+    // Linhas da tabela "Por empreendimento": busca (§5.2) + ordenação pelo
+    // cabeçalho (§6.3). A ordem padrão (maior receita primeiro, "Sem
+    // empreendimento" por último) já vem da lib.
+    const analysisRows = useMemo(() => {
+        const termo = analysisSearch.trim().toLowerCase();
+        const filtradas = termo
+            ? analysis.rows.filter(r => r.name.toLowerCase().includes(termo))
+            : analysis.rows;
+
+        const key = analysisTableColumns.sortColumn as keyof RentalAnalysisScope | null;
+        if (!key) return filtradas;
+
+        const direction = analysisTableColumns.sortDirection;
+        // Colunas aninhadas no escopo — a tabela mostra uma folha de cada bloco.
+        const valorDe = (r: RentalAnalysisScope): string | number | null => {
+            switch (analysisTableColumns.sortColumn) {
+                case 'financialRate': return r.financial.rate;
+                case 'vacancyDays': return r.vacancy?.averageDays ?? null;
+                case 'noi': return r.noi?.noi ?? null;
+                case 'waleYears': return r.executive?.wale.years ?? null;
+                case 'overdue90Rate': return r.executive?.collection.overdue90Rate ?? null;
+                default: return (r[key] as string | number | null) ?? null;
+            }
+        };
+
+        return [...filtradas].sort((a, b) => {
+            const av = valorDe(a);
+            const bv = valorDe(b);
+            // "Não medido" vai sempre para o fim, nos dois sentidos: `null` não é
+            // o menor valor, é ausência de valor — ordená-lo como zero faria a
+            // coluna afirmar que o empreendimento é o pior da carteira.
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            if (typeof av === 'string' || typeof bv === 'string') {
+                const cmp = String(av).localeCompare(String(bv), 'pt-BR');
+                return direction === 'asc' ? cmp : -cmp;
+            }
+            return direction === 'asc' ? av - bv : bv - av;
+        });
+    }, [analysis.rows, analysisSearch, analysisTableColumns.sortColumn, analysisTableColumns.sortDirection]);
 
     // Soma do valor gerado pela Inteligência de Aluguéis (rentalValueOf) de
     // cada unidade do contrato — baseline para comparar com a parcela
@@ -1568,51 +1680,84 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 original sugeria 20 no topo; 20 não é dashboard, é relatório —
                 o resto foi para o detalhamento recolhível abaixo.
                 `—` onde a conta não tem base: "não medido" nunca vira zero. */}
+            {/* Seletor de escopo (§5.3) — controla QUAL carteira os indicadores
+                abaixo descrevem. Fica acima dos KPIs de propósito: o dado não
+                pode aparecer antes do controle que decide de quem ele fala. */}
+            {!currentBuilding && activeTab === 'analysis' && (
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor="analysis-emp" className="text-xs font-semibold text-slate-500">Empreendimento</label>
+                        <select
+                            id="analysis-emp"
+                            value={analysisEmpId}
+                            onChange={e => setAnalysisEmpId(e.target.value)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                            <option value="ALL">Todos os empreendimentos ({analysis.total.unitsCount} unidades)</option>
+                            {analysis.rows.map(r => (
+                                <option key={r.empreendimentoId} value={r.empreendimentoId}>
+                                    {r.name} ({r.unitsCount} unidade{r.unitsCount === 1 ? '' : 's'})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    {!isAllEmpreendimentos && (
+                        <button
+                            onClick={() => setAnalysisEmpId('ALL')}
+                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all shrink-0"
+                        >
+                            <X className="w-4 h-4" />
+                            Ver a carteira inteira
+                        </button>
+                    )}
+                </div>
+            )}
+
             {!currentBuilding && activeTab === 'analysis' && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    <KpiCard shadow={false} size="sm" label="Ocupação física" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
+                    <KpiCard shadow={false} size="sm" label="Ocupação física" value={scope.occupancyRate != null ? `${(scope.occupancyRate * 100).toFixed(1)}%` : '—'} icon={<Key className="w-4 h-4" />} color="purple" />
                     {/* Ao lado da física de propósito: a diferença entre as duas
                         é que denuncia carteira cheia de unidade barata. */}
-                    <KpiCard shadow={false} size="sm" label="Ocupação financeira" value={financialOcc.rate != null ? `${(financialOcc.rate * 100).toFixed(1)}%` : '—'} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Vacância média" value={vacancy ? `${vacancy.averageDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="amber" />
-                    <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="indigo" />
-                    <KpiCard shadow={false} size="sm" label="Vencido há mais de 90 dias" value={executive?.collection.overdue90Rate != null ? `${(executive.collection.overdue90Rate * 100).toFixed(1)}%` : '—'} icon={<AlertCircle className="w-4 h-4" />} color="red" />
-                    <KpiCard shadow={false} size="sm" label="NOI" value={noi ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.noi) : '—'} icon={<TrendingUp className="w-4 h-4" />} color={noi && noi.noi < 0 ? 'red' : 'teal'} />
-                    <KpiCard shadow={false} size="sm" label="WALE da carteira" value={executive?.wale.years != null ? `${executive.wale.years.toFixed(1)} anos` : '—'} icon={<Calendar className="w-4 h-4" />} color="blue" />
-                    <KpiCard shadow={false} size="sm" label="Taxa de renovação" value={executive?.renewal.rate != null ? `${(executive.renewal.rate * 100).toFixed(0)}%` : '—'} icon={<RefreshCw className="w-4 h-4" />} color="violet" />
+                    <KpiCard shadow={false} size="sm" label="Ocupação financeira" value={scope.financial.rate != null ? `${(scope.financial.rate * 100).toFixed(1)}%` : '—'} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Vacância média" value={scope.vacancy ? `${scope.vacancy.averageDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="indigo" />
+                    <KpiCard shadow={false} size="sm" label="Vencido há mais de 90 dias" value={scope.executive?.collection.overdue90Rate != null ? `${(scope.executive.collection.overdue90Rate * 100).toFixed(1)}%` : '—'} icon={<AlertCircle className="w-4 h-4" />} color="red" />
+                    <KpiCard shadow={false} size="sm" label="NOI" value={scope.noi ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.noi) : '—'} icon={<TrendingUp className="w-4 h-4" />} color={scope.noi && scope.noi.noi < 0 ? 'red' : 'teal'} />
+                    <KpiCard shadow={false} size="sm" label="WALE da carteira" value={scope.executive?.wale.years != null ? `${scope.executive.wale.years.toFixed(1)} anos` : '—'} icon={<Calendar className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} size="sm" label="Taxa de renovação" value={scope.executive?.renewal.rate != null ? `${(scope.executive.renewal.rate * 100).toFixed(0)}%` : '—'} icon={<RefreshCw className="w-4 h-4" />} color="violet" />
                 </div>
             )}
 
             {/* Avisos que impedem leitura errada dos números acima. Cada um só
                 aparece quando o caso existe — aviso permanente vira ruído. */}
-            {!currentBuilding && activeTab === 'analysis' && (executive || financialOcc.withoutPrice > 0) && (
+            {!currentBuilding && activeTab === 'analysis' && (scope.executive || scope.financial.withoutPrice > 0) && (
                 <div className="space-y-1 -mt-1 mb-3">
                     {/* Sem isto, "98% de ocupação financeira" parece carteira
                         rentabilizada quando pode ser meia carteira sem preço. */}
-                    {financialOcc.withoutPrice > 0 && (
+                    {scope.financial.withoutPrice > 0 && (
                         <p className="text-xs text-gray-400">
-                            {financialOcc.withoutPrice} de {financialOcc.leafCount} unidades não têm aluguel de
+                            {scope.financial.withoutPrice} de {scope.financial.leafCount} unidades não têm aluguel de
                             referência cadastrado e ficam fora da <strong>ocupação financeira</strong> — a taxa
-                            fala apenas das {financialOcc.leafCount - financialOcc.withoutPrice} precificadas.
+                            fala apenas das {scope.financial.leafCount - scope.financial.withoutPrice} precificadas.
                         </p>
                     )}
                     {/* Sem este aviso, "0,8% recebido" é lido como inadimplência
                         de 99% — quando o que falta é baixa no sistema. */}
-                    {executive && executive.collection.collectionRate != null && executive.collection.collectionRate < 0.5 && (
+                    {scope.executive && scope.executive.collection.collectionRate != null && scope.executive.collection.collectionRate < 0.5 && (
                         <p className="text-xs text-gray-400">
-                            Apenas {(executive.collection.collectionRate * 100).toFixed(1)}% dos aluguéis lançados
+                            Apenas {(scope.executive.collection.collectionRate * 100).toFixed(1)}% dos aluguéis lançados
                             estão baixados como recebidos. O indicador mede <strong>conciliação no sistema</strong>,
                             não necessariamente atraso do locatário.
                         </p>
                     )}
-                    {executive && executive.wale.expiredStillActive > 0 && (
+                    {scope.executive && scope.executive.wale.expiredStillActive > 0 && (
                         <p className="text-xs text-gray-400">
-                            {executive.wale.expiredStillActive} contrato{executive.wale.expiredStillActive > 1 ? 's' : ''} com
+                            {scope.executive.wale.expiredStillActive} contrato{scope.executive.wale.expiredStillActive > 1 ? 's' : ''} com
                             data de término já vencida e ainda em vigor — fora do WALE, porque prazo negativo
                             distorceria a média. Renove ou encerre para o número refletir a carteira.
                         </p>
                     )}
-                    {executive && executive.renewal.rate == null && executive.contractsConsidered > 0 && (
+                    {scope.executive && scope.executive.renewal.rate == null && scope.executive.contractsConsidered > 0 && (
                         <p className="text-xs text-gray-400">
                             Taxa de renovação sem base: nenhum contrato terminou no período. Não é 0%.
                         </p>
@@ -1633,11 +1778,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
             {!currentBuilding && activeTab === 'analysis' && showDetail && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
-                    <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                    <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
-                    <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
-                    <KpiCard shadow={false} size="sm" label="Receita potencial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(financialOcc.potential)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Aluguéis recebidos" value={executive ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(executive.collection.received) : '—'} icon={<Check className="w-4 h-4" />} color="teal" />
+                    <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={scope.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} size="sm" label="Yield mensal" value={scope.monthlyYield != null ? `${(scope.monthlyYield * 100).toFixed(2)}%` : '—'} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
+                    <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.portfolioValue)} icon={<Home className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} size="sm" label="Receita potencial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.financial.potential)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Aluguéis recebidos" value={scope.executive ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.executive.collection.received) : '—'} icon={<Check className="w-4 h-4" />} color="teal" />
                 </div>
             )}
 
@@ -1645,27 +1790,27 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 `null` significa "não medido" (migration ainda não aplicada), que
                 é diferente de zero; mostrar "0 dias" sem ter medido seria pior
                 que não mostrar nada. */}
-            {!currentBuilding && activeTab === 'analysis' && showDetail && vacancy && (
+            {!currentBuilding && activeTab === 'analysis' && showDetail && scope.vacancy && (
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
-                        <KpiCard shadow={false} size="sm" label="Unidades vagas" value={vacancy.vacantCount} icon={<HomeIcon className="w-4 h-4" />} color="blue" />
-                        <KpiCard shadow={false} size="sm" label="Vacância média" value={`${vacancy.averageDays} dias`} icon={<Clock className="w-4 h-4" />} color="amber" />
+                        <KpiCard shadow={false} size="sm" label="Unidades vagas" value={scope.vacancy.vacantCount} icon={<HomeIcon className="w-4 h-4" />} color="blue" />
+                        <KpiCard shadow={false} size="sm" label="Vacância média" value={`${scope.vacancy.averageDays} dias`} icon={<Clock className="w-4 h-4" />} color="amber" />
                         {/* Mediana ao lado da média de propósito: uma unidade parada
                             há anos distorce a média e esconde a carteira saudável. */}
-                        <KpiCard shadow={false} size="sm" label="Vacância mediana" value={`${vacancy.medianDays} dias`} icon={<Clock className="w-4 h-4" />} color="indigo" />
-                        <KpiCard shadow={false} size="sm" label="Estoque envelhecido" value={vacancy.over90} icon={<AlertCircle className="w-4 h-4" />} color="red" />
-                        <KpiCard shadow={false} size="sm" label="Absorção líquida (30d)" value={vacancy.netAbsorption30d.net} icon={<TrendingUp className="w-4 h-4" />} color="emerald" />
+                        <KpiCard shadow={false} size="sm" label="Vacância mediana" value={`${scope.vacancy.medianDays} dias`} icon={<Clock className="w-4 h-4" />} color="indigo" />
+                        <KpiCard shadow={false} size="sm" label="Estoque envelhecido" value={scope.vacancy.over90} icon={<AlertCircle className="w-4 h-4" />} color="red" />
+                        <KpiCard shadow={false} size="sm" label="Absorção líquida (30d)" value={scope.vacancy.netAbsorption30d.net} icon={<TrendingUp className="w-4 h-4" />} color="emerald" />
                     </div>
 
                     {/* Enquanto houver marco de backfill entre as vagas, os dias são
                         um PISO — o `changed_at` daquelas linhas é o `updated_at` do
                         imóvel, não a data real da mudança de status. Some sozinho
                         conforme as unidades passam por uma mudança real. */}
-                    {vacancy.approximateCount > 0 && (
+                    {scope.vacancy.approximateCount > 0 && (
                         <p className="text-xs text-gray-400 -mt-1 mb-3">
-                            {vacancy.approximateCount === vacancy.vacantCount
+                            {scope.vacancy.approximateCount === scope.vacancy.vacantCount
                                 ? 'Tempo de vacância ainda estimado: o histórico começou a ser medido agora.'
-                                : `${vacancy.approximateCount} de ${vacancy.vacantCount} unidades vagas ainda usam a data estimada do início da medição.`}
+                                : `${scope.vacancy.approximateCount} de ${scope.vacancy.vacantCount} unidades vagas ainda usam a data estimada do início da medição.`}
                             {' '}O número tende a crescer até a medição real assumir.
                         </p>
                     )}
@@ -1675,16 +1820,191 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             {/* Rentabilidade (Fase 2) — o bloco que responde "quanto RENDE", e
                 não "quanto fatura". Só existe com despesa apropriada por imóvel;
                 sem ela o NOI seria a receita com outro nome. */}
-            {!currentBuilding && activeTab === 'analysis' && showDetail && noi && (
+            {!currentBuilding && activeTab === 'analysis' && showDetail && scope.noi && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    <KpiCard shadow={false} size="sm" label="Receita no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.revenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Despesa no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.expense)} icon={<Briefcase className="w-4 h-4" />} color="orange" />
-                    <KpiCard shadow={false} size="sm" label="NOI" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(noi.noi)} icon={<TrendingUp className="w-4 h-4" />} color={noi.noi >= 0 ? 'teal' : 'red'} />
+                    <KpiCard shadow={false} size="sm" label="Receita no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.revenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Despesa no período" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.expense)} icon={<Briefcase className="w-4 h-4" />} color="orange" />
+                    <KpiCard shadow={false} size="sm" label="NOI" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(scope.noi.noi)} icon={<TrendingUp className="w-4 h-4" />} color={scope.noi.noi >= 0 ? 'teal' : 'red'} />
                     {/* Margem e cap rate são `null` quando indefinidos (sem
                         receita / sem patrimônio) — mostrar "0%" afirmaria algo
                         que a conta não sustenta. */}
-                    <KpiCard shadow={false} size="sm" label="Margem NOI" value={noi.margin != null ? `${(noi.margin * 100).toFixed(1)}%` : '—'} icon={<BarChart3 className="w-4 h-4" />} color="violet" />
+                    <KpiCard shadow={false} size="sm" label="Margem NOI" value={scope.noi.margin != null ? `${(scope.noi.margin * 100).toFixed(1)}%` : '—'} icon={<BarChart3 className="w-4 h-4" />} color="violet" />
                 </div>
+            )}
+
+            {/* ── COMPARATIVO POR EMPREENDIMENTO ──────────────────────────────
+                Só em "Todos": com um empreendimento escolhido, os KPIs acima já
+                falam dele e uma tabela de uma linha só seria eco.
+                A soma das linhas fecha com os KPIs do topo por construção —
+                as duas coisas saem do mesmo `groupRentalAnalysis`. */}
+            {!currentBuilding && activeTab === 'analysis' && isAllEmpreendimentos && analysis.rows.length > 1 && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">Receita mensal contratada por empreendimento</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                        Soma das parcelas dos contratos fechados — a mesma base do KPI “Receita mensal”.
+                    </p>
+                    {/* Barras horizontais: o rótulo é o nome do empreendimento, que
+                        é texto longo e não caberia no eixo X. Altura por linha,
+                        não fixa, senão as barras engordam com poucos itens. */}
+                    <div style={{ height: Math.max(140, analysis.rows.length * 38 + 24) }} className="mt-3">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                                data={analysis.rows.map(r => ({ name: r.name, receita: r.monthlyRevenue, id: r.empreendimentoId }))}
+                                layout="vertical"
+                                margin={{ top: 0, right: 72, bottom: 0, left: 0 }}
+                            >
+                                <CartesianGrid horizontal={false} stroke="#f1f5f9" />
+                                <XAxis type="number" hide />
+                                <YAxis
+                                    type="category"
+                                    dataKey="name"
+                                    width={180}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fontSize: 12, fill: '#475569' }}
+                                />
+                                <RechartsTooltip
+                                    cursor={{ fill: '#f8fafc' }}
+                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: 12 }}
+                                    formatter={(val: any) => [moneyBRL(Number(val)), 'Receita mensal']}
+                                />
+                                {/* Série única: sem legenda (o título já a nomeia) e
+                                    com rótulo direto na ponta da barra, em cor de
+                                    texto — o valor não veste a cor da série. */}
+                                <Bar
+                                    dataKey="receita"
+                                    fill="#3b82f6"
+                                    radius={[0, 4, 4, 0]}
+                                    barSize={18}
+                                    cursor="pointer"
+                                    onClick={(d: any) => d?.payload?.id && setAnalysisEmpId(d.payload.id)}
+                                    label={{ position: 'right', formatter: (v: any) => moneyBRL(Number(v)), fontSize: 11, fill: '#64748b' }}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
+
+            {/* Tabela por empreendimento — toolbar acoplada (§5.2). */}
+            {!currentBuilding && activeTab === 'analysis' && isAllEmpreendimentos && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar empreendimento..."
+                                    value={analysisSearch}
+                                    onChange={e => setAnalysisSearch(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={ANALYSIS_COLUMNS}
+                                    visibleColumns={analysisTableColumns.visibleColumns}
+                                    showColumnConfig={analysisTableColumns.showColumnConfig}
+                                    onToggleShow={() => analysisTableColumns.setShowColumnConfig(!analysisTableColumns.showColumnConfig)}
+                                    onToggleColumn={analysisTableColumns.toggleColumn}
+                                    onReset={analysisTableColumns.resetColumns}
+                                />
+                                <button
+                                    onClick={() => analysisCols.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {analysisRows.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
+                            <p className="text-sm text-gray-500">
+                                {analysisSearch
+                                    ? 'Tente ajustar a busca.'
+                                    : 'Vincule os imóveis de locação a um empreendimento pelo Espelho de Locações.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table ref={analysisCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: analysisTableTotalWidth }}>
+                                <colgroup>
+                                    {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map(c => (
+                                        <col key={c.key} data-col-key={c.key} style={{ width: `${analysisCols.getWidth(c.key)}px` }} />
+                                    ))}
+                                    {/* Espaçador (§6.1.1): absorve a folga quando a soma
+                                        das colunas é menor que o container, para a borda
+                                        da última coluna não andar a cada arraste. */}
+                                    <col />
+                                </colgroup>
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map(c => (
+                                            <SortableHeader
+                                                key={c.key}
+                                                colKey={c.key}
+                                                label={c.label}
+                                                uppercase={false}
+                                                sortColumn={analysisTableColumns.sortColumn}
+                                                sortDirection={analysisTableColumns.sortDirection}
+                                                onSort={analysisTableColumns.handleColumnSort}
+                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <analysisCols.ResizeHandle colKey={c.key} />
+                                            </SortableHeader>
+                                        ))}
+                                        <th aria-hidden="true" className="border-r border-gray-100"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {analysisRows.map(row => (
+                                        // Clique na linha = a ação dominante desta tabela
+                                        // (§9.1): recortar a aba para o empreendimento.
+                                        <tr
+                                            key={row.empreendimentoId}
+                                            className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                                            onClick={() => setAnalysisEmpId(row.empreendimentoId)}
+                                            title={`Ver a análise de ${row.name}`}
+                                        >
+                                            {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map(c => (
+                                                <td
+                                                    key={c.key}
+                                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                        c.key === 'monthlyRevenue' || c.key === 'noi'
+                                                            ? 'font-medium text-gray-800'
+                                                            : c.key === 'name'
+                                                                ? 'font-normal text-gray-700 truncate'
+                                                                : 'font-normal text-gray-600'
+                                                    }`}
+                                                >
+                                                    {renderAnalysisCell(c.key, row)}
+                                                </td>
+                                            ))}
+                                            <td aria-hidden="true"></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Com um empreendimento escolhido, o lugar da tabela vira o lembrete
+                do recorte — senão o usuário lê os KPIs como se fossem da carteira. */}
+            {!currentBuilding && activeTab === 'analysis' && !isAllEmpreendimentos && (
+                <p className="text-sm text-gray-500">
+                    Mostrando apenas <strong className="font-medium text-gray-700">{scope.name}</strong>.{' '}
+                    <button onClick={() => setAnalysisEmpId('ALL')} className="text-blue-600 hover:text-blue-800 font-medium">
+                        Ver todos os empreendimentos
+                    </button>
+                </p>
             )}
 
             {/* Toolbar de abas — ui_ux_guia_unificado.md §19.1: card branco externo

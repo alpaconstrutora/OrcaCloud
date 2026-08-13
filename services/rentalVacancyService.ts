@@ -30,18 +30,24 @@ export interface RentalVacancyMetrics extends VacancyStats {
 
 export const rentalVacancyService = {
     /**
-     * `null` = indicador indisponível (migration não aplicada). É diferente de
-     * zero, que significa "medido, e não há unidade vaga" — a tela não pode
-     * confundir os dois e mostrar "0 dias de vacância" quando na verdade não
-     * mediu nada.
+     * Os eventos crus, sem agregar.
+     *
+     * Existe porque a aba Análise agrupa a carteira **por empreendimento** e as
+     * contas (`vacancyStats`, `netAbsorption`) já são puras: em vez de uma
+     * consulta por empreendimento, a tela pede os eventos uma vez e chama as
+     * funções por balde. Ver docs/planos/2026-08-12-locacoes-analise-por-empreendimento.md.
+     *
+     * Mesmo contrato de `getVacancyMetrics`: `null` = **não medido** (tabela
+     * ausente, RLS barrou, ou log vazio), que é diferente de "medido e não há
+     * evento".
      *
      * `organizationId` nulo = "Todas as organizações": não filtra e deixa a RLS
      * recortar (REGRA #5). Nunca bloquear o carregamento por causa dele.
      */
-    async getVacancyMetrics(
+    async getVacancyEvents(
         organizationId?: string | null,
         buildingId?: string | null
-    ): Promise<RentalVacancyMetrics | null> {
+    ): Promise<StatusEvent[] | null> {
         try {
             let query = supabase
                 .from('commercial_property_status_events')
@@ -106,16 +112,32 @@ export const rentalVacancyService = {
                 return null;
             }
 
-            const now = new Date();
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
-
-            return {
-                ...vacancyStats(events, now),
-                netAbsorption30d: netAbsorption(events, thirtyDaysAgo, now),
-            };
+            return events;
         } catch (err) {
             console.error('[RentalVacancy] Erro ao carregar métricas de vacância:', err);
             return null;
         }
+    },
+
+    /**
+     * `null` = indicador indisponível (migration não aplicada). É diferente de
+     * zero, que significa "medido, e não há unidade vaga" — a tela não pode
+     * confundir os dois e mostrar "0 dias de vacância" quando na verdade não
+     * mediu nada.
+     */
+    async getVacancyMetrics(
+        organizationId?: string | null,
+        buildingId?: string | null
+    ): Promise<RentalVacancyMetrics | null> {
+        const events = await this.getVacancyEvents(organizationId, buildingId);
+        if (!events) return null;
+
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+
+        return {
+            ...vacancyStats(events, now),
+            netAbsorption30d: netAbsorption(events, thirtyDaysAgo, now),
+        };
     },
 };

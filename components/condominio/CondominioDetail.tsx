@@ -5,16 +5,27 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package } from 'lucide-react';
+import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone } from 'lucide-react';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
 import FracoesTab from './FracoesTab';
 import AtivosTab from './AtivosTab';
+import ComunicacaoTab from './ComunicacaoTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type { Empreendimento } from '../../types/empreendimento';
 
-type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao';
+type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao' | 'comunicacao';
+
+/** §19.1 — cada aba troca o assunto da tela, então troca o título junto. */
+const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
+    ficha: { titulo: 'Ficha do condomínio', subtitulo: 'CNPJ próprio, síndico e mandato' },
+    ocupacoes: { titulo: 'Ocupações', subtitulo: 'quem é dono, quem mora e quem paga' },
+    fracoes: { titulo: 'Frações ideais', subtitulo: 'transcrição da convenção registrada' },
+    ativos: { titulo: 'Ativos do edifício', subtitulo: 'equipamentos e garantia do fornecedor' },
+    manutencao: { titulo: 'Manutenção predial', subtitulo: 'plano NBR 5674 e ordens de serviço' },
+    comunicacao: { titulo: 'Comunicação', subtitulo: 'avisos e documentos do portal' },
+};
 
 interface Props {
     empreendimento: Empreendimento;
@@ -84,6 +95,9 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
         // cadastrado, o plano fala de "elevador" no abstrato.
         { id: 'ativos', label: 'Ativos', icon: Package },
         { id: 'manutencao', label: 'Manutenção', icon: Wrench },
+        // Última porque é o que SAI do condomínio para o condômino — as demais
+        // são o que se sabe sobre ele.
+        { id: 'comunicacao', label: 'Comunicação', icon: Megaphone },
     ];
 
     return (
@@ -100,10 +114,16 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
                 >
                     <ArrowLeft className="w-4 h-4" /> Voltar
                 </button>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{e.name}</h1>
+                {/* §19.1/§20 — o título acompanha a aba ativa: cada uma troca o
+                    conteúdo inteiro, e um <h1> fixo ficaria mentindo sobre o que
+                    a tela mostra. A IDENTIDADE (qual condomínio) desce para o
+                    subtítulo em vez de sumir — sem ela, saber "Manutenção" sem
+                    saber "de qual prédio" é pior que o problema original. */}
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{TITULOS[aba].titulo}</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    {e.code ? `${e.code} · ` : ''}
-                    {e.condominio_cnpj ? `CNPJ ${e.condominio_cnpj}` : 'CNPJ do condomínio não informado'}
+                    {e.name}
+                    {e.code ? ` · ${e.code}` : ''}
+                    {' · '}{TITULOS[aba].subtitulo}
                 </p>
             </div>
 
@@ -216,6 +236,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
             {aba === 'fracoes' && <FracoesTab empreendimento={e} />}
             {aba === 'ativos' && <AtivosTab empreendimento={e} />}
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
+            {aba === 'comunicacao' && <ComunicacaoTab empreendimento={e} />}
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${

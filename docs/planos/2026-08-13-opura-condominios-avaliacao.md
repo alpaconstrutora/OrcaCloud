@@ -406,9 +406,26 @@ Pronto quando: um empreendimento `ENTREGUE` real vira edifício operado em uma a
 
 ### F3 — Portal do Condômino
 
-Portal novo, irmão de `/portal-cliente`, **com autenticação real** (não token de 90 dias). Eixo `usuário → ocupação → unidade`. Abas: chamados (reusar `client_requests`/`client_service_orders`), documentos, manual do proprietário, garantias, avisos. Sem financeiro.
+**IMPLEMENTADO em 14/08/2026** — `/portal-condomino?token=…`, `aplicar_20270905000023_portal_condomino.sql` (⏳ **não aplicada**).
 
-Pronto quando: dois moradores de unidades diferentes logam e cada um vê só a própria unidade — verificado no navegador, não por `tsc`.
+**Correção de premissa.** Este plano dizia "com autenticação real (não token de 90 dias)", e eu repeti isso várias vezes citando o Portal do Corretor como precedente de login. **Errado: nenhum dos seis portais deste app tem autenticação real** — todos usam token em link público, o corretor inclusive. O que a memória registrava ("corretor exige e-mail+org") é sobre o cadastro do perfil, não sobre login.
+
+**Decisão do usuário: "token agora, login depois".** Entrega no padrão da casa, mas desenhada para que trocar por autenticação real **não exija migrar dado**:
+
+> A identidade do condômino **não é o token** — é a linha de `condomino_portal_access`, que liga a PESSOA à UNIDADE. O token é uma credencial pendurada nela, e `auth_user_id` é a outra, reservada desde já. No dia do login real, preenche-se aquele campo e as RPCs aceitam sessão; a linha de acesso, os chamados e as leituras continuam apontando para o mesmo lugar. Se o token FOSSE a identidade (como em `client_portal_tokens`, onde ele é a própria chave), a troca exigiria reescrever tudo que o referencia.
+
+| Decisão | Por quê |
+|---|---|
+| **Chamados são da UNIDADE**, não da pessoa (`client_requests.unit_id`, nulo nas linhas antigas) | Quem mora hoje precisa ver o vazamento aberto pelo morador anterior; e quem tem duas unidades não pode ver as listas misturadas |
+| **Avisos são tabela nova** | `communications` é RH/obra, `investor_announcements` é investidor — misturar comunicado de obra com aviso de síndico na mesma caixa é pior que duplicar estrutura |
+| **Leitura confirmada por ACESSO**, não por pessoa | A mesma pessoa pode ter duas unidades; ler numa não é ler na outra |
+| **Revogar desativa, não apaga** | A linha é a identidade, e dela dependem as leituras — apagar levaria o histórico junto |
+| **Sem dado financeiro** | É o que torna token frágil. Quando o financeiro entrar (pós-portão), a autenticação real deixa de ser opcional |
+| Documentos por **URL pública** | O condômino não tem sessão; arquivo em bucket privado não abre. A tela avisa isso em âmbar |
+
+Lado admin: aba **Comunicação** no condomínio (avisos com contagem de leitura + documentos com visibilidade), e botão de gerar/copiar link na linha da ocupação — renovar troca o token e **invalida o anterior**, que é o desejado por quem perdeu o controle do link.
+
+Pronto quando: dois moradores de unidades diferentes abrem seus links e cada um vê só a própria unidade — verificado no navegador, não por `tsc`.
 
 ### 🚪 Portão
 

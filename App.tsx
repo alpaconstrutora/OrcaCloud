@@ -5,6 +5,7 @@ import ResetPassword from './components/ResetPassword';
 import LoginGateway from './components/LoginGateway';
 
 const AIChat      = React.lazy(() => import('./components/AIChat'));
+const CondominoPortal = React.lazy(() => import('./components/condominio/CondominoPortal'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
 import { supabase } from './lib/supabase';
 import { atsService } from './services/atsService';
@@ -593,6 +594,13 @@ const App: React.FC = () => {
     return null;
   }, []);
 
+  const condominoPortalToken = React.useMemo(() => {
+    if (window.location.pathname === '/portal-condomino') {
+      return new URLSearchParams(window.location.search).get('token');
+    }
+    return null;
+  }, []);
+
   const partnerPortalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal-parceiro') {
       return new URLSearchParams(window.location.search).get('token');
@@ -656,6 +664,16 @@ const App: React.FC = () => {
   }, [showOverlay]);
 
   // ── Guards públicos (ordem preservada) ───────────────────────────────────────
+  // O Portal do Condômino não tem gate próprio: a RPC já valida o token e
+  // devolve `{ok:false, motivo}` quando ele não presta, e a tela trata isso.
+  // Um gate a mais seria uma segunda validação para o mesmo token.
+  if (condominoPortalToken) {
+    return (
+      <React.Suspense fallback={<div className="h-screen bg-gray-50" />}>
+        <CondominoPortal token={condominoPortalToken} />
+      </React.Suspense>
+    );
+  }
   if (portalToken) return <PortalTokenGate token={portalToken} />;
   if (clientPortalToken) return <ClientPortalTokenGate token={clientPortalToken} />;
   if (brokerPortalToken) return <BrokerPortalTokenGate token={brokerPortalToken} />;

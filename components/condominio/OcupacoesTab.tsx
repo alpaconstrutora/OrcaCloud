@@ -23,6 +23,7 @@ import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
+import { condominoAccessService, linkDoPortal } from '../../services/condominoPortalService';
 import {
     occupancyImportService,
     type ImportPreview,
@@ -398,6 +399,42 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
+    /**
+     * Gera (ou renova) o link do Portal do Condômino desta ocupação e copia.
+     *
+     * Renovar TROCA o token, o que invalida o link anterior — e é o
+     * comportamento desejado: quem pede link novo geralmente perdeu o controle
+     * do antigo. Por isso a confirmação avisa, em vez de trocar em silêncio.
+     */
+    const gerarLinkPortal = async (linha: UnitOccupancyRow) => {
+        const ok = await confirm({
+            title: 'Gerar link do portal?',
+            message: `${linha._client_name} recebe acesso à unidade ${linha._unit_name} por 90 dias. Se já existir um link para esta ocupação, ele deixa de funcionar.`,
+            variant: 'default',
+            confirmLabel: 'Gerar link',
+        });
+        if (!ok) return;
+        try {
+            const acesso = await condominoAccessService.gerar({
+                id: linha.id,
+                unit_id: linha.unit_id,
+                client_id: linha.client_id,
+                organization_id: orgId,
+            });
+            const link = linkDoPortal(acesso.token);
+            try {
+                await navigator.clipboard.writeText(link);
+                notify('Link gerado e copiado. Vale por 90 dias.');
+            } catch {
+                // Área de transferência bloqueada (http, permissão): o link não
+                // pode se perder por causa disso.
+                notify(`Link gerado: ${link}`);
+            }
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao gerar o link.', 'error');
+        }
+    };
+
     const excluir = async (linha: UnitOccupancyRow) => {
         const ok = await confirm({
             title: 'Excluir o registro?',
@@ -631,6 +668,13 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                         {visiveis.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
+                                                    {o && !o.ended_at && (
+                                                        <ActionIconButton
+                                                            kind="share"
+                                                            title="Gerar link do Portal do Condômino"
+                                                            onClick={() => gerarLinkPortal(o)}
+                                                        />
+                                                    )}
                                                     {o && !o.ended_at && (
                                                         <ActionIconButton
                                                             kind="edit"

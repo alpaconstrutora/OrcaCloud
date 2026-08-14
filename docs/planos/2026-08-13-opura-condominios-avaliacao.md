@@ -281,6 +281,43 @@ Ressalva registrada e vencida pelo usuário: Empreendimentos mora em *Incorpora�
 | Garantia de fornecedor por equipamento | Hoje só existe construtora→cliente em `warranty_terms` | Equipamento com garantia de fornecedor alerta antes do vencimento |
 | Alertas de vencimento | Reusar o padrão de cron já provado em `20260514000002_quality_sla_cron.sql` | Cron dispara e o alerta chega; verificado com data forçada |
 
+### 🔗 Ponte com Locações — importar ocupações dos contratos (pedido de 14/08/2026)
+
+**Pedido original, literal:**
+
+> conectar condomínio com locações:
+> 1. crie opcao de importar ocupacões dos contratos de locacão
+
+**Decisões travadas pelo usuário na mesma conversa:** o locatário vira **INQUILINO *e* RESPONSÁVEL FINANCEIRO**; contratos **encerrados entram como histórico**, além dos vigentes.
+
+**A corrente já existe inteira** — só nunca foi percorrida até o fim. `EspelhoLocacoesTab.tsx` para no imóvel (status e preço de `commercial_properties`) e **nunca alcança o locatário**:
+
+```
+contracts  domain='LOCACAO', number 'CL-{ano}-{seq}'
+  ├─ client_id           → o LOCATÁRIO (clients.id)
+  ├─ start_date/end_date → vigência da ocupação
+  ├─ parent_contract_id  → renovação: o filho SUBSTITUI o pai
+  └─ deal_id → commercial_deals ├─ commercial_deal_units.property_id (N unidades)
+                                └─ property_id (principal, legado)
+                                     ↓ commercial_properties.id
+                                     ↓ empreendimento_units.rental_property_id
+```
+
+Um contrato reúne apto + vaga + box (é o motivo de `commercial_deal_units` existir), logo **um contrato pode gerar várias ocupações**.
+
+**O achado que mudou o desenho — idempotência.** `uidx_unit_occupancies_vigente` só cobre ocupação **vigente**. Histórico não tem trava, então importar duas vezes duplicaria tudo em silêncio — e o usuário optou justamente por trazer encerrados. Daí `source_contract_id` com índice único: a ocupação sabe de que contrato nasceu.
+
+**Cadeia de renovação colapsa em UMA ocupação.** Renovar cria contrato-filho (`parent_contract_id`), não aditivo; cru, um inquilino de 6 anos viraria 6 linhas idênticas. Como a renovação é a mesma ocupação continuando, agrupa-se a cadeia: `started_at` do mais antigo, `ended_at` do mais recente, `source_contract_id` do contrato vivo.
+
+**Ressalva de escopo:** por lei a taxa condominial é obrigação do **proprietário**; o repasse ao inquilino é cláusula que o sistema não lê. A importação assume o repasse em todos os contratos — onde não valer, a correção é manual.
+
+| Item | O que muda | Como sei que terminou |
+|---|---|---|
+| `aplicar_20270905000019_ocupacoes_origem_contrato.sql` | `source_contract_id` + FK `ON DELETE SET NULL` (apagar contrato não apaga quem morou lá) + `uidx_unit_occupancies_origem` | Bloco de conferência: `coluna=1, fk=1, uidx_origem=1` |
+| `services/rentalOccupancyImportService.ts` | Prévia → aplicar. Reporta 4 situações: sem vínculo de unidade, já importada, unidade já tem responsável, cadeia de renovação | **Importar duas vezes cria ZERO na segunda** |
+| Botão em `OcupacoesTab.tsx` | "Importar de Locações" + `Sheet` de prévia com motivo por linha desmarcada | Responsável já existente é pulado com o nome de quem ocupa o papel, não um `23505` cru |
+| `EspelhoLocacoesTab.tsx` | **Não mexer** — é o eixo de publicação da unidade; ocupação é outra pergunta | — |
+
 ### F2 — Handoff da entrega (o diferencial)
 
 Ação única que transforma empreendimento entregue em edifício operado: cria o condomínio, importa unidades e frações, puxa proprietários de `commercial_deals`, instancia ativos e garantias, gera o plano de manutenção inicial a partir dos sistemas. **É a única coisa aqui que a Superlógica não consegue copiar** — e o motivo de F0 e F1 virem antes.

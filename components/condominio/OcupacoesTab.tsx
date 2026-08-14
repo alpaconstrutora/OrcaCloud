@@ -9,7 +9,7 @@
 // UI: ui_ux_guia_unificado.md — §5.2 toolbar acoplada, §6.6 px-6 + border-r,
 // §7 tipografia, §8 status como texto, §9 ações, §14 useConfirm, §22 estado local.
 import React from 'react';
-import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen } from 'lucide-react';
+import { Users, UserCheck, Home, Wallet, Search, RefreshCw, Plus, DoorOpen, Download } from 'lucide-react';
 import {
     ColumnConfig,
     useTableColumns,
@@ -23,6 +23,11 @@ import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
+import {
+    rentalOccupancyImportService,
+    type ImportPreview,
+    type ImportPreviewRow,
+} from '../../services/rentalOccupancyImportService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type {
@@ -99,6 +104,13 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
 
     const [sheetAberto, setSheetAberto] = React.useState(false);
     const [salvando, setSalvando] = React.useState(false);
+
+    // Importação de Locações — prévia antes de gravar: ninguém desfaz 40
+    // ocupações à mão, então a escrita direta seria irreversível na prática.
+    const [importOpen, setImportOpen] = React.useState(false);
+    const [preview, setPreview] = React.useState<ImportPreview | null>(null);
+    const [carregandoPreview, setCarregandoPreview] = React.useState(false);
+    const [importando, setImportando] = React.useState(false);
     const [form, setForm] = React.useState<{
         unit_id: string; client_id: string; role: OccupancyRole; started_at: string; notes: string;
     }>({ unit_id: '', client_id: '', role: 'PROPRIETARIO', started_at: hojeISO(), notes: '' });
@@ -196,6 +208,65 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
             ).size,
         };
     }, [linhas, unidades.length]);
+
+    const abrirImportacao = async () => {
+        setImportOpen(true);
+        setCarregandoPreview(true);
+        setPreview(null);
+        try {
+            setPreview(await rentalOccupancyImportService.previewImport(empreendimento.id, orgId));
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao montar a prévia da importação.', 'error');
+            setImportOpen(false);
+        } finally {
+            setCarregandoPreview(false);
+        }
+    };
+
+    const alternarLinha = (key: string) => {
+        setPreview(p => p && ({
+            ...p,
+            rows: p.rows.map(r => (r.key === key ? { ...r, selected: !r.selected } : r)),
+        }));
+    };
+
+    const aplicarImportacao = async () => {
+        if (!preview) return;
+        setImportando(true);
+        try {
+            const r = await rentalOccupancyImportService.applyImport(preview.rows);
+            // §22 — costura no array local em vez de recarregar a aba inteira.
+            if (r.novas.length > 0) {
+                const porUnidade = Object.fromEntries(unidades.map(u => [u.id, u.label]));
+                setLinhas(prev => [
+                    ...r.novas.map(o => {
+                        const [torre, nome] = (porUnidade[o.unit_id] || ' · ').split(' · ');
+                        const linhaPrevia = preview.rows.find(x => x.unitId === o.unit_id);
+                        return {
+                            ...o,
+                            _client_name: linhaPrevia?.clientName || '—',
+                            _client_document: null,
+                            _client_email: null,
+                            _unit_name: nome || '—',
+                            _tower_name: torre || '—',
+                            _fracao_ideal: null,
+                        };
+                    }).filter(o => incluirEncerradas || !o.ended_at),
+                    ...prev,
+                ]);
+            }
+            setImportOpen(false);
+            const resumo = [
+                `${r.criadas} criada${r.criadas === 1 ? '' : 's'}`,
+                r.puladas > 0 ? `${r.puladas} pulada${r.puladas === 1 ? '' : 's'}` : null,
+            ].filter(Boolean).join(' · ');
+            notify(r.erros.length > 0 ? `${resumo}. ${r.erros[0]}` : resumo, r.erros.length > 0 ? 'error' : 'success');
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao importar.', 'error');
+        } finally {
+            setImportando(false);
+        }
+    };
 
     const abrirNova = () => {
         setForm({ unit_id: '', client_id: '', role: 'PROPRIETARIO', started_at: hojeISO(), notes: '' });
@@ -351,6 +422,15 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                 onReset={tableColumns.resetColumns}
                             />
                         </div>
+
+                        <button
+                            onClick={abrirImportacao}
+                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 shrink-0 whitespace-nowrap"
+                            title="Traz quem já está declarado como locatário nos contratos de locação"
+                        >
+                            <Download className="w-4 h-4" />
+                            Importar de Locações
+                        </button>
 
                         {/* Ação primária — §17, variante compacta */}
                         <button
@@ -581,6 +661,96 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                     >
                         {salvando ? 'Salvando...' : 'Salvar ocupação'}
+                    </button>
+                </SheetFooter>
+            </Sheet>
+
+            {/* Prévia da importação — mostra o que SERIA criado antes de gravar */}
+            <Sheet open={importOpen} onClose={() => setImportOpen(false)} size="2xl">
+                <SheetHeader onClose={() => setImportOpen(false)}>
+                    <SheetTitle>Importar de Locações</SheetTitle>
+                    <SheetDescription>
+                        Quem já está nos contratos de locação vira ocupação. Nada é gravado até você confirmar.
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetPanel>
+                    {carregandoPreview ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500">Lendo os contratos...</p>
+                        </div>
+                    ) : !preview || preview.rows.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Download className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nada a importar</h3>
+                            <p className="text-sm text-gray-500 max-w-md mx-auto">
+                                {preview && preview.contratosSemVinculo > 0
+                                    ? `${preview.contratosSemVinculo} contrato(s) de locação não alcançam nenhuma unidade deste condomínio — a unidade precisa estar publicada no Espelho de Locações para a ponte existir.`
+                                    : 'Nenhum contrato de locação com locatário e vigência definidos.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="text-xs text-gray-500">
+                                {preview.rows.filter(r => r.selected).length} de {preview.rows.length} selecionadas
+                                {preview.contratosSemVinculo > 0 && ` · ${preview.contratosSemVinculo} contrato(s) sem unidade vinculada`}
+                                {preview.contratosNaoImportaveis > 0 && ` · ${preview.contratosNaoImportaveis} em rascunho/minuta`}
+                            </div>
+
+                            {preview.rows.map(r => (
+                                <label
+                                    key={r.key}
+                                    className={`flex items-start gap-3 p-3 rounded-[10px] border transition-all cursor-pointer ${
+                                        r.selected ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white'
+                                    } ${r.roles.length === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={r.selected}
+                                        disabled={r.roles.length === 0}
+                                        onChange={() => alternarLinha(r.key)}
+                                        className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-sm font-medium text-gray-800">{r.unitLabel}</span>
+                                            <span className="text-sm text-gray-500">·</span>
+                                            <span className="text-sm text-gray-700">{r.clientName}</span>
+                                            <span className="text-xs text-gray-400">{r.contractNumber}</span>
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                            {r.roles.length > 0
+                                                ? r.roles.map(p => (p === 'INQUILINO' ? 'Inquilino' : 'Responsável financeiro')).join(' + ')
+                                                : 'Nenhum papel novo'}
+                                            {' · '}
+                                            {r.endedAt
+                                                ? `${formatarData(r.startedAt)} a ${formatarData(r.endedAt)} (histórico)`
+                                                : `desde ${formatarData(r.startedAt)} (vigente)`}
+                                        </div>
+                                        {r.motivo && (
+                                            <p className="text-xs text-amber-600 mt-1">{r.motivo}</p>
+                                        )}
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </SheetPanel>
+                <SheetFooter>
+                    <button
+                        onClick={() => setImportOpen(false)}
+                        className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={aplicarImportacao}
+                        disabled={importando || !preview || preview.rows.filter(r => r.selected).length === 0}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        {importando
+                            ? 'Importando...'
+                            : `Importar ${preview?.rows.filter(r => r.selected).length ?? 0} ocupações`}
                     </button>
                 </SheetFooter>
             </Sheet>

@@ -221,6 +221,12 @@ export interface UnitOccupancy {
     started_at: string;
     /** NULO = vigente. Encerrar não apaga: a ocupação é histórico. */
     ended_at?: string | null;
+    /**
+     * Contrato de locação que originou a ocupação. NULO = cadastrada à mão.
+     * Numa cadeia de renovação aponta para o contrato VIVO (o mais recente).
+     * É esta coluna que torna "Importar de Locações" repetível sem duplicar.
+     */
+    source_contract_id?: string | null;
     notes?: string | null;
     created_at: string;
     updated_at: string;

@@ -20,7 +20,7 @@ import type {
 
 // Colunas explícitas, nunca `select('*')` — feedback_select_narrowing.
 const OCCUPANCY_COLS =
-    'id, unit_id, client_id, organization_id, role, started_at, ended_at, notes, created_at, updated_at';
+    'id, unit_id, client_id, organization_id, role, started_at, ended_at, notes, source_contract_id, created_at, updated_at';
 
 /** Traduz os erros do banco em frases que o usuário resolve sozinho (UI_PATTERNS §6.4). */
 export function traduzirErroOcupacao(mensagem: string, nomePessoa?: string): string {

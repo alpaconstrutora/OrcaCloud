@@ -179,6 +179,8 @@ export interface CostCenterV2 {
     organization_id: string;
     empresa_id?: string | null;
     parent_id?: string | null;
+    /** Obra vinculada (opcional) — Empreendimento é derivado dela, nunca gravado direto. */
+    project_id?: string | null;
     code: string;
     name: string;
     description?: string | null;

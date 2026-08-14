@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
     Search, Plus, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown,
     Download, Upload, FileDown, Layers, AlertCircle,
@@ -11,24 +11,32 @@ import CostCenterV2ImportModal from './CostCenterV2ImportModal';
 import { useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { costCenterService } from '../services/costCenterService';
 import { exportService } from '../services/exportService';
+import { projectService } from '../services/projectService';
+import { empreendimentoService } from '../services/empreendimentoService';
+import { onlyObras } from '../utils/projectClassification';
+import { EmpreendimentoCell, type EmpreendimentoCellValue } from './empreendimento/EmpreendimentoCell';
 import { CostCenterV2 } from '../types/financial';
 
 const COLUMNS: ColumnConfig[] = [
-    { key: 'code',        label: 'Código',                 sortable: true },
-    { key: 'group',       label: 'Centro de custo (grupo)', sortable: true },
-    { key: 'name',        label: 'Centro de custo',        sortable: true },
-    { key: 'description', label: 'Descrição',              sortable: true },
-    { key: 'actions',     label: 'Ações',                  sortable: false },
+    { key: 'code',           label: 'Código',                 sortable: true },
+    { key: 'group',          label: 'Centro de custo (grupo)', sortable: true },
+    { key: 'name',           label: 'Centro de custo',        sortable: true },
+    { key: 'empreendimento', label: 'Empreendimento',         sortable: true },
+    { key: 'obra',           label: 'Obra',                   sortable: true },
+    { key: 'description',    label: 'Descrição',              sortable: true },
+    { key: 'actions',        label: 'Ações',                  sortable: false },
 ];
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta). 'actions' é
 // estrutural (fixo, fora do drag) e não entra aqui.
 const COST_CENTER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    code:        { label: 'Código',                  className: 'px-6 py-2 border-r border-gray-100 w-24' },
-    group:       { label: 'Centro de custo (grupo)',  className: 'px-6 py-2 border-r border-gray-100' },
-    name:        { label: 'Centro de custo',          className: 'px-6 py-2 border-r border-gray-100' },
-    description: { label: 'Descrição',                className: 'px-6 py-2 border-r border-gray-100' },
+    code:           { label: 'Código',                  className: 'px-6 py-2 border-r border-gray-100 w-24' },
+    group:          { label: 'Centro de custo (grupo)',  className: 'px-6 py-2 border-r border-gray-100' },
+    name:           { label: 'Centro de custo',          className: 'px-6 py-2 border-r border-gray-100' },
+    empreendimento: { label: 'Empreendimento',           className: 'px-6 py-2 border-r border-gray-100' },
+    obra:           { label: 'Obra',                     className: 'px-6 py-2 border-r border-gray-100' },
+    description:    { label: 'Descrição',                className: 'px-6 py-2 border-r border-gray-100' },
 };
 
 interface CostCenterModuleProps {
@@ -38,12 +46,16 @@ interface CostCenterModuleProps {
 }
 
 interface FormState {
+    /** 'group' = grupo (parent_id null); 'item' = centro de custo dentro de um grupo. */
+    recordType: 'group' | 'item';
     parent_id: string;
+    /** Obra vinculada — só se aplica a 'item' (grupo é corporativo, sem obra). */
+    project_id: string;
     name: string;
     description: string;
 }
 
-const EMPTY_FORM: FormState = { parent_id: '', name: '', description: '' };
+const EMPTY_FORM: FormState = { recordType: 'group', parent_id: '', project_id: '', name: '', description: '' };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` em vez de uma sequência fixa.
@@ -56,9 +68,11 @@ function renderCostCenterCell(
         expanded: boolean;
         toggleExpand: (id: string) => void;
         groupNameFor: (item: CostCenterV2) => string;
+        empreendimentoByProject: Record<string, EmpreendimentoCellValue>;
+        obraNameById: Record<string, string>;
     },
 ): React.ReactNode {
-    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor } = ctx;
+    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, empreendimentoByProject, obraNameById } = ctx;
     switch (key) {
         case 'code':
             return <span className="text-xs font-normal text-gray-500 whitespace-nowrap">{item.code}</span>;
@@ -83,6 +97,14 @@ function renderCostCenterCell(
             ) : (
                 <span className="text-sm font-normal text-gray-900 truncate">{item.name}</span>
             );
+        case 'empreendimento':
+            return <EmpreendimentoCell value={item.project_id ? empreendimentoByProject[item.project_id] : undefined} />;
+        case 'obra':
+            return (
+                <span className="text-sm font-normal text-gray-700 truncate">
+                    {item.project_id ? (obraNameById[item.project_id] || '—') : <span className="text-gray-400 italic">—</span>}
+                </span>
+            );
         case 'description':
             return <span className="text-sm font-normal text-gray-500 truncate line-clamp-1">{item.description || '-'}</span>;
         default:
@@ -106,6 +128,10 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const [saving, setSaving] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const [obraNameById, setObraNameById] = useState<Record<string, string>>({});
+    const [empreendimentoByProject, setEmpreendimentoByProject] = useState<Record<string, EmpreendimentoCellValue>>({});
+    const [sheetObras, setSheetObras] = useState<{ id: string; name: string }[]>([]);
+    const [sheetObrasLoading, setSheetObrasLoading] = useState(false);
     const confirm = useConfirm();
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -127,6 +153,36 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     }, [organizationId]);
 
     React.useEffect(() => { load(); }, [load]);
+
+    // Resolve nome da obra e empreendimento (derivado, nunca gravado direto — mesmo
+    // padrão de SupplyChainOrderList/EmpreendimentoCell) para cada organização
+    // presente na listagem atual.
+    useEffect(() => {
+        const orgIds = Array.from(new Set(items.filter(i => i.project_id).map(i => i.organization_id)));
+        if (orgIds.length === 0) {
+            setObraNameById({});
+            setEmpreendimentoByProject({});
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            const nameMap: Record<string, string> = {};
+            const empMap: Record<string, EmpreendimentoCellValue> = {};
+            await Promise.all(orgIds.map(async orgId => {
+                const [projects, emp] = await Promise.all([
+                    projectService.listProjects(undefined, orgId),
+                    empreendimentoService.mapObrasToEmpreendimentos(orgId),
+                ]);
+                onlyObras(projects).forEach(p => { nameMap[p.id] = p.name; });
+                Object.assign(empMap, emp);
+            }));
+            if (!cancelled) {
+                setObraNameById(nameMap);
+                setEmpreendimentoByProject(empMap);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [items]);
 
     const itemsById = useMemo(() => new Map(items.map(i => [i.id, i])), [items]);
     const childrenByParent = useMemo(() => {
@@ -152,21 +208,27 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             case 'code': return a.code.localeCompare(b.code, 'pt-BR', { numeric: true }) * dir;
             case 'group': return groupNameFor(a).localeCompare(groupNameFor(b), 'pt-BR') * dir;
             case 'name': return (a.parent_id ? a.name : '').localeCompare(b.parent_id ? b.name : '', 'pt-BR') * dir;
+            case 'obra': return (a.project_id ? obraNameById[a.project_id] || '' : '').localeCompare(b.project_id ? obraNameById[b.project_id] || '' : '', 'pt-BR') * dir;
+            case 'empreendimento': return (a.project_id ? empreendimentoByProject[a.project_id]?.name || '' : '').localeCompare(b.project_id ? empreendimentoByProject[b.project_id]?.name || '' : '', 'pt-BR') * dir;
             case 'description': return (a.description || '').localeCompare(b.description || '', 'pt-BR') * dir;
             default: return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
         }
-    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor]);
+    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor, obraNameById, empreendimentoByProject]);
 
     const matchesSearch = useCallback((item: CostCenterV2) => {
         const q = searchTerm.trim().toLowerCase();
         if (!q) return true;
+        const obraName = item.project_id ? (obraNameById[item.project_id] || '') : '';
+        const empreendimentoName = item.project_id ? (empreendimentoByProject[item.project_id]?.name || '') : '';
         return (
             item.code.toLowerCase().includes(q) ||
             item.name.toLowerCase().includes(q) ||
             (item.description || '').toLowerCase().includes(q) ||
-            groupNameFor(item).toLowerCase().includes(q)
+            groupNameFor(item).toLowerCase().includes(q) ||
+            obraName.toLowerCase().includes(q) ||
+            empreendimentoName.toLowerCase().includes(q)
         );
-    }, [searchTerm, groupNameFor]);
+    }, [searchTerm, groupNameFor, obraNameById, empreendimentoByProject]);
 
     const isFiltering = searchTerm.trim() !== '';
 
@@ -194,18 +256,30 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
     const toggleExpand = (id: string) => setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
     const toggleExpandAll = () => setExpandedIds(allExpanded ? {} : Object.fromEntries(parentIds.map(id => [id, true])));
 
-    const openCreate = async (parentId?: string) => {
+    const openCreate = async (recordType: 'group' | 'item') => {
         const target = await resolveWriteOrg('all-allowed');
         if (!target) return;
         setCreateTarget(target);
         setEditingItem(null);
-        setFormData({ parent_id: parentId || '', name: '', description: '' });
+        setFormData({
+            recordType,
+            parent_id: '',
+            project_id: '',
+            name: '',
+            description: '',
+        });
         setSheetOpen(true);
     };
 
     const openEdit = (item: CostCenterV2) => {
         setEditingItem(item);
-        setFormData({ parent_id: item.parent_id || '', name: item.name, description: item.description || '' });
+        setFormData({
+            recordType: item.parent_id ? 'item' : 'group',
+            parent_id: item.parent_id || '',
+            project_id: item.project_id || '',
+            name: item.name,
+            description: item.description || '',
+        });
         setSheetOpen(true);
     };
 
@@ -218,23 +292,44 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
 
     const editingHasChildren = editingItem ? (childrenByParent.get(editingItem.id)?.length ?? 0) > 0 : false;
 
+    // Vínculo com Obra é por organização (a obra pertence a uma só) — só faz
+    // sentido oferecer o select quando o destino da escrita é uma organização
+    // única (edição, ou criação com organização específica escolhida).
+    const linkOrgId = editingItem ? editingItem.organization_id : (createTarget?.kind === 'org' ? createTarget.orgId : null);
+
+    useEffect(() => {
+        if (!sheetOpen || !linkOrgId) { setSheetObras([]); return; }
+        let cancelled = false;
+        setSheetObrasLoading(true);
+        projectService.listProjects(undefined, linkOrgId)
+            .then(rows => { if (!cancelled) setSheetObras(onlyObras(rows).map(p => ({ id: p.id, name: p.name }))); })
+            .catch(() => { if (!cancelled) setSheetObras([]); })
+            .finally(() => { if (!cancelled) setSheetObrasLoading(false); });
+        return () => { cancelled = true; };
+    }, [sheetOpen, linkOrgId]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name.trim() || (!editingItem && !createTarget)) return;
+        if (formData.recordType === 'item' && !editingHasChildren && !formData.parent_id) return;
         setSaving(true);
         try {
+            const parentId = formData.recordType === 'group' ? null : (formData.parent_id || null);
+            const projectId = formData.recordType === 'group' ? null : (formData.project_id || null);
             if (editingItem) {
                 await costCenterService.update(editingItem.id, {
                     name: formData.name.trim(),
                     description: formData.description.trim() || null,
-                    parent_id: editingHasChildren ? editingItem.parent_id : (formData.parent_id || null),
+                    parent_id: editingHasChildren ? editingItem.parent_id : parentId,
+                    project_id: projectId,
                 });
             } else {
                 // Em "Todas as organizações" o centro de custo é criado em cada uma.
                 const { ok, failed } = await forEachTargetOrg(createTarget!, orgId =>
                     costCenterService.create({
                         organization_id: orgId,
-                        parent_id: formData.parent_id || null,
+                        parent_id: parentId,
+                        project_id: projectId,
                         name: formData.name.trim(),
                         description: formData.description.trim() || undefined,
                     }));
@@ -370,11 +465,21 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                     />
 
                     <button
-                        onClick={() => openCreate()}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        onClick={() => openCreate('group')}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-600 border border-blue-200 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                     >
                         <Plus className="w-[15px] h-[15px]" />
-                        Novo
+                        Novo grupo
+                    </button>
+
+                    <button
+                        onClick={() => openCreate('item')}
+                        disabled={groups.length === 0}
+                        title={groups.length === 0 ? 'Crie um grupo antes de cadastrar um centro de custo' : undefined}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo centro de custo
                     </button>
                 </div>
 
@@ -417,7 +522,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${isGroup ? 'bg-gray-50/60' : ''}`}>
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor })}
+                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoByProject })}
                                                 </td>
                                             ))}
                                             <td className="px-6 py-2.5 text-right">
@@ -439,30 +544,55 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
             {/* Sheet — criar/editar (UI_PATTERNS.md: painel lateral é o padrão para cadastro simples) */}
             <Sheet open={sheetOpen} onClose={closeSheet} size="md">
                 <SheetHeader onClose={closeSheet}>
-                    <SheetTitle>{editingItem ? 'Editar registro' : 'Novo registro'}</SheetTitle>
+                    <SheetTitle>
+                        {editingItem
+                            ? (formData.recordType === 'group' ? 'Editar grupo' : 'Editar centro de custo')
+                            : (formData.recordType === 'group' ? 'Novo grupo' : 'Novo centro de custo')}
+                    </SheetTitle>
                     <SheetDescription>
                         {editingItem ? `Código ${editingItem.code}` : 'O código é gerado automaticamente ao salvar.'}
                     </SheetDescription>
                 </SheetHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
                     <SheetPanel className="p-6 space-y-5">
-                        <div>
-                            <label className="text-xs font-semibold text-slate-500">Grupo</label>
-                            <select
-                                value={formData.parent_id}
-                                onChange={(e) => setFormData({ ...formData, parent_id: e.target.value })}
-                                disabled={editingHasChildren}
-                                className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:opacity-50 disabled:bg-gray-50"
-                            >
-                                <option value="">— Este registro é um grupo —</option>
-                                {groups.filter(g => g.id !== editingItem?.id).map(g => (
-                                    <option key={g.id} value={g.id}>{g.name}</option>
-                                ))}
-                            </select>
-                            {editingHasChildren && (
-                                <p className="text-xs text-gray-400 mt-1.5">Este grupo tem centros de custo vinculados — não pode virar subgrupo de outro grupo.</p>
-                            )}
-                        </div>
+                        {editingItem && !editingHasChildren && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Tipo de registro</label>
+                                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, recordType: 'group', parent_id: '', project_id: '' })}
+                                        className={`h-9 rounded-[6px] text-sm font-medium border transition-all ${formData.recordType === 'group' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    >
+                                        Grupo
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, recordType: 'item' })}
+                                        className={`h-9 rounded-[6px] text-sm font-medium border transition-all ${formData.recordType === 'item' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    >
+                                        Centro de custo
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {formData.recordType === 'item' && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Grupo</label>
+                                <select
+                                    required
+                                    value={formData.parent_id}
+                                    onChange={(e) => setFormData({ ...formData, parent_id: e.target.value })}
+                                    className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                >
+                                    <option value="" disabled>Selecione um grupo...</option>
+                                    {groups.filter(g => g.id !== editingItem?.id).map(g => (
+                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Nome</label>
@@ -472,10 +602,31 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = ({ organizationId }) =
                                 autoFocus
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                placeholder={formData.parent_id ? 'Ex: Recursos Humanos' : 'Ex: Administrativo'}
+                                placeholder={formData.recordType === 'item' ? 'Ex: Recursos Humanos' : 'Ex: Condomínios'}
                                 className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
+
+                        {formData.recordType === 'item' && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Obra <span className="text-gray-400 font-normal">(opcional)</span></label>
+                                {linkOrgId ? (
+                                    <select
+                                        value={formData.project_id}
+                                        onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
+                                        disabled={sheetObrasLoading}
+                                        className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:opacity-50 disabled:bg-gray-50"
+                                    >
+                                        <option value="">— Sem obra vinculada —</option>
+                                        {sheetObras.map(o => (
+                                            <option key={o.id} value={o.id}>{o.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <p className="mt-1.5 text-xs text-gray-400">Disponível só ao gravar numa organização específica — não em "Todas as organizações".</p>
+                                )}
+                            </div>
+                        )}
 
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Descrição</label>

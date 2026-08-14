@@ -1,12 +1,14 @@
 import { supabase } from '../lib/supabase';
 import { CostCenterV2 } from '../types/financial';
 
-const COLUMNS = 'id, organization_id, empresa_id, parent_id, code, name, description, created_at, updated_at';
+const COLUMNS = 'id, organization_id, empresa_id, parent_id, project_id, code, name, description, created_at, updated_at';
 
 export interface CostCenterInput {
     organization_id: string;
     empresa_id?: string | null;
     parent_id?: string | null;
+    /** Obra vinculada (opcional). */
+    project_id?: string | null;
     name: string;
     description?: string | null;
     /** Código manual — se omitido, `create` gera via RPC (001, 002...). */
@@ -38,6 +40,7 @@ export const costCenterService = {
                 organization_id: input.organization_id,
                 empresa_id: input.empresa_id ?? null,
                 parent_id: input.parent_id ?? null,
+                project_id: input.project_id ?? null,
                 code,
                 name: input.name,
                 description: input.description ?? null,
@@ -54,6 +57,7 @@ export const costCenterService = {
         if (input.name !== undefined) payload.name = input.name;
         if (input.description !== undefined) payload.description = input.description;
         if (input.empresa_id !== undefined) payload.empresa_id = input.empresa_id;
+        if (input.project_id !== undefined) payload.project_id = input.project_id;
 
         const { data, error } = await supabase
             .from('cost_centers_v2')
@@ -70,6 +74,7 @@ export const costCenterService = {
             organization_id: item.organization_id,
             empresa_id: item.empresa_id,
             parent_id: item.parent_id,
+            project_id: item.project_id,
             name: `${item.name} (cópia)`,
             description: item.description,
         });

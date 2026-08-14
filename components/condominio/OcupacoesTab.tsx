@@ -85,6 +85,20 @@ interface Props {
     empreendimento: Empreendimento;
 }
 
+/**
+ * Uma linha da tabela. `ocupacao: null` é uma unidade SEM ninguém — ela existe
+ * na lista de propósito: o espelho do condomínio tem de mostrar todas as
+ * unidades, senão a lacuna de cadastro fica invisível.
+ */
+interface LinhaExibida {
+    key: string;
+    unitId: string;
+    unitName: string;
+    towerName: string;
+    fracao: number | null;
+    ocupacao: UnitOccupancyRow | null;
+}
+
 interface ClienteOpcao { id: string; name: string; document?: string | null }
 
 const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
@@ -95,7 +109,15 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     const tableColumns = useTableColumns(COLUMNS, 'ocupacoesColumns');
 
     const [linhas, setLinhas] = React.useState<UnitOccupancyRow[]>([]);
-    const [unidades, setUnidades] = React.useState<{ id: string; label: string }[]>([]);
+    /**
+     * TODAS as unidades do empreendimento, sempre — ocupadas ou não. A tabela é
+     * ancorada nelas, não nas ocupações: unidade vazia precisa APARECER, senão
+     * "nenhuma ocupação cadastrada" e "nenhuma unidade cadastrada" viram a mesma
+     * tela em branco, e a lacuna fica invisível.
+     */
+    const [unidades, setUnidades] = React.useState<
+        { id: string; label: string; unitName: string; towerName: string; fracao: number | null }[]
+    >([]);
     const [clientes, setClientes] = React.useState<ClienteOpcao[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
@@ -133,7 +155,13 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 towerName: u._tower_name,
                 fracao: u.fracao_ideal_decimal ?? null,
             }]));
-            setUnidades(units.map(u => ({ id: u.id, label: `${u._tower_name} · ${u.name}` })));
+            setUnidades(units.map(u => ({
+                id: u.id,
+                label: `${u._tower_name} · ${u.name}`,
+                unitName: u.name,
+                towerName: u._tower_name,
+                fracao: u.fracao_ideal_decimal ?? null,
+            })));
 
             const dados = await unitOccupancyService.listByEmpreendimento(
                 units.map(u => u.id),
@@ -157,26 +185,65 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     }, [orgId]);
 
     const filtradas = React.useMemo(() => {
+        // A tabela parte das UNIDADES. Cada ocupação vira uma linha; unidade sem
+        // ninguém vira uma linha própria, com `ocupacao: null`. Assim o espelho
+        // do condomínio está sempre completo, e a lacuna é visível.
+        const porUnidade = new Map<string, UnitOccupancyRow[]>();
+        for (const l of linhas) {
+            if (!porUnidade.has(l.unit_id)) porUnidade.set(l.unit_id, []);
+            porUnidade.get(l.unit_id)!.push(l);
+        }
+
+        const todas: LinhaExibida[] = [];
+        for (const u of unidades) {
+            const ocupacoes = porUnidade.get(u.id) || [];
+            if (ocupacoes.length === 0) {
+                todas.push({
+                    key: `vazia:${u.id}`, unitId: u.id, unitName: u.unitName,
+                    towerName: u.towerName, fracao: u.fracao, ocupacao: null,
+                });
+            } else {
+                for (const o of ocupacoes) {
+                    todas.push({
+                        key: o.id, unitId: u.id, unitName: u.unitName,
+                        towerName: u.towerName, fracao: u.fracao ?? o._fracao_ideal ?? null,
+                        ocupacao: o,
+                    });
+                }
+            }
+            porUnidade.delete(u.id);
+        }
+        // Ocupação cujo unidade não veio na lista (excluída, ou fora do recorte):
+        // aparece mesmo assim, senão some sem explicação.
+        for (const restantes of porUnidade.values()) {
+            for (const o of restantes) {
+                todas.push({
+                    key: o.id, unitId: o.unit_id, unitName: o._unit_name,
+                    towerName: o._tower_name, fracao: o._fracao_ideal ?? null, ocupacao: o,
+                });
+            }
+        }
+
         const termo = searchTerm.trim().toLowerCase();
         const base = termo
-            ? linhas.filter(l =>
-                l._client_name.toLowerCase().includes(termo)
-                || l._unit_name.toLowerCase().includes(termo)
-                || l._tower_name.toLowerCase().includes(termo)
-                || (l._client_document || '').toLowerCase().includes(termo)
-                || ROLE_LABELS[l.role].toLowerCase().includes(termo))
-            : linhas;
+            ? todas.filter(l =>
+                (l.ocupacao?._client_name || '').toLowerCase().includes(termo)
+                || l.unitName.toLowerCase().includes(termo)
+                || l.towerName.toLowerCase().includes(termo)
+                || (l.ocupacao?._client_document || '').toLowerCase().includes(termo)
+                || (l.ocupacao ? ROLE_LABELS[l.ocupacao.role].toLowerCase().includes(termo) : false))
+            : todas;
 
-        const valor = (l: UnitOccupancyRow, col: string): string | number => {
+        const valor = (l: LinhaExibida, col: string): string | number => {
             switch (col) {
-                case 'unidade': return l._unit_name;
-                case 'torre': return l._tower_name;
-                case 'pessoa': return l._client_name;
-                case 'documento': return l._client_document || '';
-                case 'papel': return ROLE_LABELS[l.role];
-                case 'entrada': return l.started_at;
-                case 'saida': return l.ended_at || '';
-                case 'fracao': return l._fracao_ideal ?? -1;
+                case 'unidade': return l.unitName;
+                case 'torre': return l.towerName;
+                case 'pessoa': return l.ocupacao?._client_name || '';
+                case 'documento': return l.ocupacao?._client_document || '';
+                case 'papel': return l.ocupacao ? ROLE_LABELS[l.ocupacao.role] : '';
+                case 'entrada': return l.ocupacao?.started_at || '';
+                case 'saida': return l.ocupacao?.ended_at || '';
+                case 'fracao': return l.fracao ?? -1;
                 default: return '';
             }
         };
@@ -191,9 +258,9 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 return tableColumns.sortDirection === 'desc' ? -cmp : cmp;
             }
             // Sem coluna escolhida: agrupa por unidade, que é como se lê um espelho.
-            return a._unit_name.localeCompare(b._unit_name, 'pt-BR', { numeric: true });
+            return a.unitName.localeCompare(b.unitName, 'pt-BR', { numeric: true });
         });
-    }, [linhas, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [linhas, unidades, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const kpis = React.useMemo(() => {
         const vigentes = linhas.filter(l => !l.ended_at);
@@ -453,12 +520,15 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 ) : filtradas.length === 0 ? (
                     <div className="text-center py-12">
                         <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        {/* A tabela agora parte das UNIDADES, então vazia só quando o
+                            empreendimento não tem nenhuma — "sem ocupação" deixou de
+                            ser tela em branco e virou linha rotulada. */}
                         <h3 className="text-lg font-bold text-gray-900 mb-2">
-                            {linhas.length === 0 ? 'Nenhuma ocupação cadastrada' : 'Nenhum resultado'}
+                            {unidades.length === 0 ? 'Nenhuma unidade cadastrada' : 'Nenhum resultado'}
                         </h3>
-                        <p className="text-sm text-gray-500">
-                            {linhas.length === 0
-                                ? 'Registre quem é dono, quem mora e quem paga cada unidade.'
+                        <p className="text-sm text-gray-500 max-w-md mx-auto">
+                            {unidades.length === 0
+                                ? 'As unidades vêm do Empreendimento, na aba Torres e Unidades. Sem elas não há o que ocupar.'
                                 : 'Tente ajustar a busca.'}
                         </p>
                     </div>
@@ -513,31 +583,39 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtradas.map(l => (
-                                    <tr key={l.id} className={`hover:bg-blue-50/50 transition-colors group ${l.ended_at ? 'opacity-60' : ''}`}>
+                                {filtradas.map(l => {
+                                    const o = l.ocupacao;
+                                    return (
+                                    <tr key={l.key} className={`hover:bg-blue-50/50 transition-colors group ${o?.ended_at ? 'opacity-60' : ''}`}>
                                         {visiveis.includes('unidade') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l._unit_name}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l.unitName}</td>
                                         )}
                                         {visiveis.includes('torre') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{l._tower_name}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{l.towerName}</td>
                                         )}
                                         {visiveis.includes('pessoa') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{l._client_name}</td>
+                                            /* Unidade sem ocupante aparece rotulada, não em branco:
+                                               vazio sem rótulo lê como dado faltando por descuido. */
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                {o ? o._client_name : <span className="text-gray-400">Sem ocupante</span>}
+                                            </td>
                                         )}
                                         {visiveis.includes('documento') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{l._client_document || '—'}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{o?._client_document || '—'}</td>
                                         )}
                                         {visiveis.includes('papel') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <span className={`text-sm font-normal ${ROLE_TEXT_COLOR[l.role]}`}>{ROLE_LABELS[l.role]}</span>
+                                                {o
+                                                    ? <span className={`text-sm font-normal ${ROLE_TEXT_COLOR[o.role]}`}>{ROLE_LABELS[o.role]}</span>
+                                                    : <span className="text-sm font-normal text-gray-400">—</span>}
                                             </td>
                                         )}
                                         {visiveis.includes('entrada') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{formatarData(l.started_at)}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{o ? formatarData(o.started_at) : '—'}</td>
                                         )}
                                         {visiveis.includes('saida') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {l.ended_at ? formatarData(l.ended_at) : 'Vigente'}
+                                                {!o ? '—' : o.ended_at ? formatarData(o.ended_at) : 'Vigente'}
                                             </td>
                                         )}
                                         {visiveis.includes('fracao') && (
@@ -545,31 +623,34 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                                prédio entregue vem da CONVENÇÃO, não do motor de áreas. Por isso o vazio é
                                                rotulado, não deixado em branco como se fosse dado faltando por descuido. */
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {l._fracao_ideal != null
-                                                    ? `${(l._fracao_ideal * 100).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}%`
+                                                {l.fracao != null
+                                                    ? `${(l.fracao * 100).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}%`
                                                     : <span className="text-gray-400">Não informada</span>}
                                             </td>
                                         )}
                                         {visiveis.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5">
-                                                    {!l.ended_at && (
+                                                    {o && !o.ended_at && (
                                                         <ActionIconButton
                                                             kind="edit"
                                                             title="Encerrar ocupação"
                                                             icon={<DoorOpen className="w-4 h-4" />}
-                                                            onClick={() => encerrar(l)}
+                                                            onClick={() => encerrar(o)}
                                                         />
                                                     )}
-                                                    <InlineDisclosureMenu
-                                                        showDelete
-                                                        onDelete={() => excluir(l)}
-                                                    />
+                                                    {o && (
+                                                        <InlineDisclosureMenu
+                                                            showDelete
+                                                            onDelete={() => excluir(o)}
+                                                        />
+                                                    )}
                                                 </div>
                                             </td>
                                         )}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

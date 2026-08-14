@@ -321,6 +321,10 @@ Duas divergências do guia corrigidas na mesma passagem, ambas apontadas pela ve
 > 2. **Reserva não é posse.** Só `CONTRATO`/`ASSINATURA`/`COMPLETED` geram ocupação; `RESERVA`/`IN_NEGOTIATION`/`PENDING`/`WAITING_PAYMENT` aparecem como "negociação em andamento", visíveis mas sem criar dono errado.
 > 3. **O responsável financeiro deixou de depender da ordem de importação** — é decidido numa passagem só: locatário quando existe, senão proprietário. A "ordem decide" que eu tinha documentado como desejável era, na verdade, fragilidade.
 >
+> **A TABELA da aba também virou ancorada na unidade (14/08/2026).** Pedido do usuário: *"quando importar um impreendimento, importar também as unidades, indepedente se estão locadas ou vendidas. Sempre carregar as unidades"*. A aba listava **ocupações**, então unidade sem ninguém era invisível — e "nenhuma ocupação" e "nenhuma unidade" davam a mesma tela em branco. Agora: unidade sem ocupante vira linha própria marcada "Sem ocupante"; unidade com proprietário e inquilino vira duas linhas; a fração ideal passa a vir da **unidade** (que é onde o dado mora) e não da ocupação; e ocupação órfã — cuja unidade saiu da lista — aparece mesmo assim, em vez de sumir em silêncio.
+>
+> **Não há importação de unidades, e não vai haver:** o condomínio É o empreendimento, então as unidades já são dele. Carregar é leitura; copiar criaria duas listas do mesmo prédio divergindo com o tempo.
+>
 > **Duas reversões do que havia sido combinado**, ambas decorrentes da inversão: o **trilho de eixo** (Locações/Vendas) deixou de existir — os dois são resolvidos na mesma prévia; e **contratos encerrados não entram mais como histórico** — a visão por unidade é um retrato do agora. Restaurar o histórico seria uma segunda passagem sobre contratos encerrados, alimentando `ended_at`.
 
 **A corrente já existe inteira** — só nunca foi percorrida até o fim. `EspelhoLocacoesTab.tsx` para no imóvel (status e preço de `commercial_properties`) e **nunca alcança o locatário**:

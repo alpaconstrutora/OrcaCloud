@@ -255,6 +255,12 @@ Ressalva registrada e vencida pelo usuário: Empreendimentos mora em *Incorpora�
 Agora: botão **"Importar empreendimento"** abre um painel com os disponíveis (estágio, cidade, tipo) e você marca quais viram condomínio — o de serviço é só não marcar. **`EM_OBRAS` entra na lista de propósito**: dá para preparar o condomínio antes da entrega, que é o handoff da F2. **A ação é reversível** ("Tirar de Condomínios" devolve para ENTREGUE) e não destrói nada — não há cópia de torres nem unidades, é o mesmo registro, então ocupações e plano de manutenção continuam gravados.
 
 Duas divergências do guia corrigidas na mesma passagem, ambas apontadas pela verificação estrutural: o botão "Abrir" duplicava o clique na linha (§9.1) e havia duas ações em texto azul lado a lado (§9.2). A coluna "Situação" foi removida — com a lista contendo só condomínios, todo valor era idêntico.
+
+**Dois defeitos encontrados usando o painel com dado real (14/08/2026):**
+
+1. **`ENCERRADO` estava excluído dos disponíveis, e era erro.** Encerrado é a **incorporação**, não o prédio — é justamente quando o empreendimento deixa de ser empreendimento e passa a ser só condomínio, ou seja, o candidato mais maduro. O filtro levou o usuário a **mudar o status de um registro real** (`007 - Bella Vista`) para contornar a tela. Filtro que faz alguém adulterar dado é pior que filtro nenhum. Agora o único critério é "ainda não é condomínio".
+
+2. **O painel não dizia que recorta por organização.** Dos 15 empreendimentos, 6 não apareciam por serem de outras orgs (4 em *Altair Pereira da Rosa*, 2 em *Garden Cambuhy SPE*) — e nada na tela explicava. **O recorte está certo** e não foi alterado: é a REGRA #5, e a lista de condomínios filtra igual; importar um empreendimento de outra org o tornaria condomínio *na org dele*, sumindo da lista atual — pior que o sintoma. O que faltava era **contar**: o painel agora avisa qual organização está mostrando e que há outras em "Todas as organizações", e em modo "Todas" mostra a organização de cada linha, porque o condomínio nasce na org do empreendimento.
 | `components/condominio/CondominioDetail.tsx` | Abas Ficha / Ocupações / Manutenção. Ficha grava CNPJ do condomínio, razão social, instalação e mandato do síndico, com aviso de mandato vencido | ✅ |
 | Ocupações sai de Empreendimentos | `git mv` para `components/condominio/`; a aba foi removida de `EmpreendimentoDetail` com comentário explicando por quê | ✅ |
 | Rota e menu | `case 'condominios'` em `AppRouter` (sem props — lê `useOrgContext`), item em Comercial no `Layout` | ✅ |

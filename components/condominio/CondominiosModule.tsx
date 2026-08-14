@@ -22,6 +22,7 @@ import { useConfirm } from '../ui/confirm';
 import CondominioDetail from './CondominioDetail';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { useOrgContext } from '../../hooks/useOrgContext';
+import { useStore } from '../../store/useStore';
 import type { Empreendimento } from '../../types/empreendimento';
 
 /** Rótulo do estágio do empreendimento no painel de importação. */
@@ -46,7 +47,14 @@ const CondominiosModule: React.FC = () => {
     const confirm = useConfirm();
     // A org vem do seletor do topo via hook, nunca de prop — e `null` ("Todas")
     // NÃO bloqueia o carregamento (CLAUDE.md regra #5).
-    const { orgId } = useOrgContext();
+    const { orgId, isAllOrgs } = useOrgContext();
+    // Só para NOMEAR a organização no painel de importação — a autoridade sobre
+    // o recorte continua sendo o seletor do topo (CLAUDE.md regra #5).
+    const organizations = useStore(state => state.organizations);
+    const orgNome = React.useMemo(
+        () => organizations.find((o: any) => o.id === orgId)?.name,
+        [organizations, orgId],
+    );
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('condominios:search', '');
     const tableColumns = useTableColumns(COLUMNS, 'condominiosColumns');
@@ -83,13 +91,21 @@ const CondominiosModule: React.FC = () => {
     /** A tabela: só o que JÁ é condomínio. */
     const emOperacao = React.useMemo(() => todos.filter(e => e.status === 'EM_OPERACAO'), [todos]);
     /**
-     * O painel de importação: tudo que ainda não é condomínio e não está
-     * encerrado. Inclui empreendimentos EM_OBRAS de propósito — dá para
-     * preparar o condomínio antes da entrega; e exclui os que nunca terão
-     * (serviço, por exemplo) só por você não marcá-los.
+     * O painel de importação: tudo que ainda não é condomínio. Só isso.
+     *
+     * ENCERRADO estava excluído e era ERRO — encerrado é a INCORPORAÇÃO, não o
+     * prédio. É justamente quando o empreendimento deixa de ser empreendimento
+     * e passa a ser só condomínio, ou seja, o candidato mais maduro de todos.
+     * O filtro obrigou o usuário a mudar o status de registros reais para
+     * contornar a tela (14/08/2026): filtro que faz alguém adulterar dado é
+     * pior que filtro nenhum.
+     *
+     * EM_OBRAS entra de propósito — dá para preparar o condomínio antes da
+     * entrega. Quem nunca terá condomínio (serviço, por exemplo) fica de fora
+     * simplesmente por não ser marcado.
      */
     const disponiveis = React.useMemo(
-        () => todos.filter(e => e.status !== 'EM_OPERACAO' && e.status !== 'ENCERRADO'),
+        () => todos.filter(e => e.status !== 'EM_OPERACAO'),
         [todos],
     );
 
@@ -364,6 +380,17 @@ const CondominiosModule: React.FC = () => {
                                 Empreendimento de serviço, ou qualquer outro que não tenha condomínio,
                                 é só não marcar — ele continua onde está.
                             </p>
+
+                            {/* O painel recorta pelo seletor do topo, como o resto do app. Sem
+                                dizer isso, empreendimento de outra organização parece não existir
+                                — e o usuário vai procurar defeito onde não há (14/08/2026). */}
+                            {!isAllOrgs && (
+                                <p className="text-xs text-amber-600 mb-3">
+                                    Mostrando só os de <span className="font-medium">{orgNome || 'organização selecionada'}</span>.
+                                    Empreendimentos de outras organizações (SPEs, por exemplo) aparecem
+                                    ao trocar o seletor do topo para “Todas as organizações”.
+                                </p>
+                            )}
                             {disponiveis.map(e => (
                                 <label
                                     key={e.id}
@@ -386,6 +413,12 @@ const CondominiosModule: React.FC = () => {
                                             {STATUS_LABEL[e.status] || e.status}
                                             {e.endereco_city ? ` · ${e.endereco_city}` : ''}
                                             {e.tipo ? ` · ${e.tipo}` : ''}
+                                            {/* Em "Todas as organizações" a origem importa: o
+                                                condomínio nasce na org do empreendimento, não na
+                                                que está selecionada. */}
+                                            {isAllOrgs && organizations.find((o: any) => o.id === e.organization_id)?.name
+                                                ? ` · ${organizations.find((o: any) => o.id === e.organization_id)?.name}`
+                                                : ''}
                                         </div>
                                     </div>
                                 </label>

@@ -12,6 +12,7 @@ import SinapiRebaseModal from './SinapiRebaseModal';
 import { WBSImportModal } from './WBSImportModal';
 import { WBSTemplateModal } from './WBSTemplateModal';
 import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
 import * as XLSX from 'xlsx';
 
@@ -127,17 +128,22 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [expandedPhases, setExpandedPhases] = React.useState<string[]>([]);
   const [expandedSubPhases, setExpandedSubPhases] = React.useState<string[]>([]);
   const [addingTo, setAddingTo] = React.useState<AddingTarget | null>(null);
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [searchCode, setSearchCode] = React.useState('');
-  const [searchGroupFilter, setSearchGroupFilter] = React.useState('');
-  const [searchType, setSearchType] = React.useState('');
+  // §3 — preferência de busca (o que o usuário digita/alterna) sobrevive a navegação/reload.
+  // searchLocation/searchCharges/searchReference/searchDatabase ficam de fora de propósito:
+  // são o CONTEXTO do orçamento (região/desoneração/competência/base SINAPI), derivado de
+  // `settings` — persistir em localStorage vazaria o valor de um orçamento para o próximo
+  // que o usuário abrir.
+  const [searchTerm, setSearchTerm] = usePersistedState('budgetEditor:searchTerm', '');
+  const [searchCode, setSearchCode] = usePersistedState('budgetEditor:searchCode', '');
+  const [searchGroupFilter, setSearchGroupFilter] = usePersistedState('budgetEditor:searchGroupFilter', '');
+  const [searchType, setSearchType] = usePersistedState('budgetEditor:searchType', '');
   const [searchLocation, setSearchLocation] = React.useState(settings.location || 'MG');
   const [searchCharges, setSearchCharges] = React.useState(settings.socialChargesMode || 'SEM_DESONERACAO');
   const [searchReference, setSearchReference] = React.useState(settings.referenceMonth || '12/2025');
   const [references, setReferences] = React.useState<SinapiReference[]>([]);
   const [searchDatabase, setSearchDatabase] = React.useState(settings.database || 'SINAPI');
-  const [searchScope, setSearchScope] = React.useState<'description' | 'category' | 'both'>('description');
-  const [searchMode, setSearchMode] = React.useState<'exact' | 'all-words'>('all-words');
+  const [searchScope, setSearchScope] = usePersistedState<'description' | 'category' | 'both'>('budgetEditor:searchScope', 'description');
+  const [searchMode, setSearchMode] = usePersistedState<'exact' | 'all-words'>('budgetEditor:searchMode', 'all-words');
   const [searchResults, setSearchResults] = React.useState<SinapiItem[]>([]);
   const [selectedSearchItems, setSelectedSearchItems] = React.useState<SinapiItem[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
@@ -162,7 +168,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [editingVersionDescription, setEditingVersionDescription] = React.useState('');
   const [compareVersion, setCompareVersion] = React.useState<BudgetVersion | null>(null);
   const [isCreatingItem, setIsCreatingItem] = React.useState(false);
-  const [showOnlyFavorites, setShowOnlyFavorites] = React.useState(false);
+  const [showOnlyFavorites, setShowOnlyFavorites] = usePersistedState('budgetEditor:showOnlyFavorites', false);
   const [isParametricModalOpen, setIsParametricModalOpen] = React.useState(false);
   const [parametricType, setParametricType] = React.useState<'FINANCIAL' | 'QUANTITATIVE'>('FINANCIAL');
   const [parametricPreview, setParametricPreview] = React.useState<{ totalValue: number; itemsCount: number; mainMaterials?: Array<{ desc: string; qty: number; unit: string }> } | null>(null);
@@ -440,7 +446,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   };
   const handleCreateItem = async () => {
     if (!newItem.description || !newItem.unit) {
-      alert("Por favor, preencha a descrição e a unidade.");
+      setNotification({ message: 'Por favor, preencha a descrição e a unidade.', type: 'error' });
+      setTimeout(() => setNotification(null), 4000);
       return;
     }
 
@@ -463,13 +470,15 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       setSearchCode(savedItem.code);
     } catch (error) {
       console.error('[BudgetEditor] Falha ao criar item:', error);
-      alert("Erro ao criar item.");
+      setNotification({ message: 'Erro ao criar item.', type: 'error' });
+      setTimeout(() => setNotification(null), 4000);
     }
   };
 
   const handleSaveVersion = async () => {
     if (!versionDescription.trim()) {
-      alert("Por favor, insira uma descrição para a versão.");
+      setNotification({ message: 'Por favor, insira uma descrição para a versão.', type: 'error' });
+      setTimeout(() => setNotification(null), 4000);
       return;
     }
 
@@ -899,7 +908,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     // Actually, renumberWBSAndSync depends on current budget state mapping which might be broken.
     // So better just update settings.wbs and let the user manage items.
 
-    alert('EAP importada com sucesso! A estrutura do projeto foi atualizada.');
+    setNotification({ message: 'EAP importada com sucesso! A estrutura do projeto foi atualizada.', type: 'success' });
+    setTimeout(() => setNotification(null), 4000);
   };
 
   const handleExportWBS = () => {
@@ -932,7 +942,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const handleLoadTemplate = (wbs: WBSGroup[]) => {
     onUpdateSettings({ ...settings, wbs });
     // renumberWBSAndSync(wbs); // Optional
-    alert('Modelo de EAP carregado com sucesso!');
+    setNotification({ message: 'Modelo de EAP carregado com sucesso!', type: 'success' });
+    setTimeout(() => setNotification(null), 4000);
   };
 
   const handleClearWBS = async () => {
@@ -954,9 +965,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     try {
       const { contractService } = await import('../services/contractService');
       const contract = await contractService.generateFromBudget(pid, oid, budget);
-      alert(`Contrato ${contract.number} gerado com sucesso! Acesse em Gestão de Vendas → Contratos de Serviço.`);
+      setNotification({ message: `Contrato ${contract.number} gerado com sucesso! Acesse em Gestão de Vendas → Contratos de Serviço.`, type: 'success' });
+      setTimeout(() => setNotification(null), 5000);
     } catch (e) {
-      alert(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`);
+      setNotification({ message: `Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, type: 'error' });
+      setTimeout(() => setNotification(null), 4000);
     } finally {
       setGeneratingContract(false);
     }
@@ -1469,7 +1482,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       : parametricService.generateQuantitativeBudget(settings);
 
     if (newItems.length === 0) {
-      alert("Não foi possível gerar o orçamento. Verifique se a área e o padrão estão definidos correctly.");
+      setNotification({ message: 'Não foi possível gerar o orçamento. Verifique se a área e o padrão estão definidos corretamente.', type: 'error' });
+      setTimeout(() => setNotification(null), 4000);
       return;
     }
 
@@ -1645,7 +1659,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     } catch (error: unknown) {
       console.error("Save error:", error);
       const msg = error instanceof Error ? error.message : JSON.stringify(error);
-      alert(`Erro ao salvar item: ${msg}`);
+      setNotification({ message: `Erro ao salvar item: ${msg}`, type: 'error' });
+            setTimeout(() => setNotification(null), 4000);
     }
   };
 
@@ -1659,7 +1674,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         setTimeout(() => setNotification(null), 3000);
       } catch (error) {
         console.error('[BudgetEditor] Falha ao excluir item:', error);
-        alert('Erro ao excluir item.');
+        setNotification({ message: 'Erro ao excluir item.', type: 'error' });
+        setTimeout(() => setNotification(null), 4000);
       }
     }
   };
@@ -1824,14 +1840,15 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         return isValid;
       });
       onUpdateBudget(validItems);
-      alert(`${orphanedItems.length} itens removidos com sucesso.`);
+      setNotification({ message: `${orphanedItems.length} itens removidos com sucesso.`, type: 'success' });
+      setTimeout(() => setNotification(null), 4000);
     }
   };
 
   return (
     <div className="h-full flex flex-col space-y-4 relative">
       {orphanedItems.length > 0 && (
-        <div className="mx-0 p-4 bg-amber-50 border border-amber-200 rounded-lg animate-in slide-in-from-top-2">
+        <div className="mx-0 p-4 bg-amber-50 border border-amber-200 rounded-[10px] animate-in slide-in-from-top-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="bg-amber-100 p-2 rounded-full text-amber-600">
@@ -1868,7 +1885,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         </div>
       )}
       {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
-        <div className="mx-0 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mx-0 p-4 bg-blue-50 border border-blue-200 rounded-[10px]">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="bg-blue-100 p-2 rounded-full text-blue-600">
@@ -2096,7 +2113,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           <div className="relative">
             <button
               onClick={() => setManageEapMenuOpen(!manageEapMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-button font-bold border ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-[6px] transition-all text-button font-bold border ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               title="Gerenciar estrutura da EAP"
             >
               <Layers className="w-3.5 h-3.5" />
@@ -2107,7 +2124,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             {manageEapMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setManageEapMenuOpen(false)}></div>
-                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   <button
                     onClick={() => { setIsTemplateModalOpen(true); setManageEapMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
@@ -2139,7 +2156,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
       {
         showHistory && (
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-blue-100 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="bg-white p-4 rounded-[10px] shadow-sm border border-blue-100 animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold text-blue-900 flex items-center gap-2">
                 <History className="w-4 h-4" />
@@ -2155,12 +2172,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   const isActive = v.id === settings.activeVersionId;
                   const isEditing = editingVersionId === v.id;
                   return (
-                    <div key={v.id} className={`border rounded-lg p-3 transition-all group relative ${isActive ? 'border-amber-300 bg-amber-50/40' : 'border-gray-100 hover:border-blue-300 hover:bg-blue-50/30'}`}>
+                    <div key={v.id} className={`border rounded-[10px] p-3 transition-all group relative ${isActive ? 'border-amber-300 bg-amber-50/40' : 'border-gray-100 hover:border-blue-300 hover:bg-blue-50/30'}`}>
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-1.5">
-                          <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">Item {v.item}</span>
+                          <span className="text-sm font-normal text-blue-700">Item {v.item}</span>
                           {isActive && (
-                            <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-sm font-normal text-amber-700">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                               Ativa
                             </span>
@@ -2178,15 +2195,15 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             value={editingVersionDescription}
                             onChange={e => setEditingVersionDescription(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') handleRenameVersion(v.id); if (e.key === 'Escape') setEditingVersionId(null); }}
-                            className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            className="flex-1 text-sm border border-blue-300 rounded-[6px] px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
                           />
                           <Button onClick={() => handleRenameVersion(v.id)} size="sm" className="text-button">OK</Button>
-                          <button onClick={() => setEditingVersionId(null)} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-button hover:bg-gray-200"><X className="w-3 h-3" /></button>
+                          <button onClick={() => setEditingVersionId(null)} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-[6px] text-button hover:bg-gray-200"><X className="w-3 h-3" /></button>
                         </div>
                       ) : (
                         <div className="flex items-start justify-between gap-1 mb-3">
                           <p className="text-sm text-gray-700 font-medium line-clamp-2 flex-1">{v.description}</p>
-                          <button onClick={() => handleStartEditVersion(v)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded" title="Renomear versão">
+                          <button onClick={() => handleStartEditVersion(v)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded-[6px]" title="Renomear versão">
                             <Pencil className="w-3 h-3 text-gray-400" />
                           </button>
                         </div>
@@ -2195,7 +2212,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         {!isActive && (
                           <button
                             onClick={() => onUpdateSettings({ ...settings, activeVersionId: v.id })}
-                            className="flex-none px-2.5 py-1.5 border border-amber-200 text-amber-600 bg-amber-50 rounded text-button font-bold hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-colors"
+                            className="flex-none px-2.5 py-1.5 border border-amber-200 text-amber-600 bg-amber-50 rounded-[6px] text-button font-bold hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-colors"
                             title="Marcar como versão ativa sem restaurar o orçamento"
                           >
                             Marcar Ativa
@@ -2203,14 +2220,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         )}
                         <button
                           onClick={() => setCompareVersion(v)}
-                          className="flex-none px-2.5 py-1.5 border border-slate-200 text-slate-600 bg-white rounded text-button font-bold hover:bg-slate-700 hover:text-white hover:border-slate-700 transition-colors"
+                          className="flex-none px-2.5 py-1.5 border border-slate-200 text-slate-600 bg-white rounded-[6px] text-button font-bold hover:bg-slate-700 hover:text-white hover:border-slate-700 transition-colors"
                           title="Comparar esta versão com o orçamento atual"
                         >
                           Comparar
                         </button>
                         <button
                           onClick={() => handleLoadVersion(v)}
-                          className={`flex-1 py-1.5 border rounded text-form-input font-bold transition-colors ${isActive ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-600 hover:text-white hover:border-amber-600' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white'}`}
+                          className={`flex-1 py-1.5 border rounded-[6px] text-form-input font-bold transition-colors ${isActive ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-600 hover:text-white hover:border-amber-600' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white'}`}
                         >
                           {isActive ? 'Recarregar Versão' : 'Restaurar Versão'}
                         </button>
@@ -2230,7 +2247,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           const fmtMoney = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
           return (
             <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+              <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
                   <div>
                     <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
@@ -2254,7 +2271,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     ['Alterados', String(diff.changed), 'text-amber-700'],
                     ['Adic./Rem.', `${diff.added} / ${diff.removed}`, 'text-slate-700'],
                   ].map(([label, value, color]) => (
-                    <div key={label} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
+                    <div key={label} className="border border-gray-100 rounded-[10px] p-3 bg-gray-50/50">
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
                       <p className={`text-lg font-black mt-1 ${color}`}>{value}</p>
                     </div>
@@ -2270,35 +2287,35 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <table className="w-full text-left text-sm">
                       <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
                         <tr>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Status</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Código</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descrição</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Qtd. base</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Qtd. atual</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Total base</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Total atual</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Variação</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Campos</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Status</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Código</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Descrição</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Qtd. base</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Qtd. atual</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Total base</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Total atual</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Variação</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Campos</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {diff.rows.map(row => (
                           <tr key={row.id} className="hover:bg-blue-50/30">
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${row.status === 'Adicionado' ? 'bg-emerald-50 text-emerald-700' : row.status === 'Removido' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                              <span className={`text-sm font-normal ${row.status === 'Adicionado' ? 'text-emerald-700' : row.status === 'Removido' ? 'text-red-700' : 'text-amber-700'}`}>
                                 {row.status}
                               </span>
                             </td>
-                            <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.code}</td>
-                            <td className="px-4 py-3 text-gray-700 max-w-md">
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-600">{row.code}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-gray-700 max-w-md">
                               <div className="line-clamp-2" title={row.description}>{row.description}</div>
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-gray-500">{row.beforeQty.toLocaleString('pt-BR')}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-gray-900 font-bold">{row.afterQty.toLocaleString('pt-BR')}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-gray-500">{fmtMoney(row.beforeTotal)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-gray-900 font-bold">{fmtMoney(row.afterTotal)}</td>
-                            <td className={`px-4 py-3 text-right tabular-nums font-black ${row.delta >= 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmtMoney(row.delta)}</td>
-                            <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">{row.fields.join(', ')}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm text-gray-500">{row.beforeQty.toLocaleString('pt-BR')}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm text-gray-900">{row.afterQty.toLocaleString('pt-BR')}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-500">{fmtMoney(row.beforeTotal)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{fmtMoney(row.afterTotal)}</td>
+                            <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium ${row.delta >= 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmtMoney(row.delta)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-500 max-w-xs">{row.fields.join(', ')}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2330,7 +2347,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
           return (
             <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+              <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
                   <div>
                     <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
@@ -2349,7 +2366,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <button
                       key={filter.id}
                       onClick={() => setTechnicalDashboardFilter(filter.id)}
-                      className={`text-left border rounded-lg p-3 transition-all ${technicalDashboardFilter === filter.id ? 'border-rose-300 bg-rose-50 shadow-sm' : 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'}`}
+                      className={`text-left border rounded-[10px] p-3 transition-all ${technicalDashboardFilter === filter.id ? 'border-rose-300 bg-rose-50 shadow-sm' : 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'}`}
                     >
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{filter.label}</p>
                       <p className={`text-lg font-black mt-1 ${filter.tone}`}>{filter.value}</p>
@@ -2358,9 +2375,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 </div>
 
                 {budgetControlRows.length === 0 && (
-                  <div className="mx-6 mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 flex items-center justify-between gap-3">
+                  <div className="mx-6 mt-4 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 flex items-center justify-between gap-3">
                     <span>As divergências financeiras aparecem depois de carregar o controle orçado x realizado.</span>
-                    <button onClick={() => { setIsTechnicalDashboardOpen(false); handleOpenBudgetControl(); }} className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-bold hover:bg-blue-700">Carregar controle</button>
+                    <button onClick={() => { setIsTechnicalDashboardOpen(false); handleOpenBudgetControl(); }} className="px-3 py-1.5 rounded-[6px] bg-blue-600 text-white text-xs font-bold hover:bg-blue-700">Carregar controle</button>
                   </div>
                 )}
 
@@ -2373,35 +2390,35 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <table className="w-full text-left text-sm">
                       <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
                         <tr>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Código</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descrição</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Classe</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Status</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Responsável</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Pendências</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Ação</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Código</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Descrição</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Classe</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Status</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Responsável</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Pendências</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Ação</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {filteredRows.map(row => (
                           <tr key={row.item.id} className="hover:bg-rose-50/30">
-                            <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.code}</td>
-                            <td className="px-4 py-3 text-gray-700 max-w-md"><div className="line-clamp-2" title={row.description}>{row.description}</div></td>
-                            <td className="px-4 py-3 font-bold text-gray-700">{row.precisionClass}</td>
-                            <td className="px-4 py-3 text-gray-600">{row.status}</td>
-                            <td className="px-4 py-3 text-gray-600">{row.responsible}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap gap-1">
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-600">{row.code}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-gray-700 max-w-md"><div className="line-clamp-2" title={row.description}>{row.description}</div></td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-700">{row.precisionClass}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-gray-600">{row.status}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-gray-600">{row.responsible}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                              <div className="flex flex-wrap gap-2">
                                 {row.issues.map(issue => (
-                                  <span key={issue} className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">{issue}</span>
+                                  <span key={issue} className="text-sm font-normal text-amber-700">{issue}</span>
                                 ))}
                                 {row.financialAlerts.map(alert => (
-                                  <span key={alert} className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-100">{alert}</span>
+                                  <span key={alert} className="text-sm font-normal text-red-700">{alert}</span>
                                 ))}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right">
-                              <button onClick={() => handleOpenTechnicalItem(row.item)} className="px-3 py-1.5 rounded-md bg-gray-900 text-white text-xs font-bold hover:bg-gray-800">Abrir</button>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                              <button onClick={() => handleOpenTechnicalItem(row.item)} className="px-3 py-1.5 rounded-[6px] bg-gray-900 text-white text-xs font-bold hover:bg-gray-800">Abrir</button>
                             </td>
                           </tr>
                         ))}
@@ -2429,7 +2446,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
           return (
             <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+              <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
                   <div>
                     <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
@@ -2452,7 +2469,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     ['Pago', fmtMoney(totals.paid), 'text-slate-700'],
                     ['Alertas', String(alertedRows), alertedRows > 0 ? 'text-amber-700' : 'text-emerald-700'],
                   ].map(([label, value, color]) => (
-                    <div key={label} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
+                    <div key={label} className="border border-gray-100 rounded-[10px] p-3 bg-gray-50/50">
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
                       <p className={`text-lg font-black mt-1 ${color}`}>{value}</p>
                     </div>
@@ -2460,7 +2477,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 </div>
 
                 {budgetControlError && (
-                  <div className="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                  <div className="mx-6 mt-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
                     {budgetControlError}
                   </div>
                 )}
@@ -2478,38 +2495,38 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <table className="w-full text-left text-sm">
                       <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
                         <tr>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Código</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descrição</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Orçado</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Contratado</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Medido</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Aprovado</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Pago</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Saldo</th>
-                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Alertas</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Código</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Descrição</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Orçado</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Contratado</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Medido</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Aprovado</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Pago</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500 text-right">Saldo</th>
+                          <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Alertas</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {budgetControlRows.map(row => (
                           <tr key={row.id} className="hover:bg-amber-50/30">
-                            <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.code}</td>
-                            <td className="px-4 py-3 text-gray-700 max-w-md">
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-600">{row.code}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-gray-700 max-w-md">
                               <div className="line-clamp-2" title={row.description}>{row.description}</div>
                               {row.unit && <div className="text-xs text-gray-400 mt-0.5">Unid.: {row.unit}</div>}
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-gray-700 font-bold">{fmtMoney(row.budgeted)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-blue-700 font-bold">{fmtMoney(row.contracted)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-indigo-700 font-bold">{fmtMoney(row.measured)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-emerald-700 font-bold">{fmtMoney(row.approved)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-slate-700 font-bold">{fmtMoney(row.paid)}</td>
-                            <td className={`px-4 py-3 text-right tabular-nums font-black ${row.balance < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmtMoney(row.balance)}</td>
-                            <td className="px-4 py-3">
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{fmtMoney(row.budgeted)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-blue-700">{fmtMoney(row.contracted)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-indigo-700">{fmtMoney(row.measured)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-emerald-700">{fmtMoney(row.approved)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-slate-700">{fmtMoney(row.paid)}</td>
+                            <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium ${row.balance < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmtMoney(row.balance)}</td>
+                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                               {row.alerts.length === 0 ? (
-                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">OK</span>
+                                <span className="text-sm font-normal text-emerald-700">OK</span>
                               ) : (
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-wrap gap-2">
                                   {row.alerts.map(alert => (
-                                    <span key={alert} className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">{alert}</span>
+                                    <span key={alert} className="text-sm font-normal text-amber-700">{alert}</span>
                                   ))}
                                 </div>
                               )}
@@ -2524,7 +2541,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </div>
           );
         })()
-      }      <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+      }      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         <div className="flex flex-col">
           <div className={`grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_2.4fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 pt-2`}>
             {showNatureBreakdown && (
@@ -2564,7 +2581,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             const { name: groupNameDisplay } = splitName(group.name);
 
             return (
-              <div key={group.id} className="border-b-4 border-gray-100 last:border-0 mb-4 bg-white shadow-sm rounded-lg overflow-hidden">
+              <div key={group.id} className="border-b-4 border-gray-100 last:border-0 mb-4 bg-white shadow-sm rounded-[10px] overflow-hidden">
                 {/* GROUP HEADER */}
                 <div className={`bg-gray-800 hover:bg-gray-700 px-4 py-3 grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 items-center group relative transition-colors text-white`}>
                   <div className="flex items-center gap-1 cursor-pointer font-bold text-sm" onClick={() => toggleGroup(group.id)}>
@@ -2788,7 +2805,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         wbsModal.isOpen && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold text-gray-800">
                   {wbsModal.mode === 'CREATE' ? 'Nova ' : 'Editar '}
@@ -2799,10 +2816,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome {wbsModal.type === 'PHASE' ? 'da Etapa' : 'da Subetapa'}</label>
-                  <input type="text" autoFocus placeholder={wbsModal.type === 'PHASE' ? "Ex: Instalações Elétricas" : "Ex: Tubulações"} className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={wbsModal.value} onChange={(e) => setWbsModal({ ...wbsModal, value: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleConfirmWBSAction()} />
+                  <input type="text" autoFocus placeholder={wbsModal.type === 'PHASE' ? "Ex: Instalações Elétricas" : "Ex: Tubulações"} className="w-full rounded-[6px] border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={wbsModal.value} onChange={(e) => setWbsModal({ ...wbsModal, value: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleConfirmWBSAction()} />
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <button onClick={() => setWbsModal({ ...wbsModal, isOpen: false })} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancelar</button>
+                  <button onClick={() => setWbsModal({ ...wbsModal, isOpen: false })} className="flex-1 px-4 py-2 border border-gray-300 rounded-[6px] text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancelar</button>
                   <Button onClick={handleConfirmWBSAction} className="flex-1 font-medium">{wbsModal.mode === 'CREATE' ? 'Inserir' : 'Salvar'}</Button>
                 </div>
               </div>
@@ -2814,10 +2831,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         isSaveDbModalOpen && itemToSave && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-gray-200 overflow-hidden">
               <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-900">Salvar na Base</h3>
-                <button onClick={() => setIsSaveDbModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+                <button onClick={() => setIsSaveDbModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-[6px] text-gray-400 hover:text-gray-600 transition-colors">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -2829,7 +2846,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
                 <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
                   {customDatabases.length === 0 ? (
-                    <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-lg dashed border border-gray-200">
+                    <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-[10px] dashed border border-gray-200">
                       Nenhuma base encontrada.
                     </div>
                   ) : (
@@ -2837,9 +2854,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <button
                         key={db.id}
                         onClick={() => confirmSaveToDatabase(db.id)}
-                        className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-all text-left group"
+                        className="flex items-center gap-3 p-3 rounded-[10px] border border-gray-100 hover:border-blue-300 hover:bg-blue-50 transition-all text-left group"
                       >
-                        <div className="bg-blue-100 text-blue-600 p-2 rounded-lg group-hover:bg-white group-hover:shadow-sm transition-all">
+                        <div className="bg-blue-100 text-blue-600 p-2 rounded-[6px] group-hover:bg-white group-hover:shadow-sm transition-all">
                           <Database className="w-4 h-4" />
                         </div>
                         <span className="font-medium text-gray-700 group-hover:text-blue-700">{db.name}</span>
@@ -2856,7 +2873,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         addingTo && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-[1px]">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 border border-gray-200 overflow-hidden">
               {/* Header */}
               <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
                 <div>
@@ -2866,14 +2883,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsCreatingItem(!isCreatingItem)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-button font-bold transition-all border ${isCreatingItem ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 h-8 flex items-center justify-center'}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all border ${isCreatingItem ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 h-8 flex items-center justify-center'}`}
                   >
                     {isCreatingItem ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                     {isCreatingItem ? 'Cancelar Criação' : 'Criar Novo Item'}
                   </button>
                   <button
                     onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-button font-bold transition-all border ${showOnlyFavorites ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all border ${showOnlyFavorites ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'}`}
                   >
                     <Star className={`w-3.5 h-3.5 ${showOnlyFavorites ? 'fill-amber-500 text-amber-500' : ''}`} />
                     Apenas Favoritos
@@ -2889,7 +2906,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               {isCreatingItem && (
                 <div className="p-6 bg-gradient-to-br from-blue-50/50 to-white border-b border-blue-100 animate-in slide-in-from-top-4 duration-300">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="p-2 bg-blue-100 rounded-lg">
+                    <div className="p-2 bg-blue-100 rounded-[6px]">
                       <Database className="w-5 h-5 text-blue-600" />
                     </div>
                     <h4 className="font-bold text-gray-800">Novo Item na Base Própria</h4>
@@ -2899,7 +2916,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <div className="col-span-3">
                       <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
                       <select
-                        className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.type}
                         onChange={(e) => setNewItem({ ...newItem, type: e.target.value as SinapiType })}
                       >
@@ -2913,7 +2930,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <input
                         type="text"
                         placeholder="Ex: Cimento Portland CP-III-40 ensacado"
-                        className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.description}
                         onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                       />
@@ -2923,7 +2940,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <input
                         type="text"
                         placeholder="kg"
-                        className="w-full rounded-lg border border-gray-200 p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.unit}
                         onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
                       />
@@ -2934,7 +2951,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         type="number"
                         step="0.01"
                         placeholder="0.00"
-                        className="w-full rounded-lg border border-gray-200 p-2 text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.price}
                         onChange={(e) => setNewItem({ ...newItem, price: Number(e.target.value) })}
                       />
@@ -2942,7 +2959,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <div className="col-span-9">
                       <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo (Categoria)</label>
                       <select
-                        className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.category}
                         onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
                       >
@@ -2955,7 +2972,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <div className="col-span-3 flex items-end">
                       <button
                         onClick={handleCreateItem}
-                        className="w-full bg-emerald-600 text-white font-bold py-2 rounded-lg hover:bg-emerald-700 shadow-sm transition-all flex items-center justify-center gap-2"
+                        className="w-full bg-emerald-600 text-white font-bold py-2 rounded-[6px] hover:bg-emerald-700 shadow-sm transition-all flex items-center justify-center gap-2"
                       >
                         <Save className="w-4 h-4" /> Salvar Item
                       </button>
@@ -2975,7 +2992,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <input
                       type="text"
                       placeholder="Ex: 98546"
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={searchCode}
                       onChange={(e) => setSearchCode(e.target.value)}
                     />
@@ -2983,7 +3000,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
                     <select
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchType}
                       onChange={(e) => setSearchType(e.target.value)}
                     >
@@ -2995,7 +3012,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="col-span-3">
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo</label>
                     <select
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchGroupFilter}
                       onChange={(e) => setSearchGroupFilter(e.target.value)}
                     >
@@ -3014,13 +3031,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           autoFocus
                           type="text"
                           placeholder="Buscar por descrição..."
-                          className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                          className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
                       </div>
                       <select
-                        className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
+                        className="rounded-[6px] border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
                         value={searchScope}
                         onChange={(e) => setSearchScope(e.target.value as 'description' | 'category' | 'both')}
                         title="Escopo da busca"
@@ -3031,7 +3048,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       </select>
 
                       <select
-                        className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
+                        className="rounded-[6px] border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
                         value={searchMode}
                         onChange={(e) => setSearchMode(e.target.value as 'exact' | 'all-words')}
                         title="Modo da busca"
@@ -3044,7 +3061,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 </div>
 
                 {/* Filtros de Base/Configuração */}
-                <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-100 transition-all">
+                <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-50 rounded-[10px] border border-gray-100 transition-all">
                   <div className="flex items-center gap-2">
                     <label className="text-xs font-bold text-gray-400 uppercase">Base:</label>
                     <select
@@ -3174,7 +3191,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     {searchResults.map(result => (
                       <div
                         key={result.code}
-                        className={`p-3 hover:bg-blue-50 cursor-pointer border rounded-lg group transition-all relative ${(!showOnlyFavorites || favorites.includes(result.code)) ? 'block' : 'hidden'} ${selectedSearchItems.find(i => i.code === result.code) ? 'border-blue-400 bg-blue-50/30 shadow-sm' : 'border-gray-100 bg-white'}`}
+                        className={`p-3 hover:bg-blue-50 cursor-pointer border rounded-[10px] group transition-all relative ${(!showOnlyFavorites || favorites.includes(result.code)) ? 'block' : 'hidden'} ${selectedSearchItems.find(i => i.code === result.code) ? 'border-blue-400 bg-blue-50/30 shadow-sm' : 'border-gray-100 bg-white'}`}
                         onClick={(e) => handleToggleSelectItem(e, result)}
                       >
                         <div className="flex justify-between items-start mb-1">
@@ -3187,7 +3204,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             />
                             <button
                               onClick={(e) => { e.stopPropagation(); onToggleFavorite(e, result.code); }}
-                              className="p-1 px-1.5 rounded-lg hover:bg-white shadow-sm transition-all z-10 border border-transparent hover:border-amber-200"
+                              className="p-1 px-1.5 rounded-[6px] hover:bg-white shadow-sm transition-all z-10 border border-transparent hover:border-amber-200"
                               title={favorites.includes(result.code) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                             >
                               <Star className={`w-3.5 h-3.5 ${favorites.includes(result.code) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
@@ -3218,7 +3235,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             )}
                              <button
                                 onClick={(e) => { e.stopPropagation(); handleAddItem(result); }}
-                                className="text-button text-blue-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-blue-100/70 hover:bg-blue-200 px-2 py-1 rounded-md border border-blue-200/50 shadow-sm z-10"
+                                className="text-button text-blue-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-blue-100/70 hover:bg-blue-200 px-2 py-1 rounded-[6px] border border-blue-200/50 shadow-sm z-10"
                               >
                                 <Plus className="w-3 h-3" /> Adicionar
                               </button>
@@ -3257,17 +3274,17 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         isVersionModalOpen && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
               <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                   <Save className="w-5 h-5 text-emerald-600" />
                   Salvar Nova Versão
                 </h3>
-                <button onClick={() => setIsVersionModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors"><X className="w-5 h-5" /></button>
+                <button onClick={() => setIsVersionModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-2 rounded-[6px] hover:bg-gray-100 transition-colors"><X className="w-5 h-5" /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-4">
-                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-lg flex items-center justify-between">
+                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-[10px] flex items-center justify-between">
                     <span className="text-sm text-emerald-800 font-medium">Próximo Item:</span>
                     <span className="bg-emerald-600 text-white text-xs font-bold px-3 py-1 rounded-full">
                       {(settings.versions?.length || 0) + 1}
@@ -3279,14 +3296,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       autoFocus
                       rows={3}
                       placeholder="Ex: Orçamento inicial, Revisão após alteração de acabamentos..."
-                      className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none text-sm resize-none"
+                      className="w-full rounded-[6px] border border-gray-300 p-2.5 focus:ring-2 focus:ring-emerald-500 outline-none text-sm resize-none"
                       value={versionDescription}
                       onChange={(e) => setVersionDescription(e.target.value)}
                     />
                   </div>
                   <div className="flex gap-3 pt-6 border-t border-gray-100 mt-6">
-                    <button onClick={() => setIsVersionModalOpen(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancelar</button>
-                    <button onClick={handleSaveVersion} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium shadow-sm transition-all active:scale-95">Salvar Versão</button>
+                    <button onClick={() => setIsVersionModalOpen(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-[6px] text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancelar</button>
+                    <button onClick={handleSaveVersion} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium shadow-sm transition-all active:scale-95">Salvar Versão</button>
                   </div>
                 </div>
               </div>
@@ -3298,10 +3315,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         selectedDetailsItem && (
           <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-5xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
                 <div className="flex items-start gap-3">
-                  <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-sm">
+                  <div className="bg-blue-600 p-2.5 rounded-[6px] text-white shadow-sm">
                     <ClipboardList className="w-5 h-5" />
                   </div>
                   <div>
@@ -3321,7 +3338,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <select
                       value={selectedDetailsItem.precisionClass || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, precisionClass: e.target.value ? e.target.value as BudgetEntry['precisionClass'] : undefined } : prev)}
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     >
                       <option value="">Não definida</option>
                       <option value="A">A - Projeto executivo</option>
@@ -3336,7 +3353,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <select
                       value={selectedDetailsItem.status || 'Rascunho'}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, status: e.target.value as BudgetEntry['status'] } : prev)}
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     >
                       {['Rascunho', 'Em revisão', 'Aguardando aprovação', 'Aprovado', 'Congelado', 'Substituído', 'Cancelado'].map(status => <option key={status} value={status}>{status}</option>)}
                     </select>
@@ -3346,7 +3363,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <input
                       value={selectedDetailsItem.discipline || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, discipline: e.target.value } : prev)}
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       placeholder="Ex: Estrutura"
                     />
                   </div>
@@ -3355,7 +3372,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <input
                       value={selectedDetailsItem.responsible || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, responsible: e.target.value } : prev)}
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       placeholder="Nome ou equipe"
                     />
                   </div>
@@ -3373,7 +3390,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <input
                         value={(selectedDetailsItem.location as any)?.[key] || ''}
                         onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, location: { ...(prev.location || {}), [key]: e.target.value } } : prev)}
-                        className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     </div>
                   ))}
@@ -3386,7 +3403,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       rows={4}
                       value={selectedDetailsItem.calculationMemory?.formula || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), formula: e.target.value } } : prev)}
-                      className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono"
+                      className="w-full rounded-[6px] border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono"
                       placeholder="Ex: (comprimento x altura) - vãos"
                     />
                   </div>
@@ -3397,7 +3414,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       step="0.0001"
                       value={selectedDetailsItem.calculationMemory?.result ?? ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), result: e.target.value === '' ? undefined : Number(e.target.value) } } : prev)}
-                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       placeholder="Quantidade auditável"
                     />
                     <label className="mt-4 flex items-center gap-2 text-sm font-bold text-gray-600">
@@ -3418,7 +3435,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     rows={4}
                     value={selectedDetailsItem.calculationMemory?.justification || ''}
                     onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), justification: e.target.value } } : prev)}
-                    className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    className="w-full rounded-[6px] border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                     placeholder="Explique origem da quantidade, documentos usados, premissas, exclusões ou baixa precisão."
                   />
                 </div>
@@ -3429,7 +3446,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     rows={3}
                     value={selectedDetailsItem.notes || ''}
                     onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, notes: e.target.value } : prev)}
-                    className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    className="w-full rounded-[6px] border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                   />
                 </div>
               </div>
@@ -3439,8 +3456,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   A quantidade principal do item continua em {selectedDetailsItem.quantity.toLocaleString('pt-BR')} {selectedDetailsItem.sinapiItem?.unit || ''}; o resultado calculado serve para auditoria e conferência.
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setSelectedDetailsItem(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white font-medium transition-colors">Cancelar</button>
-                  <button onClick={handleSaveDetails} className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-sm transition-all flex items-center gap-2">
+                  <button onClick={() => setSelectedDetailsItem(null)} className="px-4 py-2 border border-gray-300 rounded-[6px] text-gray-700 hover:bg-white font-medium transition-colors">Cancelar</button>
+                  <button onClick={handleSaveDetails} className="px-5 py-2 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-bold shadow-sm transition-all flex items-center gap-2">
                     <Save className="w-4 h-4" /> Salvar memória
                   </button>
                 </div>
@@ -3453,10 +3470,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         selectedCPUItem && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 items-center">
-                  <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                  <div className="bg-blue-600 p-2.5 rounded-[6px] text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                     <Layers className="w-6 h-6" />
                   </div>
                   <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Composição de Preço Unitário (CPU)</h3>
@@ -3464,7 +3481,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => onToggleFavorite(e, selectedCPUItem.sinapiItem?.code || '')}
-                      className={`p-1.5 px-2 rounded-lg shadow-sm transition-all z-10 border flex items-center gap-1.5 font-bold text-xs uppercase ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
+                      className={`p-1.5 px-2 rounded-[6px] shadow-sm transition-all z-10 border flex items-center gap-1.5 font-bold text-xs uppercase ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
                       title={favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                     >
                       <Star className={`w-3.5 h-3.5 ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'fill-amber-500 text-amber-500' : ''}`} />
@@ -3513,7 +3530,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     const displaySubtotal = selectedCPUItem.quantity * (comp.quantity || 0) * displayPrice;
 
                     return (
-                      <div key={`${selectedCPUItem.id}-modal-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-sm text-gray-600 hover:bg-blue-50/50 py-2.5 px-4 rounded-lg border border-transparent hover:border-blue-100 transition-all">
+                      <div key={`${selectedCPUItem.id}-modal-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-sm text-gray-600 hover:bg-blue-50/50 py-2.5 px-4 rounded-[6px] border border-transparent hover:border-blue-100 transition-all">
                         <div className="col-span-1 font-mono text-xs text-center text-gray-500">{comp.code}</div>
                         <div className="col-span-1 flex justify-center">
                           <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
@@ -3530,11 +3547,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             step="0.0001"
                             value={comp.quantity || 0}
                             onChange={(e) => handleUpdateComposition(selectedCPUItem.id, idx, { quantity: Number(e.target.value) })}
-                            className="w-full text-center outline-none bg-white border border-gray-200 rounded-md py-1 text-sm focus:ring-2 focus:ring-blue-500 font-medium"
+                            className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-1 text-sm focus:ring-2 focus:ring-blue-500 font-medium"
                           />
                         </div>
                         <div className="col-span-2">
-                          <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded-md px-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                          <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
                             <span className="text-xs text-gray-400">R$</span>
                             <input
                               type="number"
@@ -3562,7 +3579,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <div className="flex items-center gap-6">
                   <div className="text-gray-900 not-italic font-bold text-base flex items-center gap-4">
                     <span className="text-gray-500 font-medium text-xs uppercase tracking-wider">Custo Total do Item:</span>
-                    <span className="bg-white px-4 py-2 rounded-lg border border-gray-200 shadow-sm text-blue-600">
+                    <span className="bg-white px-4 py-2 rounded-[6px] border border-gray-200 shadow-sm text-blue-600">
                       R$ {(selectedCPUItem.quantity * (selectedCPUItem.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -3574,7 +3591,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       }
                       handleCloseCPU();
                     }}
-                    className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm flex items-center gap-2 ${hasCPUChanges ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100' : 'bg-gray-200 text-gray-500 cursor-default'}`}
+                    className={`px-6 py-2.5 rounded-[6px] font-bold text-sm transition-all shadow-sm flex items-center gap-2 ${hasCPUChanges ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100' : 'bg-gray-200 text-gray-500 cursor-default'}`}
                   >
                     <Save className="w-4 h-4" />
                     Salvar Alterações
@@ -3590,14 +3607,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         notification && (
           <div className="fixed bottom-6 right-6 z-[100] animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 border border-gray-800 min-w-[300px]">
-              <div className="bg-emerald-500 p-1 rounded-full">
-                <CheckCircle className="w-4 h-4 text-white" />
-              </div>
+            <div className={`px-4 py-3 rounded-[10px] shadow-2xl flex items-center gap-3 min-w-[300px] text-white ${notification.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+              {notification.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              ) : (
+                <CheckCircle className="w-4 h-4 shrink-0" />
+              )}
               <div>
                 <p className="text-sm font-medium">{notification.message}</p>
               </div>
-              <button onClick={() => setNotification(null)} className="ml-auto text-gray-500 hover:text-white">
+              <button onClick={() => setNotification(null)} className="ml-auto text-white/70 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -3622,7 +3641,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         isParametricModalOpen && parametricPreview && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
               <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -3631,7 +3650,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   </h3>
                   <p className="text-sm text-gray-500 mt-1">Gere estimativas baseadas em índices técnicos e de mercado.</p>
                 </div>
-                <button onClick={() => setIsParametricModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+                <button onClick={() => setIsParametricModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-[6px] text-gray-400 hover:text-gray-600 transition-colors">
                   <X className="w-6 h-6" />
                 </button>
               </div>
@@ -3640,13 +3659,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex gap-2">
                   <button
                     onClick={() => handleOpenParametric('FINANCIAL')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${parametricType === 'FINANCIAL' ? 'bg-white text-blue-600 shadow-sm border border-blue-100' : 'text-gray-500 hover:bg-gray-100'}`}
+                    className={`flex-1 py-2 px-3 rounded-[6px] text-sm font-bold transition-all ${parametricType === 'FINANCIAL' ? 'bg-white text-blue-600 shadow-sm border border-blue-100' : 'text-gray-500 hover:bg-gray-100'}`}
                   >
                     Estimativa Financeira (CUB)
                   </button>
                   <button
                     onClick={() => handleOpenParametric('QUANTITATIVE')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${parametricType === 'QUANTITATIVE' ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' : 'text-gray-500 hover:bg-gray-100'}`}
+                    className={`flex-1 py-2 px-3 rounded-[6px] text-sm font-bold transition-all ${parametricType === 'QUANTITATIVE' ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' : 'text-gray-500 hover:bg-gray-100'}`}
                   >
                     Insumos Base (NBR 12721)
                   </button>
@@ -3654,7 +3673,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
                 <div className="p-6 space-y-4">
                   {parametricType === 'FINANCIAL' ? (
-                    <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
+                    <div className="bg-blue-50/50 p-4 rounded-[10px] border border-blue-100">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-gray-600 font-medium">Valor Total Estimado:</span>
                         <span className="text-lg font-bold text-blue-700">
@@ -3670,7 +3689,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       </p>
                     </div>
                   ) : (
-                    <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100">
+                    <div className="bg-indigo-50/50 p-4 rounded-[10px] border border-indigo-100">
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-indigo-700 font-bold">Lote Básico NBR 12721</span>
                         <span className="bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold uppercase">{settings.standard}</span>
@@ -3696,7 +3715,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </div>
                   )}
 
-                  <div className="text-xs text-gray-600 italic bg-amber-50 p-3 rounded-md border border-amber-100 flex gap-2">
+                  <div className="text-xs text-gray-600 italic bg-amber-50 p-3 rounded-[10px] border border-amber-100 flex gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                     <span>Esta ação irá criar novos itens no seu orçamento baseados na Área ({settings.area}m²) e Padrão ({settings.standard}) definidos nas configurações.</span>
                   </div>
@@ -3704,7 +3723,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="flex flex-col gap-3 mt-4">
                     <button
                       onClick={() => handleGenerateParametric('REPLACE')}
-                      className="w-full py-3 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-[6px] font-semibold transition-colors flex items-center justify-center gap-2"
                     >
                       <X className="w-4 h-4" />
                       Substituir Orçamento Atual
@@ -3722,7 +3741,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <div className="flex justify-end p-4 border-t border-gray-100 bg-gray-50">
                   <button
                     onClick={() => setIsParametricModalOpen(false)}
-                    className="px-6 py-2 bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 font-bold text-button uppercase tracking-widest transition-all"
+                    className="px-6 py-2 bg-white border border-gray-200 rounded-[6px] text-gray-600 hover:bg-gray-50 font-bold text-button uppercase tracking-widest transition-all"
                   >
                     Fechar
                   </button>

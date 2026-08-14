@@ -112,6 +112,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [crmClients, setCrmClients] = React.useState<{ id: string; name: string; document?: string }[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
+    const [planoContas, setPlanoContas] = React.useState<CostCenter[]>([]);
     const [employees, setEmployees] = React.useState<{ id: string; name: string; role?: string }[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
     const [contractTypes, setContractTypes] = React.useState<ContractTypeRecord[]>([]);
@@ -270,10 +271,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const loadDependencies = async () => {
         setIsSubmitting(true);
         try {
-            const [s, cl, cc, ca, p, emps, pa, ct] = await Promise.all([
+            const [s, cl, cc, pc, ca, p, emps, pa, ct] = await Promise.all([
                 supplierService.listSuppliers(organizationId),
                 crmClientService.listClients(organizationId),
                 financialRegistryService.listCostCenters(organizationId),
+                financialRegistryService.listPlanoContas(organizationId),
                 financialRegistryService.listChartOfAccounts(organizationId),
                 projectService.listProjects(undefined, organizationId, true),
                 laborService.listEmployees(organizationId).catch(() => [] as { id: string; name: string; role?: string }[]),
@@ -283,6 +285,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             setSuppliers(s);
             setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document })));
             setCostCenters(cc);
+            setPlanoContas(pc);
             setChartOfAccounts(ca);
             setProjects(p);
             setEmployees((emps as any[]).filter(e => e.status !== 'DEMITIDO').map(e => ({ id: e.id, name: e.name, role: e.role })));
@@ -602,6 +605,18 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         placeholder="Título resumido do contrato"
                                         value={formData.title}
                                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                                <div className="col-span-2 space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">
+                                        Número do Contrato do {isOutgoing ? 'Cliente' : 'Fornecedor'} (Opcional)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder={`Número atribuído pelo ${isOutgoing ? 'cliente' : 'fornecedor'} a este contrato, se houver`}
+                                        value={formData.client_contract_number || ''}
+                                        onChange={(e) => setFormData({ ...formData, client_contract_number: e.target.value })}
                                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                     />
                                 </div>
@@ -1387,6 +1402,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         items={chartOfAccounts}
                                         value={formData.category_id || ''}
                                         onChange={(v) => setFormData({ ...formData, category_id: v })}
+                                        valueField="id"
+                                        placeholder="Nenhuma conta vinculada"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
+                                </div>
+                                {/* Dimensão distinta de Centro de Custo (cost_centers_v2) e de Conta
+                                    Financeira (financial_categories, acima) — plano_de_contas
+                                    (Minha Organização > Plano de Contas). */}
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Plano de Contas</label>
+                                    <HierarchicalSelect
+                                        items={planoContas}
+                                        value={formData.plano_de_contas_id || ''}
+                                        onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v })}
                                         valueField="id"
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"

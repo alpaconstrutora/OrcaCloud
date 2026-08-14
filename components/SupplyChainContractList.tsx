@@ -13,6 +13,7 @@ import { appSettingsService } from '../services/appSettingsService';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
+import { financialRegistryService } from '../services/financialRegistryService';
 import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
 import { Contract } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -22,7 +23,8 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, title: 260, project: 180, empreendimento: 184, supplier: 230, date: 170, status: 130, value: 150, actions: 200,
+    number: 123, title: 260, project: 180, empreendimento: 184, supplier: 230, date: 170, status: 130, value: 150,
+    costCenter: 170, planoContas: 170, actions: 200,
 };
 
 const COLUMNS: ColumnConfig[] = [
@@ -34,6 +36,8 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'date', label: 'Vigência', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'value', label: 'Valor Atual', sortable: true },
+    { key: 'costCenter', label: 'Centro de Custo', sortable: true },
+    { key: 'planoContas', label: 'Plano de Contas', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -51,6 +55,8 @@ const CONTRACT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     date: { label: 'Vigência', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     value: { label: 'Valor Atual', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    costCenter: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    planoContas: { label: 'Plano de Contas', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
 };
 
 // Badge de status — sem estado próprio, movida para escopo de módulo para poder
@@ -83,6 +89,8 @@ function renderContractCell(
         supplierMap: Record<string, string>;
         clientMap: Record<string, string>;
         empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }>;
+        costCenterMap: Record<string, string>;
+        planoContasMap: Record<string, string>;
     },
 ): React.ReactNode {
     switch (key) {
@@ -116,6 +124,10 @@ function renderContractCell(
                     R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
             );
+        case 'costCenter':
+            return <span className="text-sm font-normal text-gray-700">{contract.cost_center_id ? (ctx.costCenterMap[contract.cost_center_id] ?? '—') : '—'}</span>;
+        case 'planoContas':
+            return <span className="text-sm font-normal text-gray-700">{contract.plano_de_contas_id ? (ctx.planoContasMap[contract.plano_de_contas_id] ?? '—') : '—'}</span>;
         default:
             return null;
     }
@@ -162,6 +174,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     // Obra → empreendimento. Contrato não tem FK para empreendimento: o vínculo
     // chega pela obra (empreendimentos.project_id ou empreendimento_towers.project_id).
     const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
+    const [costCenterMap, setCostCenterMap] = React.useState<Record<string, string>>({});
+    const [planoContasMap, setPlanoContasMap] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = usePersistedState('supplyChainContractFilters:search', '');
     const [statusFilter, setStatusFilter] = usePersistedState('supplyChainContractFilters:status', 'all');
@@ -192,7 +206,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         try {
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
-            const [data, suppliers, clients, projects, empMap] = await Promise.all([
+            const [data, suppliers, clients, projects, empMap, costCenters, planoContas] = await Promise.all([
                 contractService.listContracts(targetProjectId, organizationId, undefined, direction, domain),
                 supplierService.listSuppliers(organizationId).catch(() => []),
                 clientService.listClients(organizationId).catch(() => []),
@@ -200,12 +214,16 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 // Sem organização ("Todas") o mapa não é bloqueado — o service não filtra
                 // e a RLS recorta (CLAUDE.md regra #5).
                 empreendimentoService.mapObrasToEmpreendimentos(organizationId).catch(() => ({})),
+                financialRegistryService.listCostCenters(organizationId).catch(() => []),
+                financialRegistryService.listPlanoContas(organizationId).catch(() => []),
             ]);
             setContracts(data);
             setSupplierMap(Object.fromEntries(suppliers.map(s => [s.id, getSupplierDisplayName(s, nameMode)])));
             setClientMap(Object.fromEntries(clients.map((c: { id: string; name: string }) => [c.id, c.name])));
             setProjectMap(Object.fromEntries(projects.map((p: { id: string; name: string }) => [p.id, p.name])));
             setEmpreendimentoByProject(empMap);
+            setCostCenterMap(Object.fromEntries(costCenters.map(c => [c.id, c.name])));
+            setPlanoContasMap(Object.fromEntries(planoContas.map(c => [c.id, c.name])));
         } catch (error) {
             console.error("ERRO CRÍTICO AO CARREGAR CONTRATOS:", error);
             notify("Erro ao carregar contratos. Verifique a conexão com o banco de dados.", "error");
@@ -280,9 +298,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 if (field === 'date')     cmp = new Date(a.start_date || '').getTime() - new Date(b.start_date || '').getTime();
                 if (field === 'status')   cmp = (a.status || '').localeCompare(b.status || '');
                 if (field === 'value')    cmp = a.current_value - b.current_value;
+                if (field === 'costCenter') cmp = (costCenterMap[a.cost_center_id || ''] || '').localeCompare(costCenterMap[b.cost_center_id || ''] || '');
+                if (field === 'planoContas') cmp = (planoContasMap[a.plano_de_contas_id || ''] || '').localeCompare(planoContasMap[b.plano_de_contas_id || ''] || '');
                 return dir === 'asc' ? cmp : -cmp;
             });
-    }, [contracts, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, statusFilter, supplierMap, projectMap, empreendimentoByProject]);
+    }, [contracts, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, statusFilter, supplierMap, projectMap, empreendimentoByProject, costCenterMap, planoContasMap]);
 
     // Dashboard data
     const stats = {
@@ -571,7 +591,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                     >
                                         {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {renderContractCell(key, contract, { direction, projectMap, supplierMap, clientMap, empreendimentoByProject })}
+                                                {renderContractCell(key, contract, { direction, projectMap, supplierMap, clientMap, empreendimentoByProject, costCenterMap, planoContasMap })}
                                             </td>
                                         ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

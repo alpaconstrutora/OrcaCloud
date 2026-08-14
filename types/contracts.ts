@@ -44,6 +44,9 @@ export interface Contract {
     budget_id?: string;
     supplier_id?: string;
     number: string;
+    // Número que o cliente/contratante deu ao contrato — livre, digitado.
+    // Distinto de `number` (numeração interna gerada pela nomenclatura da org).
+    client_contract_number?: string;
     title: string;
     description?: string;
     contract_type: ContractType;
@@ -74,6 +77,10 @@ export interface Contract {
     signed_contract_url?: string;
     empresa_id?: string;
     cost_center_id?: string;
+    // Plano de Contas (tabela `plano_de_contas`) — dimensão distinta de
+    // cost_center_id (cost_centers_v2) e de category_id (financial_categories,
+    // rotulado "Conta Financeira" no ContractModal).
+    plano_de_contas_id?: string;
     category_id?: string;
     payment_method?: string;
     payment_term_type?: 'Vista' | 'Parcelado';

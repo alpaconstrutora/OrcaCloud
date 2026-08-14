@@ -689,21 +689,27 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                     </SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
-                    {/* Trilho §19.1: venda e locação são eixos independentes na
-                        mesma unidade — colunas diferentes, contratos diferentes. */}
-                    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 mb-4 w-fit">
-                        {([['LOCACAO', 'Locações → inquilinos'], ['VENDAS', 'Vendas → proprietários']] as [EixoImportacao, string][]).map(([id, label]) => (
-                            <button
-                                key={id}
-                                onClick={() => trocarEixo(id)}
-                                disabled={carregandoPreview || importando}
-                                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all disabled:opacity-50 ${
-                                    eixo === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
-                                }`}
-                            >
-                                {label}
-                            </button>
-                        ))}
+                    {/* Trilho de abas §19.1, anatomia completa: card branco externo +
+                        trilho bg-gray-50 com flex-wrap. Venda e locação são eixos
+                        independentes na mesma unidade — colunas diferentes, contratos
+                        diferentes. O `flex-wrap`/`max-w-full` importa aqui: no Sheet em
+                        mobile (bottom sheet) os dois rótulos não cabem lado a lado, e
+                        overflow-x cortaria o segundo sem indício de que existe. */}
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                            {([['LOCACAO', 'Locações → inquilinos'], ['VENDAS', 'Vendas → proprietários']] as [EixoImportacao, string][]).map(([id, label]) => (
+                                <button
+                                    key={id}
+                                    onClick={() => trocarEixo(id)}
+                                    disabled={carregandoPreview || importando}
+                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all disabled:opacity-50 ${
+                                        eixo === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <p className="text-xs text-gray-400 mb-4">
@@ -721,10 +727,16 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                         <div className="text-center py-12">
                             <Download className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nada a importar</h3>
+                            {/* A causa mais comum de prévia vazia NÃO é falta de contrato: é a
+                                unidade não estar publicada neste eixo. Venda e locação são
+                                colunas independentes na mesma unidade, e culpar o contrato
+                                mandaria o usuário procurar no lugar errado. */}
                             <p className="text-sm text-gray-500 max-w-md mx-auto">
-                                {preview && preview.contratosSemVinculo > 0
-                                    ? `${preview.contratosSemVinculo} contrato(s) não alcançam nenhuma unidade deste condomínio — a unidade precisa estar publicada no ${eixo === 'LOCACAO' ? 'Espelho de Locações' : 'Espelho de Vendas'} para a ponte existir.`
-                                    : `Nenhum contrato de ${eixo === 'LOCACAO' ? 'locação' : 'venda'} com pessoa e vigência definidas.`}
+                                {preview && preview.unidadesNoEixo === 0
+                                    ? `Nenhuma das ${preview.unidadesTotal} unidades deste condomínio está publicada no ${eixo === 'LOCACAO' ? 'Espelho de Locações' : 'Espelho de Vendas'}. A importação passa por esse vínculo — publique as unidades nesse eixo antes.`
+                                    : preview && preview.contratosSemVinculo > 0
+                                        ? `${preview.contratosSemVinculo} contrato(s) não alcançam nenhuma unidade deste condomínio, embora ${preview.unidadesNoEixo} unidade(s) estejam publicadas — confira se a negociação aponta para a unidade certa.`
+                                        : `${preview?.unidadesNoEixo ?? 0} unidade(s) publicadas, mas nenhum contrato de ${eixo === 'LOCACAO' ? 'locação' : 'venda'} com pessoa e vigência definidas.`}
                             </p>
                         </div>
                     ) : (

@@ -24,7 +24,7 @@ import type {
 
 const SYSTEM_COLS = 'id, organization_id, name, slug, description, norm_ref, is_active, sort_order, created_at, updated_at';
 const PLAN_COLS = 'id, empreendimento_id, organization_id, name, status, norm_ref, valid_from, notes, created_at, updated_at';
-const ITEM_COLS = 'id, plan_id, organization_id, building_system_id, asset_id, description, periodicity_value, periodicity_unit, last_executed_at, next_due_date, responsible_type, is_active, created_at, updated_at';
+const ITEM_COLS = 'id, plan_id, organization_id, building_system_id, asset_id, description, periodicity_value, periodicity_unit, last_executed_at, next_due_date, responsible_type, is_active, alerted_for_due_date, alerted_stage, created_at, updated_at';
 const ORDER_COLS = 'id, empreendimento_id, organization_id, plan_item_id, building_system_id, asset_id, unit_id, code, type, priority, status, description, scheduled_date, executed_date, cost, supplier_id, executed_by, findings, created_at, updated_at';
 
 export const PERIODICITY_LABELS: Record<PeriodicityUnit, [string, string]> = {

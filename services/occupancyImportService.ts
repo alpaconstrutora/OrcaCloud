@@ -98,6 +98,16 @@ export interface ImportPreview {
     contratosSemVinculo: number;
     /** Contratos ignorados por status (rascunho, minuta…). */
     contratosNaoImportaveis: number;
+    /**
+     * Quantas unidades do condomínio estão publicadas NESTE eixo. Zero é a
+     * causa mais comum de prévia vazia, e sem este número a tela culparia os
+     * contratos por um problema que é de publicação da unidade — foi o que
+     * aconteceu em 14/08/2026 com o Galeria Altavista (12 unidades no eixo de
+     * locação, 0 no de venda).
+     */
+    unidadesNoEixo: number;
+    /** Total de unidades do condomínio, publicadas ou não. */
+    unidadesTotal: number;
 }
 
 export interface ImportResult {
@@ -164,7 +174,10 @@ export const occupancyImportService = {
             }
         }
         if (porImovel.size === 0) {
-            return { rows: [], contratosSemVinculo: 0, contratosNaoImportaveis: 0 };
+            return {
+                rows: [], contratosSemVinculo: 0, contratosNaoImportaveis: 0,
+                unidadesNoEixo: 0, unidadesTotal: units.length,
+            };
         }
 
         // 2. Contratos do eixo, nesta organização.
@@ -354,7 +367,10 @@ export const occupancyImportService = {
         }
 
         rows.sort((a, b) => a.unitLabel.localeCompare(b.unitLabel, 'pt-BR', { numeric: true }));
-        return { rows, contratosSemVinculo, contratosNaoImportaveis };
+        return {
+            rows, contratosSemVinculo, contratosNaoImportaveis,
+            unidadesNoEixo: porImovel.size, unidadesTotal: units.length,
+        };
     },
 
     /**

@@ -268,7 +268,13 @@ Ressalva registrada e vencida pelo usuário: Empreendimentos mora em *Incorpora�
 | `maintenance_orders` | Tabela nova, irmã de `work_orders`: sem `project_id` obrigatório, sem `phase`, sem `planned_productivity`, sem `measurement_unit` e sem status `measured` | OS abre, executa e fecha sem tocar em `work_orders` |
 | O ciclo anda sozinho | `trg_maintenance_order_completed` + `fn_maintenance_next_due` recalculam `next_due_date` a partir da execução. O client **relê**, não recalcula — dois lugares calculando a mesma data é um deles errado sem ninguém saber qual | Concluir OS ligada ao plano muda o vencimento; bloco 11 tem o teste |
 | Garantia de fornecedor | `supplier_warranty_until` no ativo, distinta da garantia construtora→cliente de `warranty_terms` | ⚠️ coluna existe; **sem tela e sem alerta** |
-| Alertas de vencimento por cron | Não implementado | ❌ **fora desta entrega** — a tela mostra vencidos e "vence em 30 dias", mas nada dispara notificação sozinho |
+| Alertas de vencimento por cron | ✅ **Implementado em 14/08/2026** — `aplicar_20270905000020_manutencao_alertas_cron.sql`. SQL puro + `pg_cron` diário às 09h UTC, molde `20261202000002` (não o de Qualidade, que precisa de edge function: aqui a regra é comparação de datas, e função no banco não falha por deploy nem por segredo do vault ausente) | Chamar `fn_maintenance_due_alerts(30)` duas vezes: a 2ª devolve **0** |
+
+**Como o alerta não vira ruído:** a marca é o par (`alerted_for_due_date`, `alerted_stage`), não um `alert_sent_at` solto. Cada vencimento avisa duas vezes no máximo — uma ao entrar na janela de 30 dias (`PROXIMO`) e outra ao passar da data (`VENCIDO`, mais grave, por isso dispara de novo em vez de silenciar). Quando a OS é concluída e `next_due_date` anda, o item volta a ser elegível **sozinho**, sem ninguém limpar marca.
+
+✅ **PROVADO EM RUNTIME (14/08/2026)** com dado real do Galeria Altavista: item vencendo em 27 dias classificado `PROXIMO`, item vencido há 13 dias classificado `VENCIDO`, ambos com `alerted_for_due_date` gravado — e a **2ª chamada devolveu 0**, que é a idempotência funcionando.
+
+**Só plano `VIGENTE` cobra** — alertar sobre rascunho treinaria o usuário a ignorar o alerta. **Destinatário:** membros da organização (`organization_members.email`). O síndico não entra: ainda não tem login, e o Portal do Condômino é F3. **`link` fica nulo de propósito** — o app não tem roteamento por URL, então um link não levaria a lugar nenhum.
 
 **Invariantes do banco:** um plano `VIGENTE` por edifício (índice único parcial) e OS `CONCLUIDA` obriga `executed_date` (CHECK) — sem a data, o ciclo para de andar em silêncio.
 

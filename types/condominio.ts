@@ -71,6 +71,14 @@ export interface MaintenancePlanItem {
     next_due_date?: string | null;
     responsible_type: MaintenanceResponsibleType;
     is_active: boolean;
+    /**
+     * Para qual vencimento o alerta já foi disparado, e em que estágio. O par
+     * evita repetir o mesmo aviso todo dia — e, quando o ciclo anda, o item
+     * volta a ser elegível sozinho. Escrito só pelo cron
+     * (`fn_maintenance_due_alerts`); a tela não mexe.
+     */
+    alerted_for_due_date?: string | null;
+    alerted_stage?: 'PROXIMO' | 'VENCIDO' | null;
     created_at: string;
     updated_at: string;
 }

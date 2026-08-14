@@ -189,6 +189,16 @@ export interface EmpreendimentoUnit {
     // alimentados exclusivamente pela versao calculada/aprovada/travada do motor.
     fracao_ideal_decimal?: number | null;
     fracao_ideal_thousandths?: number | null;
+    /**
+     * De onde a fração veio, e as duas origens NÃO se equivalem:
+     * `MOTOR` é derivada (recalculável); `CONVENCAO` é transcrição de documento
+     * registrado e só muda por averbação. O motor nunca sobrescreve CONVENCAO —
+     * há trava no banco (`trg_fracao_ideal_protege_convencao`).
+     */
+    fracao_ideal_origem?: 'MOTOR' | 'CONVENCAO' | null;
+    /** De qual documento a fração foi transcrita. */
+    fracao_ideal_fonte?: string | null;
+    fracao_ideal_transcrita_em?: string | null;
     area_real_total_m2?: number | null;
     area_engine_version_id?: string | null;
     area_engine_synced_at?: string | null;

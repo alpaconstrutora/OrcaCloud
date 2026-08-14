@@ -1731,9 +1731,28 @@ export const areaEngineService = {
         const updates: { sourceUnitId: string; fracaoDecimal: number; fracaoThousandths: number; areaRealTotal: number }[] = [];
         let unitsWithoutSource = 0;
 
+        // Unidades cuja fração foi TRANSCRITA DA CONVENÇÃO ficam de fora: a
+        // convenção registrada é fato jurídico, o motor é cálculo — e cálculo
+        // não sobrescreve cartório. O banco também recusa
+        // (trg_fracao_ideal_protege_convencao); filtrar aqui é o que evita a
+        // escrita reversa inteira morrer por causa de uma unidade.
+        const sourceIds = structure.units
+            .map(u => (u as { source_empreendimento_unit_id?: string | null }).source_empreendimento_unit_id)
+            .filter(Boolean) as string[];
+        const travadasPorConvencao = new Set<string>();
+        if (sourceIds.length > 0) {
+            const { data: travadas } = await supabase
+                .from('empreendimento_units')
+                .select('id')
+                .in('id', sourceIds)
+                .eq('fracao_ideal_origem', 'CONVENCAO');
+            for (const t of travadas || []) travadasPorConvencao.add(t.id);
+        }
+
         for (const unit of structure.units) {
             const sourceUnitId = (unit as { source_empreendimento_unit_id?: string | null }).source_empreendimento_unit_id;
             if (!sourceUnitId) { unitsWithoutSource++; continue; }
+            if (travadasPorConvencao.has(sourceUnitId)) continue;
             const fraction = fractionByUnitId.get(unit.id);
             if (!fraction) continue; // versao ainda nao calculada para esta unidade
             updates.push({
@@ -1747,6 +1766,9 @@ export const areaEngineService = {
         if (unitsWithoutSource > 0) {
             warnings.push(`${unitsWithoutSource} unidade(s) desta versao nao tem proveniencia de um Empreendimento (criadas manualmente no editor) — nao foram atualizadas.`);
         }
+        if (travadasPorConvencao.size > 0) {
+            warnings.push(`${travadasPorConvencao.size} unidade(s) tem fracao transcrita da CONVENCAO e nao foram tocadas — documento registrado so muda por averbacao, pela tela de Fracoes.`);
+        }
         if (updates.length === 0) {
             warnings.push('Nenhuma unidade elegivel para escrita reversa. Calcule a versao antes de escrever no Empreendimento.');
         }
@@ -1758,6 +1780,9 @@ export const areaEngineService = {
                 .update({
                     fracao_ideal_decimal: u.fracaoDecimal,
                     fracao_ideal_thousandths: u.fracaoThousandths,
+                    // Marca a proveniência: sem ela, MOTOR e CONVENCAO viram o
+                    // mesmo número e a proteção deixa de existir.
+                    fracao_ideal_origem: 'MOTOR',
                     area_real_total_m2: u.areaRealTotal,
                     area_engine_version_id: versionId,
                     area_engine_synced_at: now,

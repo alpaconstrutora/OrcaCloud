@@ -451,6 +451,14 @@ Logo a fração ideal passa a ter **duas origens, que não podem ser confundidas
 
 - **F2 muda de escopo.** O handoff automático continua sendo o diferencial, mas só para empreendimentos que o ÒPURA incorporar **daqui para frente**. Para retrofit — que é o caso do piloto — F2 precisa de um caminho de entrada da convenção (importação/transcrição), senão trava.
 - **Ordem sugerida dentro de F2:** o caminho `CONVENCAO` vem primeiro, porque é o que o piloto exige; o caminho `MOTOR` já existe e só precisa ser ligado.
+
+  ✅ **IMPLEMENTADO em 14/08/2026** — `aplicar_20270905000021_fracao_ideal_origem.sql` + aba **Frações** em `components/condominio/FracoesTab.tsx`.
+
+  **A trava é o que decide se presta.** Sem marca de origem, o motor sobrescreve silenciosamente uma fração registrada em cartório — trocando o documento por uma conta. Não apareceria como erro de sistema: apareceria como boleto errado, meses depois. Proteção em duas camadas: `areaEngineService` filtra as unidades `CONVENCAO` e as reporta nos avisos da escrita reversa; `trg_fracao_ideal_protege_convencao` recusa se algum caminho novo esquecer o filtro. **Aplicação filtra, banco se recusa.**
+
+  Três decisões da tela: **nenhum botão de distribuir/ratear proporcionalmente** (a tela COPIA um documento; número inventado aqui define peso de voto em assembleia e divisão de rateio); **a soma não trava o salvamento** (transcrever 200 unidades é trabalho em etapas — travar obrigaria a inventar número para fechar, que é o erro que a tela evita), só mostra o desvio; **limpar a fração limpa a origem**, senão a unidade fica travada para o motor para sempre.
+
+  ⚠️ **Ordem de implantação:** `UNIT_COLS` passou a ler as colunas novas, então a migration tem de estar aplicada — sem ela, TODA listagem de unidades falha (espelhos de vendas e locações inclusive).
 - **Quando o rateio entrar (pós-portão), a coluna de origem é obrigatória.** Ratear por uma fração de origem desconhecida é erro que só aparece no boleto do condômino.
 - Não foi implementada agora: rateio é pós-portão e a ocupação não depende de fração. Fica como primeiro item de F2.
 

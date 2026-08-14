@@ -5,14 +5,15 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, Building2, FileText, Users, Wrench, Save } from 'lucide-react';
+import { ArrowLeft, FileText, Users, Wrench, Save, Scale } from 'lucide-react';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
+import FracoesTab from './FracoesTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type { Empreendimento } from '../../types/empreendimento';
 
-type Aba = 'ficha' | 'ocupacoes' | 'manutencao';
+type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'manutencao';
 
 interface Props {
     empreendimento: Empreendimento;
@@ -74,12 +75,20 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
     const abas: { id: Aba; label: string; icon: any }[] = [
         { id: 'ficha', label: 'Ficha', icon: FileText },
         { id: 'ocupacoes', label: 'Ocupações', icon: Users },
+        // Fica entre Ocupações e Manutenção porque é da mesma família: quem
+        // ocupa e quanto pesa cada unidade. É a base do rateio e do peso de
+        // voto em assembleia, ambos pós-portão.
+        { id: 'fracoes', label: 'Frações', icon: Scale },
         { id: 'manutencao', label: 'Manutenção', icon: Wrench },
     ];
 
     return (
         <div className="space-y-6">
-            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+            {/* §20 — título solto, NUNCA em card. Copiei o cabeçalho em card do
+                EmpreendimentoDetail, mas ele é exceção NOMEADA para telas que já
+                existiam; tela nova segue o padrão. §23: com 1 salto de
+                profundidade o padrão é "Voltar", não migalha de pão. */}
+            <div>
                 <button
                     type="button"
                     onClick={onBack}
@@ -87,18 +96,11 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
                 >
                     <ArrowLeft className="w-4 h-4" /> Voltar
                 </button>
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-teal-50 text-teal-600 rounded-[10px]">
-                        <Building2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">{e.name}</h1>
-                        <p className="text-xs text-gray-400 font-medium mt-0.5">
-                            {e.code ? `${e.code} · ` : ''}
-                            {e.condominio_cnpj ? `CNPJ ${e.condominio_cnpj}` : 'CNPJ do condomínio não informado'}
-                        </p>
-                    </div>
-                </div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{e.name}</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    {e.code ? `${e.code} · ` : ''}
+                    {e.condominio_cnpj ? `CNPJ ${e.condominio_cnpj}` : 'CNPJ do condomínio não informado'}
+                </p>
             </div>
 
             {/* Abas §19.1 */}
@@ -207,6 +209,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
             )}
 
             {aba === 'ocupacoes' && <OcupacoesTab empreendimento={e} />}
+            {aba === 'fracoes' && <FracoesTab empreendimento={e} />}
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
 
             {notification && (

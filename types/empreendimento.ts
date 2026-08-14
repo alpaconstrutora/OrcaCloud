@@ -2,8 +2,10 @@
 // Módulo Empreendimentos (Incorporação) — entidade central que possui 1..N obras (projects).
 // Hierarquia: Empreendimento → Torres (= obra) → Unidades (pavimento = floor) + Áreas Comuns.
 
+// EM_OPERACAO vem DEPOIS de ENTREGUE e não é o fim: o edifício entregue passa a ser
+// operado (condomínio). ENCERRADO continua sendo outra coisa — incorporação encerrada.
 export type EmpreendimentoStatus =
-    | 'PLANEJAMENTO' | 'LANCAMENTO' | 'EM_OBRAS' | 'ENTREGUE' | 'ENCERRADO';
+    | 'PLANEJAMENTO' | 'LANCAMENTO' | 'EM_OBRAS' | 'ENTREGUE' | 'EM_OPERACAO' | 'ENCERRADO';
 
 // Antes era um union fixo (VERTICAL/HORIZONTAL/MISTO/COND_LOGISTICO/COND_INDUSTRIAL).
 // Agora é o `slug` de um registro em `empreendimento_types` (catálogo gerenciável em
@@ -66,6 +68,18 @@ export interface Empreendimento {
     spe_razao_social?: string;
     spe_cnpj?: string;
     spe_nome_fantasia?: string;
+
+    // Condomínio (ÒPURA Pós-Entrega, F0) — o MESMO edifício depois da entrega.
+    // `condominio_cnpj` NÃO é `spe_cnpj`: a SPE incorporou, o condomínio opera. É
+    // por aqui que a segregação de caixa se ancora quando o financeiro condominial
+    // entrar (dinheiro de condomínio não encosta em razão de construtora).
+    condominio_cnpj?: string | null;
+    condominio_razao_social?: string | null;
+    condominio_instalado_em?: string | null;
+    sindico_client_id?: string | null;
+    sindico_mandato_inicio?: string | null;
+    /** Mandato tem fim, e síndico vencido não representa o condomínio. */
+    sindico_mandato_fim?: string | null;
 
     // Terreno
     terreno_street?: string;
@@ -184,6 +198,48 @@ export interface EmpreendimentoUnit {
 
 export type EmpreendimentoUnitInsert = Omit<EmpreendimentoUnit, 'id' | 'created_at' | 'updated_at'>;
 export type EmpreendimentoUnitUpdate = Partial<EmpreendimentoUnitInsert>;
+
+// ── Ocupações (ÒPURA Pós-Entrega, F0) ────────────────────────────────────────
+// Propriedade ≠ ocupação ≠ responsabilidade financeira: três relações distintas
+// entre uma pessoa e uma unidade, uma LINHA por papel. Um proprietário pode não
+// morar; um morador pode não pagar.
+// Plano: docs/planos/2026-08-13-opura-condominios-avaliacao.md
+export type OccupancyRole =
+    | 'PROPRIETARIO'            // é dono; pode não morar
+    | 'INQUILINO'               // ocupa por locação
+    | 'MORADOR'                 // mora sem ser dono nem locatário
+    | 'RESPONSAVEL_FINANCEIRO'; // recebe a cobrança do condomínio — único por unidade vigente
+
+export interface UnitOccupancy {
+    id: string;
+    unit_id: string;
+    /** A pessoa é `clients` — herda a dedup por CPF/CNPJ e é a âncora de login do Portal do Condômino. */
+    client_id: string;
+    /** Herdado do empreendimento pelo trigger `trg_unit_occupancies_org`; nunca vem do seletor do topo. */
+    organization_id: string;
+    role: OccupancyRole;
+    started_at: string;
+    /** NULO = vigente. Encerrar não apaga: a ocupação é histórico. */
+    ended_at?: string | null;
+    notes?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+/** `organization_id` sai do insert de propósito: quem decide é o trigger, não a tela. */
+export type UnitOccupancyInsert =
+    Omit<UnitOccupancy, 'id' | 'organization_id' | 'created_at' | 'updated_at'>;
+export type UnitOccupancyUpdate = Partial<Omit<UnitOccupancyInsert, 'unit_id'>>;
+
+/** Ocupação já resolvida com o nome da pessoa e da unidade, para a tabela. */
+export interface UnitOccupancyRow extends UnitOccupancy {
+    _client_name: string;
+    _client_document?: string | null;
+    _client_email?: string | null;
+    _unit_name: string;
+    _tower_name: string;
+    _fracao_ideal?: number | null;
+}
 
 export interface EmpreendimentoCommonArea {
     id: string;

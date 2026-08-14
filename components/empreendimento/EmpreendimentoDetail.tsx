@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, Users } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import TowerEditor from './TowerEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
@@ -11,6 +11,7 @@ import CuradoriaTab from './CuradoriaTab';
 import { empreendimentoProposalService } from '../../services/empreendimentoProposalService';
 import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
 import VinculacoesTab from './VinculacoesTab';
+import OcupacoesTab from './OcupacoesTab';
 import HistoricoTab from './HistoricoTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
@@ -39,6 +40,7 @@ const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
   LANCAMENTO: 'Lançamento',
   EM_OBRAS: 'Em Obras',
   ENTREGUE: 'Entregue',
+  EM_OPERACAO: 'Em Operação',
   ENCERRADO: 'Encerrado',
 };
 
@@ -58,10 +60,11 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   LANCAMENTO: 'text-amber-600',
   EM_OBRAS: 'text-blue-600',
   ENTREGUE: 'text-emerald-600',
+  EM_OPERACAO: 'text-teal-600',
   ENCERRADO: 'text-slate-500',
 };
 
-type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
+type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'regulatorio' | 'comercial' | 'locacoes' | 'ocupacoes' | 'vinculos' | 'historico';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
   const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (CLAUDE.md regras #2/#3)
@@ -187,6 +190,10 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
     { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
     { id: 'locacoes', label: 'Espelho de Locações', icon: KeyRound },
+    // Pós-entrega: quem é DONO, quem MORA e quem PAGA — perguntas que o espelho
+    // de vendas não responde. Fica depois dos espelhos porque é a fase seguinte
+    // na vida do edifício, não outro recorte do mesmo dado.
+    { id: 'ocupacoes', label: 'Ocupações', icon: Users },
     // As duas últimas são transversais (o que está pendurado / o que aconteceu),
     // não etapas do fluxo de dados — por isso ficam no fim do trilho.
     { id: 'vinculos', label: 'Vinculações', icon: Link2 },
@@ -377,6 +384,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       )}
       {tab === 'locacoes' && (
         <EspelhoLocacoesTab empreendimento={e} />
+      )}
+      {tab === 'ocupacoes' && (
+        <OcupacoesTab empreendimento={e} />
       )}
       {tab === 'sync' && (
         <SyncCenterTab

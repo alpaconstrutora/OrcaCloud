@@ -25,6 +25,7 @@ const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
   LANCAMENTO: 'Lançamento',
   EM_OBRAS: 'Em Obras',
   ENTREGUE: 'Entregue',
+  EM_OPERACAO: 'Em Operação',
   ENCERRADO: 'Encerrado',
 };
 
@@ -34,6 +35,7 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   LANCAMENTO: 'text-amber-600',
   EM_OBRAS: 'text-blue-600',
   ENTREGUE: 'text-emerald-600',
+  EM_OPERACAO: 'text-teal-600',
   ENCERRADO: 'text-slate-500',
 };
 

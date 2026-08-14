@@ -1,0 +1,324 @@
+# ÒPURA Condomínios — Avaliação da proposta e caminho recomendado
+
+**Data do pedido:** 2026-08-13
+**Estado:** avaliação concluída e aprovada. **F0: migration APLICADA e conferida** (13/08/2026) — bloco 8 devolveu os 8 contadores esperados: `tabela=1, com_rls=1, policies=4, anon_policies=0, fks=2, uidx_responsavel=1, trigger_org=1, status_em_operacao=1`. Falta provar os invariantes em runtime e construir a tela.
+**Piloto definido:** `010 - Galeria Altavista`.
+
+---
+
+## Pedido original
+
+Mensagem do usuário, transcrita literalmente (sessão de 2026-08-13):
+
+> avalie:
+> ÒPURA Condomínios
+> Objetivo
+>
+> Administrar condomínios residenciais, comerciais e mistos, cobrindo operação, finanças, manutenção, comunicação e governança.
+>
+> Perfis de usuário
+> Administradora de condomínios
+> Síndico e subsíndico
+> Conselho fiscal
+> Porteiro e zelador
+> Morador, proprietário ou inquilino
+> Prestador de serviço
+> Contabilidade
+> MVP recomendado
+> 1. Cadastro do condomínio
+> Blocos, torres, unidades, garagens e áreas comuns
+> Proprietários, moradores e inquilinos
+> Fração ideal e responsabilidade financeira
+> Mandatos de síndico e conselho
+> Documentos, convenção e regulamento interno
+> 2. Financeiro condominial
+> Plano de contas por condomínio
+> Orçamento anual
+> Rateio ordinário e extraordinário
+> Cobranças recorrentes
+> Boletos e Pix
+> Contas a pagar e receber
+> Fundo de reserva e fundos específicos
+> Inadimplência, multa, juros e acordos
+> Conciliação bancária
+> Prestação de contas mensal
+> Balancete e demonstrativo por unidade
+>
+> O rateio precisa aceitar diferentes critérios:
+>
+> Fração ideal
+> Valor igual por unidade
+> Consumo individual
+> Bloco ou grupo de unidades
+> Valor fixo
+> Fórmula personalizada
+> 3. Comunicação e atendimento
+> Mural de avisos
+> Notificações por aplicativo, e-mail e WhatsApp
+> Chamados e ocorrências
+> Enquetes
+> Registro de reclamações
+> Histórico de comunicação por unidade
+> Confirmação de leitura
+> 4. Assembleias
+> Convocação
+> Pauta e documentos
+> Controle de presença
+> Procurações
+> Votação presencial, híbrida ou digital
+> Peso de voto configurável
+> Geração de ata
+> Assinatura eletrônica
+> Arquivamento das deliberações
+> 5. Reservas
+> Salão de festas, churrasqueira, academia e outras áreas
+> Agenda e regras de utilização
+> Limite por unidade
+> Taxa de reserva e caução
+> Aprovação automática ou manual
+> Checklist de entrega do espaço
+> 6. Manutenção e operação
+>
+> Aqui existe uma vantagem competitiva para o ÒPURA, pois o sistema já possui conhecimento de obras e manutenção:
+>
+> Plano de manutenção conforme NBR 5674
+> Equipamentos e ativos do condomínio
+> Manutenções preventivas e corretivas
+> Ordens de serviço
+> Checklists de inspeção
+> Contratos de manutenção
+> Alertas de vencimento
+> Garantias da construtora e dos fornecedores
+> Histórico técnico do edifício
+> Integração com módulos existentes
+> Módulo existente	Aplicação no condomínio
+> Financeiro	Contas, conciliação, cobrança e relatórios
+> DMS/Documentos	Convenção, atas, contratos e certificados
+> Manutenção NBR 5674	Plano preventivo e histórico técnico
+> Gestão de bens	Elevadores, bombas, portões e equipamentos
+> Portal de parceiros	Prestadores e empresas de manutenção
+> Tarefas	Ocorrências, inspeções e ordens de serviço
+> Contratos	Limpeza, segurança, elevadores e seguros
+> Portal do cliente	Pode evoluir para Portal do Condômino
+> Qualidade/Entrega	Transferência das garantias da obra
+> WhatsApp	Avisos, cobranças e atualizações de chamados
+> Diferencial estratégico
+>
+> O diferencial não deveria ser apenas "administrar condomínio". Esse mercado já possui sistemas especializados. A proposta mais defensável seria:
+>
+> Da construção à operação do edifício, com todo o histórico técnico, documental e financeiro conectado.
+>
+> Quando a construtora entrega o empreendimento, o ÒPURA poderia criar automaticamente:
+>
+> Condomínio
+> Blocos e unidades
+> Cadastro inicial dos proprietários
+> Manual do proprietário
+> Manual das áreas comuns
+> Equipamentos instalados
+> Garantias
+> Plano inicial de manutenção
+> Documentação técnica
+> Pendências da entrega
+> Fases posteriores
+> Controle de acesso e visitantes
+> Encomendas e correspondências
+> Leitura de água, gás e energia
+> Gestão de funcionários e escalas
+> Livro de ocorrências da portaria
+> Marketplace de serviços
+> Aplicativo do morador
+> Gestão de múltiplos condomínios para administradoras
+> Auditoria financeira com IA
+> Previsão de inadimplência
+> Assistente para dúvidas sobre convenção e regulamento
+> Integração com portarias remotas e dispositivos IoT
+> Recomendação de posicionamento
+>
+> Eu começaria pelo pós-obra e manutenção condominial, conectado ao Portal do Cliente, e não por uma solução completa para administradoras. Isso reduz bastante o escopo e explora uma vantagem que sistemas tradicionais dificilmente têm: receber o edifício diretamente dos módulos de incorporação, engenharia, entrega e garantias do ÒPURA.
+>
+> Nome interno sugerido: ÒPURA Condomínios.
+> Entidade central no sistema: Condomínio → Blocos → Unidades → Ocupações, mantendo separadas a propriedade do imóvel, a ocupação e a responsabilidade financeira.
+
+### Decisões travadas na mesma sessão (respostas do usuário)
+
+- **Caixa condominial:** "Sim, mas depois de um portão." — F1 sai sem dinheiro de condomínio; financeiro condominial só entra como fase pós-portão, se o piloto provar demanda.
+- **Cliente pagante do piloto:** "A própria construtora (pós-entrega)."
+
+---
+
+## Veredito
+
+**A recomendação de posicionamento no fim do documento está certa. O "MVP recomendado" no meio dele a contradiz** — os 6 blocos descrevem um concorrente completo da Superlógica, não um MVP. Descartando o MVP e ficando com a recomendação, a ideia é viável e tem vantagem real e verificável no código.
+
+---
+
+## O que já existe (verificado no código, não presumido)
+
+| Peça | Situação real | Onde |
+|---|---|---|
+| **Fração ideal** | Existe e é **calculada** pelo motor NBR 12721 — ver ressalva abaixo | `empreendimento_units` (`20261231000013_area_engine_empreendimento_writeback.sql`), `services/areaEngineService.ts:1714` |
+| Empreendimento → Torre/Bloco → Unidade → Área comum | Cadastro maduro (área privativa/comum/total, pavimento, tipologia) | `components/empreendimento/`, `services/empreendimentoService.ts` |
+| Boleto + PIX + webhook | Ponta a ponta, com idempotência | `supabase/functions/asaas-charge/`, `asaas-webhook/` |
+| Régua de cobrança (dunning) | Pronta, canal só e-mail | `dunning_rules`/`dunning_events`, `services/dunningService.ts` |
+| Conciliação bancária | Alta maturidade, matching contra o razão | `services/bankReconciliationService.ts` + ~11 tabelas |
+| Rateio com invariante no servidor | Por **imóvel**; bases `PRIVATE_AREA`/`EQUAL`/`MANUAL`; soma travada = valor do lançamento | `fn_set_property_allocations`, `lib/rentalAllocation.ts` (com teste) |
+| Balancete / DRE / orçamento anual | `fn_balancete`, `fn_dre`, módulo FP&A | `components/BalanceteReport.tsx`, `components/fpa/` |
+| Assinatura eletrônica (ZapSign) | Madura, mas acoplada a contratos/deals | `supabase/functions/sign-contract/` |
+| **Garantia / assistência técnica** | `ABERTO→TRIAGEM→EM_GARANTIA→VISITA_AGENDADA→EM_REPARO→CONCLUÍDO` | `components/WarrantyModule.tsx`, `warranty_terms`/`warranty_claims` |
+| **Qualidade / patologias** | O aggregate mais valioso do repo: evidência, SLA por cron, contestação, atribuição de responsabilidade — já modela `empreendimentoId/blocoId/torreId/unidadeId/ambienteId/componenteId` | `20260514000000_create_quality_module.sql`, `20260514000002_quality_sla_cron.sql` |
+| Chamados + OS do cliente | `client_requests` + `client_service_orders`, já com categorias prediais | `20261201000001_client_portal_requests_os.sql` |
+| Ativos | CRUD completo, com manutenção preventiva/corretiva e documentos | `opura_assets`, `components/OpuraAssetsModule.tsx` |
+
+**A vantagem competitiva real não é "conhecimento de obras" genérico** — é a fração ideal calculada pelo motor de áreas somada ao par Qualidade+Garantia já ancorado na unidade. Nenhum sistema condominial tradicional tem isso, porque nenhum participou da incorporação.
+
+### ⚠️ Ressalva sobre a fração ideal (verificada em 2026-08-13)
+
+`writeBackFractionsToEmpreendimento` tem **um único ponto de chamada**: um botão em `components/AreaEngineModule.tsx:623`. Para `fracao_ideal_decimal` estar preenchida, quatro condições manuais precisam ter acontecido, nessa ordem:
+
+1. o empreendimento foi processado pelo motor de áreas;
+2. as unidades da versão têm `source_empreendimento_unit_id` (vieram do importador — unidades criadas à mão no editor são **contadas e ignoradas**, `areaEngineService.ts:1736`);
+3. a versão está `calculada`/`aprovada`/`travada` (draft, superseded e cancelled são recusadas);
+4. alguém clicou no botão de escrita reversa.
+
+**Não é automático.** Se na prática esse botão nunca foi clicado, o diferencial de F2 vira digitação manual. É a primeira coisa a conferir — ver Verificação.
+
+---
+
+## O que não existe (e a proposta subestima)
+
+1. **Entidade "Condomínio" — não existe.** Hoje "condomínio" é só uma *categoria de cliente/projeto* (`constants/clientCategories.ts`).
+2. **Ocupação — não existe, e é o buraco central.** Não há morador, residente, coproprietário, nem vínculo unidade↔usuário do portal. Grep por `morador|inquilino|resident` só retorna RH; grep por `occupanc` só retorna taxa de ocupação/vacância. A proposta identifica isso corretamente no último parágrafo — é o primeiro tijolo.
+3. **NBR 5674 — zero ocorrências no repositório.** Pior: **manutenção não tem periodicidade**. `opura_asset_maintenances` tem `scheduled_date`, mas não há coluna de recorrência/próximo vencimento em lugar nenhum. Plano cíclico é construção, não adaptação.
+4. **OS de manutenção predial — `work_orders` não serve.** É `project_id NOT NULL`, com `phase`, `budget_item_ref`, `planned_productivity`, `measurement_unit`, `team_id → labor_teams`, e status que termina em `measured`. É OS de **produção de obra medida**. Forçar manutenção predial ali contamina os dois domínios.
+5. **Reservas de áreas comuns — inexistente.** `empreendimento_common_areas` é cadastral (nome, categoria, área, pavimento): sem capacidade, horário, regra, taxa. `reservation` no repo é de equipamento/almoxarifado.
+6. **Assembleia / ata / quórum / procuração — inexistente.** Único vestígio: `investor_announcements.type='assembleia'`, um rótulo de comunicado com voto sim/não/abstenção.
+7. **Mural de avisos condominial — inexistente.** Existem `communications` (RH/obra) e `investor_announcements` — públicos errados.
+8. **Multa/juros de inadimplência própria — inexistente.** Os campos `multa`/`juros_dia` em `boletos` são *parse de boleto de terceiro*, não motor de cálculo.
+9. **Acordo / parcelamento de dívida — inexistente.**
+10. **Prestação de contas condominial — inexistente.** Balancete e DRE existem, mas prestação de contas de condomínio tem forma legal própria e aprovação em assembleia.
+
+---
+
+## Os cinco erros da proposta
+
+1. **O MVP não é um MVP.** Seis blocos; só o financeiro condominial tem 12 itens e o rateio pede 6 critérios. É o produto inteiro, e contradiz a recomendação do próprio documento.
+
+2. **"Portal do Cliente pode evoluir para Portal do Condômino" esconde um bloqueio concreto.** O Portal do Cliente é **token público sem login** (`client_portal_tokens`: 1 token por cliente, 90 dias). Serve para um comprador; **não serve para 200 moradores** com dados financeiros individuais. E o eixo é `cliente → obra/contrato`, nunca `cliente → unidade`. Evoluir exige autenticação real + eixo novo — não é ajuste de aba.
+
+3. **Três linhas da tabela de integração são otimistas.** "Manutenção NBR 5674" não existe (o que existe é manutenção de frota). "Tarefas → ordens de serviço" não se aplica (`work_orders` é de produção). "Gestão de bens" existe como cadastro, mas as categorias são `equipamento|ferramenta|veiculo|tecnologia|imovel|mobiliario` — sem taxonomia de sistemas prediais e sem garantia de fornecedor por equipamento.
+
+4. **Risco arquitetural: uma quinta hierarquia paralela.** O repo já carrega 4 módulos concorrentes de planta e o histórico do "Centro da Verdade" do Empreendimento. Se "Condomínio → Blocos → Unidades" nascer como árvore nova ao lado de `empreendimentos → towers → units`, cria-se divergência permanente entre o prédio-que-foi-vendido e o prédio-que-é-operado. **Condomínio tem que ser um estado do ciclo de vida do empreendimento, não uma entidade irmã.**
+
+5. **Segregação de caixa é requisito legal, não escolha técnica.** Quando o portão do financeiro abrir, dinheiro de condomínio não pode encostar em razão de construtora — e `internal_transactions` é razão único.
+
+   **Resolvido em 13/08/2026, e melhor do que eu supunha:** não é padrão a inventar. **Cada empreendimento já é uma organização-SPE própria** — o caso documentado é `a2c4b292` = "Construção do Edifício Garden Cambuhy SPE", com imóvel, prédio e negociação todos nela. E a cascata "filho herda a org do pai" já está travada no banco por três triggers aplicados (`20270821000001/2/3`). Logo o condomínio nasce como `organization_id` próprio pelo caminho que o sistema já percorre; a segregação de caixa vem de graça.
+
+   **A lição que vem junto** (mesmo diagnóstico, 21/07/2026): recurso "do grupo" precisa de escopo multi-org, não por-org — foi assim que o dropdown de Corretor apareceu vazio, porque os corretores estavam na org do grupo e a negociação na SPE. Vale para o condomínio: prestador de serviço e contrato de facilities provavelmente são do grupo, não do condomínio.
+
+---
+
+## Caminho recomendado
+
+Com o pagante sendo a construtora e o caixa atrás de um portão, o produto **não é administração de condomínio**: é a **operação do edifício entregue**, vendida a quem o entregou. Rótulo interno mais honesto: **ÒPURA Pós-Entrega**; "Condomínios" fica reservado para depois do portão financeiro.
+
+### F0 — Ocupações
+
+**Decisão do usuário (13/08/2026): a pessoa é `clients`.** Morador e inquilino viram registro em `clients`, herdando a dedup por CPF/CNPJ que já existe (`20270716000002_document_duplicate_lookup.sql`) e dando âncora de login para F3. Descartadas: tabela `people` nova (criaria segundo cadastro de pessoa, com o mesmo CPF em dois lugares) e `client_id` opcional com campos soltos (sem dedup, e F3 ficaria sem saber a quem dar login).
+
+| Item | O que muda | Como sei que terminou | Estado |
+|---|---|---|---|
+| `unit_occupancies` | `unit_id`, `client_id`, `role` (PROPRIETARIO / INQUILINO / MORADOR / RESPONSAVEL_FINANCEIRO), `started_at`, `ended_at`, `organization_id` | Migration aplicada; RLS `is_org_member`; zero policy para `anon`; bloco 8 devolve os 8 contadores esperados | ✅ **APLICADA e conferida** — `aplicar_20270905000017_condominio_ocupacoes.sql` |
+| Invariante do responsável financeiro | Índice único parcial: um `RESPONSAVEL_FINANCEIRO` vigente por unidade | Tentar inserir o segundo dá `duplicate key` | ✅ **PROVADO** — `23505` em `uidx_unit_occupancies_um_responsavel` |
+| Cascata de org | Trigger `trg_unit_occupancies_org`: herda do empreendimento via tower; `RAISE` se divergente | Inserir com org errada de propósito levanta "Filho herda a org do pai" | ✅ **PROVADO** — `P0001` em `fn_unit_occupancies_org()` linha 19 |
+| Estado `EM_OPERACAO` + dados do condomínio | Novo status no CHECK + `condominio_cnpj`, `condominio_razao_social`, síndico e mandato | Empreendimento muda para `EM_OPERACAO` sem quebrar espelho de vendas nem de locações | ✅ CHECK aplicado; ⏳ transição não exercitada na UI |
+| Tela de Ocupações | Aba "Ocupações" em `EmpreendimentoDetail`; `components/empreendimento/OcupacoesTab.tsx` + `services/unitOccupancyService.ts` | Cadastrar proprietário que não mora + morador que não paga, e os papéis aparecem distintos na unidade — **verificado no navegador** | ✅ escrita; `tsc` limpo e `check-ui-standard.sh` sem violações; ⏳ **NÃO verificada no navegador** |
+| **Não** criar árvore de blocos/unidades | Reusar `empreendimento_towers`/`empreendimento_units` | Nenhuma tabela nova de bloco/unidade na migration | ✅ cumprido |
+| Fração ideal | Ler `fracao_ideal_decimal` já gravada; nunca redigitar | Tela mostra a fração do motor e sinaliza "não informada" quando ausente, em vez de campo vazio editável | ⬜ **no piloto ela é sempre ausente** (`com_fracao=0`) — a tela tem de tratar isso como o caso normal, não como exceção; entrada da convenção vai para F2 |
+
+Trava de prefixo (`__tests__/migrationsPrefixo.test.ts`) rodada com a migration nova: **3/3 passando**.
+
+Regras da casa que se aplicam: REGRA #5 (org vem de `useOrgContext`, nunca `organizations[0]`), REGRA #1 (rodar `check-ui-standard.sh` nos arquivos tocados), REGRA #4 (`UI_PATTERNS.md` antes de escolher Sheet/modal/página).
+
+### F1 — Manutenção predial NBR 5674 (a fase pesada)
+
+É onde está a vantagem, e é o que a construtora paga para não ser processada.
+
+| Item | O que muda | Como sei que terminou |
+|---|---|---|
+| `building_systems` | Taxonomia de sistemas prediais (elevador, bomba, SPDA, gerador, hidráulica, fachada…) | Catálogo populado e selecionável; segue REGRA #5 para "Todas as organizações" |
+| Ativos instalados | Reusar `opura_assets` com `parent_asset_id` + categoria nova de sistema predial | Um elevador cadastrado aparece sob o edifício, não sob a frota |
+| `maintenance_plans` / `maintenance_plan_items` | **Periodicidade e próximo vencimento** — a coluna que não existe em lugar nenhum do repo | Plano com item trimestral gera a próxima data corretamente ao concluir uma execução |
+| `maintenance_orders` | **Tabela nova**, irmã de `work_orders`: sem `project_id` obrigatório, sem medição de produção; ancorada em ativo + sistema + unidade | OS de manutenção abre, executa e fecha sem tocar em `work_orders` |
+| Garantia de fornecedor por equipamento | Hoje só existe construtora→cliente em `warranty_terms` | Equipamento com garantia de fornecedor alerta antes do vencimento |
+| Alertas de vencimento | Reusar o padrão de cron já provado em `20260514000002_quality_sla_cron.sql` | Cron dispara e o alerta chega; verificado com data forçada |
+
+### F2 — Handoff da entrega (o diferencial)
+
+Ação única que transforma empreendimento entregue em edifício operado: cria o condomínio, importa unidades e frações, puxa proprietários de `commercial_deals`, instancia ativos e garantias, gera o plano de manutenção inicial a partir dos sistemas. **É a única coisa aqui que a Superlógica não consegue copiar** — e o motivo de F0 e F1 virem antes.
+
+Pronto quando: um empreendimento `ENTREGUE` real vira edifício operado em uma ação, com fração ideal somando 1,0 e sem digitação manual.
+
+### F3 — Portal do Condômino
+
+Portal novo, irmão de `/portal-cliente`, **com autenticação real** (não token de 90 dias). Eixo `usuário → ocupação → unidade`. Abas: chamados (reusar `client_requests`/`client_service_orders`), documentos, manual do proprietário, garantias, avisos. Sem financeiro.
+
+Pronto quando: dois moradores de unidades diferentes logam e cada um vê só a própria unidade — verificado no navegador, não por `tsc`.
+
+### 🚪 Portão
+
+Só depois de um piloto real em operação decidir sobre: financeiro condominial (rateio por fração ideal, fundos, multa/juros, acordos, prestação de contas), assembleias e reservas. **Nenhum dos três entra antes.** Assembleia e reserva parecem baratas e não são: assembleia tem quórum, procuração e peso de voto; reserva tem calendário, regra e caução.
+
+---
+
+## Custo aproximado
+
+| Fase | Peso |
+|---|---|
+| F0 Ocupações | Pequena — schema + CRUD |
+| F1 Manutenção NBR 5674 | **A maior** — taxonomia, plano cíclico, OS nova, alertas. Módulo inteiro |
+| F2 Handoff | Média — orquestração sobre o que F0/F1 criaram |
+| F3 Portal do Condômino | Média-alta — a autenticação real é o custo escondido |
+| Pós-portão (financeiro + assembleia + reservas) | Maior que F0–F3 somadas |
+
+A intuição de que começar pelo pós-obra "reduz bastante o escopo" está certa, com uma ressalva: **F1 não é reaproveitamento, é construção.** O que já está pronto (Asaas, conciliação, DRE, ZapSign, Qualidade, Garantia) é excelente, mas quase tudo só é usado *depois* do portão. Antes dele, reusa-se cadastro de unidade, fração ideal, chamados e o padrão de SLA por cron.
+
+---
+
+## Verificação (antes de qualquer código)
+
+1. **Fração ideal com dado real — ✅ FEITA, e o resultado é NEGATIVO.**
+   `010 - Galeria Altavista`, status `ENTREGUE`: **12 unidades, `com_fracao = 0`, `soma_fracao = null`, `ultima_escrita_do_motor = null`.** A escrita reversa nunca rodou neste empreendimento. Ver "O diferencial não vale para retrofit", abaixo.
+2. **Confirmar o piloto — ✅ resolvido.** `010 - Galeria Altavista` (org `926cf626` = Alpa Construtora, **não** uma SPE própria).
+3. **Invariantes de F0 em runtime — ✅ PROVADOS (13/08/2026).**
+   - Cascata de org: `P0001 — Ocupação na organização 000…001 mas a unidade 5b4719dd… pertence à organização 926cf626…. Filho herda a org do pai.` (`fn_unit_occupancies_org()` linha 19).
+   - Responsável financeiro único: `23505 — duplicate key value violates unique constraint "uidx_unit_occupancies_um_responsavel"`.
+
+   Nota de credencial: o login de `agente-leitura@alpaconstrutora.com.br` devolveu `invalid_credentials` (HTTP 400) — a senha mudou desde 05/08. As verificações acima foram feitas pelo usuário no SQL Editor. Para eu consultar sozinho, redefinir em Supabase Studio → Authentication → Users (a senha não fica guardada, decisão de 05/08).
+
+---
+
+## O diferencial não vale para retrofit — correção de 13/08/2026
+
+A avaliação original vendeu como vantagem "receber a fração ideal já calculada pelo motor NBR 12721". A verificação no piloto mostrou o limite disso, e o limite é **estrutural, não um esquecimento de clicar o botão**:
+
+- O motor NBR 12721 serve à **incorporação** — quadros I/II/IV-B, memorial, averbação.
+- Num edifício **já entregue**, a fração ideal não é calculada: está **registrada na convenção de condomínio**, que é o documento com valor legal. Recalcular não a substitui.
+
+Logo a fração ideal passa a ter **duas origens, que não podem ser confundidas**:
+
+| Origem | De onde vem | Pode recalcular? |
+|---|---|---|
+| `MOTOR` | Escrita reversa do motor de áreas | Sim — nova versão sobrescreve |
+| `CONVENCAO` | Transcrição da convenção registrada | **Não** — só muda por averbação |
+
+**Consequências:**
+
+- **F2 muda de escopo.** O handoff automático continua sendo o diferencial, mas só para empreendimentos que o ÒPURA incorporar **daqui para frente**. Para retrofit — que é o caso do piloto — F2 precisa de um caminho de entrada da convenção (importação/transcrição), senão trava.
+- **Ordem sugerida dentro de F2:** o caminho `CONVENCAO` vem primeiro, porque é o que o piloto exige; o caminho `MOTOR` já existe e só precisa ser ligado.
+- **Quando o rateio entrar (pós-portão), a coluna de origem é obrigatória.** Ratear por uma fração de origem desconhecida é erro que só aparece no boleto do condômino.
+- Não foi implementada agora: rateio é pós-portão e a ocupação não depende de fração. Fica como primeiro item de F2.
+
+**Sobre a org do piloto:** `926cf626` é a Alpa Construtora, a org do grupo — o Altavista **não** tem SPE própria como o Garden Cambuhy. A cascata de F0 funciona igual, mas em F2 a pergunta "condomínio vira org própria?" não se resolve sozinha por herança: vira decisão explícita.
+
+A cada fase: rodar o cenário no navegador com projeto real antes de declarar pronto — `tsc`/lint não provam comportamento.

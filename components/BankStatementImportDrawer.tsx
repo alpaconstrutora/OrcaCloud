@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { UploadCloud, FileText as FileIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { UploadCloud, FileText as FileIcon, CheckCircle2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { PaymentAccount } from '../types';
 
@@ -106,7 +106,7 @@ export default function BankStatementImportDrawer({
                                     className="h-10 flex-1 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                 >
                                     <option value="">Ano</option>
-                                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(y => (
+                                    {Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - 25 + i).map(y => (
                                         <option key={y} value={String(y)}>{y}</option>
                                     ))}
                                 </select>
@@ -181,16 +181,12 @@ export default function BankStatementImportDrawer({
                                         </div>
                                         <div>
                                             {f.status === 'done' && (
-                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-                                                    <CheckCircle2 className="w-3.5 h-3.5" /> importado
-                                                </span>
+                                                <span className="text-sm font-normal text-emerald-700">importado</span>
                                             )}
                                             {f.status === 'error' && (
-                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600">
-                                                    <AlertTriangle className="w-3.5 h-3.5" /> {f.error || 'erro'}
-                                                </span>
+                                                <span className="text-sm font-normal text-red-600">{f.error || 'erro'}</span>
                                             )}
-                                            {f.status === 'uploading' && <span className="text-xs font-medium text-blue-600">{f.progress}%</span>}
+                                            {f.status === 'uploading' && <span className="text-sm font-normal text-blue-600">{f.progress}%</span>}
                                         </div>
                                     </div>
                                     <div className="h-1 bg-gray-100 rounded-full overflow-hidden">

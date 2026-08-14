@@ -25,7 +25,6 @@ import { useConfirm } from '../ui/confirm';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
 import {
     occupancyImportService,
-    type EixoImportacao,
     type ImportPreview,
 } from '../../services/occupancyImportService';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -108,7 +107,6 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     // Importação de Locações — prévia antes de gravar: ninguém desfaz 40
     // ocupações à mão, então a escrita direta seria irreversível na prática.
     const [importOpen, setImportOpen] = React.useState(false);
-    const [eixo, setEixo] = React.useState<EixoImportacao>('LOCACAO');
     const [preview, setPreview] = React.useState<ImportPreview | null>(null);
     const [carregandoPreview, setCarregandoPreview] = React.useState(false);
     const [importando, setImportando] = React.useState(false);
@@ -210,38 +208,26 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
         };
     }, [linhas, unidades.length]);
 
-    const carregarPreview = React.useCallback(async (alvo: EixoImportacao) => {
+    // Uma prévia só: a âncora é a unidade, e ela resolve locatário e
+    // proprietário na mesma passagem. Não há mais eixo a escolher.
+    const abrirImportacao = async () => {
+        setImportOpen(true);
         setCarregandoPreview(true);
         setPreview(null);
         try {
-            setPreview(await occupancyImportService.previewImport(empreendimento.id, orgId, alvo));
+            setPreview(await occupancyImportService.previewImport(empreendimento.id, orgId));
         } catch (e: any) {
             notify(e?.message || 'Erro ao montar a prévia da importação.', 'error');
             setImportOpen(false);
         } finally {
             setCarregandoPreview(false);
         }
-        // `notify` é estável o bastante (só agenda um timeout) e incluí-lo
-        // recriaria a função a cada notificação.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [empreendimento.id, orgId]);
-
-    const abrirImportacao = async (alvo: EixoImportacao) => {
-        setEixo(alvo);
-        setImportOpen(true);
-        await carregarPreview(alvo);
     };
 
-    const trocarEixo = async (alvo: EixoImportacao) => {
-        if (alvo === eixo) return;
-        setEixo(alvo);
-        await carregarPreview(alvo);
-    };
-
-    const alternarLinha = (key: string) => {
+    const alternarLinha = (unitId: string) => {
         setPreview(p => p && ({
             ...p,
-            rows: p.rows.map(r => (r.key === key ? { ...r, selected: !r.selected } : r)),
+            rows: p.rows.map(r => (r.unitId === unitId ? { ...r, selected: !r.selected } : r)),
         }));
     };
 
@@ -256,17 +242,18 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                 setLinhas(prev => [
                     ...r.novas.map(o => {
                         const [torre, nome] = (porUnidade[o.unit_id] || ' · ').split(' · ');
-                        const linhaPrevia = preview.rows.find(x => x.unitId === o.unit_id);
+                        const linha = preview.rows.find(x => x.unitId === o.unit_id);
+                        const pessoa = linha?.pessoas.find(pp => pp.clientId === o.client_id);
                         return {
                             ...o,
-                            _client_name: linhaPrevia?.clientName || '—',
+                            _client_name: pessoa?.clientName || '—',
                             _client_document: null,
                             _client_email: null,
                             _unit_name: nome || '—',
                             _tower_name: torre || '—',
                             _fracao_ideal: null,
                         };
-                    }).filter(o => incluirEncerradas || !o.ended_at),
+                    }),
                     ...prev,
                 ]);
             }
@@ -439,7 +426,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                         </div>
 
                         <button
-                            onClick={() => abrirImportacao('LOCACAO')}
+                            onClick={abrirImportacao}
                             className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 shrink-0 whitespace-nowrap"
                             title="Traz quem já está declarado nos contratos de locação e de venda"
                         >
@@ -689,100 +676,70 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                     </SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
-                    {/* Trilho de abas §19.1, anatomia completa: card branco externo +
-                        trilho bg-gray-50 com flex-wrap. Venda e locação são eixos
-                        independentes na mesma unidade — colunas diferentes, contratos
-                        diferentes. O `flex-wrap`/`max-w-full` importa aqui: no Sheet em
-                        mobile (bottom sheet) os dois rótulos não cabem lado a lado, e
-                        overflow-x cortaria o segundo sem indício de que existe. */}
-                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                            {([['LOCACAO', 'Locações → inquilinos'], ['VENDAS', 'Vendas → proprietários']] as [EixoImportacao, string][]).map(([id, label]) => (
-                                <button
-                                    key={id}
-                                    onClick={() => trocarEixo(id)}
-                                    disabled={carregandoPreview || importando}
-                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all disabled:opacity-50 ${
-                                        eixo === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
-                                    }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <p className="text-xs text-gray-400 mb-4">
-                        {eixo === 'LOCACAO'
-                            ? 'Contratos encerrados entram como histórico — o inquilino saiu, mas o registro fica.'
-                            : 'Propriedade não termina com o contrato: nenhuma ocupação de proprietário nasce encerrada, e venda cancelada é ignorada.'}
-                    </p>
-
+                    {/* A ÂNCORA É A UNIDADE DO EMPREENDIMENTO. Uma linha por
+                        unidade — inclusive as sem ninguém encontrado. Unidade que
+                        some da lista vira defeito invisível: foi assim que a
+                        importação de vendas pareceu quebrada em 14/08/2026. */}
                     {carregandoPreview ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                            <p className="mt-2 text-gray-500">Lendo os contratos...</p>
+                            <p className="mt-2 text-gray-500">Lendo o Comercial...</p>
                         </div>
                     ) : !preview || preview.rows.length === 0 ? (
                         <div className="text-center py-12">
                             <Download className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nada a importar</h3>
-                            {/* A causa mais comum de prévia vazia NÃO é falta de contrato: é a
-                                unidade não estar publicada neste eixo. Venda e locação são
-                                colunas independentes na mesma unidade, e culpar o contrato
-                                mandaria o usuário procurar no lugar errado. */}
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma unidade</h3>
                             <p className="text-sm text-gray-500 max-w-md mx-auto">
-                                {preview && preview.unidadesNoEixo === 0
-                                    ? `Nenhuma das ${preview.unidadesTotal} unidades deste condomínio está publicada no ${eixo === 'LOCACAO' ? 'Espelho de Locações' : 'Espelho de Vendas'}. A importação passa por esse vínculo — publique as unidades nesse eixo antes.`
-                                    : preview && preview.contratosSemVinculo > 0
-                                        ? `${preview.contratosSemVinculo} contrato(s) não alcançam nenhuma unidade deste condomínio, embora ${preview.unidadesNoEixo} unidade(s) estejam publicadas — confira se a negociação aponta para a unidade certa.`
-                                        : `${preview?.unidadesNoEixo ?? 0} unidade(s) publicadas, mas nenhum contrato de ${eixo === 'LOCACAO' ? 'locação' : 'venda'} com pessoa e vigência definidas.`}
+                                Este condomínio não tem unidades cadastradas. Elas vêm do
+                                Empreendimento, na aba Torres e Unidades.
                             </p>
                         </div>
                     ) : (
                         <div className="space-y-3">
                             <div className="text-xs text-gray-500">
-                                {preview.rows.filter(r => r.selected).length} de {preview.rows.length} selecionadas
-                                {preview.contratosSemVinculo > 0 && ` · ${preview.contratosSemVinculo} contrato(s) sem unidade vinculada`}
-                                {preview.contratosNaoImportaveis > 0 && ` · ${preview.contratosNaoImportaveis} em rascunho/minuta`}
+                                {preview.unidadesComPessoa} de {preview.unidadesTotal} unidades com pessoa encontrada
+                                {preview.unidadesEmNegociacao > 0 && ` · ${preview.unidadesEmNegociacao} em negociação`}
                             </div>
 
-                            {preview.rows.map(r => (
-                                <label
-                                    key={r.key}
-                                    className={`flex items-start gap-3 p-3 rounded-[10px] border transition-all cursor-pointer ${
-                                        r.selected ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white'
-                                    } ${r.roles.length === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={r.selected}
-                                        disabled={r.roles.length === 0}
-                                        onChange={() => alternarLinha(r.key)}
-                                        className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2 flex-wrap">
+                            {preview.rows.map(r => {
+                                const semNada = r.pessoas.length === 0 && !r.responsavelFinanceiro;
+                                return (
+                                    <label
+                                        key={r.unitId}
+                                        className={`flex items-start gap-3 p-3 rounded-[10px] border transition-all cursor-pointer ${
+                                            r.selected ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white'
+                                        } ${semNada ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={r.selected}
+                                            disabled={semNada}
+                                            onChange={() => alternarLinha(r.unitId)}
+                                            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                        />
+                                        <div className="min-w-0 flex-1">
                                             <span className="text-sm font-medium text-gray-800">{r.unitLabel}</span>
-                                            <span className="text-sm text-gray-500">·</span>
-                                            <span className="text-sm text-gray-700">{r.clientName}</span>
-                                            <span className="text-xs text-gray-400">{r.contractNumber}</span>
+                                            {r.pessoas.map(p => (
+                                                <div key={p.role} className="text-xs text-gray-500 mt-0.5">
+                                                    <span className="text-gray-700">{ROLE_LABELS[p.role]}</span>
+                                                    {': '}{p.clientName}
+                                                    <span className="text-gray-400">
+                                                        {' · '}{p.origem}{' · desde '}{formatarData(p.startedAt)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {r.responsavelFinanceiro && (
+                                                <div className="text-xs text-emerald-600 mt-0.5">
+                                                    Também vira responsável financeiro
+                                                </div>
+                                            )}
+                                            {r.motivo && (
+                                                <p className="text-xs text-amber-600 mt-1">{r.motivo}</p>
+                                            )}
                                         </div>
-                                        <div className="text-xs text-gray-500 mt-0.5">
-                                            {r.roles.length > 0
-                                                ? r.roles.map(p => ROLE_LABELS[p]).join(' + ')
-                                                : 'Nenhum papel novo'}
-                                            {' · '}
-                                            {r.endedAt
-                                                ? `${formatarData(r.startedAt)} a ${formatarData(r.endedAt)} (histórico)`
-                                                : `desde ${formatarData(r.startedAt)} (vigente)`}
-                                        </div>
-                                        {r.motivo && (
-                                            <p className="text-xs text-amber-600 mt-1">{r.motivo}</p>
-                                        )}
-                                    </div>
-                                </label>
-                            ))}
+                                    </label>
+                                );
+                            })}
                         </div>
                     )}
                 </SheetPanel>
@@ -800,7 +757,9 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                     >
                         {importando
                             ? 'Importando...'
-                            : `Importar ${preview?.rows.filter(r => r.selected).length ?? 0} ocupações`}
+                            /* Conta UNIDADES, não ocupações: cada unidade pode gerar até
+                               três (proprietário, inquilino e responsável financeiro). */
+                            : `Importar ${preview?.rows.filter(r => r.selected).length ?? 0} unidades`}
                     </button>
                 </SheetFooter>
             </Sheet>

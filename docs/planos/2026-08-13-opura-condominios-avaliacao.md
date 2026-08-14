@@ -296,6 +296,21 @@ Ressalva registrada e vencida pelo usuário: Empreendimentos mora em *Incorpora�
 
 **Decisões travadas pelo usuário na mesma conversa:** o locatário vira **INQUILINO *e* RESPONSÁVEL FINANCEIRO**; contratos **encerrados entram como histórico**, além dos vigentes.
 
+> ### ⚠️ ÂNCORA INVERTIDA EM 14/08/2026 — leia antes do resto desta seção
+>
+> **Pedido do usuário, literal:** *"a ancora para as unidades vem de empreendimento e nao mais de contratos dos módulos de venda e locacao. destes modulos vem os proprietarios e locatorios apenas"*.
+>
+> **Por que a versão original falhou.** Percorrendo contratos e resolvendo a unidade no fim, unidade não publicada num eixo simplesmente **não aparecia** — e a tela ainda culpava a falta de contrato. Foi o que fez a importação de vendas parecer quebrada, quando o real era que as 12 unidades do Altavista estavam publicadas só no eixo de locação.
+>
+> **Como ficou.** O empreendimento manda: **toda unidade aparece na prévia**, e Locação e Venda entram só para responder quem é o locatário e quem é o proprietário. Unidade sem resposta vira **lacuna visível**, que é informação — diz onde falta cadastro.
+>
+> **Três consequências:**
+> 1. **O contrato deixou de ser obrigatório.** Ele é gerado por um botão (`DealModal.handleGenerateContract`), então uma venda pode estar completa sem nunca ter virado `CV-`. A âncora da pessoa passou a ser `commercial_deals` (com `type` SALE/RENTAL); o contrato entra como reforço, dando número e data formal quando existe. **Isso encerra a questão da âncora** sem precisar contar quantos `CV-` existem.
+> 2. **Reserva não é posse.** Só `CONTRATO`/`ASSINATURA`/`COMPLETED` geram ocupação; `RESERVA`/`IN_NEGOTIATION`/`PENDING`/`WAITING_PAYMENT` aparecem como "negociação em andamento", visíveis mas sem criar dono errado.
+> 3. **O responsável financeiro deixou de depender da ordem de importação** — é decidido numa passagem só: locatário quando existe, senão proprietário. A "ordem decide" que eu tinha documentado como desejável era, na verdade, fragilidade.
+>
+> **Duas reversões do que havia sido combinado**, ambas decorrentes da inversão: o **trilho de eixo** (Locações/Vendas) deixou de existir — os dois são resolvidos na mesma prévia; e **contratos encerrados não entram mais como histórico** — a visão por unidade é um retrato do agora. Restaurar o histórico seria uma segunda passagem sobre contratos encerrados, alimentando `ended_at`.
+
 **A corrente já existe inteira** — só nunca foi percorrida até o fim. `EspelhoLocacoesTab.tsx` para no imóvel (status e preço de `commercial_properties`) e **nunca alcança o locatário**:
 
 ```

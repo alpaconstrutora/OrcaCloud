@@ -1,418 +1,336 @@
 // services/occupancyImportService.ts
-// Ponte Comercial → Condomínios: importar ocupações dos contratos.
+// Ponte Comercial → Condomínios: quem ocupa cada unidade do empreendimento.
 // Plano: docs/planos/2026-08-13-opura-condominios-avaliacao.md
 //
-// A corrente já existia inteira, só nunca tinha sido percorrida até o fim — os
-// Espelhos param no imóvel e nunca alcançam a pessoa:
+// A ÂNCORA É A UNIDADE DO EMPREENDIMENTO, não o contrato.
 //
-//   contracts (domain='LOCACAO' | 'VENDAS')
-//     ├─ client_id            → o LOCATÁRIO / o COMPRADOR
-//     ├─ start_date/end_date  → a vigência
-//     ├─ parent_contract_id   → renovação (contrato-FILHO, não aditivo)
-//     └─ deal_id → commercial_deal_units.property_id  (N unidades por contrato)
-//                  ou commercial_deals.property_id    (principal, legado)
-//                    ↓ commercial_properties.id
-//                    ↓ empreendimento_units.rental_property_id      (LOCACAO)
-//                      empreendimento_units.commercial_property_id  (VENDAS)
+// A primeira versão percorria contratos e resolvia a unidade no fim do caminho.
+// O efeito colateral matou o recurso na prática: unidade não publicada num eixo
+// simplesmente NÃO APARECIA, e a tela ainda culpava a falta de contrato. Em
+// 14/08/2026 isso levou à conclusão de que a importação de vendas estava
+// quebrada, quando o real era que as 12 unidades do Galeria Altavista estavam
+// publicadas só no eixo de locação.
 //
-// OS DOIS EIXOS SÃO PARECIDOS MAS NÃO IGUAIS, e a diferença não é cosmética:
+// Invertido, o empreendimento manda: TODA unidade aparece na prévia, e Locação
+// e Venda de Ativos entram só para responder duas perguntas sobre ela —
+// quem é o LOCATÁRIO e quem é o PROPRIETÁRIO. Unidade sem resposta aparece
+// como lacuna, que é informação: diz onde falta cadastro.
 //
-//   LOCAÇÃO  vigência TERMINA. Contrato encerrado vira ocupação histórica —
-//            o inquilino saiu. Renovação encadeia contratos, e a cadeia
-//            colapsa numa ocupação só.
-//   VENDA    propriedade NÃO TERMINA. Um contrato de venda com `end_date` no
-//            passado não significa que a pessoa deixou de ser dona — significa
-//            que o parcelamento acabou. Por isso ocupação de PROPRIETARIO
-//            nunca nasce com `ended_at`, e contrato de venda cancelado é
-//            IGNORADO em vez de virar histórico: a venda não aconteceu.
+//   empreendimento_units
+//     ├─ rental_property_id      ─┐
+//     └─ commercial_property_id  ─┴→ commercial_deals (type SALE | RENTAL)
+//                                      ├─ client_id  → a PESSOA
+//                                      ├─ status     → só negócio efetivado conta
+//                                      └─ contracts.deal_id → reforço: número e
+//                                         data formal, quando o contrato existe
 //
-// PRÉVIA ANTES DE GRAVAR: importação que escreve direto no banco sem mostrar o
-// que vai fazer é irreversível na prática — ninguém desfaz 40 ocupações à mão.
+// O CONTRATO DEIXOU DE SER OBRIGATÓRIO. Ele é gerado por um botão
+// (DealModal.handleGenerateContract), então uma venda pode estar completa sem
+// nunca ter gerado `CV-`. Ancorar nele perdia esses proprietários em silêncio.
 
 import { supabase } from '../lib/supabase';
 import { empreendimentoService } from './empreendimentoService';
 import { traduzirErroOcupacao } from './unitOccupancyService';
 import type { OccupancyRole, UnitOccupancy } from '../types/empreendimento';
 
-/** Eixo comercial de onde a ocupação vem. */
-export type EixoImportacao = 'LOCACAO' | 'VENDAS';
+/**
+ * Status de negociação em que a pessoa REALMENTE detém a unidade.
+ * `RESERVA`, `IN_NEGOTIATION`, `PENDING` e `WAITING_PAYMENT` ficam de fora de
+ * propósito: reserva não é posse, e criar proprietário a partir de negociação
+ * em andamento é pior que não criar nenhum. Elas aparecem na prévia como
+ * "negociação em andamento", para não sumirem sem explicação.
+ */
+const STATUS_EFETIVADOS = new Set(['CONTRATO', 'ASSINATURA', 'COMPLETED']);
+const STATUS_EM_ANDAMENTO = new Set(['IN_NEGOTIATION', 'PENDING', 'WAITING_PAYMENT', 'RESERVA']);
 
-/** Status que significam "este contrato não vale mais" — viram histórico (só locação). */
-const STATUS_MORTOS = new Set(['Encerrado', 'Cancelado', 'Suspenso']);
-/** Status que nunca viram ocupação: contrato que ainda não existe de fato. */
-const STATUS_NAO_IMPORTAVEIS = new Set(['Rascunho', 'Minuta', 'Revisão', 'Cancelado']);
-
-interface ConfigEixo {
-    domain: EixoImportacao;
-    /** Coluna de `empreendimento_units` que aponta para o imóvel comercial. */
-    chaveImovel: 'rental_property_id' | 'commercial_property_id';
-    papelPrincipal: OccupancyRole;
-    /** Locação encerra; propriedade não. Ver o cabeçalho do arquivo. */
-    geraHistorico: boolean;
-    rotuloPessoa: string;
-}
-
-const EIXOS: Record<EixoImportacao, ConfigEixo> = {
-    LOCACAO: {
-        domain: 'LOCACAO',
-        chaveImovel: 'rental_property_id',
-        papelPrincipal: 'INQUILINO',
-        geraHistorico: true,
-        rotuloPessoa: 'locatário',
-    },
-    VENDAS: {
-        domain: 'VENDAS',
-        chaveImovel: 'commercial_property_id',
-        papelPrincipal: 'PROPRIETARIO',
-        // Propriedade não termina com o contrato: `end_date` no passado só diz
-        // que o parcelamento acabou, não que a pessoa deixou de ser dona.
-        geraHistorico: false,
-        rotuloPessoa: 'comprador',
-    },
-};
-
-export interface ImportPreviewRow {
-    /** Chave estável da linha (contrato vivo + unidade). */
-    key: string;
-    /** Contrato VIVO da cadeia — o mais recente da renovação. */
-    contractId: string;
-    contractNumber: string;
-    /** Quantos contratos a cadeia de renovação colapsou nesta linha. */
-    chainSize: number;
-    unitId: string;
-    unitLabel: string;
+export interface PessoaEncontrada {
+    role: OccupancyRole;
     clientId: string;
     clientName: string;
     startedAt: string;
-    /** Nulo = vigente. Preenchido = histórico. */
-    endedAt: string | null;
-    roles: OccupancyRole[];
+    /** Contrato formal, quando existe. Nulo = veio só da negociação. */
+    sourceContractId: string | null;
+    /** De onde a informação saiu, para a prévia poder justificar cada linha. */
+    origem: string;
+}
+
+export interface ImportUnitRow {
+    unitId: string;
+    unitLabel: string;
+    /** Proprietário e/ou locatário encontrados. Vazio = lacuna de cadastro. */
+    pessoas: PessoaEncontrada[];
+    /**
+     * Quem recebe a cobrança do condomínio. Locatário quando há um; senão o
+     * proprietário. Decidido aqui, numa passagem só — na versão anterior
+     * dependia da ORDEM em que os eixos eram importados, o que é frágil.
+     */
+    responsavelFinanceiro: string | null;
     selected: boolean;
-    /** Por que a linha veio desmarcada, ou o que foi ajustado nela. */
     motivo?: string;
 }
 
 export interface ImportPreview {
-    rows: ImportPreviewRow[];
-    /** Contratos de locação da org que não alcançam nenhuma unidade deste empreendimento. */
-    contratosSemVinculo: number;
-    /** Contratos ignorados por status (rascunho, minuta…). */
-    contratosNaoImportaveis: number;
-    /**
-     * Quantas unidades do condomínio estão publicadas NESTE eixo. Zero é a
-     * causa mais comum de prévia vazia, e sem este número a tela culparia os
-     * contratos por um problema que é de publicação da unidade — foi o que
-     * aconteceu em 14/08/2026 com o Galeria Altavista (12 unidades no eixo de
-     * locação, 0 no de venda).
-     */
-    unidadesNoEixo: number;
-    /** Total de unidades do condomínio, publicadas ou não. */
+    rows: ImportUnitRow[];
     unidadesTotal: number;
+    unidadesComPessoa: number;
+    /** Unidades cuja negociação existe mas ainda não é posse. */
+    unidadesEmNegociacao: number;
 }
 
 export interface ImportResult {
     criadas: number;
     puladas: number;
     erros: string[];
-    /** As ocupações criadas, para a tela atualizar o array local (§22). */
     novas: UnitOccupancy[];
 }
 
 const OCCUPANCY_COLS =
     'id, unit_id, client_id, organization_id, role, started_at, ended_at, notes, source_contract_id, created_at, updated_at';
 
-function hojeISO(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-interface ContratoBruto {
-    id: string; number: string | null; client_id: string | null;
-    start_date: string | null; end_date: string | null; status: string | null;
-    deal_id: string | null; parent_contract_id: string | null;
-}
-
-/**
- * Sobe a cadeia de renovação até o contrato original. Renovar cria um contrato
- * NOVO que substitui o anterior (`parent_contract_id`), não um aditivo — então
- * uma locação de 6 anos são 6 contratos, e importar cru geraria 6 ocupações
- * idênticas em sequência. Juridicamente é a MESMA ocupação continuando.
- */
-function raizDaCadeia(id: string, porId: Map<string, ContratoBruto>): string {
-    const visitados = new Set<string>();
-    let atual = id;
-    for (;;) {
-        if (visitados.has(atual)) return atual; // ciclo de dado corrompido: para
-        visitados.add(atual);
-        const pai = porId.get(atual)?.parent_contract_id;
-        if (!pai || !porId.has(pai)) return atual;
-        atual = pai;
-    }
+interface DealBruto {
+    id: string; client_id: string | null; property_id: string | null;
+    type: string | null; status: string | null; date: string | null;
 }
 
 export const occupancyImportService = {
-    /**
-     * Monta o que SERIA criado, sem gravar nada. A tela mostra e o usuário
-     * confirma.
-     */
-    async previewImport(
-        empreendimentoId: string,
-        organizationId: string,
-        eixo: EixoImportacao = 'LOCACAO',
-    ): Promise<ImportPreview> {
-        const cfg = EIXOS[eixo];
-
-        // 1. As unidades deste empreendimento, indexadas pelo imóvel comercial
-        //    do eixo pedido — venda e locação são colunas DIFERENTES e
-        //    independentes na mesma unidade.
+    /** Monta o que SERIA criado, sem gravar nada. */
+    async previewImport(empreendimentoId: string, organizationId: string): Promise<ImportPreview> {
+        // 1. A ÂNCORA: as unidades do empreendimento. Todas, publicadas ou não.
         const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
-        const porImovel = new Map<string, { id: string; label: string }>();
+        if (units.length === 0) {
+            return { rows: [], unidadesTotal: 0, unidadesComPessoa: 0, unidadesEmNegociacao: 0 };
+        }
+
+        // 2. Os imóveis comerciais de cada unidade — os DOIS eixos juntos. A
+        //    classificação vem depois, do `type` da negociação, e não da coluna
+        //    de origem: assim uma unidade publicada na coluna trocada ainda é
+        //    resolvida corretamente.
+        const imovelParaUnidade = new Map<string, { id: string; label: string }>();
         for (const u of units) {
-            const imovel = u[cfg.chaveImovel];
-            if (imovel) {
-                porImovel.set(imovel, { id: u.id, label: `${u._tower_name} · ${u.name}` });
-            }
-        }
-        if (porImovel.size === 0) {
-            return {
-                rows: [], contratosSemVinculo: 0, contratosNaoImportaveis: 0,
-                unidadesNoEixo: 0, unidadesTotal: units.length,
-            };
+            const label = `${u._tower_name} · ${u.name}`;
+            if (u.rental_property_id) imovelParaUnidade.set(u.rental_property_id, { id: u.id, label });
+            if (u.commercial_property_id) imovelParaUnidade.set(u.commercial_property_id, { id: u.id, label });
         }
 
-        // 2. Contratos do eixo, nesta organização.
-        const { data: contratosData, error: erroContratos } = await supabase
-            .from('contracts')
-            .select('id, number, client_id, start_date, end_date, status, deal_id, parent_contract_id')
-            .eq('organization_id', organizationId)
-            .eq('domain', cfg.domain);
-        if (erroContratos) throw new Error(`Falha ao carregar contratos (${cfg.domain}): ${erroContratos.message}`);
+        const propertyIds = [...imovelParaUnidade.keys()];
+        const dealsPorUnidade = new Map<string, DealBruto[]>();
+        let unidadesEmNegociacao = 0;
 
-        const contratos = (contratosData || []) as ContratoBruto[];
-        const porId = new Map(contratos.map(c => [c.id, c]));
+        if (propertyIds.length > 0) {
+            // Negociação pela unidade principal…
+            const { data: deals, error } = await supabase
+                .from('commercial_deals')
+                .select('id, client_id, property_id, type, status, date')
+                .in('property_id', propertyIds);
+            if (error) throw new Error(`Falha ao carregar negociações: ${error.message}`);
 
-        const importaveis = contratos.filter(c =>
-            c.client_id && c.start_date && !STATUS_NAO_IMPORTAVEIS.has(c.status || ''));
-        const contratosNaoImportaveis = contratos.length - importaveis.length;
-
-        // 3. Unidades de cada contrato: a lista de itens, com a unidade principal
-        //    do negócio como retaguarda para contratos anteriores a
-        //    commercial_deal_units (20270825000020).
-        const dealIds = [...new Set(importaveis.map(c => c.deal_id).filter(Boolean) as string[])];
-        const imoveisPorDeal = new Map<string, Set<string>>();
-
-        if (dealIds.length > 0) {
+            // …e pela lista de itens (apto + vaga + box sob um contrato só).
             const { data: dealUnits } = await supabase
                 .from('commercial_deal_units')
                 .select('deal_id, property_id')
-                .in('deal_id', dealIds);
+                .in('property_id', propertyIds);
+
+            const todos = new Map<string, DealBruto>();
+            for (const d of (deals || []) as DealBruto[]) todos.set(d.id, d);
+
+            const extraIds = [...new Set((dealUnits || []).map(du => du.deal_id))]
+                .filter(id => !todos.has(id));
+            if (extraIds.length > 0) {
+                const { data: extras } = await supabase
+                    .from('commercial_deals')
+                    .select('id, client_id, property_id, type, status, date')
+                    .in('id', extraIds);
+                for (const d of (extras || []) as DealBruto[]) todos.set(d.id, d);
+            }
+
+            // Cada negociação alcança 1..N unidades.
+            const imoveisPorDeal = new Map<string, Set<string>>();
+            for (const d of todos.values()) {
+                if (d.property_id) {
+                    imoveisPorDeal.set(d.id, new Set([d.property_id]));
+                }
+            }
             for (const du of dealUnits || []) {
                 if (!imoveisPorDeal.has(du.deal_id)) imoveisPorDeal.set(du.deal_id, new Set());
                 imoveisPorDeal.get(du.deal_id)!.add(du.property_id);
             }
 
-            const { data: deals } = await supabase
-                .from('commercial_deals')
-                .select('id, property_id')
-                .in('id', dealIds);
-            for (const d of deals || []) {
-                if (!d.property_id) continue;
-                if (!imoveisPorDeal.has(d.id)) imoveisPorDeal.set(d.id, new Set());
-                imoveisPorDeal.get(d.id)!.add(d.property_id);
+            for (const [dealId, imoveis] of imoveisPorDeal) {
+                const deal = todos.get(dealId);
+                if (!deal || !deal.client_id) continue;
+                for (const imovel of imoveis) {
+                    const unidade = imovelParaUnidade.get(imovel);
+                    if (!unidade) continue;
+                    if (!dealsPorUnidade.has(unidade.id)) dealsPorUnidade.set(unidade.id, []);
+                    dealsPorUnidade.get(unidade.id)!.push(deal);
+                }
             }
         }
 
-        // 4. Colapsa a cadeia de renovação: uma ocupação por (cadeia × unidade).
-        interface Cadeia {
-            vivo: ContratoBruto; tamanho: number;
-            inicio: string; fim: string | null; imoveis: Set<string>; ids: string[];
-        }
-        const cadeias = new Map<string, Cadeia>();
-
-        for (const c of importaveis) {
-            const raiz = raizDaCadeia(c.id, porId);
-            const imoveis = imoveisPorDeal.get(c.deal_id || '') || new Set<string>();
-            const existente = cadeias.get(raiz);
-            if (!existente) {
-                cadeias.set(raiz, {
-                    vivo: c, tamanho: 1,
-                    inicio: c.start_date!, fim: c.end_date ?? null,
-                    imoveis: new Set(imoveis), ids: [c.id],
-                });
-                continue;
-            }
-            existente.tamanho += 1;
-            existente.ids.push(c.id);
-            for (const i of imoveis) existente.imoveis.add(i);
-            if (c.start_date! < existente.inicio) existente.inicio = c.start_date!;
-            // O contrato VIVO é o de vigência mais recente — é dele que sai a
-            // data de saída e a marca de origem.
-            const fimAtual = existente.vivo.end_date || '9999-12-31';
-            const fimNovo = c.end_date || '9999-12-31';
-            if (fimNovo >= fimAtual) {
-                existente.vivo = c;
-                existente.fim = c.end_date ?? null;
+        // 3. Contratos das negociações — reforço, não requisito: dão número e
+        //    data formal, e a marca de origem que torna a importação repetível.
+        const dealIds = [...new Set([...dealsPorUnidade.values()].flat().map(d => d.id))];
+        const contratoPorDeal = new Map<string, { id: string; number: string | null; start_date: string | null }>();
+        if (dealIds.length > 0) {
+            const { data: contratos } = await supabase
+                .from('contracts')
+                .select('id, number, start_date, deal_id')
+                .in('deal_id', dealIds);
+            for (const c of contratos || []) {
+                if (c.deal_id) contratoPorDeal.set(c.deal_id, { id: c.id, number: c.number, start_date: c.start_date });
             }
         }
 
-        // 5. Estado atual: o que já foi importado e quem já é responsável financeiro.
-        const todosContratoIds = [...cadeias.values()].flatMap(c => c.ids);
-        const unitIds = units.map(u => u.id);
-
+        // 4. Ocupações que já existem — para não reoferecer o que já foi criado.
         const { data: jaExistentes } = await supabase
             .from('unit_occupancies')
-            .select('unit_id, role, ended_at, source_contract_id, client_id')
-            .in('unit_id', unitIds);
+            .select('unit_id, client_id, role, ended_at')
+            .in('unit_id', units.map(u => u.id))
+            .is('ended_at', null);
+        const vigentes = new Set((jaExistentes || []).map(o => `${o.unit_id}|${o.client_id}|${o.role}`));
+        const papelOcupado = new Set((jaExistentes || []).map(o => `${o.unit_id}|${o.role}`));
 
-        const importadas = new Set(
-            (jaExistentes || [])
-                .filter(o => o.source_contract_id && todosContratoIds.includes(o.source_contract_id))
-                .map(o => `${o.source_contract_id}|${o.unit_id}|${o.role}`),
-        );
-        const responsavelVigentePorUnidade = new Map<string, string>(
-            (jaExistentes || [])
-                .filter(o => !o.ended_at && o.role === 'RESPONSAVEL_FINANCEIRO')
-                .map(o => [o.unit_id, o.client_id]),
-        );
-
-        // 6. Nomes das pessoas.
-        const clientIds = [...new Set([...cadeias.values()].map(c => c.vivo.client_id!).filter(Boolean))];
+        // 5. Nomes.
+        const clientIds = [...new Set([...dealsPorUnidade.values()].flat().map(d => d.client_id!).filter(Boolean))];
         const nomes = new Map<string, string>();
         if (clientIds.length > 0) {
             const { data: cs } = await supabase.from('clients').select('id, name').in('id', clientIds);
             for (const c of cs || []) nomes.set(c.id, c.name);
         }
 
-        // 7. As linhas.
-        const rows: ImportPreviewRow[] = [];
-        let contratosSemVinculo = 0;
-        const hoje = hojeISO();
+        /** A negociação mais recente e efetivada de um tipo. */
+        const melhorDeal = (lista: DealBruto[], tipo: 'SALE' | 'RENTAL'): DealBruto | null => {
+            const candidatos = lista
+                .filter(d => d.type === tipo && STATUS_EFETIVADOS.has(d.status || ''))
+                .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            return candidatos[0] || null;
+        };
 
-        for (const cadeia of cadeias.values()) {
-            const unidadesAlcancadas = [...cadeia.imoveis]
-                .map(p => porImovel.get(p))
-                .filter(Boolean) as { id: string; label: string }[];
+        // 6. Uma linha por UNIDADE — inclusive as sem ninguém.
+        const rows: ImportUnitRow[] = [];
+        let unidadesComPessoa = 0;
 
-            if (unidadesAlcancadas.length === 0) { contratosSemVinculo += 1; continue; }
+        for (const u of units) {
+            const label = `${u._tower_name} · ${u.name}`;
+            const lista = dealsPorUnidade.get(u.id) || [];
+            const pessoas: PessoaEncontrada[] = [];
+            const motivos: string[] = [];
 
-            const morto = STATUS_MORTOS.has(cadeia.vivo.status || '');
-            const venceu = !!cadeia.fim && cadeia.fim < hoje;
-
-            // A diferença central entre os eixos. Em LOCAÇÃO, histórico é o que
-            // já acabou — por status ou por data — e só a ocupação VIGENTE
-            // disputa o índice de responsável financeiro único, então o
-            // histórico entra sem colidir. Em VENDA não existe histórico:
-            // propriedade não termina com o contrato, e venda cancelada não
-            // gera dono nenhum (é ignorada logo abaixo).
-            const endedAt = cfg.geraHistorico && (morto || venceu) ? (cadeia.fim || hoje) : null;
-
-            if (!cfg.geraHistorico && morto) {
-                // Venda desfeita: a pessoa nunca foi dona. Pular é mais correto
-                // que criar ocupação encerrada, que sugeriria que ela foi.
-                continue;
-            }
-
-            for (const unidade of unidadesAlcancadas) {
-                const roles: OccupancyRole[] = [cfg.papelPrincipal];
-                const motivos: string[] = [];
-
-                // Responsável financeiro só entra em ocupação VIGENTE: para
-                // histórico o papel não faz sentido (ninguém é responsável por
-                // uma cobrança que já não existe) e poluiria a lista.
-                //
-                // Nos dois eixos o papel é oferecido, e a ORDEM DE IMPORTAÇÃO
-                // decide quem fica com ele. Isso é desejável: por lei a taxa
-                // condominial é obrigação do PROPRIETÁRIO, e o repasse ao
-                // inquilino é cláusula. Se a locação foi importada antes, o
-                // inquilino já tem o papel e o proprietário é reportado — a
-                // unidade alugada fica com o inquilino pagando, que é a
-                // prática; a unidade só vendida fica com o dono.
-                if (!endedAt) {
-                    const ocupanteDoPapel = responsavelVigentePorUnidade.get(unidade.id);
-                    if (!ocupanteDoPapel) {
-                        roles.push('RESPONSAVEL_FINANCEIRO');
-                    } else if (ocupanteDoPapel !== cadeia.vivo.client_id) {
-                        motivos.push(
-                            `Unidade já tem responsável financeiro (${nomes.get(ocupanteDoPapel) || 'outra pessoa'}) — só o ${cfg.rotuloPessoa === 'locatário' ? 'inquilino' : 'proprietário'} será criado.`,
-                        );
-                    }
-                }
-
-                // Venda não renova; a cadeia só é plural em locação.
-                if (cadeia.tamanho > 1) {
-                    motivos.push(`${cadeia.tamanho} contratos da mesma renovação unidos numa ocupação só.`);
-                }
-
-                const pendentes = roles.filter(r => !importadas.has(`${cadeia.vivo.id}|${unidade.id}|${r}`));
-                if (pendentes.length === 0) {
-                    motivos.unshift('Já importada deste contrato.');
-                }
-
-                rows.push({
-                    key: `${cadeia.vivo.id}|${unidade.id}`,
-                    contractId: cadeia.vivo.id,
-                    contractNumber: cadeia.vivo.number || '(sem número)',
-                    chainSize: cadeia.tamanho,
-                    unitId: unidade.id,
-                    unitLabel: unidade.label,
-                    clientId: cadeia.vivo.client_id!,
-                    clientName: nomes.get(cadeia.vivo.client_id!) || '(pessoa não encontrada)',
-                    startedAt: cadeia.inicio,
-                    endedAt,
-                    roles: pendentes,
-                    selected: pendentes.length > 0,
-                    motivo: motivos.length ? motivos.join(' ') : undefined,
+            const montar = (deal: DealBruto | null, role: OccupancyRole) => {
+                if (!deal || !deal.client_id) return;
+                const contrato = contratoPorDeal.get(deal.id);
+                pessoas.push({
+                    role,
+                    clientId: deal.client_id,
+                    clientName: nomes.get(deal.client_id) || '(pessoa não encontrada)',
+                    startedAt: contrato?.start_date || deal.date || new Date().toISOString().slice(0, 10),
+                    sourceContractId: contrato?.id || null,
+                    origem: contrato
+                        ? `Contrato ${contrato.number || 's/ número'}`
+                        : `Negociação (${deal.status})`,
                 });
+            };
+
+            montar(melhorDeal(lista, 'SALE'), 'PROPRIETARIO');
+            montar(melhorDeal(lista, 'RENTAL'), 'INQUILINO');
+
+            const emAndamento = lista.filter(d => STATUS_EM_ANDAMENTO.has(d.status || ''));
+            if (pessoas.length === 0 && emAndamento.length > 0) {
+                unidadesEmNegociacao += 1;
+                motivos.push(`Negociação em andamento (${emAndamento[0].status}) — reserva não é posse, então nada é criado.`);
             }
+
+            // O responsável financeiro sai do LOCATÁRIO quando existe; senão do
+            // proprietário. Por lei a taxa é do dono, mas o repasse ao inquilino
+            // é a prática — e agora isso é decidido numa passagem só, não pela
+            // ordem em que alguém clicou em importar.
+            const locatario = pessoas.find(p => p.role === 'INQUILINO');
+            const proprietario = pessoas.find(p => p.role === 'PROPRIETARIO');
+            let responsavelFinanceiro: string | null = null;
+            if (!papelOcupado.has(`${u.id}|RESPONSAVEL_FINANCEIRO`)) {
+                responsavelFinanceiro = (locatario || proprietario)?.clientId || null;
+            } else {
+                motivos.push('Unidade já tem responsável financeiro — o papel não é tocado.');
+            }
+
+            const novas = pessoas.filter(p => !vigentes.has(`${u.id}|${p.clientId}|${p.role}`));
+            if (pessoas.length > 0 && novas.length === 0) {
+                motivos.unshift('Já importada.');
+            }
+            if (pessoas.length === 0 && emAndamento.length === 0) {
+                motivos.push('Nenhum proprietário ou locatário encontrado no Comercial.');
+            }
+            if (pessoas.length > 0) unidadesComPessoa += 1;
+
+            const temAlgoACriar = novas.length > 0
+                || (responsavelFinanceiro !== null && !vigentes.has(`${u.id}|${responsavelFinanceiro}|RESPONSAVEL_FINANCEIRO`));
+
+            rows.push({
+                unitId: u.id,
+                unitLabel: label,
+                pessoas: novas,
+                responsavelFinanceiro: temAlgoACriar ? responsavelFinanceiro : null,
+                selected: temAlgoACriar,
+                motivo: motivos.length ? motivos.join(' ') : undefined,
+            });
         }
 
         rows.sort((a, b) => a.unitLabel.localeCompare(b.unitLabel, 'pt-BR', { numeric: true }));
-        return {
-            rows, contratosSemVinculo, contratosNaoImportaveis,
-            unidadesNoEixo: porImovel.size, unidadesTotal: units.length,
-        };
+        return { rows, unidadesTotal: units.length, unidadesComPessoa, unidadesEmNegociacao };
     },
 
     /**
-     * Grava só as linhas marcadas. Uma a uma, de propósito: um lote único faria
-     * o primeiro conflito derrubar as 39 ocupações boas junto — e o que importa
-     * aqui é aproveitar o máximo, relatando o que sobrou.
+     * Grava só as linhas marcadas, uma ocupação por vez: um lote único faria o
+     * primeiro conflito derrubar as boas junto.
      */
-    async applyImport(rows: ImportPreviewRow[]): Promise<ImportResult> {
-        const selecionadas = rows.filter(r => r.selected && r.roles.length > 0);
+    async applyImport(rows: ImportUnitRow[]): Promise<ImportResult> {
         const criadas: UnitOccupancy[] = [];
         const erros: string[] = [];
         let puladas = 0;
 
-        for (const row of selecionadas) {
-            for (const role of row.roles) {
+        for (const row of rows.filter(r => r.selected)) {
+            const aCriar: { role: OccupancyRole; clientId: string; startedAt: string; contractId: string | null; origem: string }[] =
+                row.pessoas.map(p => ({
+                    role: p.role, clientId: p.clientId, startedAt: p.startedAt,
+                    contractId: p.sourceContractId, origem: p.origem,
+                }));
+
+            if (row.responsavelFinanceiro) {
+                const base = row.pessoas.find(p => p.clientId === row.responsavelFinanceiro);
+                aCriar.push({
+                    role: 'RESPONSAVEL_FINANCEIRO',
+                    clientId: row.responsavelFinanceiro,
+                    startedAt: base?.startedAt || new Date().toISOString().slice(0, 10),
+                    contractId: base?.sourceContractId || null,
+                    origem: base?.origem || 'Comercial',
+                });
+            }
+
+            for (const item of aCriar) {
                 const { data, error } = await supabase
                     .from('unit_occupancies')
                     .insert({
                         unit_id: row.unitId,
-                        client_id: row.clientId,
+                        client_id: item.clientId,
                         // A org é derivada pelo trigger a partir da unidade
-                        // (CLAUDE.md regra #5) — mandar do client é o caminho de
-                        // gravar na org errada.
+                        // (CLAUDE.md regra #5).
                         organization_id: null,
-                        role,
-                        started_at: row.startedAt,
-                        ended_at: row.endedAt,
-                        source_contract_id: row.contractId,
-                        notes: `Importada do contrato ${row.contractNumber}`,
+                        role: item.role,
+                        started_at: item.startedAt,
+                        ended_at: null,
+                        source_contract_id: item.contractId,
+                        notes: `Importada do Comercial — ${item.origem}`,
                     })
                     .select(OCCUPANCY_COLS)
                     .single();
 
                 if (error) {
                     // Corrida com outra aba, ou dado que mudou entre a prévia e o
-                    // clique: conta como pulada, não como falha da importação.
-                    if (error.message.includes('uidx_unit_occupancies_origem')
-                        || error.message.includes('uidx_unit_occupancies_vigente')
-                        || error.message.includes('uidx_unit_occupancies_um_responsavel')) {
+                    // clique. Conta como pulada, não como falha.
+                    if (error.message.includes('uidx_unit_occupancies')) {
                         puladas += 1;
                     } else {
-                        erros.push(`${row.unitLabel} (${row.clientName}): ${traduzirErroOcupacao(error.message)}`);
+                        erros.push(`${row.unitLabel}: ${traduzirErroOcupacao(error.message)}`);
                     }
                     continue;
                 }

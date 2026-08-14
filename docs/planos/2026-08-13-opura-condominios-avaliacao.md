@@ -1,7 +1,7 @@
 # ÒPURA Condomínios — Avaliação da proposta e caminho recomendado
 
 **Data do pedido:** 2026-08-13
-**Estado:** avaliação concluída e aprovada. **F0: migration APLICADA e conferida** (13/08/2026) — bloco 8 devolveu os 8 contadores esperados: `tabela=1, com_rls=1, policies=4, anon_policies=0, fks=2, uidx_responsavel=1, trigger_org=1, status_em_operacao=1`. Falta provar os invariantes em runtime e construir a tela.
+**Estado:** avaliação concluída e aprovada. **Módulo Comercial › Condomínios criado; F1 (manutenção NBR 5674) escrita — migration `...000018` ainda NÃO aplicada.** **F0: migration APLICADA e conferida** (13/08/2026) — bloco 8 devolveu os 8 contadores esperados: `tabela=1, com_rls=1, policies=4, anon_policies=0, fks=2, uidx_responsavel=1, trigger_org=1, status_em_operacao=1`. Falta provar os invariantes em runtime e construir a tela.
 **Piloto definido:** `010 - Galeria Altavista`.
 
 ---
@@ -240,9 +240,37 @@ Trava de prefixo (`__tests__/migrationsPrefixo.test.ts`) rodada com a migration 
 
 Regras da casa que se aplicam: REGRA #5 (org vem de `useOrgContext`, nunca `organizations[0]`), REGRA #1 (rodar `check-ui-standard.sh` nos arquivos tocados), REGRA #4 (`UI_PATTERNS.md` antes de escolher Sheet/modal/página).
 
+### 🏠 O módulo — Comercial › Condomínios (pedido de 13/08/2026)
+
+Pedido do usuário: *"Vamos criar um espaço dedicado ao condomínio em Comercial < condomínios"*, com escopo **lista + ficha + Ocupações + Manutenção**, e Ocupações **saindo** de Empreendimentos.
+
+Ressalva registrada e vencida pelo usuário: Empreendimentos mora em *Incorporação*, então Condomínios em *Comercial* separa as duas metades da vida do mesmo edifício. Precedente a favor: Locações também é operação pura e já mora em Comercial.
+
+| Item | O que muda | Estado |
+|---|---|---|
+| `components/condominio/CondominiosModule.tsx` | Lista de `empreendimentos` EM_OPERACAO; **ENTREGUE aparece como candidato** com a ação "Colocar em operação" — senão o usuário teria de descobrir sozinho que precisa mudar o status noutro módulo | ✅ |
+| `components/condominio/CondominioDetail.tsx` | Abas Ficha / Ocupações / Manutenção. Ficha grava CNPJ do condomínio, razão social, instalação e mandato do síndico, com aviso de mandato vencido | ✅ |
+| Ocupações sai de Empreendimentos | `git mv` para `components/condominio/`; a aba foi removida de `EmpreendimentoDetail` com comentário explicando por quê | ✅ |
+| Rota e menu | `case 'condominios'` em `AppRouter` (sem props — lê `useOrgContext`), item em Comercial no `Layout` | ✅ |
+| Permissão | Entra sob `canViewSales`/`crm`, a mesma do menu onde mora. **Não** foi criada chave nova: o app já tem ~85 módulos declarados e só ~11 chaves lidas | ⚠️ decisão consciente |
+
 ### F1 — Manutenção predial NBR 5674 (a fase pesada)
 
 É onde está a vantagem, e é o que a construtora paga para não ser processada.
+
+**Implementada e APLICADA em 13/08/2026** — `aplicar_20270905000018_condominio_manutencao_nbr5674.sql`. Bloco 10 conferido: `tabelas=4, com_rls=4, policies=16, anon_policies=0, uidx_plano_vigente=1, trigger_ciclo=1, fn_next_due=1, cols_assets=4`. ⏳ Falta a semente do bloco 9 (12 sistemas prediais) e o teste do ciclo em runtime.
+
+| Item | O que foi feito | Como sei que terminou |
+|---|---|---|
+| `building_systems` | Taxonomia por organização (elevador, bomba, SPDA, gerador, fachada…), com `norm_ref`. Catálogo, não enum — o rol muda por tipologia. Semente da NBR 14037 comentada no bloco 9 | Catálogo populado e selecionável no item do plano |
+| Ativos instalados | **Sem tabela nova**: `opura_assets` ganhou `empreendimento_id`, `building_system_id`, `supplier_id` e `supplier_warranty_until`. `category` é VARCHAR livre, então "sistema_predial" entra sem DDL de constraint | Elevador cadastrado aparece sob o edifício, não sob a frota |
+| **Periodicidade** | `periodicity_value` + `periodicity_unit` (DIA/SEMANA/MES/ANO) e `next_due_date`. **É a coluna que não existia em lugar nenhum do repositório** — sem ela, manutenção é agendamento avulso | Item trimestral gera a próxima data ao concluir a ordem |
+| `maintenance_orders` | Tabela nova, irmã de `work_orders`: sem `project_id` obrigatório, sem `phase`, sem `planned_productivity`, sem `measurement_unit` e sem status `measured` | OS abre, executa e fecha sem tocar em `work_orders` |
+| O ciclo anda sozinho | `trg_maintenance_order_completed` + `fn_maintenance_next_due` recalculam `next_due_date` a partir da execução. O client **relê**, não recalcula — dois lugares calculando a mesma data é um deles errado sem ninguém saber qual | Concluir OS ligada ao plano muda o vencimento; bloco 11 tem o teste |
+| Garantia de fornecedor | `supplier_warranty_until` no ativo, distinta da garantia construtora→cliente de `warranty_terms` | ⚠️ coluna existe; **sem tela e sem alerta** |
+| Alertas de vencimento por cron | Não implementado | ❌ **fora desta entrega** — a tela mostra vencidos e "vence em 30 dias", mas nada dispara notificação sozinho |
+
+**Invariantes do banco:** um plano `VIGENTE` por edifício (índice único parcial) e OS `CONCLUIDA` obriga `executed_date` (CHECK) — sem a data, o ciclo para de andar em silêncio.
 
 | Item | O que muda | Como sei que terminou |
 |---|---|---|

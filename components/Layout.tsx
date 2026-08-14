@@ -1067,10 +1067,13 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(o => !o)}
-                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations'].includes(activeView)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','condominios','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations'].includes(activeView)}
                   >
                     {(mod.crm || isDev) && <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />}
                     {(((mod as any).rentals ?? mod.crm) || isDev) && <DropdownItem id="rentals" label="Locações" icon={Building2} />}
+                    {/* Pós-entrega: o edifício operado. Fica junto de Locações porque
+                        as duas são operação de imóvel, não incorporação. */}
+                    {(mod.crm || isDev) && <DropdownItem id="condominios" label="Condomínios" icon={Building2} />}
                     {(mod.crm || isDev) && <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />}
                     {(mod.crm || isDev) && <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />}
                   </NavDropdown>

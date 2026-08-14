@@ -104,6 +104,7 @@ const OpuraMarketModule     = React.lazy(() => import('./OpuraMarketModule'));
 const OpuraGovernanceModule = React.lazy(() => import('./OpuraGovernanceModule'));
 const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
 const EmpreendimentoModule  = React.lazy(() => import('./empreendimento/EmpreendimentoModule'));
+const CondominiosModule     = React.lazy(() => import('./condominio/CondominiosModule'));
 const RegulatoryMapModule   = React.lazy(() => import('./regulatoryMap/RegulatoryMapModule'));
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
@@ -311,6 +312,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewRentals', 'rentals');
     } else if (['sales', 'gestao-vendas'].includes(activeView)) {
       allowed = isModuleAllowed('canViewSales', 'crm');
+    } else if (activeView === 'condominios') {
+      // Sem chave própria ainda: pós-entrega entra sob a permissão de Comercial,
+      // que é onde o item de menu mora. Quando Condomínios ganhar chave própria
+      // em Permissões Detalhadas, trocar aqui — não criar chave declarada que
+      // ninguém lê (o app já tem ~85 módulos listados e só ~11 chaves aplicadas).
+      allowed = isModuleAllowed('canViewSales', 'crm');
     } else if (activeView === 'imovib' || activeView === 'empreendimentos' || activeView === 'laudo-avaliacao' || activeView === 'regulatory-maps') {
       allowed = isModuleAllowed('canViewImovib', 'incorporacao');
     } else if (activeView === 'fiscal-nfe') {
@@ -487,6 +494,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />
+        </React.Suspense>
+      );
+
+    case 'condominios':
+      // Sem props de organização: o módulo lê do useOrgContext, que é a
+      // autoridade única (CLAUDE.md regra #5) — prop é o que se deforma no caminho.
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <CondominiosModule />
         </React.Suspense>
       );
 

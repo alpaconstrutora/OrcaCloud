@@ -1,18 +1,30 @@
-// services/rentalOccupancyImportService.ts
-// Ponte Locações → Condomínios: importar ocupações dos contratos de locação.
+// services/occupancyImportService.ts
+// Ponte Comercial → Condomínios: importar ocupações dos contratos.
 // Plano: docs/planos/2026-08-13-opura-condominios-avaliacao.md
 //
-// A corrente já existia inteira, só nunca tinha sido percorrida até o fim — o
-// Espelho de Locações para no imóvel e nunca alcança o locatário:
+// A corrente já existia inteira, só nunca tinha sido percorrida até o fim — os
+// Espelhos param no imóvel e nunca alcançam a pessoa:
 //
-//   contracts (domain='LOCACAO')
-//     ├─ client_id            → o LOCATÁRIO
-//     ├─ start_date/end_date  → a vigência da ocupação
+//   contracts (domain='LOCACAO' | 'VENDAS')
+//     ├─ client_id            → o LOCATÁRIO / o COMPRADOR
+//     ├─ start_date/end_date  → a vigência
 //     ├─ parent_contract_id   → renovação (contrato-FILHO, não aditivo)
 //     └─ deal_id → commercial_deal_units.property_id  (N unidades por contrato)
 //                  ou commercial_deals.property_id    (principal, legado)
 //                    ↓ commercial_properties.id
-//                    ↓ empreendimento_units.rental_property_id
+//                    ↓ empreendimento_units.rental_property_id      (LOCACAO)
+//                      empreendimento_units.commercial_property_id  (VENDAS)
+//
+// OS DOIS EIXOS SÃO PARECIDOS MAS NÃO IGUAIS, e a diferença não é cosmética:
+//
+//   LOCAÇÃO  vigência TERMINA. Contrato encerrado vira ocupação histórica —
+//            o inquilino saiu. Renovação encadeia contratos, e a cadeia
+//            colapsa numa ocupação só.
+//   VENDA    propriedade NÃO TERMINA. Um contrato de venda com `end_date` no
+//            passado não significa que a pessoa deixou de ser dona — significa
+//            que o parcelamento acabou. Por isso ocupação de PROPRIETARIO
+//            nunca nasce com `ended_at`, e contrato de venda cancelado é
+//            IGNORADO em vez de virar histórico: a venda não aconteceu.
 //
 // PRÉVIA ANTES DE GRAVAR: importação que escreve direto no banco sem mostrar o
 // que vai fazer é irreversível na prática — ninguém desfaz 40 ocupações à mão.
@@ -22,10 +34,42 @@ import { empreendimentoService } from './empreendimentoService';
 import { traduzirErroOcupacao } from './unitOccupancyService';
 import type { OccupancyRole, UnitOccupancy } from '../types/empreendimento';
 
-/** Status que significam "este contrato não vale mais" — viram histórico. */
+/** Eixo comercial de onde a ocupação vem. */
+export type EixoImportacao = 'LOCACAO' | 'VENDAS';
+
+/** Status que significam "este contrato não vale mais" — viram histórico (só locação). */
 const STATUS_MORTOS = new Set(['Encerrado', 'Cancelado', 'Suspenso']);
 /** Status que nunca viram ocupação: contrato que ainda não existe de fato. */
 const STATUS_NAO_IMPORTAVEIS = new Set(['Rascunho', 'Minuta', 'Revisão', 'Cancelado']);
+
+interface ConfigEixo {
+    domain: EixoImportacao;
+    /** Coluna de `empreendimento_units` que aponta para o imóvel comercial. */
+    chaveImovel: 'rental_property_id' | 'commercial_property_id';
+    papelPrincipal: OccupancyRole;
+    /** Locação encerra; propriedade não. Ver o cabeçalho do arquivo. */
+    geraHistorico: boolean;
+    rotuloPessoa: string;
+}
+
+const EIXOS: Record<EixoImportacao, ConfigEixo> = {
+    LOCACAO: {
+        domain: 'LOCACAO',
+        chaveImovel: 'rental_property_id',
+        papelPrincipal: 'INQUILINO',
+        geraHistorico: true,
+        rotuloPessoa: 'locatário',
+    },
+    VENDAS: {
+        domain: 'VENDAS',
+        chaveImovel: 'commercial_property_id',
+        papelPrincipal: 'PROPRIETARIO',
+        // Propriedade não termina com o contrato: `end_date` no passado só diz
+        // que o parcelamento acabou, não que a pessoa deixou de ser dona.
+        geraHistorico: false,
+        rotuloPessoa: 'comprador',
+    },
+};
 
 export interface ImportPreviewRow {
     /** Chave estável da linha (contrato vivo + unidade). */
@@ -96,31 +140,40 @@ function raizDaCadeia(id: string, porId: Map<string, ContratoBruto>): string {
     }
 }
 
-export const rentalOccupancyImportService = {
+export const occupancyImportService = {
     /**
      * Monta o que SERIA criado, sem gravar nada. A tela mostra e o usuário
      * confirma.
      */
-    async previewImport(empreendimentoId: string, organizationId: string): Promise<ImportPreview> {
-        // 1. As unidades deste empreendimento, indexadas pelo imóvel de locação.
+    async previewImport(
+        empreendimentoId: string,
+        organizationId: string,
+        eixo: EixoImportacao = 'LOCACAO',
+    ): Promise<ImportPreview> {
+        const cfg = EIXOS[eixo];
+
+        // 1. As unidades deste empreendimento, indexadas pelo imóvel comercial
+        //    do eixo pedido — venda e locação são colunas DIFERENTES e
+        //    independentes na mesma unidade.
         const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
         const porImovel = new Map<string, { id: string; label: string }>();
         for (const u of units) {
-            if (u.rental_property_id) {
-                porImovel.set(u.rental_property_id, { id: u.id, label: `${u._tower_name} · ${u.name}` });
+            const imovel = u[cfg.chaveImovel];
+            if (imovel) {
+                porImovel.set(imovel, { id: u.id, label: `${u._tower_name} · ${u.name}` });
             }
         }
         if (porImovel.size === 0) {
             return { rows: [], contratosSemVinculo: 0, contratosNaoImportaveis: 0 };
         }
 
-        // 2. Contratos de locação da organização.
+        // 2. Contratos do eixo, nesta organização.
         const { data: contratosData, error: erroContratos } = await supabase
             .from('contracts')
             .select('id, number, client_id, start_date, end_date, status, deal_id, parent_contract_id')
             .eq('organization_id', organizationId)
-            .eq('domain', 'LOCACAO');
-        if (erroContratos) throw new Error(`Falha ao carregar contratos de locação: ${erroContratos.message}`);
+            .eq('domain', cfg.domain);
+        if (erroContratos) throw new Error(`Falha ao carregar contratos (${cfg.domain}): ${erroContratos.message}`);
 
         const contratos = (contratosData || []) as ContratoBruto[];
         const porId = new Map(contratos.map(c => [c.id, c]));
@@ -231,29 +284,48 @@ export const rentalOccupancyImportService = {
 
             const morto = STATUS_MORTOS.has(cadeia.vivo.status || '');
             const venceu = !!cadeia.fim && cadeia.fim < hoje;
-            // Histórico é o que já acabou — por status ou por data. Só a ocupação
-            // VIGENTE disputa o índice de responsável financeiro único, então o
-            // histórico entra sem colidir com nada.
-            const endedAt = morto || venceu ? (cadeia.fim || hoje) : null;
+
+            // A diferença central entre os eixos. Em LOCAÇÃO, histórico é o que
+            // já acabou — por status ou por data — e só a ocupação VIGENTE
+            // disputa o índice de responsável financeiro único, então o
+            // histórico entra sem colidir. Em VENDA não existe histórico:
+            // propriedade não termina com o contrato, e venda cancelada não
+            // gera dono nenhum (é ignorada logo abaixo).
+            const endedAt = cfg.geraHistorico && (morto || venceu) ? (cadeia.fim || hoje) : null;
+
+            if (!cfg.geraHistorico && morto) {
+                // Venda desfeita: a pessoa nunca foi dona. Pular é mais correto
+                // que criar ocupação encerrada, que sugeriria que ela foi.
+                continue;
+            }
 
             for (const unidade of unidadesAlcancadas) {
-                const roles: OccupancyRole[] = ['INQUILINO'];
+                const roles: OccupancyRole[] = [cfg.papelPrincipal];
                 const motivos: string[] = [];
 
                 // Responsável financeiro só entra em ocupação VIGENTE: para
                 // histórico o papel não faz sentido (ninguém é responsável por
                 // uma cobrança que já não existe) e poluiria a lista.
+                //
+                // Nos dois eixos o papel é oferecido, e a ORDEM DE IMPORTAÇÃO
+                // decide quem fica com ele. Isso é desejável: por lei a taxa
+                // condominial é obrigação do PROPRIETÁRIO, e o repasse ao
+                // inquilino é cláusula. Se a locação foi importada antes, o
+                // inquilino já tem o papel e o proprietário é reportado — a
+                // unidade alugada fica com o inquilino pagando, que é a
+                // prática; a unidade só vendida fica com o dono.
                 if (!endedAt) {
                     const ocupanteDoPapel = responsavelVigentePorUnidade.get(unidade.id);
                     if (!ocupanteDoPapel) {
                         roles.push('RESPONSAVEL_FINANCEIRO');
                     } else if (ocupanteDoPapel !== cadeia.vivo.client_id) {
                         motivos.push(
-                            `Unidade já tem responsável financeiro (${nomes.get(ocupanteDoPapel) || 'outra pessoa'}) — só o inquilino será criado.`,
+                            `Unidade já tem responsável financeiro (${nomes.get(ocupanteDoPapel) || 'outra pessoa'}) — só o ${cfg.rotuloPessoa === 'locatário' ? 'inquilino' : 'proprietário'} será criado.`,
                         );
                     }
                 }
 
+                // Venda não renova; a cadeia só é plural em locação.
                 if (cadeia.tamanho > 1) {
                     motivos.push(`${cadeia.tamanho} contratos da mesma renovação unidos numa ocupação só.`);
                 }

@@ -24,10 +24,10 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { useConfirm } from '../ui/confirm';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
 import {
-    rentalOccupancyImportService,
+    occupancyImportService,
+    type EixoImportacao,
     type ImportPreview,
-    type ImportPreviewRow,
-} from '../../services/rentalOccupancyImportService';
+} from '../../services/occupancyImportService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type {
@@ -108,6 +108,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
     // Importação de Locações — prévia antes de gravar: ninguém desfaz 40
     // ocupações à mão, então a escrita direta seria irreversível na prática.
     const [importOpen, setImportOpen] = React.useState(false);
+    const [eixo, setEixo] = React.useState<EixoImportacao>('LOCACAO');
     const [preview, setPreview] = React.useState<ImportPreview | null>(null);
     const [carregandoPreview, setCarregandoPreview] = React.useState(false);
     const [importando, setImportando] = React.useState(false);
@@ -209,18 +210,32 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
         };
     }, [linhas, unidades.length]);
 
-    const abrirImportacao = async () => {
-        setImportOpen(true);
+    const carregarPreview = React.useCallback(async (alvo: EixoImportacao) => {
         setCarregandoPreview(true);
         setPreview(null);
         try {
-            setPreview(await rentalOccupancyImportService.previewImport(empreendimento.id, orgId));
+            setPreview(await occupancyImportService.previewImport(empreendimento.id, orgId, alvo));
         } catch (e: any) {
             notify(e?.message || 'Erro ao montar a prévia da importação.', 'error');
             setImportOpen(false);
         } finally {
             setCarregandoPreview(false);
         }
+        // `notify` é estável o bastante (só agenda um timeout) e incluí-lo
+        // recriaria a função a cada notificação.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [empreendimento.id, orgId]);
+
+    const abrirImportacao = async (alvo: EixoImportacao) => {
+        setEixo(alvo);
+        setImportOpen(true);
+        await carregarPreview(alvo);
+    };
+
+    const trocarEixo = async (alvo: EixoImportacao) => {
+        if (alvo === eixo) return;
+        setEixo(alvo);
+        await carregarPreview(alvo);
     };
 
     const alternarLinha = (key: string) => {
@@ -234,7 +249,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
         if (!preview) return;
         setImportando(true);
         try {
-            const r = await rentalOccupancyImportService.applyImport(preview.rows);
+            const r = await occupancyImportService.applyImport(preview.rows);
             // §22 — costura no array local em vez de recarregar a aba inteira.
             if (r.novas.length > 0) {
                 const porUnidade = Object.fromEntries(unidades.map(u => [u.id, u.label]));
@@ -424,12 +439,12 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                         </div>
 
                         <button
-                            onClick={abrirImportacao}
+                            onClick={() => abrirImportacao('LOCACAO')}
                             className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 shrink-0 whitespace-nowrap"
-                            title="Traz quem já está declarado como locatário nos contratos de locação"
+                            title="Traz quem já está declarado nos contratos de locação e de venda"
                         >
                             <Download className="w-4 h-4" />
-                            Importar de Locações
+                            Importar do Comercial
                         </button>
 
                         {/* Ação primária — §17, variante compacta */}
@@ -668,12 +683,35 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
             {/* Prévia da importação — mostra o que SERIA criado antes de gravar */}
             <Sheet open={importOpen} onClose={() => setImportOpen(false)} size="2xl">
                 <SheetHeader onClose={() => setImportOpen(false)}>
-                    <SheetTitle>Importar de Locações</SheetTitle>
+                    <SheetTitle>Importar do Comercial</SheetTitle>
                     <SheetDescription>
-                        Quem já está nos contratos de locação vira ocupação. Nada é gravado até você confirmar.
+                        Quem já está nos contratos vira ocupação. Nada é gravado até você confirmar.
                     </SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
+                    {/* Trilho §19.1: venda e locação são eixos independentes na
+                        mesma unidade — colunas diferentes, contratos diferentes. */}
+                    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 mb-4 w-fit">
+                        {([['LOCACAO', 'Locações → inquilinos'], ['VENDAS', 'Vendas → proprietários']] as [EixoImportacao, string][]).map(([id, label]) => (
+                            <button
+                                key={id}
+                                onClick={() => trocarEixo(id)}
+                                disabled={carregandoPreview || importando}
+                                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all disabled:opacity-50 ${
+                                    eixo === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <p className="text-xs text-gray-400 mb-4">
+                        {eixo === 'LOCACAO'
+                            ? 'Contratos encerrados entram como histórico — o inquilino saiu, mas o registro fica.'
+                            : 'Propriedade não termina com o contrato: nenhuma ocupação de proprietário nasce encerrada, e venda cancelada é ignorada.'}
+                    </p>
+
                     {carregandoPreview ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -685,8 +723,8 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nada a importar</h3>
                             <p className="text-sm text-gray-500 max-w-md mx-auto">
                                 {preview && preview.contratosSemVinculo > 0
-                                    ? `${preview.contratosSemVinculo} contrato(s) de locação não alcançam nenhuma unidade deste condomínio — a unidade precisa estar publicada no Espelho de Locações para a ponte existir.`
-                                    : 'Nenhum contrato de locação com locatário e vigência definidos.'}
+                                    ? `${preview.contratosSemVinculo} contrato(s) não alcançam nenhuma unidade deste condomínio — a unidade precisa estar publicada no ${eixo === 'LOCACAO' ? 'Espelho de Locações' : 'Espelho de Vendas'} para a ponte existir.`
+                                    : `Nenhum contrato de ${eixo === 'LOCACAO' ? 'locação' : 'venda'} com pessoa e vigência definidas.`}
                             </p>
                         </div>
                     ) : (
@@ -720,7 +758,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento }) => {
                                         </div>
                                         <div className="text-xs text-gray-500 mt-0.5">
                                             {r.roles.length > 0
-                                                ? r.roles.map(p => (p === 'INQUILINO' ? 'Inquilino' : 'Responsável financeiro')).join(' + ')
+                                                ? r.roles.map(p => ROLE_LABELS[p]).join(' + ')
                                                 : 'Nenhum papel novo'}
                                             {' · '}
                                             {r.endedAt

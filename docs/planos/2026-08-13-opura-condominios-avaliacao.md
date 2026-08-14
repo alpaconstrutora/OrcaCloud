@@ -313,9 +313,21 @@ Um contrato reúne apto + vaga + box (é o motivo de `commercial_deal_units` exi
 
 | Item | O que muda | Como sei que terminou |
 |---|---|---|
-| `aplicar_20270905000019_ocupacoes_origem_contrato.sql` | `source_contract_id` + FK `ON DELETE SET NULL` (apagar contrato não apaga quem morou lá) + `uidx_unit_occupancies_origem` | Bloco de conferência: `coluna=1, fk=1, uidx_origem=1` |
+| `aplicar_20270905000019_ocupacoes_origem_contrato.sql` | `source_contract_id` + FK `ON DELETE SET NULL` (apagar contrato não apaga quem morou lá) + `uidx_unit_occupancies_origem` | ✅ **APLICADA e conferida (14/08/2026)**: `coluna=1, fk=1, uidx_origem=1, fk_on_delete='n'` (SET NULL) |
 | `services/rentalOccupancyImportService.ts` | Prévia → aplicar. Reporta 4 situações: sem vínculo de unidade, já importada, unidade já tem responsável, cadeia de renovação | **Importar duas vezes cria ZERO na segunda** |
-| Botão em `OcupacoesTab.tsx` | "Importar de Locações" + `Sheet` de prévia com motivo por linha desmarcada | Responsável já existente é pulado com o nome de quem ocupa o papel, não um `23505` cru |
+| Botão em `OcupacoesTab.tsx` | "Importar do Comercial" + `Sheet` de prévia com motivo por linha desmarcada | Responsável já existente é pulado com o nome de quem ocupa o papel, não um `23505` cru |
+
+**Estendido para VENDAS em 14/08/2026** (o service virou `occupancyImportService`, com trilho de eixo no painel). `contracts.domain='VENDAS'` já existia, então a `000019` cobre os dois eixos sem coluna nova. **Os eixos não são simétricos, e a diferença não é cosmética:**
+
+| | LOCAÇÃO | VENDAS |
+|---|---|---|
+| Coluna da unidade | `rental_property_id` | `commercial_property_id` |
+| Papel | INQUILINO | PROPRIETARIO |
+| Vigência termina? | **Sim** — contrato encerrado vira ocupação histórica | **Não** — `end_date` no passado só diz que o parcelamento acabou, não que a pessoa deixou de ser dona |
+| Contrato cancelado | Vira histórico (a pessoa morou lá) | **Ignorado** (a venda não aconteceu; nunca foi dona) |
+| Renovação | Cadeia colapsa em 1 ocupação | Não existe |
+
+**Quem fica com o RESPONSÁVEL FINANCEIRO é decidido pela ORDEM de importação**, e isso é desejável: por lei a taxa é obrigação do proprietário, mas o repasse ao inquilino é a prática. Importando locação antes, a unidade alugada fica com o inquilino pagando e o proprietário é reportado; a unidade só vendida fica com o dono.
 | `EspelhoLocacoesTab.tsx` | **Não mexer** — é o eixo de publicação da unidade; ocupação é outra pergunta | — |
 
 ### F2 — Handoff da entrega (o diferencial)

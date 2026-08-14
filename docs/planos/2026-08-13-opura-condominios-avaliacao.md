@@ -248,7 +248,13 @@ Ressalva registrada e vencida pelo usuário: Empreendimentos mora em *Incorpora�
 
 | Item | O que muda | Estado |
 |---|---|---|
-| `components/condominio/CondominiosModule.tsx` | Lista de `empreendimentos` EM_OPERACAO; **ENTREGUE aparece como candidato** com a ação "Colocar em operação" — senão o usuário teria de descobrir sozinho que precisa mudar o status noutro módulo | ✅ |
+| `components/condominio/CondominiosModule.tsx` | Lista só os `empreendimentos` EM_OPERACAO; trazer é ação explícita | ✅ **revisto em 14/08/2026** — ver abaixo |
+
+**Correção de 14/08/2026 — "nem todo empreendimento terá condomínio".** Pedido do usuário: *"nem todo impreendimento tera condomínio. Pois tem impreendimento que será servico por exemplo"*. A primeira versão exibia **todo** empreendimento ENTREGUE como candidato, o que enchia a tela de prédios que nunca serão condomínio e obrigava a ignorá-los para sempre.
+
+Agora: botão **"Importar empreendimento"** abre um painel com os disponíveis (estágio, cidade, tipo) e você marca quais viram condomínio — o de serviço é só não marcar. **`EM_OBRAS` entra na lista de propósito**: dá para preparar o condomínio antes da entrega, que é o handoff da F2. **A ação é reversível** ("Tirar de Condomínios" devolve para ENTREGUE) e não destrói nada — não há cópia de torres nem unidades, é o mesmo registro, então ocupações e plano de manutenção continuam gravados.
+
+Duas divergências do guia corrigidas na mesma passagem, ambas apontadas pela verificação estrutural: o botão "Abrir" duplicava o clique na linha (§9.1) e havia duas ações em texto azul lado a lado (§9.2). A coluna "Situação" foi removida — com a lista contendo só condomínios, todo valor era idêntico.
 | `components/condominio/CondominioDetail.tsx` | Abas Ficha / Ocupações / Manutenção. Ficha grava CNPJ do condomínio, razão social, instalação e mandato do síndico, com aviso de mandato vencido | ✅ |
 | Ocupações sai de Empreendimentos | `git mv` para `components/condominio/`; a aba foi removida de `EmpreendimentoDetail` com comentário explicando por quê | ✅ |
 | Rota e menu | `case 'condominios'` em `AppRouter` (sem props — lê `useOrgContext`), item em Comercial no `Layout` | ✅ |

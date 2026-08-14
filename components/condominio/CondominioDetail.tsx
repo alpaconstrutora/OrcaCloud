@@ -5,15 +5,16 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, FileText, Users, Wrench, Save, Scale } from 'lucide-react';
+import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package } from 'lucide-react';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
 import FracoesTab from './FracoesTab';
+import AtivosTab from './AtivosTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type { Empreendimento } from '../../types/empreendimento';
 
-type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'manutencao';
+type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao';
 
 interface Props {
     empreendimento: Empreendimento;
@@ -79,6 +80,9 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
         // ocupa e quanto pesa cada unidade. É a base do rateio e do peso de
         // voto em assembleia, ambos pós-portão.
         { id: 'fracoes', label: 'Frações', icon: Scale },
+        // Ativos vem ANTES de Manutenção porque é o alvo dela: sem equipamento
+        // cadastrado, o plano fala de "elevador" no abstrato.
+        { id: 'ativos', label: 'Ativos', icon: Package },
         { id: 'manutencao', label: 'Manutenção', icon: Wrench },
     ];
 
@@ -210,6 +214,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
 
             {aba === 'ocupacoes' && <OcupacoesTab empreendimento={e} />}
             {aba === 'fracoes' && <FracoesTab empreendimento={e} />}
+            {aba === 'ativos' && <AtivosTab empreendimento={e} />}
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
 
             {notification && (

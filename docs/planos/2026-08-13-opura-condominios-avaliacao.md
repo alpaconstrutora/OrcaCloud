@@ -377,7 +377,17 @@ Um contrato reúne apto + vaga + box (é o motivo de `commercial_deal_units` exi
 | Importar unidades | ✅ resolvido por **desenho** — são compartilhadas, não copiadas |
 | Puxar proprietários de `commercial_deals` | ✅ importação ancorada na unidade |
 | **Gerar plano de manutenção inicial** | ✅ **feito em 14/08/2026** — ver abaixo |
-| Instanciar ativos e garantias | ❌ pendente (a coluna `supplier_warranty_until` existe desde a F1, sem tela nem alerta) |
+| Instanciar ativos e garantias | ✅ **feito em 14/08/2026** — aba **Ativos** + `aplicar_20270905000022`, APLICADA e conferida (`colunas=2, funcao=1, job=1`) |
+
+**Ativos e garantia do fornecedor.** Sem tabela nova: é `opura_assets`, que já tem hierarquia, documentos e histórico — a F1 preparou as colunas de vínculo (`empreendimento_id`, `building_system_id`, `supplier_warranty_until`).
+
+- **O código patrimonial deriva do maior sufixo** (`OPR-PRE-0001`), não do aleatório que o módulo de Bens usa: com `UNIQUE (organization_id, code)`, aleatório é colisão esperando acontecer — e quando acontece, o cadastro falha sem o usuário entender por quê. Mesmo raciocínio de `nextRentalNumber` (derivar do máximo, nunca de COUNT).
+- **A garantia daqui NÃO é a de `warranty_terms`.** Aquela é da construtora ao comprador e corre da entrega do imóvel; esta é do FORNECEDOR do equipamento e corre da instalação. Confundi-las faz o condomínio cobrar da parte errada e descobrir tarde que o prazo da certa já venceu.
+- **O alerta avisa com 90 dias, não 30 como o de manutenção.** Manutenção vencida se resolve executando o serviço; garantia vencida não se resolve de jeito nenhum — só vale antes de expirar, e acionar fornecedor envolve laudo, orçamento e negociação. Descobrir na véspera é o mesmo que descobrir depois.
+- **Um job de cron, UMA instrução.** Os dois alertas entram como `fn_maintenance_due_alerts(30) + fn_supplier_warranty_alerts(90)` na mesma query: dois `SELECT` separados por `;` dependeriam de o pg_cron aceitar múltiplas instruções, e se a segunda fosse ignorada o alerta de garantia nunca dispararia — sem erro nenhum para denunciar.
+- Dívida técnica registrada: os tipos gerados do Supabase não conhecem as colunas da `000018`, então `buildingAssetService` usa cast explícito.
+
+**Com isso a F2 está COMPLETA.**
 
 **Plano de manutenção inicial (`services/maintenanceCatalog.ts`).** Criar um plano entregava um plano **vazio**, e o usuário digitava item por item — na prática, inventando do zero o que a norma já diz. Um plano que nasce vazio é um plano que ninguém preenche; foi exatamente o que aconteceu no teste do cron, quando um item precisou ser inventado ("cc") só para haver o que alertar.
 

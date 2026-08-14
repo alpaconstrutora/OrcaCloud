@@ -21,6 +21,9 @@ import { useConfirm } from '../ui/confirm';
 import {
     maintenanceService, formatarPeriodicidade, diasParaVencer,
 } from '../../services/maintenanceService';
+import {
+    CATALOGO_MANUTENCAO, primeiroVencimento, type ItemPadrao,
+} from '../../services/maintenanceCatalog';
 import type {
     BuildingSystem, MaintenanceOrderRow, MaintenanceOrderType, MaintenancePlan,
     MaintenancePlanItemRow, MaintenanceResponsibleType, PeriodicityUnit,
@@ -129,6 +132,14 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
     const [sheetOrdem, setSheetOrdem] = React.useState(false);
     const [salvando, setSalvando] = React.useState(false);
 
+    // Criação do plano com os itens padrão — prévia antes de gravar, como todo
+    // o resto do módulo: um plano que nasce vazio é um plano que ninguém
+    // preenche, mas 20 itens gravados sem aviso também não servem.
+    const [sheetPlano, setSheetPlano] = React.useState(false);
+    const [propostos, setPropostos] = React.useState<
+        { key: string; systemId: string; systemName: string; item: ItemPadrao; selected: boolean }[]
+    >([]);
+
     const [formItem, setFormItem] = React.useState<{
         building_system_id: string; description: string;
         periodicity_value: number; periodicity_unit: PeriodicityUnit;
@@ -192,7 +203,27 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
             o.description.toLowerCase().includes(t) || o._system_name.toLowerCase().includes(t));
     }, [ordens, searchTerm]);
 
+    /** Monta a proposta a partir dos sistemas prediais cadastrados na organização. */
+    const abrirCriacaoPlano = () => {
+        const linhas = sistemas.flatMap(s =>
+            (CATALOGO_MANUTENCAO[s.slug] || []).map((item, i) => ({
+                key: `${s.id}:${i}`,
+                systemId: s.id,
+                systemName: s.name,
+                item,
+                selected: true,
+            })),
+        );
+        setPropostos(linhas);
+        setSheetPlano(true);
+    };
+
+    const alternarProposto = (key: string) => {
+        setPropostos(prev => prev.map(p => (p.key === key ? { ...p, selected: !p.selected } : p)));
+    };
+
     const criarPlano = async () => {
+        setSalvando(true);
         try {
             const novo = await maintenanceService.createPlan({
                 empreendimento_id: empreendimento.id,
@@ -201,11 +232,50 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                 status: 'VIGENTE',
                 valid_from: hojeISO(),
             });
+
+            const escolhidos = propostos.filter(p => p.selected);
+            const criados: typeof itens = [];
+            const erros: string[] = [];
+
+            // Um a um: um lote único faria a primeira falha derrubar os demais,
+            // e um plano pela metade sem aviso é pior que nenhum.
+            for (const p of escolhidos) {
+                try {
+                    const item = await maintenanceService.createPlanItem({
+                        plan_id: novo.id,
+                        organization_id: orgId,
+                        building_system_id: p.systemId,
+                        asset_id: null,
+                        description: p.item.description,
+                        periodicity_value: p.item.periodicity_value,
+                        periodicity_unit: p.item.periodicity_unit,
+                        responsible_type: p.item.responsible_type,
+                        is_active: true,
+                        next_due_date: primeiroVencimento(p.item),
+                    });
+                    criados.push({
+                        ...item,
+                        _system_name: p.systemName,
+                        _dias_para_vencer: diasParaVencer(item.next_due_date),
+                    });
+                } catch (e: any) {
+                    erros.push(`${p.item.description}: ${e?.message || 'erro'}`);
+                }
+            }
+
             setPlano(novo);
-            setItens([]);
-            notify('Plano criado e colocado em vigor.');
+            setItens(criados);
+            setSheetPlano(false);
+            notify(
+                erros.length > 0
+                    ? `Plano criado com ${criados.length} itens. ${erros[0]}`
+                    : `Plano criado e em vigor, com ${criados.length} ${criados.length === 1 ? 'item' : 'itens'}.`,
+                erros.length > 0 ? 'error' : 'success',
+            );
         } catch (e: any) {
             notify(e?.message || 'Erro ao criar o plano.', 'error');
+        } finally {
+            setSalvando(false);
         }
     };
 
@@ -299,6 +369,30 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
         }
     };
 
+    /**
+     * Exclusão de OS também passa por confirmação (§14). Concluída, ela é o
+     * registro de que o serviço foi feito — e é a âncora do próximo vencimento
+     * no plano. Apagar sem perguntar apaga histórico técnico do edifício.
+     */
+    const excluirOrdem = async (o: MaintenanceOrderRow) => {
+        const ok = await confirm({
+            title: 'Excluir a ordem de serviço?',
+            message: o.status === 'CONCLUIDA'
+                ? `"${o.description}" foi concluída em ${formatarData(o.executed_date)} e é o registro de que o serviço aconteceu. Excluí-la apaga esse histórico — o vencimento já calculado no plano permanece.`
+                : `"${o.description}" será apagada. Esta ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            await maintenanceService.removeOrder(o.id);
+            setOrdens(prev => prev.filter(x => x.id !== o.id));
+            notify('Ordem excluída.');
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao excluir a ordem.', 'error');
+        }
+    };
+
     const excluirItem = async (i: MaintenancePlanItemRow) => {
         const ok = await confirm({
             title: 'Remover do plano?',
@@ -318,27 +412,13 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard
-                    label="VENCIDOS" value={kpis.vencidos}
-                    sub={kpis.vencidos > 0 ? 'Exigem ação imediata' : undefined}
-                    icon={<AlertTriangle className="w-5 h-5" />}
-                    color={kpis.vencidos > 0 ? 'red' : 'gray'}
-                />
-                <KpiCard
-                    label="VENCEM EM 30 DIAS" value={kpis.proximos}
-                    icon={<CalendarClock className="w-5 h-5" />}
-                    color={kpis.proximos > 0 ? 'amber' : 'gray'}
-                />
-                <KpiCard label="ITENS NO PLANO" value={kpis.itens} icon={<ClipboardList className="w-5 h-5" />} color="blue" />
-                <KpiCard label="ORDENS ABERTAS" value={kpis.abertas} icon={<Wrench className="w-5 h-5" />} color="indigo" />
-            </div>
-
             {erro && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-[10px] px-4 py-3 text-sm">{erro}</div>
             )}
 
-            {/* Sub-abas §19.1 — card branco + trilho bg-gray-50 */}
+            {/* ANATOMIA: abas → KPIs → toolbar. As abas vêm ANTES porque os números
+                dizem respeito à aba ativa — mostrar o dado antes do controle que o
+                define inverte a leitura (§20.1, ordem corrigida em 02/08/2026). */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {([['plano', 'Plano de manutenção'], ['ordens', 'Ordens de serviço']] as [Aba, string][]).map(([id, label]) => (
@@ -353,6 +433,22 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                         </button>
                     ))}
                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard
+                    label="VENCIDOS" value={kpis.vencidos}
+                    sub={kpis.vencidos > 0 ? 'Exigem ação imediata' : undefined}
+                    icon={<AlertTriangle className="w-5 h-5" />}
+                    color={kpis.vencidos > 0 ? 'red' : 'gray'}
+                />
+                <KpiCard
+                    label="VENCEM EM 30 DIAS" value={kpis.proximos}
+                    icon={<CalendarClock className="w-5 h-5" />}
+                    color={kpis.proximos > 0 ? 'amber' : 'gray'}
+                />
+                <KpiCard label="ITENS NO PLANO" value={kpis.itens} icon={<ClipboardList className="w-5 h-5" />} color="blue" />
+                <KpiCard label="ORDENS ABERTAS" value={kpis.abertas} icon={<Wrench className="w-5 h-5" />} color="indigo" />
             </div>
 
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
@@ -426,11 +522,13 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     <div className="text-center py-12">
                         <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum plano de manutenção</h3>
-                        <p className="text-sm text-gray-500 mb-4">
-                            A NBR 5674 exige plano com periodicidade definida. Sem ele, manutenção vira lista de tarefas avulsas.
+                        <p className="text-sm text-gray-500 mb-4 max-w-md mx-auto">
+                            A NBR 5674 exige plano com periodicidade definida. Sem ele, manutenção vira
+                            lista de tarefas avulsas — e o plano já nasce com os itens padrão dos
+                            sistemas cadastrados.
                         </p>
                         <button
-                            onClick={criarPlano}
+                            onClick={abrirCriacaoPlano}
                             className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
                             <Plus className="w-[15px] h-[15px]" /> Criar plano de manutenção
@@ -554,10 +652,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                                                     )}
                                                     <InlineDisclosureMenu
                                                         showDelete
-                                                        onDelete={async () => {
-                                                            await maintenanceService.removeOrder(o.id);
-                                                            setOrdens(prev => prev.filter(x => x.id !== o.id));
-                                                        }}
+                                                        onDelete={() => excluirOrdem(o)}
                                                     />
                                                 </div>
                                             </td>
@@ -569,6 +664,86 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     </div>
                 )}
             </div>
+
+            {/* Criar plano — proposta a partir dos sistemas prediais cadastrados */}
+            <Sheet open={sheetPlano} onClose={() => setSheetPlano(false)} size="2xl">
+                <SheetHeader onClose={() => setSheetPlano(false)}>
+                    <SheetTitle>Criar plano de manutenção</SheetTitle>
+                    <SheetDescription>{empreendimento.name}</SheetDescription>
+                </SheetHeader>
+                <SheetPanel>
+                    {propostos.length === 0 ? (
+                        <div className="text-center py-12">
+                            <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item sugerido</h3>
+                            <p className="text-sm text-gray-500 max-w-md mx-auto">
+                                {sistemas.length === 0
+                                    ? 'Não há sistemas prediais cadastrados nesta organização — o bloco 9 da migration 000018 tem a semente da NBR 14037 pronta para rodar.'
+                                    : 'Os sistemas cadastrados não têm itens no catálogo padrão. O plano será criado vazio e você adiciona os itens à mão.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {/* Honestidade sobre o que o catálogo é: a NBR remete ao manual do
+                                proprietário e do fabricante. Vender isto como "a norma" faria o
+                                usuário confiar em periodicidade que talvez não sirva ao
+                                equipamento dele. */}
+                            <p className="text-xs text-amber-600">
+                                Ponto de partida, não a norma. A NBR 5674 remete ao manual do proprietário
+                                e dos fabricantes — confira as periodicidades e desmarque o que não se
+                                aplica a este edifício.
+                            </p>
+                            <div className="text-xs text-gray-500">
+                                {propostos.filter(p => p.selected).length} de {propostos.length} itens selecionados
+                            </div>
+
+                            {propostos.map(p => (
+                                <label
+                                    key={p.key}
+                                    className={`flex items-start gap-3 p-3 rounded-[10px] border transition-all cursor-pointer ${
+                                        p.selected ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200 bg-white'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={p.selected}
+                                        onChange={() => alternarProposto(p.key)}
+                                        className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-medium text-gray-800">{p.item.description}</div>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                            {p.systemName}
+                                            {' · '}{formatarPeriodicidade(p.item.periodicity_value, p.item.periodicity_unit)}
+                                            {' · '}{RESPONSAVEL_LABELS[p.item.responsible_type]}
+                                            <span className="text-gray-400">
+                                                {' · 1º vencimento '}{formatarData(primeiroVencimento(p.item))}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </SheetPanel>
+                <SheetFooter>
+                    <button
+                        onClick={() => setSheetPlano(false)}
+                        className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={criarPlano}
+                        disabled={salvando}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                    >
+                        {salvando
+                            ? 'Criando...'
+                            : `Criar plano com ${propostos.filter(p => p.selected).length} itens`}
+                    </button>
+                </SheetFooter>
+            </Sheet>
 
             {/* Novo item do plano */}
             <Sheet open={sheetItem} onClose={() => setSheetItem(false)} size="lg">

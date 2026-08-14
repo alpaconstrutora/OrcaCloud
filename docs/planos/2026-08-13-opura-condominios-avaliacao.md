@@ -369,6 +369,27 @@ Um contrato reúne apto + vaga + box (é o motivo de `commercial_deal_units` exi
 
 ### F2 — Handoff da entrega (o diferencial)
 
+**Estado em 14/08/2026 — a fase encolheu, porque 3 dos 5 itens saíram por outro caminho:**
+
+| Item original | Estado |
+|---|---|
+| Criar o condomínio | ✅ botão *Importar empreendimento* |
+| Importar unidades | ✅ resolvido por **desenho** — são compartilhadas, não copiadas |
+| Puxar proprietários de `commercial_deals` | ✅ importação ancorada na unidade |
+| **Gerar plano de manutenção inicial** | ✅ **feito em 14/08/2026** — ver abaixo |
+| Instanciar ativos e garantias | ❌ pendente (a coluna `supplier_warranty_until` existe desde a F1, sem tela nem alerta) |
+
+**Plano de manutenção inicial (`services/maintenanceCatalog.ts`).** Criar um plano entregava um plano **vazio**, e o usuário digitava item por item — na prática, inventando do zero o que a norma já diz. Um plano que nasce vazio é um plano que ninguém preenche; foi exatamente o que aconteceu no teste do cron, quando um item precisou ser inventado ("cc") só para haver o que alertar.
+
+Agora *Criar plano* abre uma prévia com ~22 itens padrão dos 12 sistemas prediais, cada um com periodicidade, responsável e primeiro vencimento; o usuário desmarca o que não se aplica.
+
+Três decisões:
+- **É ponto de partida, não a norma, e a tela diz isso.** A NBR 5674 remete ao manual do proprietário (NBR 14037) e aos manuais dos fabricantes; a periodicidade real muda por equipamento e por exigência local (validade do AVCB varia por estado). Apresentar como "a norma" faria o usuário confiar em número que talvez não sirva.
+- **Primeiro vencimento = hoje + periodicidade**, não hoje. Senão o plano nasce com 22 itens vencendo no mesmo dia, o cron dispara 22 alertas de uma vez e o usuário aprende a ignorá-los na primeira semana. Quem sabe que um serviço está atrasado ajusta a data; o contrário não tem conserto fácil.
+- **Catálogo em código, não no banco** — conhecimento versionado com a aplicação. Editável por organização é passo seguinte, se houver demanda.
+
+Duas divergências do guia corrigidas na mesma passagem: **exclusão de OS disparava sem confirmação** (§14) — a séria, porque OS concluída é o registro de que o serviço aconteceu e a âncora do vencimento; e **KPIs antes das abas** (§20.1), invertendo a leitura.
+
 Ação única que transforma empreendimento entregue em edifício operado: cria o condomínio, importa unidades e frações, puxa proprietários de `commercial_deals`, instancia ativos e garantias, gera o plano de manutenção inicial a partir dos sistemas. **É a única coisa aqui que a Superlógica não consegue copiar** — e o motivo de F0 e F1 virem antes.
 
 Pronto quando: um empreendimento `ENTREGUE` real vira edifício operado em uma ação, com fração ideal somando 1,0 e sem digitação manual.

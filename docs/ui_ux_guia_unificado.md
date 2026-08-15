@@ -201,6 +201,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §21 Rótulo de campo e título de modal
 - [ ] §22 Atualizar estado local em vez de recarregar a tabela inteira (criar/editar/excluir) + preservar scroll ao voltar de edição em página cheia
 - [ ] §23 Migalha de pão — decisão explícita (usa `ui/Breadcrumb.tsx` com 3+ níveis internos, ou "Voltar" com 1 salto, ou nada por §18)
+- [ ] §24 Portal do Investidor — a tela auditada está dentro ou fora do escopo da exceção? (fora = §4/§6.2/§8/§17 valem inteiras)
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -1912,6 +1913,61 @@ Semântica: `<nav aria-label="Trilha de navegação">`.
 | `OfficesDashboard.tsx:192` | ✅ N/A — era só um botão "Voltar" com comentário errado; comentário corrigido |
 | `TasksMobileApp.tsx:797` | ✅ N/A — chrome mobile (exceção acima) |
 | `OpuraAssetsModule.tsx:802` | ❌ pendente — `Corporativo / Gestão de Bens` é caminho de módulo estático, sem navegação: a correção é **remover**, não migrar. Não feito aqui porque mexe no cabeçalho em card que o §20 marca como "não migre sem decisão explícita". |
+
+---
+
+## 24. PORTAL DO INVESTIDOR — vocabulário próprio (exceção autorizada)
+
+**Escopo — e só ele:** as 4 abas que o **investidor** vê no acesso por link
+público (`isPublicExperience` em `InvestorDashboard.tsx`): Resumo, Carteira,
+Oportunidades, Documentos, mais a casca standalone (§20.2.1). Arquivos:
+`components/investor/portal/*` e os trechos de `InvestorDashboard.tsx`
+recortados por `isPublicExperience`.
+
+**Fora do escopo:** todo o resto do app, inclusive a visão do gestor sobre o
+mesmo módulo (abas Financeiro, Fiscal, Comunicados, SPE, Relatórios, e o
+`InvestorSummaryDashboard`/`HoldingsList`/`OpportunitiesTab`/`ReportsTab`
+antigos, que continuam servindo o admin). Nada aqui autoriza um segundo
+vocabulário numa tela interna.
+
+**Origem:** 2026-08-15, a pedido explícito do usuário, a partir de um desenho de
+referência externo (dashboard estilo Shakuro). Perguntado se queria o layout do
+print no vocabulário do guia ou o print fiel, respondeu *"Fiel ao print,
+inclusive pílulas e laranja"* e *"vamos abrir exceção neste caso. vamos testar
+esse novo UI UX"*. É um **experimento de produto delimitado**, não a nova régua
+do app.
+
+### Os quatro desvios (e só eles)
+
+| Elemento | Guia | Portal do Investidor | Por quê |
+|---|---|---|---|
+| Status | §8 texto colorido, sem pílula | pílula `rounded-[6px]` + fundo + `uppercase tracking-wider` (`StatusPill`) | é a âncora visual do desenho de referência; o portal é leitura passiva, sem coluna de ações competindo pelo olho |
+| `<thead>` | §6.2 sentence case | `uppercase tracking-[0.08em]` `text-[11px]` (`Th`) | idem — separa cabeçalho de dado sem linha divisória vertical (o portal não usa `border-r`) |
+| Cor de ação | §17 azul sólido | coral `#E1553C` (`PrimaryButton`, aba ativa, série do gráfico, barra de progresso) | identidade própria do portal do investidor, distinta do app interno |
+| Faixa de KPIs | §4 `KpiCard` com ícone colorido por métrica | card único com divisores verticais, sem ícone, com delta de tendência (`KpiStrip`) | é a variante que a §4.4 registrou como proposta; aqui ela existe **só** neste vocabulário, não no `KpiCard.tsx` |
+
+### O que continua valendo (não é exceção)
+
+- Tamanho de texto `text-sm`/`text-[13px]` — nada de `text-xs` em dado;
+- `py-2.5` de altura de linha (§7.2), aplicado no `Td` do kit;
+- Ações sempre visíveis (§9) — nunca `opacity-0 group-hover`;
+- `useConfirm()` para destrutivo (§14) — o portal não tem ação destrutiva hoje;
+- Gutter `p-4 md:p-6` reaplicado à mão pela casca (§20.2.1);
+- Estados de loading e vazio explícitos (§11/§12) — `PortalLoading`/`PortalEmpty`;
+- Datas nunca via `new Date('YYYY-MM-DD')` cru (âncora de meio-dia em `parseDate`).
+
+### Regra de manutenção
+
+Toda cor/medida do vocabulário mora em `components/investor/portal/PortalKit.tsx`.
+Tela do portal **não escreve `bg-[#E1553C]` à mão** — usa a primitiva. Se
+precisar de um elemento novo, ele nasce no kit.
+
+> ℹ️ `scripts/check-ui-standard.sh` **continua acusando** esses arquivos (§8 pílula
+> e afins) — o checador é textual. A saída correta é apontar para esta seção, não
+> silenciar o check nem "corrigir" o portal para o padrão do app.
+> ⚠️ Se o experimento for aprovado e o app inteiro for migrar, isto vira o padrão
+> e as §4/§6.2/§8/§17 é que precisam ser reescritas — não se espalha o vocabulário
+> tela a tela sem essa decisão.
 
 ---
 

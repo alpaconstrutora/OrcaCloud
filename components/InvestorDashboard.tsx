@@ -25,6 +25,11 @@ import OpportunitiesTab from './investor/OpportunitiesTab';
 import ReportsTab from './investor/ReportsTab';
 import { HoldingItem, HistoricalPoint } from './investor/types';
 import { isObra } from '../utils/projectClassification';
+// Vocabulário próprio do portal do investidor — exceção §24 do guia de UI
+import PortalOverview from './investor/portal/PortalOverview';
+import PortalHoldings from './investor/portal/PortalHoldings';
+import PortalOpportunities from './investor/portal/PortalOpportunities';
+import PortalDocuments from './investor/portal/PortalDocuments';
 
 interface InvestorDashboardProps {
     activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
@@ -568,19 +573,19 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
     return (
         <div className={isStandalone
-            ? 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 md:h-screen md:flex md:flex-col md:overflow-hidden'
+            ? 'portal-mobile-font min-h-screen bg-[#F2F2F4] pb-24 md:pb-0 md:h-screen md:flex md:flex-col md:overflow-hidden'
             : 'portal-mobile-font space-y-8 pb-24 md:pb-12'}>
 
             {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Cliente) ══ */}
             {isStandalone && (
-                <div className="hidden md:flex h-9 bg-indigo-50 border-b border-indigo-200 items-center justify-center gap-3 shrink-0 text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                <div className="hidden md:flex h-9 bg-[#FDEDE8] border-b border-[#F3D9D1] items-center justify-center gap-3 shrink-0 text-xs font-bold text-[#C24428] uppercase tracking-wider">
                     <span>Acesso via link público</span>
                 </div>
             )}
             {isStandalone && (
                 <header className="hidden md:flex h-16 border-b border-gray-100 bg-white items-center justify-between px-6 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Portal do Investidor</div>
+                        <div className="px-2.5 py-1 bg-[#E1553C] text-white rounded-lg text-xs font-black uppercase tracking-wider">Portal do Investidor</div>
                         <h1 className="text-md font-bold text-gray-900 tracking-tight">Área do Investidor</h1>
                     </div>
                     <div className="relative" ref={accountMenuRef}>
@@ -591,7 +596,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             aria-haspopup="menu"
                             aria-expanded={isAccountMenuOpen}
                         >
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E1553C] text-[11px] font-bold text-white">
                                 {investorDisplayName.charAt(0).toUpperCase()}
                             </span>
                             <span className="font-semibold text-gray-600">{investorDisplayName} (INVESTIDOR)</span>
@@ -602,7 +607,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
                                 <div className="border-b border-gray-100 px-4 py-3">
                                     <div className="flex items-center gap-3">
-                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E1553C] text-sm font-bold text-white">
                                             {investorDisplayName.charAt(0).toUpperCase()}
                                         </span>
                                         <div className="min-w-0 flex-1">
@@ -637,7 +642,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 onClick={() => setActiveTab(tab.id as TabId)}
                                 className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                                     activeTab === tab.id
-                                        ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 font-bold'
+                                        ? 'bg-[#FDEDE8] border border-[#F3D9D1] text-[#C24428] font-semibold'
                                         : 'text-gray-500 hover:text-gray-900 hover:bg-white'
                                 }`}
                             >
@@ -714,8 +719,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 </div>
             )}
 
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-100">
+            {/* Header — no portal do investidor a identidade já vem da casca
+                (badge + menu de conta + sidebar), então o bloco de título some
+                e o conteúdo começa pela faixa de KPIs, como no desenho de
+                referência (§24). No app interno ele continua igual. */}
+            <div className={`${isPublicExperience ? 'hidden' : 'flex'} flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-100`}>
                 <div>
                     <div className="flex items-center gap-2 text-xs font-black text-blue-600 uppercase tracking-widest mb-3">
                         <div className="w-5 h-1 bg-blue-600 rounded-full" />
@@ -802,30 +810,55 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             ) : (
             <main className="min-h-[500px]">
                 {activeTab === 'dashboard' && (
-                    <InvestorSummaryDashboard
-                        equity={stats.equity}
-                        activeWorks={stats.activeWorks}
-                        monthlyYieldPct={stats.monthlyYieldPct}
-                        totalContributed={stats.totalContributed}
-                        totalDividends={stats.totalDividends}
-                        historicalData={historicalData}
-                        holdings={stats.holdings}
-                        isAdmin={isAdmin}
-                        loadingAI={loadingAI}
-                        aiInsight={aiInsight}
-                        onNavigateToHoldings={() => setActiveTab('holdings')}
-                    />
+                    isPublicExperience ? (
+                        <PortalOverview
+                            equity={stats.equity}
+                            activeWorks={stats.activeWorks}
+                            monthlyYieldPct={stats.monthlyYieldPct}
+                            totalContributed={stats.totalContributed}
+                            totalDividends={stats.totalDividends}
+                            holdings={stats.holdings}
+                            contributions={investorContributions}
+                            aiInsight={aiInsight}
+                            loadingAI={loadingAI}
+                            onSelectAsset={setSelectedAsset}
+                            onNavigateToHoldings={() => setActiveTab('holdings')}
+                        />
+                    ) : (
+                        <InvestorSummaryDashboard
+                            equity={stats.equity}
+                            activeWorks={stats.activeWorks}
+                            monthlyYieldPct={stats.monthlyYieldPct}
+                            totalContributed={stats.totalContributed}
+                            totalDividends={stats.totalDividends}
+                            historicalData={historicalData}
+                            holdings={stats.holdings}
+                            isAdmin={isAdmin}
+                            loadingAI={loadingAI}
+                            aiInsight={aiInsight}
+                            onNavigateToHoldings={() => setActiveTab('holdings')}
+                        />
+                    )
                 )}
                 {activeTab === 'simulator' && <InvestmentSimulator />}
                 {activeTab === 'holdings' && (
-                    <HoldingsList
-                        holdings={filteredHoldings}
-                        filterStatus={filterStatus}
-                        viewMode={viewMode}
-                        onFilterChange={setFilterStatus}
-                        onViewModeChange={setViewMode}
-                        onSelectAsset={setSelectedAsset}
-                    />
+                    isPublicExperience ? (
+                        <PortalHoldings
+                            holdings={filteredHoldings}
+                            filterStatus={filterStatus}
+                            onFilterChange={setFilterStatus}
+                            onSelectAsset={setSelectedAsset}
+                        />
+                    ) : (
+                        <HoldingsList
+                            holdings={filteredHoldings}
+                            filterStatus={filterStatus}
+                            viewMode={viewMode}
+                            onFilterChange={setFilterStatus}
+                            onViewModeChange={setViewMode}
+                            onSelectAsset={setSelectedAsset}
+                        />
+                    )
                 )}
                 {activeTab === 'financeiro' && (
                     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -847,24 +880,42 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     </div>
                 )}
                 {activeTab === 'opportunities' && (
-                    <OpportunitiesTab
-                        opportunities={opportunities}
-                        isAdmin={isAdmin}
-                        viewMode={viewMode}
-                        organizationId={orgId}
-                        investorProfile={investorProfile}
+                    isPublicExperience ? (
+                        <PortalOpportunities
+                            opportunities={opportunities}
+                            investorProfile={investorProfile}
+                            portalToken={portalToken}
+                        />
+                    ) : (
+                        <OpportunitiesTab
+                            opportunities={opportunities}
+                            isAdmin={isAdmin}
+                            viewMode={viewMode}
+                            organizationId={orgId}
+                            investorProfile={investorProfile}
+                            portalToken={portalToken}
+                            onViewModeChange={setViewMode}
+                            onDelete={handleDeleteOpportunity}
+                            onUpdate={(updated) => setOpportunities(prev =>
+                                prev.some(o => o.id === updated.id)
+                                    ? prev.map(o => o.id === updated.id ? updated : o)
+                                    : [updated, ...prev]
+                            )}
+                            openConfirm={openConfirm}
+                        />
+                    )
+                )}
+                {activeTab === 'reports' && isPublicExperience && (
+                    <PortalDocuments
+                        reports={reports}
+                        announcements={portalAnnouncements}
                         portalToken={portalToken}
-                        onViewModeChange={setViewMode}
-                        onDelete={handleDeleteOpportunity}
-                        onUpdate={(updated) => setOpportunities(prev =>
-                            prev.some(o => o.id === updated.id)
-                                ? prev.map(o => o.id === updated.id ? updated : o)
-                                : [updated, ...prev]
+                        onAcknowledged={(id) => setPortalAnnouncements(prev =>
+                            prev.map(a => a.id === id ? { ...a, acknowledged: true } : a)
                         )}
-                        openConfirm={openConfirm}
                     />
                 )}
-                {activeTab === 'reports' && (
+                {activeTab === 'reports' && !isPublicExperience && (
                     <div className="space-y-6">
                         <ReportsTab
                             reports={reports}
@@ -1075,11 +1126,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id as TabId)}
                                         className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
-                                            ${isActive ? 'text-blue-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
+                                            ${isActive ? 'text-[#C24428]' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
                                         `}
                                     >
                                         {isActive && (
-                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
+                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#E1553C] rounded-full" />
                                         )}
                                         <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
                                             {tab.icon}
@@ -1095,11 +1146,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 <button
                                     onClick={() => setShowMoreSheet(true)}
                                     className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
-                                        ${moreActive ? 'text-blue-600' : 'text-gray-400'}
+                                        ${moreActive ? 'text-[#C24428]' : 'text-gray-400'}
                                     `}
                                 >
                                     {moreActive && (
-                                        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
+                                        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#E1553C] rounded-full" />
                                     )}
                                     <span className={`transition-transform duration-200 ${moreActive ? 'scale-110' : ''}`}>
                                         <MoreHorizontal className="w-4 h-4" />
@@ -1139,7 +1190,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                             onClick={() => { setActiveTab(tab.id as TabId); setShowMoreSheet(false); }}
                                             className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all ${
                                                 isActive
-                                                    ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                    ? 'bg-[#FDEDE8] border-[#F3D9D1] text-[#C24428]'
                                                     : 'bg-gray-50 border-gray-100 text-gray-600'
                                             }`}
                                         >

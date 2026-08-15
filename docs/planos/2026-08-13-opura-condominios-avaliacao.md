@@ -450,6 +450,26 @@ Isso resolve a segregação sem depender da organização: a despesa do condomí
 
 **Fatias seguintes:** cobrança (boleto/PIX via Asaas, que já existe), fundo de reserva e específicos, inadimplência com multa e juros, acordos, e prestação de contas mensal.
 
+**Correções de 14/08/2026, encontradas usando a tela:**
+- **Centro de custo nascia como GRUPO de primeiro nível**, lado a lado com Obra/Administrativo/Comercial — que são famílias de despesa, não unidades de caixa. Agora `garantirGrupoCondominios` acha (ou cria) o grupo "Condomínios" e o condomínio entra como FILHO. Somada a isso, a opção de **vincular um centro de custo existente**, que é o caso comum de quem já cadastrou à mão — oferecida ANTES da criação, para não sobrarem dois centros para o mesmo caixa.
+- **`internal_transactions.date` não existe.** As colunas são `transaction_date` e `due_date`. Adotado **`transaction_date`**, que é por onde `fn_dre` e `fn_balancete` recortam o período: usar vencimento faria o rateio e o balancete discordarem sobre a qual mês a mesma despesa pertence, e o condômino receberia cota que a contabilidade não confirma.
+
+---
+
+## ▶ ESTADO PARA RETOMAR (14/08/2026)
+
+**Migrations `000017`–`000024`: todas aplicadas e conferidas.** Nenhuma pendente.
+
+**No ar:** Comercial › Condomínios, com 7 abas (Ficha, Ocupações, Frações, Ativos, Manutenção, Financeiro, Comunicação) + Portal do Condômino em `/portal-condomino?token=`.
+
+**Dívida de verificação — a maior desta frente.** Do que foi construído, o usuário exercitou: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos acima). **Nunca abertas:** Ficha, Frações, Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
+
+**Piloto ainda não rodou.** `010 - Galeria Altavista` tem plano de manutenção com 2 itens (um de teste, "cc") e nada mais: sem ocupações, sem frações, sem ativos, sem centro de custo vinculado. `007 - Bella Vista` está EM_OPERACAO e tem o centro de custo `009` solto (a arrumar: desvincular/excluir e vincular o `007 — Condomínio Bella Vista`).
+
+**Próxima fatia sugerida:** cobrança — transformar rateio fechado em boleto/PIX. É costura, não construção: `asaas-charge`, webhook com idempotência, régua de dunning e conciliação já existem.
+
+**Outras frentes ativas no mesmo repo** (não tocar sem combinar): Planta Inteligente (`blueprintKernel`, `BlueprintCanvas`, `BlueprintEditor` + testes golden) e Centro de Custo/Contratos.
+
 ### 🚪 Portão — assembleias e reservas (ainda fechado)
 
 Só depois de um piloto real em operação decidir sobre: financeiro condominial (rateio por fração ideal, fundos, multa/juros, acordos, prestação de contas), assembleias e reservas. **Nenhum dos três entra antes.** Assembleia e reserva parecem baratas e não são: assembleia tem quórum, procuração e peso de voto; reserva tem calendário, regra e caução.

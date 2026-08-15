@@ -281,13 +281,17 @@ export const condominioRateioService = {
         const fimISO = fim.toISOString().slice(0, 10);
 
         // 1. Despesas do centro de custo na competência.
+        // `transaction_date`, NÃO `due_date`: é por ela que fn_dre e fn_balancete
+        // recortam o período. Usar vencimento aqui faria o rateio e o balancete
+        // discordarem sobre a qual mês a mesma despesa pertence — e o condômino
+        // receberia uma cota que a contabilidade não confirma.
         const { data: txs, error: erroTx } = await supabase
             .from('internal_transactions')
-            .select('id, description, amount, date, direction')
+            .select('id, description, amount, transaction_date, direction')
             .eq('cost_center_id', params.costCenterId)
             .eq('direction', 'DEBIT')
-            .gte('date', inicio)
-            .lt('date', fimISO);
+            .gte('transaction_date', inicio)
+            .lt('transaction_date', fimISO);
         if (erroTx) throw new Error(`Falha ao carregar as despesas: ${erroTx.message}`);
 
         const despesas: DespesaRateio[] = (txs || []).map((t: any) => ({

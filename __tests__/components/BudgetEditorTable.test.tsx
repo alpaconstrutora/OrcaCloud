@@ -14,7 +14,7 @@
  * <table>, ou se a contagem de colunas divergir entre as faixas.
  */
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, fireEvent, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { SinapiType } from '../../types';
 import type { BudgetEntry, ProjectSettings } from '../../types';
@@ -86,6 +86,9 @@ let BudgetEditor: typeof import('../../components/BudgetEditor').BudgetEditor;
 
 beforeEach(async () => {
     vi.clearAllMocks();
+    // A busca da WBS usa usePersistedState (§3): sem limpar, o termo de um teste
+    // vaza para o seguinte pelo localStorage e a árvore aparece filtrada.
+    localStorage.clear();
     const mod = await import('../../components/BudgetEditor');
     BudgetEditor = mod.BudgetEditor ?? (mod as any).default;
 });
@@ -206,6 +209,50 @@ describe('Estrutura da tabela da WBS', () => {
         const { container } = renderEditor([makeEntry('1')]);
         const table = getWbsTable(container);
         expect(table.querySelector('[title="Arrastar para reordenar"]')).not.toBeNull();
+    });
+
+    it('a toolbar e a tabela dividem UM card, com a régua separada por border-b (§5.2)', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        const table = getWbsTable(container);
+
+        // Sobe do <table> até o card: o pai que tem border+rounded+shadow.
+        const card = table.closest('.rounded-\\[10px\\].border.shadow-sm') as HTMLElement | null;
+        expect(card).not.toBeNull();
+
+        // A busca tem que estar DENTRO do mesmo card — se estiver fora, são dois
+        // blocos separados e não é toolbar acoplada.
+        const search = within(card!).getByPlaceholderText(/buscar item/i);
+        expect(search).toBeDefined();
+
+        // A régua interna não pode ter moldura própria (§5.2: sem card aninhado).
+        const toolbar = search.closest('.border-b') as HTMLElement | null;
+        expect(toolbar).not.toBeNull();
+        expect(toolbar!.className).not.toMatch(/rounded-\[10px\]/);
+        expect(toolbar!.className).not.toMatch(/shadow-sm/);
+    });
+
+    it('a busca filtra os itens e abre a árvore para mostrar o resultado', () => {
+        const { container } = renderEditor([makeEntry('1'), makeEntry('2')]);
+        const search = container.querySelector('input[placeholder*="Buscar item"]') as HTMLInputElement;
+
+        // Sem busca, os dois itens aparecem.
+        expect(container.textContent).toContain('Item 1');
+        expect(container.textContent).toContain('Item 2');
+
+        fireEvent.change(search, { target: { value: 'Item 1' } });
+
+        // O que não bate sai; o que bate continua — e aparece mesmo com a árvore
+        // recolhida, senão a busca pareceria quebrada.
+        expect(container.textContent).toContain('Item 1');
+        expect(container.textContent).not.toContain('Item 2');
+    });
+
+    it('busca sem resultado mostra o empty state em vez de tabela vazia (§12)', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        const search = container.querySelector('input[placeholder*="Buscar item"]') as HTMLInputElement;
+
+        fireEvent.change(search, { target: { value: 'zzz-inexistente' } });
+        expect(container.textContent).toContain('Nenhum item encontrado');
     });
 
     it('a subetapa vazia ocupa a linha inteira em vez de quebrar o alinhamento', () => {

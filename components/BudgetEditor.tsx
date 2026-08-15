@@ -104,22 +104,31 @@ const DRAG_COL_WIDTH = 32;
 
 /** Larguras iniciais da tabela da WBS (§6.1). A coluna de arraste é estrutural
  *  (32px, sem `data-col-key`): não é redimensionável e o autoFit a desconta do
- *  container em vez de tentar ajustá-la. */
+ *  container em vez de tentar ajustá-la.
+ *
+ *  ⚠️ A soma tem que **aproximar a largura útil real** da tela, não ser um chute
+ *  pequeno: valor baixo trunca descrição e deixa uma faixa branca à direita até
+ *  o usuário descobrir o botão de autofit — primeira impressão ruim mesmo com o
+ *  mecanismo certo por baixo. Aqui a soma dá 1.668px (2.004px com o
+ *  detalhamento por natureza), perto da área útil de uma tela grande; em telas
+ *  menores sobra scroll horizontal, que é o comportamento certo para uma
+ *  planilha densa. "Descrição" é a coluna que absorve a diferença, por ser a
+ *  única com texto longo. */
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  item: 88,
-  base: 76,
-  codigo: 92,
-  descricao: 320,
-  qtd: 72,
-  unid: 64,
-  'custo-unit': 116,
-  'custo-total': 116,
-  bdi: 72,
-  'preco-unit': 116,
-  'preco-total': 188,
-  mo: 104,
-  mat: 104,
-  equip: 104,
+  item: 96,
+  base: 84,
+  codigo: 104,
+  descricao: 520,
+  qtd: 84,
+  unid: 72,
+  'custo-unit': 128,
+  'custo-total': 128,
+  bdi: 76,
+  'preco-unit': 128,
+  'preco-total': 216,
+  mo: 112,
+  mat: 112,
+  equip: 112,
 };
 
 const BudgetEditor: React.FC<BudgetEditorProps> = ({
@@ -202,6 +211,19 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [parametricType, setParametricType] = React.useState<'FINANCIAL' | 'QUANTITATIVE'>('FINANCIAL');
   const [parametricPreview, setParametricPreview] = React.useState<{ totalValue: number; itemsCount: number; mainMaterials?: Array<{ desc: string; qty: number; unit: string }> } | null>(null);
   const [showNatureBreakdown, setShowNatureBreakdown] = React.useState(false);
+  // Busca da toolbar acoplada (§5.2) — filtra os itens da WBS por código/descrição.
+  const [wbsSearch, setWbsSearch] = usePersistedState('budgetEditor:wbsSearch', '');
+  const wbsQuery = wbsSearch.trim().toLowerCase();
+  const isSearching_wbs = wbsQuery.length > 0;
+
+  /** Item bate com a busca (código ou descrição). Sem busca, tudo passa. */
+  const matchesWbsSearch = React.useCallback((item: BudgetEntry) => {
+    if (!wbsQuery) return true;
+    const it = item.sinapiItem;
+    return (it?.description || '').toLowerCase().includes(wbsQuery)
+      || (it?.code || '').toLowerCase().includes(wbsQuery);
+  }, [wbsQuery]);
+
   // Largura da tabela = soma EXATA das colunas visíveis (§6.1). O espaçador não
   // entra na conta: é ele que absorve a folga quando sobra espaço no container.
   const tableTotalWidth = React.useMemo(() => {
@@ -1973,9 +1995,33 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         }}
       />
 
-      {/* Main Toolbar */}
-      <div className="bg-white p-2 rounded-[10px] shadow-sm border border-gray-200 flex flex-wrap gap-3 items-center justify-between">
+      {/* Toolbar acoplada à tabela (§5.2): toolbar e WBS dividem UM card —
+          border/rounded/shadow/overflow só neste pai, e a régua interna sem
+          moldura própria, separada do conteúdo pelo border-b. */}
+      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
+      <div className="p-3 border-b border-gray-100 flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap items-center gap-3">
+          {/* Busca da WBS — parte do conjunto padrão da toolbar acoplada */}
+          <div className="relative w-full md:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar item por código ou descrição..."
+              value={wbsSearch}
+              onChange={(e) => setWbsSearch(e.target.value)}
+              className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            />
+            {isSearching_wbs && (
+              <button
+                onClick={() => setWbsSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-[6px] hover:bg-gray-100"
+                title="Limpar busca"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
           {isLocked && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-[6px] border border-amber-200 text-xs font-bold animate-pulse">
               <AlertTriangle className="w-4 h-4" />
@@ -2591,8 +2637,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </div>
           );
         })()
-      }      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-auto">
+      }
+        {/* Conteúdo — SEM bg/border/rounded/shadow próprios: o card pai já supre (§5.2) */}
+        <div className="flex-1 overflow-auto min-h-0">
           <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
             {/* Uma única definição de coluna para TODAS as linhas (cabeçalho, grupo,
                 etapa, subetapa e item) — antes eram 3 templates de grid distintos
@@ -2639,7 +2686,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </thead>
           {(settings?.wbs || []).map((group, gIndex) => {
             if (!group) return null;
-            const isGroupExpanded = expandedGroups.includes(group.id);
+            // Com busca ativa, grupo sem nenhum item correspondente sai inteiro.
+            if (isSearching_wbs && !budget.some(b => b.group === group.name && matchesWbsSearch(b))) return null;
+            // A busca também abre a árvore: o resultado não pode ficar escondido
+            // dentro de um grupo recolhido.
+            const isGroupExpanded = isSearching_wbs || expandedGroups.includes(group.id);
             const groupTotal = calculateGroupTotal(group.name);
             const { name: groupNameDisplay } = splitName(group.name);
 
@@ -2698,7 +2749,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 {/* PHASES LOOP */}
                 {isGroupExpanded && (group.phases || []).map((phase, pIndex) => {
                   if (!phase) return null;
-                  const isPhaseExpanded = expandedPhases.includes(phase.id);
+                  if (isSearching_wbs && !budget.some(b => b.group === group.name && b.phase === phase.name && matchesWbsSearch(b))) return null;
+                  const isPhaseExpanded = isSearching_wbs || expandedPhases.includes(phase.id);
                   const phaseTotal = calculatePhaseTotal(group.name, phase.name);
                   const { id: phaseIdDisplay, name: phaseNameDisplay } = splitName(phase.name);
 
@@ -2757,9 +2809,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       {/* SUBPHASES LOOP */}
                       {isPhaseExpanded && (phase.subPhases || []).map((subPhaseName, spIndex) => {
                         if (!subPhaseName) return null;
-                        const isSubExpanded = expandedSubPhases.includes(subPhaseName);
+                        const isSubExpanded = isSearching_wbs || expandedSubPhases.includes(subPhaseName);
                         const subTotal = calculateSubPhaseTotal(group.name, phase.name, subPhaseName);
-                        const items = budget.filter(b => b.group === group.name && b.phase === phase.name && b.subPhase === subPhaseName);
+                        const allItems = budget.filter(b => b.group === group.name && b.phase === phase.name && b.subPhase === subPhaseName);
+                        const items = isSearching_wbs ? allItems.filter(matchesWbsSearch) : allItems;
+                        // Com busca ativa, subetapa sem nenhum item correspondente sai da
+                        // árvore — mostrar a faixa vazia faria a busca parecer quebrada.
+                        if (isSearching_wbs && items.length === 0) return null;
                         const { id: subIdDisplay, name: subNameDisplay } = splitName(subPhaseName);
 
                         return (
@@ -2868,6 +2924,19 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <tr>
                 <td colSpan={showNatureBreakdown ? 16 : 13} className="p-8 text-center text-gray-400">
                   Nenhum grupo definido. Clique em "Nova Etapa" para começar.
+                </td>
+              </tr>
+            </tbody>
+          )}
+
+          {/* Empty state da busca (§12) — sem moldura própria: está dentro do card acoplado */}
+          {isSearching_wbs && !budget.some(matchesWbsSearch) && (
+            <tbody>
+              <tr>
+                <td colSpan={showNatureBreakdown ? 16 : 13} className="text-center py-12">
+                  <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item encontrado</h3>
+                  <p className="text-sm text-gray-500">Nenhum item do orçamento bate com "{wbsSearch}". Tente outro termo.</p>
                 </td>
               </tr>
             </tbody>

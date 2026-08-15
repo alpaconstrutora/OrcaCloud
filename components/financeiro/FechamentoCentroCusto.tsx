@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, CalendarDays, ChevronDown, ChevronRight, Layers, Loader2,
-    Lock, LockOpen, MoveHorizontal, RefreshCw, Search, X,
+    Lock, LockOpen, MoveHorizontal, RefreshCw, Search, Tag, X,
 } from 'lucide-react';
 import type { Payable, CostCenter } from '../../types/financial';
 import { payableParty } from '../../services/payableService';
@@ -41,6 +41,10 @@ export function competenciaDoTitulo(p: Payable): string {
 /** Rótulo da fatia não classificada. Não é lacuna a esconder: é o número que
  *  diz quanto do mês ninguém apropriou a centro de custo nenhum. */
 const SEM_CENTRO_CUSTO = 'Sem centro de custo';
+
+/** Valor do <select> para a fatia sem centro de custo — `costCenterId` é `null`
+ *  ali, e `<option value="">` já está tomado por "Todos". */
+const CC_FILTRO_SEM = '__sem__';
 
 /** Linha do consolidado — uma por Centro de Custo. */
 export interface LinhaFechamento {
@@ -140,6 +144,10 @@ export default function FechamentoCentroCusto({
 }: Props) {
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState('fechamentoCentroCusto:search', '');
+    // Seletor de Centro de Custo — filtro de FONTE (§5.3 não se aplica: não muda
+    // "qual mês?", só recorta a tabela ao CC escolhido), então mora na régua da
+    // busca (§5.1), não na barra de escopo do pai. '' = todos.
+    const [ccFiltro, setCcFiltro] = usePersistedState('fechamentoCentroCusto:cc', '');
     const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [fechamento, setFechamento] = useState<CostCenterClosing | null>(null);
@@ -234,8 +242,25 @@ export default function FechamentoCentroCusto({
         return consolidadoVivo;
     }, [estaFechada, fechamento, consolidadoVivo]);
 
+    /**
+     * Opções do seletor — só os centros de custo que TÊM título nesta
+     * competência, não o cadastro inteiro (`costCenters`). Listar o cadastro
+     * completo ofereceria dezenas de CCs que dariam tabela vazia ao escolher,
+     * sem nenhuma pista de por quê. Derivado de `consolidado` (antes do próprio
+     * filtro/busca) para a lista de opções não encolher enquanto o usuário digita.
+     */
+    const opcoesCentroCusto = useMemo(
+        () => [...consolidado]
+            .map(l => ({ value: l.costCenterId ?? CC_FILTRO_SEM, label: l.nome }))
+            .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
+        [consolidado],
+    );
+
     const filtered = useMemo(() => {
         let result = consolidado;
+        if (ccFiltro) {
+            result = result.filter(l => (l.costCenterId ?? CC_FILTRO_SEM) === ccFiltro);
+        }
         if (search) {
             const termo = search.toLowerCase();
             result = result.filter(l => l.nome.toLowerCase().includes(termo));
@@ -264,7 +289,7 @@ export default function FechamentoCentroCusto({
             result = [...result].sort((a, b) => b.previsto - a.previsto);
         }
         return result;
-    }, [consolidado, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [consolidado, ccFiltro, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     useEffect(() => { onConsolidadoChange?.(filtered); }, [filtered, onConsolidadoChange]);
 
@@ -396,6 +421,30 @@ export default function FechamentoCentroCusto({
                         )}
                     </div>
 
+                    {/* Seletor de Centro de Custo — filtro de FONTE (mesmo vocabulário
+                        do filtro "Origem" em ContasPagarParcelas.tsx): não muda o mês
+                        que a tela olha, só recorta a tabela a um CC. Dropdown, não
+                        segmentado — a lista pode ter dezenas de centros de custo.
+                        Opções só com os CCs que TÊM título nesta competência (ver
+                        `opcoesCentroCusto`), então escolher qualquer item sempre
+                        devolve pelo menos uma linha. */}
+                    <div className="relative flex items-center shrink-0">
+                        <Tag className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                        <select
+                            value={ccFiltro}
+                            onChange={e => setCcFiltro(e.target.value)}
+                            disabled={opcoesCentroCusto.length === 0}
+                            className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Filtrar por centro de custo"
+                        >
+                            <option value="">Todos os centros de custo</option>
+                            {opcoesCentroCusto.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
+                    </div>
+
                     <button
                         onClick={onReload}
                         className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
@@ -517,11 +566,20 @@ export default function FechamentoCentroCusto({
                     <div className="text-center py-12 text-gray-400">
                         <Layers className="w-12 h-12 mx-auto mb-4 opacity-30" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum título nesta competência</h3>
-                        <p className="text-sm text-gray-500">
-                            {search
-                                ? 'Nenhum centro de custo bate com a busca.'
+                        <p className="text-sm text-gray-500 mb-4">
+                            {search || ccFiltro
+                                ? 'Nenhum centro de custo bate com o filtro.'
                                 : 'Não há títulos a pagar com vencimento neste mês.'}
                         </p>
+                        {(search || ccFiltro) && (
+                            <button
+                                onClick={() => { setSearch(''); setCcFiltro(''); }}
+                                className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
+                            >
+                                <X className="w-[15px] h-[15px]" />
+                                Limpar filtros
+                            </button>
+                        )}
                     </div>
                 ) : (
                     /* §6.5 — o consolidado pode ter dezenas de centros de custo:

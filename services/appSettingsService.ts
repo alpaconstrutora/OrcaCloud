@@ -23,17 +23,18 @@ export interface AppSettings {
     /** Casas do sequencial por obra (zeros à esquerda). */
     quotationSeqPadding: number;
 
-    // Contratos de LOCAÇÃO — mesmo padrão, mas o sequencial é por organização e
-    // ano: contrato de locação não tem obra. Tokens: {prefixo} {ano} {seq}.
+    // Contratos de LOCAÇÃO — sequencial por UNIDADE (não por obra: contrato de
+    // locação não tem obra, chega no empreendimento pela unidade via
+    // vw_unit_property_map). Tokens: {prefixo} {empreendimento} {unidade} {seq}.
     rentalContractPrefix: string;
     rentalContractNumberPattern: string;
-    /** Casas do sequencial (zeros à esquerda). */
+    /** Casas do sequencial por unidade (zeros à esquerda). */
     rentalContractSeqPadding: number;
 
     // Contratos de VENDA DE UNIDADES — idem locação, sequência independente.
     unitSaleContractPrefix: string;
     unitSaleContractNumberPattern: string;
-    /** Casas do sequencial (zeros à esquerda). */
+    /** Casas do sequencial por unidade (zeros à esquerda). */
     unitSaleContractSeqPadding: number;
 
     // Exibição de fornecedores: razão social ou apelido curto
@@ -62,16 +63,13 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
     quotationNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
     quotationSeqPadding: 4,
 
-    // Padding 3 (não 4, como os de Suprimentos): reproduz exatamente o formato
-    // que já está em produção — CL-2026-001, CV-2026-001. Mudar aqui faz o
-    // próximo contrato sair com largura diferente dos anteriores.
     rentalContractPrefix: 'CL',
-    rentalContractNumberPattern: '{prefixo}-{ano}-{seq}',
-    rentalContractSeqPadding: 3,
+    rentalContractNumberPattern: '{prefixo}-{empreendimento}-{unidade}-{seq}',
+    rentalContractSeqPadding: 4,
 
     unitSaleContractPrefix: 'CV',
-    unitSaleContractNumberPattern: '{prefixo}-{ano}-{seq}',
-    unitSaleContractSeqPadding: 3,
+    unitSaleContractNumberPattern: '{prefixo}-{empreendimento}-{unidade}-{seq}',
+    unitSaleContractSeqPadding: 4,
 
     supplierNameDisplay: 'razao',
 
@@ -90,10 +88,10 @@ export const TEMPLATE_VARS = {
     orderNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     contractNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     quotationNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
-    // Sem {empreendimento}/{obra}: contrato de locação e de venda de unidade
-    // não tem obra vinculada, os tokens sairiam vazios.
-    rentalContractNumber: ['{prefixo}', '{ano}', '{seq}'],
-    unitSaleContractNumber: ['{prefixo}', '{ano}', '{seq}'],
+    // {unidade}, não {obra}: contrato de locação/venda não tem obra — chega no
+    // empreendimento pela unidade (vw_unit_property_map).
+    rentalContractNumber: ['{prefixo}', '{empreendimento}', '{unidade}', '{seq}'],
+    unitSaleContractNumber: ['{prefixo}', '{empreendimento}', '{unidade}', '{seq}'],
     whatsappOrderSent: ['{fornecedor}', '{pedido}', '{obra}', '{itens}', '{total}', '{entrega}'],
     whatsappStatusChange: ['{fornecedor}', '{pedido}', '{status}'],
     email: ['{pedido}', '{status}'],

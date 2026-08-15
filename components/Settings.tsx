@@ -158,18 +158,17 @@ const Settings: React.FC = () => {
         [appSettings.quotationPrefix, appSettings.quotationNumberPattern, appSettings.quotationSeqPadding],
     );
 
-    // Locação e venda de unidades usam o ano corrente no preview — é o mesmo ano
-    // que a geração real usa, então o exemplo é o número que sairia de verdade.
-    const previewYear = new Date().getFullYear();
-
+    // Exemplo com código de empreendimento e unidade fictícios, só para o
+    // usuário ver o efeito da máscara — a numeração real busca os dois via
+    // vw_unit_property_map a partir da unidade da negociação.
     const previewRentalContractNumber = React.useMemo(
-        () => formatRentalContractNumber(previewYear, 1, appSettings),
-        [previewYear, appSettings.rentalContractPrefix, appSettings.rentalContractNumberPattern, appSettings.rentalContractSeqPadding],
+        () => formatRentalContractNumber({ empreendimentoCode: 'RES01', unitName: '101' }, 1, appSettings),
+        [appSettings.rentalContractPrefix, appSettings.rentalContractNumberPattern, appSettings.rentalContractSeqPadding],
     );
 
     const previewUnitSaleContractNumber = React.useMemo(
-        () => formatUnitSaleContractNumber(previewYear, 1, appSettings),
-        [previewYear, appSettings.unitSaleContractPrefix, appSettings.unitSaleContractNumberPattern, appSettings.unitSaleContractSeqPadding],
+        () => formatUnitSaleContractNumber({ empreendimentoCode: 'RES01', unitName: '101' }, 1, appSettings),
+        [appSettings.unitSaleContractPrefix, appSettings.unitSaleContractNumberPattern, appSettings.unitSaleContractSeqPadding],
     );
 
     const runMigration = async () => {
@@ -566,7 +565,7 @@ const Settings: React.FC = () => {
                         </div>
                         <div>
                             <h2 className="text-lg font-semibold text-gray-800">Numeração de Contratos de Locação</h2>
-                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de locação. O sequencial é por organização e reinicia a cada ano.</p>
+                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de locação. O sequencial é por unidade e reinicia a cada unidade.</p>
                         </div>
                     </div>
                     <button onClick={() => handleAppSettingsReset('rentalContractNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
@@ -586,7 +585,7 @@ const Settings: React.FC = () => {
                             type="text"
                             value={appSettings.rentalContractNumberPattern}
                             onChange={e => setAppSettings(s => ({ ...s, rentalContractNumberPattern: e.target.value }))}
-                            placeholder="{prefixo}-{ano}-{seq}"
+                            placeholder="{prefixo}-{empreendimento}-{unidade}-{seq}"
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                         />
                     </div>
@@ -618,8 +617,10 @@ const Settings: React.FC = () => {
                         <span className="font-mono text-sm text-gray-700">{previewRentalContractNumber}</span>
                     </div>
                     <p className="text-xs text-gray-400">
-                        O sequencial é controlado pelo banco e é único por organização e ano. Contrato de locação
-                        <strong> não tem obra vinculada</strong>, por isso não há aqui os campos {'{empreendimento}'} e {'{obra}'}.
+                        O sequencial é controlado pelo banco e é único por unidade — a mesma unidade só repete o número em
+                        um novo contrato dela mesma (novo inquilino, renovação avulsa). Contrato de locação
+                        <strong> não tem obra vinculada</strong>, por isso {'{empreendimento}'} e {'{unidade}'} vêm da
+                        unidade de Empreendimento associada ao imóvel da negociação, não de {'{obra}'}.
                         Alterar a máscara <strong>não renumera</strong> os contratos já emitidos.
                     </p>
                 </div>
@@ -643,7 +644,7 @@ const Settings: React.FC = () => {
                         </div>
                         <div>
                             <h2 className="text-lg font-semibold text-gray-800">Numeração de Contratos de Venda de Unidades</h2>
-                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de venda de unidades. O sequencial é por organização, reinicia a cada ano e é independente do de locação.</p>
+                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de venda de unidades. O sequencial é por unidade e é independente do de locação.</p>
                         </div>
                     </div>
                     <button onClick={() => handleAppSettingsReset('unitSaleContractNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
@@ -663,7 +664,7 @@ const Settings: React.FC = () => {
                             type="text"
                             value={appSettings.unitSaleContractNumberPattern}
                             onChange={e => setAppSettings(s => ({ ...s, unitSaleContractNumberPattern: e.target.value }))}
-                            placeholder="{prefixo}-{ano}-{seq}"
+                            placeholder="{prefixo}-{empreendimento}-{unidade}-{seq}"
                             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                         />
                     </div>
@@ -695,8 +696,10 @@ const Settings: React.FC = () => {
                         <span className="font-mono text-sm text-gray-700">{previewUnitSaleContractNumber}</span>
                     </div>
                     <p className="text-xs text-gray-400">
-                        O sequencial é controlado pelo banco e é único por organização e ano. Contrato de venda de unidade
-                        <strong> não tem obra vinculada</strong>, por isso não há aqui os campos {'{empreendimento}'} e {'{obra}'}.
+                        O sequencial é controlado pelo banco e é único por unidade — sequência independente da de locação,
+                        mesmo quando é a mesma unidade. Contrato de venda de unidade
+                        <strong> não tem obra vinculada</strong>, por isso {'{empreendimento}'} e {'{unidade}'} vêm da
+                        unidade de Empreendimento associada ao imóvel da negociação, não de {'{obra}'}.
                         Alterar a máscara <strong>não renumera</strong> os contratos já emitidos.
                     </p>
                 </div>

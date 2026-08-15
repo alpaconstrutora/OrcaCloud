@@ -2,12 +2,13 @@ import { supabase } from '../lib/supabase';
 import { appSettingsService, AppSettings } from './appSettingsService';
 
 /**
- * Numeração de Contratos de VENDA DE UNIDADES — `CV-{ano}-{seq}`.
+ * Numeração de Contratos de VENDA DE UNIDADES — `CV-{empreendimento}-{unidade}-{seq}`.
  *
- * Gêmeo de `rentalContractNumberingService.ts` com sequência independente:
- * excluir ou criar contrato de locação não pode mexer no número da próxima
- * venda. Escopo do sequencial: organização + ano (contrato de venda de unidade
- * também não tem obra).
+ * Gêmeo de `rentalContractNumberingService.ts`, com contador independente: uma
+ * mesma unidade pode ter contrato de locação e, depois, de venda — as duas
+ * sequências não podem se misturar. Ver o cabeçalho daquele arquivo para o
+ * raciocínio completo (unidade em vez de obra, chegada via
+ * `vw_unit_property_map`).
  *
  * Substitui o encadeamento anterior em `createFromDeal` — RPC
  * `get_next_contract_number` genérica, com fallback para `Date.now()` e outro
@@ -16,34 +17,74 @@ import { appSettingsService, AppSettings } from './appSettingsService';
  * exclusão.
  */
 
+export class MissingUnitError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'MissingUnitError';
+    }
+}
+
+interface ResolvedUnit {
+    unitId: string;
+    unitName: string;
+    empreendimentoCode: string;
+}
+
+const clean = (v?: string | null) => (v ?? '').trim();
+
+export async function resolveSaleUnit(propertyId: string): Promise<ResolvedUnit> {
+    if (!propertyId) throw new MissingUnitError('Negociação sem unidade — selecione o imóvel antes de gerar o contrato.');
+
+    const { data, error } = await supabase
+        .from('vw_unit_property_map')
+        .select('unit_id, unit_name, empreendimento_code')
+        .eq('property_id', propertyId)
+        .eq('purpose', 'SALE')
+        .maybeSingle();
+    if (error) throw error;
+
+    if (!data?.unit_id) {
+        throw new MissingUnitError(
+            'Não é possível gerar o número do contrato: o imóvel não está vinculado a uma unidade de Empreendimento. ' +
+            'Vincule a unidade em Empreendimentos › Torres › Unidades antes de gerar o contrato.',
+        );
+    }
+
+    return {
+        unitId: data.unit_id,
+        unitName: clean(data.unit_name),
+        empreendimentoCode: clean((data as { empreendimento_code?: string }).empreendimento_code),
+    };
+}
+
 /** Aplica a máscara. Separado da busca para poder ser usado no preview das Configurações. */
 export function formatUnitSaleContractNumber(
-    year: number,
+    unit: { empreendimentoCode: string; unitName: string },
     seq: number,
     settings: Pick<AppSettings, 'unitSaleContractPrefix' | 'unitSaleContractNumberPattern' | 'unitSaleContractSeqPadding'>,
 ): string {
     const prefixo = (settings.unitSaleContractPrefix ?? '').trim().replace(/^-+|-+$/g, '');
     const padding = Math.max(1, Number(settings.unitSaleContractSeqPadding) || 1);
 
-    return (settings.unitSaleContractNumberPattern || '{prefixo}-{ano}-{seq}')
+    return (settings.unitSaleContractNumberPattern || '{prefixo}-{empreendimento}-{unidade}-{seq}')
         .replace(/{prefixo}/g, prefixo)
-        .replace(/{ano}/g, String(year))
+        .replace(/{empreendimento}/g, unit.empreendimentoCode)
+        .replace(/{unidade}/g, unit.unitName)
         .replace(/{seq}/g, String(seq).padStart(padding, '0'));
 }
 
 /**
- * Reserva o próximo sequencial da organização/ano e devolve o número completo.
- * O sequencial é consumido mesmo que o insert do contrato falhe depois — buraco
- * na numeração é preferível a número repetido.
+ * Reserva o próximo sequencial da unidade e devolve o número completo do
+ * contrato. O sequencial é consumido mesmo que o insert do contrato falhe
+ * depois — buraco na numeração é preferível a número repetido.
  */
-export async function generateUnitSaleContractNumber(orgId: string, year: number): Promise<string> {
-    if (!orgId) throw new Error('Negociação sem organização — impossível gerar o número do contrato.');
+export async function generateUnitSaleContractNumber(propertyId: string): Promise<string> {
+    const unit = await resolveSaleUnit(propertyId);
 
     const { data: seq, error } = await supabase.rpc('fn_next_unit_sale_contract_seq', {
-        p_org_id: orgId,
-        p_year: year,
+        p_unit_id: unit.unitId,
     });
     if (error) throw new Error(`Falha ao gerar o número do contrato de venda: ${error.message}`);
 
-    return formatUnitSaleContractNumber(year, Number(seq), appSettingsService.get());
+    return formatUnitSaleContractNumber(unit, Number(seq), appSettingsService.get());
 }

@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import {
     contractService, nextRentalNumber, removeContractTransactionsFrom, buildRecurringDueDates,
+    resolveDealUnitsInfo,
 } from './contractService';
 import { contractIndexService, normalizeIndexName, IndexName } from './contractIndexService';
 import { commercialFinanceService } from './commercialFinanceService';
@@ -297,7 +298,12 @@ export const contractRenewalService = {
                     paymentDays: parent.payment_days,
                 }).length
                 : 0,
-            nextNumber: await nextRentalNumber(parent.organization_id, parseISO(startDate).getUTCFullYear()),
+            // A numeração passou a ser por UNIDADE (empreendimento+unidade), não
+            // mais por organização+ano — resolve a unidade a partir do deal do
+            // contrato pai, mesmo caminho de createFromDeal.
+            nextNumber: await nextRentalNumber(
+                (await resolveDealUnitsInfo(parent.deal_id ?? '')).primaryPropertyId ?? '',
+            ),
             nextAddendumNumber: mode === 'ADITIVO'
                 ? await contractService.nextAddendumNumber(parent.id)
                 : undefined,

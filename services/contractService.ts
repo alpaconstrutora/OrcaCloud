@@ -265,19 +265,21 @@ export async function removeContractTransactionsFrom(
 }
 
 /**
- * Próximo número da sequência de LOCAÇÃO (`CL-{ano}-{seq}`), independente da de
- * vendas. Usado por `createFromDeal` e pela renovação (contractRenewalService).
+ * Próximo número da sequência de LOCAÇÃO (`CL-{empreendimento}-{unidade}-{seq}`),
+ * independente da de vendas. Usado por `createFromDeal` e pela renovação
+ * (contractRenewalService).
  *
  * A máscara e o contador vivem em `rentalContractNumberingService` desde
  * 15/08/2026 (Configurações do Sistema › Nomenclatura › Contratos de Locação).
- * Antes o sequencial saía do MAIOR sufixo existente lido AQUI, no navegador —
- * o que já evitava a repetição que COUNT(*) causa após exclusão, mas não
- * impedia dois usuários de lerem o mesmo máximo e gerarem o mesmo número. O
- * contador agora é atômico no banco; esta função continua existindo só como o
- * ponto de entrada que os dois chamadores já conheciam.
+ * O contador é por UNIDADE (chegada via `vw_unit_property_map`, não há obra em
+ * contrato de locação) e é atômico no banco — dois usuários gerando contrato da
+ * mesma unidade ao mesmo tempo não colidem.
+ *
+ * `propertyId` é `commercial_properties.id` da unidade principal da
+ * negociação — mesmo campo que `resolveDealUnitsInfo` já resolve.
  */
-export async function nextRentalNumber(orgId: string, year: number): Promise<string> {
-    return generateRentalContractNumber(orgId, year);
+export async function nextRentalNumber(propertyId: string): Promise<string> {
+    return generateRentalContractNumber(propertyId);
 }
 
 /**
@@ -296,10 +298,12 @@ export async function nextRentalNumber(orgId: string, year: number): Promise<str
  *
  * Nunca lança: falhar aqui não pode impedir a geração do contrato.
  */
-async function resolveDealUnitsInfo(dealId: string, fallbackPropertyId?: string): Promise<{
+export async function resolveDealUnitsInfo(dealId: string, fallbackPropertyId?: string): Promise<{
     unitLabel: string;
     companyId?: string;
     executionAddress?: string;
+    /** `commercial_properties.id` da unidade PRINCIPAL — entrada da numeração de contrato (locação/venda). */
+    primaryPropertyId?: string;
 }> {
     try {
         const { data: unitRows } = await supabase
@@ -329,7 +333,8 @@ async function resolveDealUnitsInfo(dealId: string, fallbackPropertyId?: string)
             .filter(Boolean)
             .join(' + ');
 
-        const primary = byId.get(rows.find(r => r.is_primary)?.property_id ?? ids[0]);
+        const primaryId = rows.find(r => r.is_primary)?.property_id ?? ids[0];
+        const primary = byId.get(primaryId);
 
         // `street` só existe nas linhas migradas; `address` é o campo legado de
         // texto livre e continua sendo o preenchido em muitas unidades antigas.
@@ -345,6 +350,7 @@ async function resolveDealUnitsInfo(dealId: string, fallbackPropertyId?: string)
             unitLabel,
             companyId: primary?.company_id || undefined,
             executionAddress: line || primary?.address || undefined,
+            primaryPropertyId: primaryId || undefined,
         };
     } catch {
         return { unitLabel: '' };
@@ -1306,19 +1312,22 @@ export const contractService = {
             return existing;
         }
 
-        const { unitLabel, companyId: unitCompanyId, executionAddress } = unitsInfo;
+        const { unitLabel, companyId: unitCompanyId, executionAddress, primaryPropertyId } = unitsInfo;
 
         // Gera número: usa o do deal se preenchido; senão sequência própria do domínio.
         let number = (deal.contract_number && deal.contract_number.trim())
             ? deal.contract_number.trim()
             : '';
         if (!number) {
-            const year = new Date().getFullYear();
             // Cada domínio tem sua própria sequência e sua própria máscara,
-            // configuráveis em Configurações do Sistema › Nomenclatura.
+            // configuráveis em Configurações do Sistema › Nomenclatura. O
+            // sequencial é por UNIDADE — resolvida de primaryPropertyId via
+            // vw_unit_property_map, não há obra em locação/venda de unidade.
+            const propertyId = primaryPropertyId || deal.property_id;
+            if (!propertyId) throw new Error('Negociação sem unidade — selecione o imóvel antes de gerar o contrato.');
             number = isRental
-                ? await nextRentalNumber(deal.organization_id, year)
-                : await generateUnitSaleContractNumber(deal.organization_id, year);
+                ? await nextRentalNumber(propertyId)
+                : await generateUnitSaleContractNumber(propertyId);
         }
 
         // Idempotência secundária: contrato com este número já existe?

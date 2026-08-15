@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
-import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle } from 'lucide-react';
+import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
@@ -12,7 +12,7 @@ import SinapiRebaseModal from './SinapiRebaseModal';
 import { WBSImportModal } from './WBSImportModal';
 import { WBSTemplateModal } from './WBSTemplateModal';
 import { useConfirm } from './ui/confirm';
-import { usePersistedState } from './ui/TableUtils';
+import { usePersistedState, useResizableColumns } from './ui/TableUtils';
 import Button from './ui/Button';
 import * as XLSX from 'xlsx';
 
@@ -95,6 +95,33 @@ const getTypeBadge = (type: SinapiType) => {
   );
 };
 
+/** Colunas redimensionáveis, na ordem em que aparecem — "preco-total" fica fora
+ *  porque vem DEPOIS do espaçador do §6.1.1. */
+const WBS_COLUMN_KEYS = ['item', 'base', 'codigo', 'descricao', 'qtd', 'unid', 'custo-unit', 'custo-total', 'bdi', 'preco-unit'] as const;
+const NATURE_COLUMN_KEYS = ['mo', 'mat', 'equip'] as const;
+/** Coluna do drag handle: estrutural, largura fixa, não redimensionável. */
+const DRAG_COL_WIDTH = 32;
+
+/** Larguras iniciais da tabela da WBS (§6.1). A coluna de arraste é estrutural
+ *  (32px, sem `data-col-key`): não é redimensionável e o autoFit a desconta do
+ *  container em vez de tentar ajustá-la. */
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  item: 88,
+  base: 76,
+  codigo: 92,
+  descricao: 320,
+  qtd: 72,
+  unid: 64,
+  'custo-unit': 116,
+  'custo-total': 116,
+  bdi: 72,
+  'preco-unit': 116,
+  'preco-total': 188,
+  mo: 104,
+  mat: 104,
+  equip: 104,
+};
+
 const BudgetEditor: React.FC<BudgetEditorProps> = ({
   budget,
   settings,
@@ -108,6 +135,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   organizationId,
 }) => {
   const confirm = useConfirm();
+  // Redimensionamento por arraste + autofit sob comando (§6.1/§6.1.2).
+  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'budgetEditorColWidths');
   const [generatingContract, setGeneratingContract] = React.useState(false);
   const [wbsModal, setWbsModal] = React.useState<{
     isOpen: boolean;
@@ -173,6 +202,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [parametricType, setParametricType] = React.useState<'FINANCIAL' | 'QUANTITATIVE'>('FINANCIAL');
   const [parametricPreview, setParametricPreview] = React.useState<{ totalValue: number; itemsCount: number; mainMaterials?: Array<{ desc: string; qty: number; unit: string }> } | null>(null);
   const [showNatureBreakdown, setShowNatureBreakdown] = React.useState(false);
+  // Largura da tabela = soma EXATA das colunas visíveis (§6.1). O espaçador não
+  // entra na conta: é ele que absorve a folga quando sobra espaço no container.
+  const tableTotalWidth = React.useMemo(() => {
+    const base = DRAG_COL_WIDTH
+      + WBS_COLUMN_KEYS.reduce((sum, key) => sum + cols.getWidth(key), 0)
+      + cols.getWidth('preco-total');
+    return showNatureBreakdown
+      ? base + NATURE_COLUMN_KEYS.reduce((sum, key) => sum + cols.getWidth(key), 0)
+      : base;
+  }, [cols, showNatureBreakdown]);
   const [auxiliaryItems, setAuxiliaryItems] = React.useState<Map<string, SinapiItem>>(new Map());
   const [isLoadingAuxiliary, setIsLoadingAuxiliary] = React.useState(false);
   const [hasCPUChanges, setHasCPUChanges] = React.useState(false);
@@ -1988,6 +2027,17 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               {expandedGroups.length > 0 ? 'Recolher' : 'Expandir'}
             </button>
 
+            {/* Auto-ajuste de largura (§6.1.2) — sob comando explícito, nunca
+                automático: recalcular a cada digitação faria as colunas dançarem.
+                Neutro (não é toggle, não fica azul). */}
+            <button
+              onClick={() => cols.autoFit()}
+              className="p-2 rounded-[6px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+              title="Ajustar largura das colunas ao conteúdo"
+            >
+              <MoveHorizontal className="w-4 h-4" />
+            </button>
+
             <div className="h-6 w-px bg-gray-200 mx-1" />
 
             <button
@@ -2543,50 +2593,46 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         })()
       }      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         <div className="flex-1 overflow-auto">
-          <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+          <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
             {/* Uma única definição de coluna para TODAS as linhas (cabeçalho, grupo,
                 etapa, subetapa e item) — antes eram 3 templates de grid distintos
-                (11, 9 e 12 colunas), e por isso as colunas nunca alinhavam. */}
+                (11, 9 e 12 colunas), e por isso as colunas nunca alinhavam.
+                ⚠️ A tabela NUNCA usa w-full junto com table-layout:fixed (§6.1): a
+                largura é a soma exata das colunas, senão o navegador redistribui a
+                sobra e o arraste redimensiona a coluna errada. */}
             <colgroup>
-              <col style={{ width: '32px' }} />
-              <col style={{ width: '88px' }} />
-              <col style={{ width: '76px' }} />
-              <col style={{ width: '92px' }} />
+              <col style={{ width: `${DRAG_COL_WIDTH}px` }} />
+              {WBS_COLUMN_KEYS.map(key => (
+                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+              ))}
+              {/* Espaçador (§6.1.1): absorve a folga ANTES do bloco final, para a
+                  borda de "Preço total" não andar a cada redimensionamento. */}
               <col />
-              <col style={{ width: '72px' }} />
-              <col style={{ width: '64px' }} />
-              <col style={{ width: '116px' }} />
-              <col style={{ width: '116px' }} />
-              <col style={{ width: '72px' }} />
-              <col style={{ width: '116px' }} />
-              <col style={{ width: '188px' }} />
-              {showNatureBreakdown && (
-                <>
-                  <col style={{ width: '104px' }} />
-                  <col style={{ width: '104px' }} />
-                  <col style={{ width: '104px' }} />
-                </>
-              )}
+              <col data-col-key="preco-total" style={{ width: `${cols.getWidth('preco-total')}px` }} />
+              {showNatureBreakdown && NATURE_COLUMN_KEYS.map(key => (
+                <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+              ))}
             </colgroup>
             <thead>
               <tr className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-500">
                 <th className="px-3 py-2 border-r border-gray-100"></th>
-                <th className="px-3 py-2 border-r border-gray-100">Item</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center">Base</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center">Código</th>
-                <th className="px-3 py-2 border-r border-gray-100">Descrição</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center">Qtd.</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center">Unid.</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center">Custo unit.</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-right">Custo total</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center text-red-500">BDI</th>
-                <th className="px-3 py-2 border-r border-gray-100 text-right">Preço unit.</th>
-                <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right">Preço total</th>
+                <th className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Item<cols.ResizeHandle colKey="item" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Base<cols.ResizeHandle colKey="base" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Código<cols.ResizeHandle colKey="codigo" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Descrição<cols.ResizeHandle colKey="descricao" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Qtd.<cols.ResizeHandle colKey="qtd" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Unid.<cols.ResizeHandle colKey="unid" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Custo unit.<cols.ResizeHandle colKey="custo-unit" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-right relative overflow-hidden">Custo total<cols.ResizeHandle colKey="custo-total" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center text-red-500 relative overflow-hidden">BDI<cols.ResizeHandle colKey="bdi" /></th>
+                <th className="px-3 py-2 border-r border-gray-100 text-right relative overflow-hidden">Preço unit.<cols.ResizeHandle colKey="preco-unit" /></th>
+                <th aria-hidden="true" className="border-r border-gray-100"></th>
+                <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right relative overflow-hidden">Preço total<cols.ResizeHandle colKey="preco-total" /></th>
                 {showNatureBreakdown && (
                   <>
-                    <th className="px-3 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/50">M.O</th>
-                    <th className="px-3 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/50">Mat.</th>
-                    <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right text-blue-600 bg-blue-50/50">Equip.</th>
+                    <th className="px-3 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/50 relative overflow-hidden">M.O<cols.ResizeHandle colKey="mo" /></th>
+                    <th className="px-3 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/50 relative overflow-hidden">Mat.<cols.ResizeHandle colKey="mat" /></th>
+                    <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right text-blue-600 bg-blue-50/50 relative overflow-hidden">Equip.<cols.ResizeHandle colKey="equip" /></th>
                   </>
                 )}
               </tr>
@@ -2613,7 +2659,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       {groupNameDisplay}
                     </div>
                   </td>
-                  <td colSpan={6} className="px-3 py-2.5 border-r border-gray-700"></td>
+                  <td colSpan={7} className="px-3 py-2.5 border-r border-gray-700"></td>
                   <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
                     <div className="flex items-center justify-end">
                       <span className="font-bold text-base whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -2672,7 +2718,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             {phaseNameDisplay}
                           </div>
                         </td>
-                        <td colSpan={6} className="px-3 py-2.5 border-r border-gray-200"></td>
+                        <td colSpan={7} className="px-3 py-2.5 border-r border-gray-200"></td>
                         <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
                           <div className="flex items-center justify-end">
                             <span className="font-bold text-gray-900 text-sm whitespace-nowrap">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -2731,7 +2777,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                   {subNameDisplay}
                                 </div>
                               </td>
-                              <td colSpan={6} className="px-3 py-2.5 border-r border-gray-100"></td>
+                              <td colSpan={7} className="px-3 py-2.5 border-r border-gray-100"></td>
                               <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
                                 <div className="flex items-center justify-end">
                                   <span className="font-medium text-gray-700 text-sm whitespace-nowrap">R$ {subTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -2770,7 +2816,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             {isSubExpanded && (
                               items.length === 0 ? (
                                 <tr className="border-b border-gray-100">
-                                  <td colSpan={showNatureBreakdown ? 15 : 12} className="px-3 py-2.5 pl-16 text-sm text-gray-400 italic">
+                                  <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-2.5 pl-16 text-sm text-gray-400 italic">
                                     Nenhum item nesta subetapa. Clique em "+ Item" para adicionar.
                                   </td>
                                 </tr>
@@ -2820,7 +2866,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           {(!settings.wbs || settings.wbs.length === 0) && (
             <tbody>
               <tr>
-                <td colSpan={showNatureBreakdown ? 15 : 12} className="p-8 text-center text-gray-400">
+                <td colSpan={showNatureBreakdown ? 16 : 13} className="p-8 text-center text-gray-400">
                   Nenhum grupo definido. Clique em "Nova Etapa" para começar.
                 </td>
               </tr>

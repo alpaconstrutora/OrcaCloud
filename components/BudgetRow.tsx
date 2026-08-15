@@ -110,8 +110,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     const hasComposition = item.sinapiItem?.composition && item.sinapiItem.composition.length > 0;
     const canOpenCPU = item.sinapiItem?.type === SinapiType.COMPOSITION || hasComposition;
     const hasCalculationMemory = !!(item.calculationMemory?.formula?.trim() || item.calculationMemory?.justification?.trim() || item.calculationMemory?.result !== undefined);
-    // Colunas da tabela (BudgetEditor.tsx monta o mesmo <colgroup>): 12 fixas + 3 de natureza.
-    const totalCols = showNatureBreakdown ? 15 : 12;
+    // Colunas da tabela (BudgetEditor.tsx monta o mesmo <colgroup>): drag + 10
+    // redimensionáveis + espaçador (§6.1.1) + preço total, mais 3 de natureza.
+    const totalCols = showNatureBreakdown ? 16 : 13;
 
     const handleToggleCPU = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -253,6 +254,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 <td className={`${TD} text-right text-sm font-medium text-blue-600 whitespace-nowrap`}>
                     R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </td>
+
+                {/* Espaçador (§6.1.1) — casa com o <col /> sem largura do colgroup */}
+                <td aria-hidden="true" className="border-r border-gray-100"></td>
 
                 {/* Preço total + ações. Total em font-black por §7.3; ações sempre visíveis (§9). */}
                 <td className={TD}>

@@ -129,8 +129,9 @@ describe('Estrutura da tabela da WBS', () => {
         const { container } = renderEditor([makeEntry('1')]);
         const table = getWbsTable(container);
 
+        // drag(1) + 10 redimensionáveis + espaçador(1) + preço total(1)
         const colCount = table.querySelectorAll('colgroup > col').length;
-        expect(colCount).toBe(12);
+        expect(colCount).toBe(13);
 
         const headerRow = table.querySelector('thead tr') as HTMLTableRowElement;
         expect(countCells(headerRow)).toBe(colCount);
@@ -142,6 +143,38 @@ describe('Estrutura da tabela da WBS', () => {
         for (const row of bodyRows) {
             expect(countCells(row)).toBe(colCount);
         }
+    });
+
+    it('a largura declarada da <table> é a soma exata das colunas — nunca 100% (§6.1)', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        const table = getWbsTable(container);
+
+        // w-full/100% junto com table-layout:fixed faz o navegador redistribuir a
+        // sobra e o arraste passa a redimensionar a coluna vizinha errada.
+        expect(table.className).not.toMatch(/\bw-full\b/);
+        expect(table.style.width).not.toBe('100%');
+        expect(table.style.tableLayout).toBe('fixed');
+
+        const declared = parseInt(table.style.width, 10);
+        const colSum = Array.from(table.querySelectorAll('colgroup > col'))
+            .reduce((sum, c) => sum + (parseInt((c as HTMLElement).style.width, 10) || 0), 0);
+        // O espaçador não tem width e soma 0 — é exatamente o papel dele (§6.1.1).
+        expect(declared).toBe(colSum);
+    });
+
+    it('toda coluna de dado tem alça de redimensionamento, e o espaçador não (§6.1)', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        const table = getWbsTable(container);
+
+        const resizableCols = Array.from(table.querySelectorAll('colgroup > col[data-col-key]'));
+        const handles = table.querySelectorAll('thead [title*="redimensionar"]');
+        // Uma alça por coluna redimensionável — resize parcial é inconsistência visível.
+        expect(handles.length).toBe(resizableCols.length);
+
+        const spacers = Array.from(table.querySelectorAll('colgroup > col')).filter(
+            c => !(c as HTMLElement).dataset.colKey && !(c as HTMLElement).style.width
+        );
+        expect(spacers.length).toBe(1);
     });
 
     it('com o detalhamento por natureza ligado, as 3 colunas extras entram em TODAS as faixas', () => {

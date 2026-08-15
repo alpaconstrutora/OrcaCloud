@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
@@ -122,6 +122,17 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
     const [showMobilePreview, setShowMobilePreview] = React.useState(false);
     const [showTabConfig, setShowTabConfig] = React.useState(false);
+    const [showMoreSheet, setShowMoreSheet] = React.useState(false);
+    const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
+    const accountMenuRef = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        if (!isAccountMenuOpen) return;
+        const onDocClick = (e: MouseEvent) => {
+            if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) setIsAccountMenuOpen(false);
+        };
+        document.addEventListener('mousedown', onDocClick);
+        return () => document.removeEventListener('mousedown', onDocClick);
+    }, [isAccountMenuOpen]);
     const [portalAnnouncements, setPortalAnnouncements] = React.useState<any[]>([]);
     const [dataLoading, setDataLoading] = React.useState(true);
     const [dataError, setDataError] = React.useState<string | null>(null);
@@ -547,8 +558,96 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         ? `Olá, ${investorProfile.name.split(' ')[0]}`
         : TAB_TITLES[activeTab];
 
+    // Modo link público (portalToken) — só nele renderizamos a casca própria do
+    // portal (banner + header + sidebar), espelhando o Portal do Cliente
+    // (isStandalone). No app autenticado a navegação já vem do Layout global.
+    const isStandalone = !!portalToken;
+    const investorDisplayName = investorProfile?.name || 'Investidor';
+    const tabLabel = (tab: { id: string; label: string }) =>
+        isPublicExperience ? (PUBLIC_TAB_LABELS[tab.id as TabId] ?? tab.label) : tab.label;
+
     return (
-        <div className="space-y-8 pb-12">
+        <div className={isStandalone
+            ? 'portal-mobile-font min-h-screen bg-gray-50/30 pb-24 md:pb-0 md:h-screen md:flex md:flex-col md:overflow-hidden'
+            : 'portal-mobile-font space-y-8 pb-24 md:pb-12'}>
+
+            {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Cliente) ══ */}
+            {isStandalone && (
+                <div className="hidden md:flex h-9 bg-indigo-50 border-b border-indigo-200 items-center justify-center gap-3 shrink-0 text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                    <span>Acesso via link público</span>
+                </div>
+            )}
+            {isStandalone && (
+                <header className="hidden md:flex h-16 border-b border-gray-100 bg-white items-center justify-between px-6 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Portal do Investidor</div>
+                        <h1 className="text-md font-bold text-gray-900 tracking-tight">Área do Investidor</h1>
+                    </div>
+                    <div className="relative" ref={accountMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsAccountMenuOpen(o => !o)}
+                            className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+                            aria-haspopup="menu"
+                            aria-expanded={isAccountMenuOpen}
+                        >
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                                {investorDisplayName.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="font-semibold text-gray-600">{investorDisplayName} (INVESTIDOR)</span>
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isAccountMenuOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isAccountMenuOpen && (
+                            <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
+                                <div className="border-b border-gray-100 px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+                                            {investorDisplayName.charAt(0).toUpperCase()}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-bold text-gray-900">{investorDisplayName}</div>
+                                            <div className="truncate text-xs text-gray-500">{investorProfile?.email || ''}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="border-t border-gray-100 p-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAccountMenuOpen(false)}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <HelpCircle className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Dúvidas? Fale com a incorporadora.</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </header>
+            )}
+
+            <div className={isStandalone ? 'md:flex md:flex-1 md:overflow-hidden md:min-h-0' : ''}>
+                {isStandalone && (
+                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex">
+                        {navTabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as TabId)}
+                                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                                    activeTab === tab.id
+                                        ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 font-bold'
+                                        : 'text-gray-500 hover:text-gray-900 hover:bg-white'
+                                }`}
+                            >
+                                {tab.icon}
+                                <span>{tabLabel(tab)}</span>
+                            </button>
+                        ))}
+                    </aside>
+                )}
+                <div className={isStandalone ? 'md:flex-1 md:overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-8' : 'space-y-8'}>
             {/* Prévia Mobile — renderiza o portal como o investidor vê */}
             {showMobilePreview && !isPreview && (
                 <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Investidor">
@@ -649,10 +748,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             <Settings2 className="w-4 h-4" />
                         </Button>
                     )}
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                    {/* No standalone a navegação é a sidebar (desktop) / barra inferior (mobile) */}
+                    <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} gap-2 overflow-x-auto pb-1 scrollbar-hide`}>
                         {navTabs.map(tab => {
                             const hidden = isAdmin && !enabledTabIds.includes(tab.id);
-                            const label = isPublicExperience ? (PUBLIC_TAB_LABELS[tab.id as TabId] ?? tab.label) : tab.label;
+                            const label = tabLabel(tab);
                             return (
                                 <button
                                     key={tab.id}
@@ -891,7 +991,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             </main>
             )}
 
-            <div className="pt-12 text-center opacity-30 select-none pointer-events-none">
+            <div className="hidden md:block pt-12 text-center opacity-30 select-none pointer-events-none">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Gestão de Ativos Premium • Opura Platinum</p>
             </div>
 
@@ -956,6 +1056,106 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     />
                 );
             })()}
+
+            {/* Mobile Bottom Navigation — máx. 5 slots; excedente vai pro sheet "Mais" */}
+            {(() => {
+                const MAX_BAR = 5;
+                const hasMore = navTabs.length > MAX_BAR;
+                const barTabs = hasMore ? navTabs.slice(0, MAX_BAR - 1) : navTabs;
+                const moreTabs = hasMore ? navTabs.slice(MAX_BAR - 1) : [];
+                const moreActive = moreTabs.some(t => t.id === activeTab);
+                return (
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+                        <div className="flex">
+                            {barTabs.map(tab => {
+                                const isActive = activeTab === tab.id;
+                                const isVisible = enabledTabIds.includes(tab.id);
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id as TabId)}
+                                        className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
+                                            ${isActive ? 'text-blue-600' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
+                                        `}
+                                    >
+                                        {isActive && (
+                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
+                                        )}
+                                        <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
+                                            {tab.icon}
+                                        </span>
+                                        <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
+                                            {tabLabel(tab).split(' ')[0]}
+                                        </span>
+                                        {isAdmin && !isVisible && <EyeOff className="w-2 h-2 absolute top-2 right-2 text-gray-200" />}
+                                    </button>
+                                );
+                            })}
+                            {hasMore && (
+                                <button
+                                    onClick={() => setShowMoreSheet(true)}
+                                    className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
+                                        ${moreActive ? 'text-blue-600' : 'text-gray-400'}
+                                    `}
+                                >
+                                    {moreActive && (
+                                        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
+                                    )}
+                                    <span className={`transition-transform duration-200 ${moreActive ? 'scale-110' : ''}`}>
+                                        <MoreHorizontal className="w-4 h-4" />
+                                    </span>
+                                    <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
+                                        Mais
+                                    </span>
+                                </button>
+                            )}
+                        </div>
+                        {/* Safe area for iOS home indicator */}
+                        <div className="bg-white" style={{ height: 'env(safe-area-inset-bottom)' }} />
+                    </div>
+                );
+            })()}
+
+            {/* Bottom-sheet "Mais" — abas excedentes (somente mobile) */}
+            {showMoreSheet && (() => {
+                const MAX_BAR = 5;
+                const moreTabs = navTabs.length > MAX_BAR ? navTabs.slice(MAX_BAR - 1) : [];
+                return (
+                    <div className="md:hidden fixed inset-0 z-[200]" onClick={() => setShowMoreSheet(false)}>
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" />
+                        <div
+                            className="absolute bottom-0 inset-x-0 bg-white rounded-t-[2rem] shadow-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-in slide-in-from-bottom duration-200"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-4" />
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-center mb-4">Mais opções</p>
+                            <div className="space-y-2">
+                                {moreTabs.map(tab => {
+                                    const isActive = activeTab === tab.id;
+                                    const isVisible = enabledTabIds.includes(tab.id);
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => { setActiveTab(tab.id as TabId); setShowMoreSheet(false); }}
+                                            className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-all ${
+                                                isActive
+                                                    ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                                    : 'bg-gray-50 border-gray-100 text-gray-600'
+                                            }`}
+                                        >
+                                            <span className={isActive ? 'text-blue-500' : 'text-gray-400'}>{tab.icon}</span>
+                                            <span className="text-sm font-black uppercase tracking-tight">{tabLabel(tab)}</span>
+                                            {isAdmin && !isVisible && <EyeOff className="w-3.5 h-3.5 ml-auto text-gray-300" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+                </div>{/* /content column */}
+            </div>{/* /body wrapper */}
         </div>
     );
 };

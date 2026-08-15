@@ -201,9 +201,10 @@ const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     </div>
   );
 
-  // Fora do <Layout> (guard roda antes dele) — gutter §20.2 reaplicado à mão.
+  // Fora do <Layout> (guard roda antes dele). O gutter §20.2 vem da própria
+  // casca standalone do portal (igual ao Portal do Cliente) — não duplicar aqui.
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gray-50">
       <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
         <InvestorDashboardPublic
           settings={{} as any}

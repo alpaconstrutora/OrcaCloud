@@ -587,6 +587,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.run({ type: 'MoveVertex', wallId, end, to });
   }
 
+  /**
+   * Desliza a abertura ao longo da parede. O canvas já grampeia o arraste entre
+   * as vizinhas, então a recusa do kernel aqui é rede de segurança — e, se vier,
+   * já aparece na faixa de aviso do topo com a distância máxima no texto.
+   */
+  function moverAbertura(openingId: string, offsetMm: number) {
+    editor.run({ type: 'MoveOpening', openingId, offsetMm });
+  }
+
   function removerSelecionada() {
     if (!editor.selectedId) return;
     // Abertura e parede sao objetos diferentes com a mesma tecla de atalho.
@@ -1015,6 +1024,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
               onMoveVertex={moverPonta}
+              onMoveOpening={moverAbertura}
               fundo={
                 fundo.imagem && fundo.underlay
                   ? {

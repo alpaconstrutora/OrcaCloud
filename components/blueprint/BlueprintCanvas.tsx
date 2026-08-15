@@ -250,6 +250,11 @@ interface Props {
   onSelecionarMedicao?: (id: string | null) => void;
   /** Move a ponta de uma parede. Sem isto, a alça é desenhada e não faz nada. */
   onMoveVertex?: (wallId: string, end: 'a' | 'b', to: Point) => void;
+  /**
+   * Desliza a abertura ao longo da parede que já a hospeda. Sem isto, o arraste
+   * mostra a prévia e não grava nada.
+   */
+  onMoveOpening?: (openingId: string, offsetMm: number) => void;
 }
 
 interface Vista {
@@ -287,6 +292,7 @@ export default function BlueprintCanvas({
   mostrarMedidasParedes = false,
   fundo = null,
   onMoveVertex,
+  onMoveOpening,
   onCalibrar,
   medicoes = [],
   onMedicaoPronta,
@@ -336,6 +342,10 @@ export default function BlueprintCanvas({
   /** Ponta em arraste, e para onde ela iria se soltasse agora. */
   const [movendo, setMovendo] = useState<{ wallId: string; end: 'a' | 'b' } | null>(null);
   const [destinoPonta, setDestinoPonta] = useState<Point | null>(null);
+  /** Abertura em arraste, e o offset em que ela pararia se soltasse agora. */
+  const [movendoAbertura, setMovendoAbertura] = useState<
+    { openingId: string; offsetMm: number } | null
+  >(null);
   /** Primeiro ponto da aferição, em milímetro do modelo. */
   const [calibP1, setCalibP1] = useState<Point | null>(null);
   /** Vértices da forma medida em curso. */
@@ -486,12 +496,19 @@ export default function BlueprintCanvas({
 
   /**
    * Onde, ao longo do eixo da parede, cai o cursor — em mm a partir de `a`.
-   * O resultado ja vem preso dentro dos limites uteis para uma abertura de
-   * `larguraAberturaMm`: e o kernel que recusaria, e recusar depois do clique
-   * seria pior do que nao deixar errar.
+   *
+   * A LARGURA VEM POR PARÂMETRO, e isso não é detalhe: ela era lida de
+   * `larguraAberturaMm`, que é a largura do seletor da BARRA — a da próxima
+   * abertura a inserir. Arrastar uma porta de 700 com a barra em 2000 grampearia
+   * o movimento pela largura errada, e a porta pararia longe da ponta da parede
+   * sem explicação na tela.
+   *
+   * O resultado ja vem preso dentro dos limites uteis para uma abertura dessa
+   * largura: e o kernel que recusaria, e recusar depois do clique seria pior do
+   * que nao deixar errar.
    */
   const offsetNaParede = useCallback(
-    (w: Wall, mundo: { x: number; y: number }): number => {
+    (w: Wall, mundo: { x: number; y: number }, larguraMm: number): number => {
       const dx = w.b.x - w.a.x;
       const dy = w.b.y - w.a.y;
       const comp2 = dx * dx + dy * dy;
@@ -499,10 +516,42 @@ export default function BlueprintCanvas({
       const t = ((mundo.x - w.a.x) * dx + (mundo.y - w.a.y) * dy) / comp2;
       const comp = wallLength(w);
       const centro = t * comp;
-      const bruto = centro - larguraAberturaMm / 2;
-      return Math.round(Math.max(0, Math.min(comp - larguraAberturaMm, bruto)));
+      const bruto = centro - larguraMm / 2;
+      return Math.round(Math.max(0, Math.min(comp - larguraMm, bruto)));
     },
-    [larguraAberturaMm],
+    [],
+  );
+
+  /** Distância do cursor ao longo do eixo, em mm a partir de `a`. Sem grampo. */
+  const distanciaNoEixo = useCallback((w: Wall, mundo: { x: number; y: number }): number => {
+    const dx = w.b.x - w.a.x;
+    const dy = w.b.y - w.a.y;
+    const comp2 = dx * dx + dy * dy;
+    if (comp2 === 0) return 0;
+    const t = ((mundo.x - w.a.x) * dx + (mundo.y - w.a.y) * dy) / comp2;
+    return t * wallLength(w);
+  }, []);
+
+  /**
+   * Qual abertura daquela parede está SOB o cursor.
+   *
+   * Teste preciso: o cursor caiu dentro do vão, entre `offsetMm` e
+   * `offsetMm + widthMm`. O teste antigo comparava a distância até o começo do
+   * vão com a maior das duas larguras (a da abertura e a do seletor da barra), e
+   * acertava a quase um metro de distância. Isso passava para SELECIONAR, mas
+   * não serve para decidir "o usuário pegou ESTA porta para arrastar" — com ele,
+   * apertar na parede ao lado da porta empurraria a porta.
+   */
+  const aberturaSob = useCallback(
+    (w: Wall, mundo: { x: number; y: number }): Opening | null => {
+      const d = distanciaNoEixo(w, mundo);
+      return (
+        model.openings.find(
+          (o) => o.wallId === w.id && d >= o.offsetMm && d <= o.offsetMm + o.widthMm,
+        ) ?? null
+      );
+    },
+    [model.openings, distanciaNoEixo],
   );
 
   const paredeSob = useCallback(
@@ -788,10 +837,17 @@ export default function BlueprintCanvas({
       const ny = ux;
       const meia = w.thicknessMm / 2;
 
-      const ini = { x: w.a.x + ux * o.offsetMm, y: w.a.y + uy * o.offsetMm };
+      // ARRASTE: a própria abertura é desenhada no offset novo, em vez de um
+      // fantasma ao lado dela. Assim vão, batentes e arco de giro acompanham o
+      // gesto inteiro — e o que se vê durante o arraste é exatamente o que fica
+      // ao soltar. O modelo só muda no `pointerup`.
+      const offsetMm =
+        movendoAbertura?.openingId === o.id ? movendoAbertura.offsetMm : o.offsetMm;
+
+      const ini = { x: w.a.x + ux * offsetMm, y: w.a.y + uy * offsetMm };
       const fim = {
-        x: w.a.x + ux * (o.offsetMm + o.widthMm),
-        y: w.a.y + uy * (o.offsetMm + o.widthMm),
+        x: w.a.x + ux * (offsetMm + o.widthMm),
+        y: w.a.y + uy * (offsetMm + o.widthMm),
       };
 
       const t1 = paraTela({ x: ini.x + nx * meia, y: ini.y + ny * meia } as Point);
@@ -876,6 +932,23 @@ export default function BlueprintCanvas({
         ctx.beginPath();
         ctx.arc(piv.x, piv.y, raio, angEixo, angFolha, antiHorario);
         ctx.stroke();
+      }
+
+      // Durante o arraste, a distância até o início da parede — é o número que
+      // decide onde soltar, e conferi-lo só depois de soltar seria tarde. Mesma
+      // razão do comprimento em tempo real no arraste de ponta de parede.
+      if (movendoAbertura?.openingId === o.id) {
+        // `rotuloDoTraco`, e não uma conta própria: ele afasta PERPENDICULAR ao
+        // vão. Deslocar "para cima" na tela funcionaria só em parede
+        // horizontal — numa parede vertical o número cairia em cima dela.
+        rotuloDoTraco(
+          ctx,
+          `${(offsetMm / 1000).toFixed(2).replace('.', ',')} m`,
+          paraTela(ini as Point),
+          paraTela(fim as Point),
+          Math.max(w.thicknessMm * vista.escala, 2),
+          COR_SELECIONADA,
+        );
       }
     }
 
@@ -1206,6 +1279,7 @@ export default function BlueprintCanvas({
     medindo,
     movendo,
     destinoPonta,
+    movendoAbertura,
     passoEfetivo,
     paraTela,
     paredesDoNivel,
@@ -1225,6 +1299,33 @@ export default function BlueprintCanvas({
    */
   function ortoAtivo(e: { shiftKey: boolean }): boolean {
     return ortogonal !== e.shiftKey;
+  }
+
+  /**
+   * Onde a abertura arrastada pode parar, em mm a partir de `a`.
+   *
+   * Grampeia entre as VIZINHAS da mesma parede, e não só nas pontas dela. O
+   * kernel recusaria a sobreposição de qualquer jeito (`assertModelInvariants`),
+   * mas recusar no fim do arraste faria a porta saltar de volta ao soltar — e
+   * arraste que reverte sozinho é arraste em que ninguém confia. Grampeado, o
+   * gesto simplesmente para onde tem de parar.
+   */
+  function faixaDoArraste(o: Opening, w: Wall): { min: number; max: number } {
+    const comp = wallLength(w);
+    let min = 0;
+    let max = comp - o.widthMm;
+
+    for (const outra of model.openings) {
+      if (outra.id === o.id || outra.wallId !== o.wallId) continue;
+      const fimDaOutra = outra.offsetMm + outra.widthMm;
+      // Vizinha ATRÁS: o arraste não pode começar antes do fim dela.
+      if (fimDaOutra <= o.offsetMm) min = Math.max(min, fimDaOutra);
+      // Vizinha À FRENTE: o arraste tem de terminar antes do começo dela.
+      if (outra.offsetMm >= o.offsetMm + o.widthMm) {
+        max = Math.min(max, outra.offsetMm - o.widthMm);
+      }
+    }
+    return { min, max: Math.max(min, max) };
   }
 
   /** Ponta OPOSTA à que está sendo arrastada — é dela que a trava se mede. */
@@ -1250,10 +1351,29 @@ export default function BlueprintCanvas({
       setDestinoPonta(alvo);
       return;
     }
+
+    if (movendoAbertura) {
+      const o = model.openings.find((x) => x.id === movendoAbertura.openingId);
+      const w = o ? model.walls.find((x) => x.id === o.wallId) : null;
+      if (o && w) {
+        // SEM encaixe na grade, porque a inserção também não encaixa: duas
+        // regras diferentes para posicionar a mesma abertura seriam piores do
+        // que nenhuma.
+        const bruto = offsetNaParede(w, paraMundo(px, py), o.widthMm);
+        const faixa = faixaDoArraste(o, w);
+        setMovendoAbertura({
+          openingId: o.id,
+          offsetMm: Math.max(faixa.min, Math.min(faixa.max, bruto)),
+        });
+      }
+      return;
+    }
     if (tool === 'abertura') {
       const mundo = paraMundo(px, py);
       const w = paredeSob(mundo);
-      setPreviaAbertura(w ? { wallId: w.id, offsetMm: offsetNaParede(w, mundo) } : null);
+      setPreviaAbertura(
+        w ? { wallId: w.id, offsetMm: offsetNaParede(w, mundo, larguraAberturaMm) } : null,
+      );
       setCursor(null);
       return;
     }
@@ -1345,7 +1465,7 @@ export default function BlueprintCanvas({
 
     if (tool === 'abertura') {
       const w = paredeSob(mundo);
-      if (w) onAddOpening(w.id, offsetNaParede(w, mundo));
+      if (w) onAddOpening(w.id, offsetNaParede(w, mundo, larguraAberturaMm));
       return;
     }
 
@@ -1370,13 +1490,17 @@ export default function BlueprintCanvas({
       // Abertura antes de parede: ela esta POR CIMA e e menor, entao se o
       // clique cair nas duas o usuario quis a de cima.
       const w = paredeSob(mundo);
-      const aberturaClicada = w
-        ? model.openings.find((o) => {
-            if (o.wallId !== w.id) return false;
-            const off = offsetNaParede(w, mundo);
-            return Math.abs(off - o.offsetMm) < Math.max(o.widthMm, larguraAberturaMm);
-          })
-        : undefined;
+      const aberturaClicada = w ? aberturaSob(w, mundo) : null;
+
+      // ARRASTAR A ABERTURA JÁ SELECIONADA — mesma convenção da alça de parede
+      // logo acima: seleciona, depois pega. Sem o "já selecionada", todo clique
+      // para escolher a parede perto de uma porta viraria um empurrão nela.
+      if (aberturaClicada && aberturaClicada.id === selectedId && w) {
+        setMovendoAbertura({ openingId: aberturaClicada.id, offsetMm: aberturaClicada.offsetMm });
+        canvasRef.current?.setPointerCapture(e.pointerId);
+        return;
+      }
+
       onSelect(aberturaClicada?.id ?? w?.id ?? null);
       return;
     }
@@ -1466,6 +1590,18 @@ export default function BlueprintCanvas({
       setDestinoPonta(null);
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
+
+    if (movendoAbertura) {
+      const o = model.openings.find((x) => x.id === movendoAbertura.openingId);
+      // Só emite se a abertura de fato andou. Um clique sem arrastar cai aqui
+      // com o mesmo offset, e gravar isso encheria o histórico de passos que não
+      // mudam nada — cada um deles um "desfazer" que parece travado.
+      if (o && o.offsetMm !== movendoAbertura.offsetMm) {
+        onMoveOpening?.(movendoAbertura.openingId, movendoAbertura.offsetMm);
+      }
+      setMovendoAbertura(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
   }
 
   function aoRolar(e: React.WheelEvent) {
@@ -1495,6 +1631,9 @@ export default function BlueprintCanvas({
     if (e.key === 'Escape') {
       setCadeia([]);
       setTrechos([]);
+      // Desistir do arraste em curso: a abertura fica onde estava, porque o
+      // modelo só muda ao soltar.
+      setMovendoAbertura(null);
       setMovendo(null);
       setDestinoPonta(null);
       setCalibP1(null);
@@ -1516,7 +1655,7 @@ export default function BlueprintCanvas({
         aria-label="Área de desenho da planta. Use a lista de ambientes ao lado para navegar por teclado."
         className="block h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         style={{
-          cursor: arrastando || movendo
+          cursor: arrastando || movendo || movendoAbertura
             ? 'grabbing'
             : tool !== 'selecionar' && tool !== 'abertura'
               ? 'crosshair'

@@ -1,12 +1,18 @@
 /**
- * Harness isolado do símbolo de porta com os dois eixos independentes.
+ * Harness isolado da manipulação de porta: SÍMBOLO, TAMANHO e POSIÇÃO.
  *
  * Quatro paredes, uma porta em cada, uma combinação de `hingeAtStart`/
- * `swingReversed` por parede. Existe porque o risco real desta mudança é o
- * SENTIDO do arco (`anticlockwise` calculado por XOR dos dois flags,
- * ver `BlueprintCanvas.tsx`) — se a conta estiver errada, o sintoma é um arco
- * de 270° (a "volta longa") em vez do quarto de círculo padrão, e isso só se
- * vê olhando o desenho, não lendo o código nem rodando teste de unidade.
+ * `swingReversed` por parede. Nasceu para o símbolo, porque o risco daquela
+ * mudança era o SENTIDO do arco (`anticlockwise` por XOR dos dois flags, ver
+ * `BlueprintCanvas.tsx`): errado, sai um arco de 270° em vez do quarto de
+ * círculo, e isso só se vê olhando o desenho.
+ *
+ * Depois recebeu tamanho (largura/altura) e o ARRASTE de posição, que tem o
+ * mesmo tipo de risco: teste de acerto, grampo entre vizinhas e prévia só se
+ * julgam com ponteiro de verdade sobre o canvas de verdade.
+ *
+ * A pasta continua `porta-flip` porque planos já commitados apontam para este
+ * caminho.
  *
  * Abrir em: /docs/spikes/porta-flip/index.html no servidor de dev.
  */
@@ -113,6 +119,17 @@ function App() {
     }
   }
 
+  function moverAbertura(openingId: string, offsetMm: number) {
+    try {
+      setModelo(applyCommand(modelo, { type: 'MoveOpening', openingId, offsetMm }).model);
+      const el = document.getElementById('erro');
+      if (el) el.textContent = '';
+    } catch (e) {
+      const el = document.getElementById('erro');
+      if (el) el.textContent = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   const dump = document.getElementById('dump');
   if (dump) {
     dump.textContent = JSON.stringify(
@@ -124,6 +141,7 @@ function App() {
           swingReversed: o.swingReversed,
           widthMm: o.widthMm,
           heightMm: o.heightMm,
+          offsetMm: o.offsetMm,
         })),
       },
       null,
@@ -146,6 +164,7 @@ function App() {
           onDelete={() => {}}
           espessuraMm={T}
           passoGradeMm={null}
+          onMoveOpening={moverAbertura}
         />
       </div>
       <div style={{ position: 'absolute', top: 0, right: 0, width: 260, background: '#fff', borderLeft: '1px solid #e2e8f0' }}>

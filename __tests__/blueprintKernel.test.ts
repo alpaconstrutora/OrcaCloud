@@ -499,6 +499,114 @@ describe('SetOpeningSize · editar o tamanho da abertura', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Mover abertura ao longo da parede (MoveOpening)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('MoveOpening · deslizar a abertura na parede', () => {
+  /** Sala 4000×3000; porta de 900 a 1000 mm do início da primeira parede. */
+  function comPorta() {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    const wallId = built.model.walls[0].id;
+    const withOpening = applyCommand(built.model, {
+      type: 'AddOpening',
+      wallId,
+      kind: 'door',
+      offsetMm: 1000,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    });
+    return { model: withOpening.model, openingId: withOpening.model.openings[0].id, wallId };
+  }
+
+  it('move e SÓ o offset muda', () => {
+    const { model, openingId } = comPorta();
+    const antes = model.openings[0];
+    const depois = applyCommand(model, { type: 'MoveOpening', openingId, offsetMm: 2000 }).model
+      .openings[0];
+
+    expect(depois.offsetMm).toBe(2000);
+    expect(depois.widthMm).toBe(antes.widthMm);
+    expect(depois.heightMm).toBe(antes.heightMm);
+    expect(depois.wallId).toBe(antes.wallId);
+    expect(depois.hingeAtStart).toBe(antes.hingeAtStart);
+    expect(depois.swingReversed).toBe(antes.swingReversed);
+  });
+
+  it('encostar na ponta da parede é permitido nos dois extremos', () => {
+    const { model, openingId } = comPorta();
+    expect(
+      applyCommand(model, { type: 'MoveOpening', openingId, offsetMm: 0 }).model.openings[0]
+        .offsetMm,
+    ).toBe(0);
+    // 4000 − 900 = 3100 é o último offset que cabe.
+    expect(
+      applyCommand(model, { type: 'MoveOpening', openingId, offsetMm: 3100 }).model.openings[0]
+        .offsetMm,
+    ).toBe(3100);
+  });
+
+  it('offset que estoura a parede é RECUSADO, com a distância máxima na mensagem', () => {
+    const { model, openingId } = comPorta();
+    expect(() => applyCommand(model, { type: 'MoveOpening', openingId, offsetMm: 3200 })).toThrow(
+      /3100 mm/,
+    );
+  });
+
+  it('offset negativo é recusado', () => {
+    const { model, openingId } = comPorta();
+    expect(() => applyCommand(model, { type: 'MoveOpening', openingId, offsetMm: -1 })).toThrow(
+      KernelError,
+    );
+  });
+
+  it('mover para cima da abertura vizinha é recusado', () => {
+    const { model, openingId, wallId } = comPorta();
+    // Segunda porta em 2200..3100.
+    const duas = applyCommand(model, {
+      type: 'AddOpening',
+      wallId,
+      kind: 'door',
+      offsetMm: 2200,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    }).model;
+
+    // Levar a primeira para 2000 faria 2000..2900 invadir 2200..3100.
+    expect(() => applyCommand(duas, { type: 'MoveOpening', openingId, offsetMm: 2000 })).toThrow(
+      /sobrep/i,
+    );
+  });
+
+  it('abertura inexistente é recusada', () => {
+    const { model } = comPorta();
+    expect(() =>
+      applyCommand(model, { type: 'MoveOpening', openingId: 'opn_9999', offsetMm: 500 }),
+    ).toThrow(KernelError);
+  });
+
+  it('o offset novo sobrevive ao round-trip do payload', () => {
+    const { model, openingId } = comPorta();
+    const movida = applyCommand(model, { type: 'MoveOpening', openingId, offsetMm: 2500 }).model;
+
+    const rebuilt = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(movida)));
+    expect(rebuilt.openings[0].offsetMm).toBe(2500);
+  });
+
+  it('mover NÃO mexe no quantitativo de área — o vão é o mesmo, só mudou de lugar', () => {
+    const { model, openingId } = comPorta();
+    const antes = computeQuantities(model).paredes.find((p) => p.areaAberturasM2 > 0)!;
+    const depois = applyCommand(model, { type: 'MoveOpening', openingId, offsetMm: 2500 }).model;
+    const dep = computeQuantities(depois).paredes.find((p) => p.areaAberturasM2 > 0)!;
+
+    expect(dep.areaAberturasM2).toBeCloseTo(antes.areaAberturasM2, 9);
+    expect(dep.areaFaceLiquidaM2).toBeCloseTo(antes.areaFaceLiquidaM2, 9);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Girar/espelhar porta (FlipOpening) — dois eixos independentes
 // ─────────────────────────────────────────────────────────────────────────────
 

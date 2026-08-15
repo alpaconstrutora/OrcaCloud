@@ -72,6 +72,15 @@ export type Command =
       heightMm?: number;
       sillMm?: number;
     }
+  /**
+   * Desliza a abertura ao longo da parede que já a hospeda.
+   *
+   * NÃO troca de parede: `wallId` fica como está. Mudar de hospedeira é outra
+   * operação, com outras perguntas (o que acontece com a orientação da folha
+   * quando a parede nova aponta para outro lado?) — e resolver as duas no mesmo
+   * comando esconderia a segunda dentro da primeira.
+   */
+  | { type: 'MoveOpening'; openingId: ObjectId; offsetMm: number }
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string };
 
@@ -364,6 +373,33 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         o.id !== opening.id
           ? o
           : { ...o, widthMm: largura, heightMm: altura, sillMm: peitoril },
+      );
+      diff.updated.push(opening.id);
+      break;
+    }
+
+    case 'MoveOpening': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) {
+        throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      }
+      const wall = findWall(next, opening.wallId);
+      const limite = wallLength(wall);
+
+      if (command.offsetMm < 0) {
+        throw new KernelError('OPENING_OUT_OF_BOUNDS', 'A abertura não pode começar antes da parede');
+      }
+      // A medida MÁXIMA na mensagem, como em `SetOpeningSize`: recusar sem dizer
+      // até onde dá obriga a descobrir por tentativa.
+      if (command.offsetMm + opening.widthMm > limite) {
+        throw new KernelError(
+          'OPENING_OUT_OF_BOUNDS',
+          `Distância máxima aqui é ${limite - opening.widthMm} mm — a abertura tem ${opening.widthMm} mm numa parede de ${limite} mm`,
+        );
+      }
+
+      next.openings = next.openings.map((o) =>
+        o.id !== opening.id ? o : { ...o, offsetMm: command.offsetMm },
       );
       diff.updated.push(opening.id);
       break;

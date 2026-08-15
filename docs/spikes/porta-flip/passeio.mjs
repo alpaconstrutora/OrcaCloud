@@ -173,6 +173,81 @@ if (!/2800 mm/.test((await page.locator('#erro').textContent()) ?? '')) {
   falhas.push('a recusa de altura não citou o pé-direito');
 }
 
+// ── Mover arrastando (pedido de 15/08/2026) ─────────────────────────────────
+//
+// A porta está numa parede de 3000 mm e agora tem 800 de largura: pode deslizar
+// de 0 a 2200. Ela JÁ está selecionada desde o clique lá em cima, que é o que
+// libera o arraste (mesma convenção da alça de parede: selecionar, depois pegar).
+const offsetInicial = estadoDe(await ler()).offsetMm;
+
+/** Aperta no meio do vão, arrasta até `xMm` no eixo da parede e solta. */
+const arrastarPara = async (xMm, { soltar = true } = {}) => {
+  const atual = estadoDe(await ler());
+  const centroAtual = atual.offsetMm + atual.widthMm / 2;
+  const de = tela({ x: centroAtual, y: 0 });
+  const ate = tela({ x: xMm, y: 0 });
+  await page.mouse.move(de.x, de.y);
+  await page.mouse.down();
+  // Vários passos: um salto único não exercita a prévia nem o grampo.
+  await page.mouse.move(ate.x, ate.y, { steps: 10 });
+  if (soltar) await page.mouse.up();
+  await page.waitForTimeout(150);
+};
+
+// 1. Arraste comum: o centro do vão vai para 2000 mm → offset 2000 − 400 = 1600.
+await arrastarPara(2000);
+const aposArrasto = estadoDe(await ler());
+if (aposArrasto.offsetMm === offsetInicial) {
+  falhas.push(`o arraste não moveu a abertura (segue em ${offsetInicial})`);
+}
+if (Math.abs(aposArrasto.offsetMm - 1600) > 20) {
+  falhas.push(`arraste parou em ${aposArrasto.offsetMm}, esperado ~1600`);
+}
+if (aposArrasto.widthMm !== 800 || aposArrasto.heightMm !== 2400) {
+  falhas.push('arrastar mexeu no TAMANHO da abertura');
+}
+await recortar('saida-movida.png', meioDoVao.y);
+
+// 2. GRAMPO: puxar muito além da ponta da parede para no máximo (3000 − 800),
+//    sem recusa e sem saltar de volta.
+await arrastarPara(6000);
+const aposGrampo = estadoDe(await ler());
+if (aposGrampo.offsetMm !== 2200) {
+  falhas.push(`grampo falhou: parou em ${aposGrampo.offsetMm}, esperado 2200`);
+}
+if (((await page.locator('#erro').textContent()) ?? '').length > 0) {
+  falhas.push('o grampo deixou o kernel recusar — o arraste devia ter parado antes');
+}
+
+// 3. ESCAPE no meio do arraste não move nada. Com o botão ainda apertado, o
+//    print mostra a PRÉVIA: a abertura já desenhada no lugar novo, com a
+//    distância até o início da parede.
+await arrastarPara(300, { soltar: false });
+await recortar('saida-arrastando.png', meioDoVao.y);
+await page.keyboard.press('Escape');
+await page.mouse.up();
+await page.waitForTimeout(150);
+if (estadoDe(await ler()).offsetMm !== 2200) {
+  falhas.push('Escape no meio do arraste mesmo assim moveu a abertura');
+}
+
+// 4. O teste de acerto NOVO: apertar na parede LONGE do vão seleciona a parede,
+//    e o arraste ali não empurra a porta. Com o teste antigo (frouxo, acertava a
+//    quase um metro), este gesto arrastaria a porta.
+const naParede = tela({ x: 400, y: 0 });
+await page.mouse.move(naParede.x, naParede.y);
+await page.mouse.down();
+await page.mouse.move(tela({ x: 900, y: 0 }).x, naParede.y, { steps: 6 });
+await page.mouse.up();
+await page.waitForTimeout(150);
+const aposParede = await ler();
+if (!String(aposParede.selectedId).startsWith('wal_')) {
+  falhas.push(`clique longe do vão devia selecionar a PAREDE, veio ${aposParede.selectedId}`);
+}
+if (estadoDe(aposParede).offsetMm !== 2200) {
+  falhas.push('arrastar na parede, fora do vão, empurrou a abertura');
+}
+
 // As outras três portas não podem ter sido tocadas.
 const finais = (await ler()).openings.filter((o) => o.id !== alvo);
 const esperadoOutras = [
@@ -189,6 +264,10 @@ finais.forEach((o, i) => {
   // abertura, não por parede.
   if (o.widthMm !== 900 || o.heightMm !== 2100) {
     falhas.push(`tamanho da vizinha ${o.id} foi alterado: ${JSON.stringify(o)}`);
+  }
+  // Posição também: arrastar é por abertura.
+  if (o.offsetMm !== 1050) {
+    falhas.push(`posição da vizinha ${o.id} foi alterada: ${JSON.stringify(o)}`);
   }
 });
 

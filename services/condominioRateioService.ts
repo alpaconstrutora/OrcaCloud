@@ -34,6 +34,8 @@ export interface DespesaRateio {
     transaction_id: string;
     descricao: string;
     valor: number;
+    /** Só na prévia (vem de `internal_transactions`) — o snapshot salvo não guarda data. */
+    data?: string;
 }
 
 export interface ItemPrevia {
@@ -298,6 +300,7 @@ export const condominioRateioService = {
             transaction_id: t.id,
             descricao: t.description || 'Sem descrição',
             valor: Number(t.amount || 0),
+            data: t.transaction_date,
         }));
         const totalCentavos = despesas.reduce((s, d) => s + paraCentavos(d.valor), 0);
 
@@ -473,6 +476,27 @@ export const condominioRateioService = {
             .single();
         if (error) throw new Error(`Falha ao cancelar o rateio: ${error.message}`);
         return data as Rateio;
+    },
+
+    /**
+     * As despesas que compuseram um rateio já salvo — o rastro gravado em
+     * `condominio_rateio_despesas` no momento do cálculo. Serve tanto para
+     * conferir um rascunho antes de fechar quanto para a prestação de contas
+     * de um rateio fechado: uma vez salvo, é ESSA lista (não a competência
+     * corrente do centro de custo) que vale como comprovação.
+     */
+    async listarDespesas(rateioId: string): Promise<DespesaRateio[]> {
+        const { data, error } = await supabase
+            .from('condominio_rateio_despesas')
+            .select('transaction_id, descricao, valor')
+            .eq('rateio_id', rateioId)
+            .order('descricao', { ascending: true });
+        if (error) throw new Error(`Falha ao carregar as despesas: ${error.message}`);
+        return (data || []).map((d: any) => ({
+            transaction_id: d.transaction_id,
+            descricao: d.descricao || 'Sem descrição',
+            valor: Number(d.valor || 0),
+        }));
     },
 
     async listarItens(rateioId: string): Promise<{ unit_id: string; peso: number; valor: number; client_id: string | null }[]> {

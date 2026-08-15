@@ -12,7 +12,7 @@
 // rascunho → fechar, e o banco recusa alterar item de rateio já fechado.
 import React from 'react';
 import {
-    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle } from 'lucide-react';
+    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle, Receipt } from 'lucide-react';
 import { usePersistedState } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
@@ -21,7 +21,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { useConfirm } from '../ui/confirm';
 import {
     condominioRateioService, CRITERIO_LABEL, CRITERIO_EXIGE,
-    type CriterioRateio, type TipoRateio, type PreviaRateio, type Rateio,
+    type CriterioRateio, type TipoRateio, type PreviaRateio, type Rateio, type DespesaRateio,
 } from '../../services/condominioRateioService';
 import type { Empreendimento } from '../../types/empreendimento';
 
@@ -43,6 +43,43 @@ function rotuloCompetencia(iso: string): string {
     const [a, m] = iso.slice(0, 10).split('-');
     return `${m}/${a}`;
 }
+// String → string, sem passar por Date: `new Date('YYYY-MM-DD')` interpreta
+// UTC e pode voltar um dia no fuso local (mesma armadilha do Gantt).
+function dataBR(iso?: string): string {
+    if (!iso) return '—';
+    const [a, m, d] = iso.slice(0, 10).split('-');
+    return `${d}/${m}/${a}`;
+}
+
+/** Tabela de despesas — conferência (rascunho) e prestação de contas (fechado). */
+const TabelaDespesas: React.FC<{ despesas: DespesaRateio[]; comData: boolean }> = ({ despesas, comData }) => (
+    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+            <thead>
+                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    {comData && <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>}
+                    <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                    <th className="px-6 py-2 text-right whitespace-nowrap">Valor</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+                {despesas.map(d => (
+                    <tr key={d.transaction_id}>
+                        {comData && (
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                {dataBR(d.data)}
+                            </td>
+                        )}
+                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{d.descricao}</td>
+                        <td className="px-6 py-2.5 last:border-r-0 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                            {dinheiro(d.valor)}
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
 
 interface Props { empreendimento: Empreendimento }
 
@@ -59,6 +96,22 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
+    };
+
+    const [sheetDetalhe, setSheetDetalhe] = React.useState<Rateio | null>(null);
+    const [carregandoDetalhe, setCarregandoDetalhe] = React.useState(false);
+    const [despesasDetalhe, setDespesasDetalhe] = React.useState<DespesaRateio[]>([]);
+
+    const abrirDetalhe = async (r: Rateio) => {
+        setSheetDetalhe(r);
+        setCarregandoDetalhe(true);
+        try {
+            setDespesasDetalhe(await condominioRateioService.listarDespesas(r.id));
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao carregar as despesas do rateio.', 'error');
+        } finally {
+            setCarregandoDetalhe(false);
+        }
     };
 
     const [sheetNovo, setSheetNovo] = React.useState(false);
@@ -404,6 +457,14 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
+                                    {r.status !== 'CANCELADO' && (
+                                        <ActionIconButton
+                                            kind="view"
+                                            title="Ver despesas"
+                                            icon={<Receipt className="w-4 h-4" />}
+                                            onClick={() => abrirDetalhe(r)}
+                                        />
+                                    )}
                                     {r.status === 'RASCUNHO' && (
                                         <ActionIconButton
                                             kind="edit"
@@ -513,6 +574,10 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                                     </div>
                                 </div>
 
+                                {previa.despesas.length > 0 && (
+                                    <TabelaDespesas despesas={previa.despesas} comData />
+                                )}
+
                                 {previa.despesas.length === 0 && (
                                     <p className="text-xs text-amber-600 flex items-start gap-1.5">
                                         <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
@@ -561,6 +626,40 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     >
                         {salvando ? 'Salvando...' : 'Salvar rascunho'}
                     </button>
+                </SheetFooter>
+            </Sheet>
+
+            {/* Ver despesas — mesma tabela usada na conferência, reaberta a partir
+                do rastro salvo em `condominio_rateio_despesas`. Serve tanto para
+                revisar um rascunho quanto como prestação de contas de um fechado. */}
+            <Sheet open={!!sheetDetalhe} onClose={() => setSheetDetalhe(null)} size="2xl">
+                <SheetHeader onClose={() => setSheetDetalhe(null)}>
+                    <SheetTitle>Despesas do rateio</SheetTitle>
+                    <SheetDescription>
+                        {sheetDetalhe && `${rotuloCompetencia(sheetDetalhe.competencia)} · ${CRITERIO_LABEL[sheetDetalhe.criterio]} · ${STATUS_LABEL[sheetDetalhe.status]}`}
+                    </SheetDescription>
+                </SheetHeader>
+                <SheetPanel>
+                    {carregandoDetalhe ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        </div>
+                    ) : despesasDetalhe.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-8">Nenhuma despesa gravada neste rateio.</p>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex justify-between text-sm bg-gray-50 rounded-[10px] p-3">
+                                <span className="text-gray-500">Total das despesas</span>
+                                <span className="font-medium text-gray-800">
+                                    {dinheiro(despesasDetalhe.reduce((s, d) => s + d.valor, 0))}
+                                </span>
+                            </div>
+                            <TabelaDespesas despesas={despesasDetalhe} comData={false} />
+                        </div>
+                    )}
+                </SheetPanel>
+                <SheetFooter>
+                    <button onClick={() => setSheetDetalhe(null)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Fechar</button>
                 </SheetFooter>
             </Sheet>
 

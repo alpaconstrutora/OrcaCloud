@@ -12,8 +12,7 @@
 // rascunho → fechar, e o banco recusa alterar item de rateio já fechado.
 import React from 'react';
 import {
-    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2,
-} from 'lucide-react';
+    Calculator, Wallet, Search, RefreshCw, Plus, Lock, AlertTriangle, Building2, AlertCircle } from 'lucide-react';
 import { usePersistedState } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
@@ -85,14 +84,57 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
 
     React.useEffect(() => { carregar(); }, [carregar]);
 
+    const [disponiveis, setDisponiveis] = React.useState<{ id: string; code: string; name: string; grupo: string | null }[]>([]);
+    const [escolhido, setEscolhido] = React.useState('');
+
+    // Só carrega quando falta centro de custo — é o único momento em que a
+    // lista importa.
+    React.useEffect(() => {
+        if (loading || centro) return;
+        condominioRateioService.listarDisponiveis(orgId)
+            .then(setDisponiveis)
+            .catch(() => setDisponiveis([]));
+    }, [loading, centro, orgId]);
+
     const criarCentro = async () => {
         try {
+            // O nome não repete "Condomínio": ele já vai DENTRO do grupo
+            // Condomínios, e "Condomínios › Condomínio 007 - Bella Vista" lê mal.
             const c = await condominioRateioService.criarCentroDeCusto(
-                empreendimento.id, orgId, `Condomínio ${empreendimento.name}`);
+                empreendimento.id, orgId, empreendimento.name);
             setCentro(c);
-            notify(`Centro de custo ${c.code} criado. Toda despesa do condomínio deve cair nele.`);
+            notify(`Centro de custo ${c.code} criado no grupo Condomínios. Toda despesa do condomínio deve cair nele.`);
         } catch (e: any) {
             notify(e?.message || 'Erro ao criar o centro de custo.', 'error');
+        }
+    };
+
+    const vincularCentro = async () => {
+        if (!escolhido) return;
+        try {
+            const c = await condominioRateioService.vincular(escolhido, empreendimento.id);
+            setCentro(c);
+            notify(`Centro de custo ${c.code} vinculado a este condomínio.`);
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao vincular.', 'error');
+        }
+    };
+
+    const desvincularCentro = async () => {
+        if (!centro) return;
+        const ok = await confirm({
+            title: 'Desvincular o centro de custo?',
+            message: `${centro.code} — ${centro.name} deixa de ser o caixa deste condomínio. Nada é apagado: os lançamentos e os rateios já feitos continuam onde estão, mas novos rateios ficam sem de onde tirar despesa.`,
+            variant: 'warning',
+            confirmLabel: 'Desvincular',
+        });
+        if (!ok) return;
+        try {
+            await condominioRateioService.desvincular(centro.id);
+            setCentro(null);
+            notify('Centro de custo desvinculado.');
+        } catch (e: any) {
+            notify(e?.message || 'Erro ao desvincular.', 'error');
         }
     };
 
@@ -196,17 +238,56 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
             <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100 shadow-sm">
                 <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Este condomínio não tem centro de custo</h3>
-                <p className="text-sm text-gray-500 max-w-lg mx-auto mb-4">
+                <p className="text-sm text-gray-500 max-w-lg mx-auto mb-6">
                     O centro de custo é a âncora da separação do caixa: a despesa do condomínio é a
                     que cai nele, com ou sem organização própria. Sem ele não há de onde tirar as
                     despesas do rateio.
                 </p>
-                <button
-                    onClick={criarCentro}
-                    className="inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                >
-                    <Plus className="w-[15px] h-[15px]" /> Criar centro de custo
-                </button>
+
+                <div className="max-w-lg mx-auto text-left space-y-4">
+                    {/* Vincular vem primeiro: quem já cadastrou o centro de custo à
+                        mão — o caso comum — não deve ser empurrado a criar um
+                        segundo e ficar com dois para o mesmo caixa. */}
+                    {disponiveis.length > 0 && (
+                        <div className="bg-white p-4 rounded-[10px] border border-gray-200">
+                            <label className="text-xs font-semibold text-slate-500">Já existe um centro de custo para este condomínio?</label>
+                            <div className="flex gap-2 mt-1">
+                                <select
+                                    value={escolhido}
+                                    onChange={ev => setEscolhido(ev.target.value)}
+                                    className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                >
+                                    <option value="">Selecione para vincular</option>
+                                    {disponiveis.map(d => (
+                                        <option key={d.id} value={d.id}>
+                                            {d.code} — {d.name}{d.grupo ? ` (${d.grupo})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    onClick={vincularCentro}
+                                    disabled={!escolhido}
+                                    className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 shrink-0"
+                                >
+                                    Vincular
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-400 mt-1.5">
+                                Vincular aproveita os lançamentos que já caíram nele. Criar um novo
+                                deixaria dois centros de custo para o mesmo caixa.
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="text-center">
+                        <button
+                            onClick={criarCentro}
+                            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+                        >
+                            <Plus className="w-[15px] h-[15px]" /> Criar um novo, no grupo Condomínios
+                        </button>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -231,6 +312,23 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
                     icon={<Wallet className="w-5 h-5" />} color="blue"
                 />
             </div>
+
+            {/* Qual centro de custo alimenta o rateio — sem isso, "de onde vêm as
+                despesas?" só se responde abrindo o código. */}
+            {centro && (
+                <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <p className="text-sm text-gray-600 min-w-0">
+                        <span className="text-gray-400">Despesas vêm de</span>{' '}
+                        <span className="font-medium text-gray-800">{centro.code} — {centro.name}</span>
+                    </p>
+                    <button
+                        onClick={desvincularCentro}
+                        className="h-8 px-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all shrink-0 whitespace-nowrap"
+                    >
+                        Desvincular
+                    </button>
+                </div>
+            )}
 
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white">
@@ -467,9 +565,10 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento }) => {
             </Sheet>
 
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     {notification.message}
                 </div>
             )}

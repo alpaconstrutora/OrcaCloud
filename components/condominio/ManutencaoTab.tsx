@@ -8,8 +8,7 @@
 // forma mais eficiente de um plano de manutenção morrer sem ninguém notar.
 import React from 'react';
 import {
-    AlertTriangle, CalendarClock, ClipboardList, Wrench, Search, RefreshCw, Plus, CheckCircle2,
-} from 'lucide-react';
+    AlertTriangle, CalendarClock, ClipboardList, Wrench, Search, RefreshCw, Plus, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
     ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
 } from '../ui/TableUtils';
@@ -924,9 +923,10 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
             </Sheet>
 
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     {notification.message}
                 </div>
             )}

@@ -7,7 +7,7 @@
 // Juntá-los numa lista só faria o comunicado de portão quebrado disputar espaço
 // com a convenção do condomínio.
 import React from 'react';
-import { Megaphone, FileText, Search, RefreshCw, Plus, Eye, EyeOff } from 'lucide-react';
+import { Megaphone, FileText, Search, RefreshCw, Plus, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { usePersistedState } from '../ui/TableUtils';
 import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -472,9 +472,10 @@ const ComunicacaoTab: React.FC<Props> = ({ empreendimento }) => {
             </Sheet>
 
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     {notification.message}
                 </div>
             )}

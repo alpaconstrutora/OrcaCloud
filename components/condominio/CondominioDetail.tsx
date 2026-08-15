@@ -5,7 +5,7 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet } from 'lucide-react';
+import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle } from 'lucide-react';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
 import FracoesTab from './FracoesTab';
@@ -244,9 +244,10 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
             {aba === 'comunicacao' && <ComunicacaoTab empreendimento={e} />}
 
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     {notification.message}
                 </div>
             )}

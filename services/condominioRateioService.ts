@@ -109,6 +109,23 @@ export function distribuir(totalCentavos: number, pesos: number[]): number[] {
     return arredondado;
 }
 
+/**
+ * Próximo código, derivado do MAIOR existente — nunca de COUNT: com contagem,
+ * excluir um centro de custo faz o próximo repetir um código já usado, e o
+ * índice único `(organization_id, code)` recusa a criação sem o usuário
+ * entender por quê. Mesmo raciocínio de `nextRentalNumber`.
+ */
+async function proximoCodigo(organizationId: string): Promise<string> {
+    const { data } = await supabase
+        .from('cost_centers_v2')
+        .select('code')
+        .eq('organization_id', organizationId)
+        .order('code', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    return String((parseInt(data?.code || '0', 10) || 0) + 1).padStart(3, '0');
+}
+
 export const condominioRateioService = {
     /** O centro de custo do condomínio — a âncora da segregação. */
     async getCentroDeCusto(empreendimentoId: string): Promise<{ id: string; code: string; name: string } | null> {
@@ -121,26 +138,61 @@ export const condominioRateioService = {
         return data;
     },
 
+    /**
+     * O GRUPO "Condomínios", criado sob demanda. `cost_centers_v2` tem 2 níveis
+     * via `parent_id`: grupo (parent nulo) e centro de custo (filho). O
+     * condomínio é FILHO — criá-lo solto no primeiro nível o põe lado a lado com
+     * Obra, Administrativo e Comercial, que são famílias de despesa, não
+     * unidades de caixa.
+     */
+    async garantirGrupoCondominios(organizationId: string): Promise<string> {
+        const { data: existente } = await supabase
+            .from('cost_centers_v2')
+            .select('id, name')
+            .eq('organization_id', organizationId)
+            .is('parent_id', null)
+            .ilike('name', 'condomínio%')
+            .limit(1)
+            .maybeSingle();
+        if (existente) return existente.id;
+
+        // Acentuação varia no cadastro manual — tenta sem acento antes de criar.
+        const { data: semAcento } = await supabase
+            .from('cost_centers_v2')
+            .select('id')
+            .eq('organization_id', organizationId)
+            .is('parent_id', null)
+            .ilike('name', 'condominio%')
+            .limit(1)
+            .maybeSingle();
+        if (semAcento) return semAcento.id;
+
+        const { data, error } = await supabase
+            .from('cost_centers_v2')
+            .insert({
+                organization_id: organizationId,
+                code: await proximoCodigo(organizationId),
+                name: 'Condomínios',
+                description: 'Grupo dos centros de custo de condomínios.',
+            })
+            .select('id')
+            .single();
+        if (error) throw new Error(`Falha ao criar o grupo Condomínios: ${error.message}`);
+        return data.id;
+    },
+
     async criarCentroDeCusto(
         empreendimentoId: string, organizationId: string, nome: string,
     ): Promise<{ id: string; code: string; name: string }> {
-        // Código derivado do maior existente — nunca de COUNT, senão excluir um
-        // faz o próximo repetir um já usado.
-        const { data: ultimo } = await supabase
-            .from('cost_centers_v2')
-            .select('code')
-            .eq('organization_id', organizationId)
-            .order('code', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        const proximo = String((parseInt(ultimo?.code || '0', 10) || 0) + 1).padStart(3, '0');
+        const parentId = await this.garantirGrupoCondominios(organizationId);
 
         const { data, error } = await supabase
             .from('cost_centers_v2')
             .insert({
                 organization_id: organizationId,
                 empreendimento_id: empreendimentoId,
-                code: proximo,
+                parent_id: parentId,
+                code: await proximoCodigo(organizationId),
                 name: nome,
                 description: 'Centro de custo do condomínio — âncora da segregação do caixa.',
             })
@@ -148,6 +200,65 @@ export const condominioRateioService = {
             .single();
         if (error) throw new Error(`Falha ao criar o centro de custo: ${error.message}`);
         return data;
+    },
+
+    /**
+     * Centros de custo que ainda não são de nenhum condomínio — candidatos ao
+     * vínculo. Só FILHOS (parent_id preenchido): grupo não recebe lançamento, e
+     * apontar o condomínio para um grupo faria a despesa cair num nível que não
+     * é unidade de caixa.
+     */
+    async listarDisponiveis(organizationId: string): Promise<{ id: string; code: string; name: string; grupo: string | null }[]> {
+        const { data, error } = await supabase
+            .from('cost_centers_v2')
+            .select('id, code, name, parent_id')
+            .eq('organization_id', organizationId)
+            .is('empreendimento_id', null)
+            .not('parent_id', 'is', null)
+            .order('code', { ascending: true });
+        if (error) throw new Error(`Falha ao carregar os centros de custo: ${error.message}`);
+
+        const linhas = data || [];
+        const paisIds = [...new Set(linhas.map((l: any) => l.parent_id).filter(Boolean))];
+        const nomePai = new Map<string, string>();
+        if (paisIds.length > 0) {
+            const { data: pais } = await supabase
+                .from('cost_centers_v2').select('id, name').in('id', paisIds);
+            for (const p of pais || []) nomePai.set(p.id, p.name);
+        }
+        return linhas.map((l: any) => ({
+            id: l.id, code: l.code, name: l.name, grupo: nomePai.get(l.parent_id) || null,
+        }));
+    },
+
+    /**
+     * Aponta um centro de custo EXISTENTE para o condomínio. Útil quando ele já
+     * foi cadastrado à mão — foi o que aconteceu com o Bella Vista, que tinha
+     * "Condomínio Bella Vista" no grupo certo antes de o módulo criar o dele.
+     */
+    async vincular(costCenterId: string, empreendimentoId: string): Promise<{ id: string; code: string; name: string }> {
+        const { data, error } = await supabase
+            .from('cost_centers_v2')
+            .update({ empreendimento_id: empreendimentoId })
+            .eq('id', costCenterId)
+            .select('id, code, name')
+            .single();
+        if (error) {
+            if (error.message.includes('uidx_cost_center_por_empreendimento')) {
+                throw new Error('Este condomínio já tem um centro de custo vinculado.');
+            }
+            throw new Error(`Falha ao vincular: ${error.message}`);
+        }
+        return data;
+    },
+
+    /** Desfaz o vínculo sem apagar o centro de custo nem os lançamentos dele. */
+    async desvincular(costCenterId: string): Promise<void> {
+        const { error } = await supabase
+            .from('cost_centers_v2')
+            .update({ empreendimento_id: null })
+            .eq('id', costCenterId);
+        if (error) throw new Error(`Falha ao desvincular: ${error.message}`);
     },
 
     /**

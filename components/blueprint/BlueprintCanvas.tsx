@@ -833,22 +833,48 @@ export default function BlueprintCanvas({
         ctx.stroke();
       } else {
         // Porta: folha aberta a 90 graus mais o arco de giro, como em planta.
-        const piv = paraTela({ x: ini.x + nx * meia, y: ini.y + ny * meia } as Point);
+        //
+        // DOIS EIXOS INDEPENDENTES — `hingeAtStart` (girar) e `swingReversed`
+        // (espelhar) — ver o comentário de `Opening` em `model.ts`. Cada um
+        // troca o SINAL de um dos dois vetores a partir do pivô:
+        //
+        //   eixoRef  aponta da dobradiça para a OUTRA ponta do vão (onde a
+        //            folha fica quando fechada, encostada na parede);
+        //   folha    aponta da dobradiça para DENTRO do cômodo em que abre.
+        //
+        // O pivô em si também muda: com a dobradiça na ponta final, ele nasce
+        // em `fim`, não em `ini`.
+        const pivMm = o.hingeAtStart
+          ? { x: ini.x + nx * meia * (o.swingReversed ? -1 : 1), y: ini.y + ny * meia * (o.swingReversed ? -1 : 1) }
+          : { x: fim.x + nx * meia * (o.swingReversed ? -1 : 1), y: fim.y + ny * meia * (o.swingReversed ? -1 : 1) };
+        const piv = paraTela(pivMm as Point);
         const raio = larguraTela;
-        // Os ângulos são de TELA, e `ux/uy` e `nx/ny` são de modelo: o Y entra
-        // negado, como em `paraTela`. E como negar o Y inverte o sentido de
-        // giro, o arco passa a ser anti-horário — senão a folha da porta e o
-        // arco apontariam para lados opostos.
-        const angEixo = Math.atan2(-uy, ux);
-        const angNormal = Math.atan2(-ny, nx);
+
+        const eixoRefX = o.hingeAtStart ? ux : -ux;
+        const eixoRefY = o.hingeAtStart ? uy : -uy;
+        const folhaX = o.swingReversed ? -nx : nx;
+        const folhaY = o.swingReversed ? -ny : ny;
+
+        // Os ângulos são de TELA, e os vetores acima são de modelo: o Y entra
+        // negado, como em `paraTela`.
+        const angEixo = Math.atan2(-eixoRefY, eixoRefX);
+        const angFolha = Math.atan2(-folhaY, folhaX);
 
         ctx.beginPath();
         ctx.moveTo(piv.x, piv.y);
-        ctx.lineTo(piv.x + Math.cos(angNormal) * raio, piv.y + Math.sin(angNormal) * raio);
+        ctx.lineTo(piv.x + Math.cos(angFolha) * raio, piv.y + Math.sin(angFolha) * raio);
         ctx.stroke();
 
+        // `eixoRef` e `folha` são sempre perpendiculares entre si (um é a
+        // rotação de 90° do outro, com sinais próprios), então o arco entre os
+        // dois é sempre um quarto de círculo — falta só escolher o SENTIDO
+        // certo, o da volta curta. Invertendo QUALQUER um dos dois vetores
+        // sozinho, a volta curta troca de sentido; invertendo os DOIS ao mesmo
+        // tempo, ela volta a ser a de antes — por isso o teste é um XOR dos
+        // dois flags, não a soma de cada um isolado.
+        const antiHorario = o.hingeAtStart !== o.swingReversed;
         ctx.beginPath();
-        ctx.arc(piv.x, piv.y, raio, angEixo, angNormal, true);
+        ctx.arc(piv.x, piv.y, raio, angEixo, angFolha, antiHorario);
         ctx.stroke();
       }
     }

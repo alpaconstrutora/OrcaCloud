@@ -343,6 +343,139 @@ describe('Spike A · aberturas', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Girar/espelhar porta (FlipOpening) — dois eixos independentes
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('FlipOpening · girar e espelhar', () => {
+  function comPorta() {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    const wallId = built.model.walls[0].id;
+    const withOpening = applyCommand(built.model, {
+      type: 'AddOpening',
+      wallId,
+      kind: 'door',
+      offsetMm: 1000,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    });
+    return { model: withOpening.model, openingId: withOpening.model.openings[0].id };
+  }
+
+  it('AddOpening nasce com o padrão de sempre: dobradiça no início, sem espelhar', () => {
+    const { model } = comPorta();
+    expect(model.openings[0].hingeAtStart).toBe(true);
+    expect(model.openings[0].swingReversed).toBe(false);
+  });
+
+  it('aceita o estado inicial explícito, para quem já sabe qual quer', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const after = applyCommand(built, {
+      type: 'AddOpening',
+      wallId: built.walls[0].id,
+      kind: 'door',
+      offsetMm: 1000,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+      hingeAtStart: false,
+      swingReversed: true,
+    });
+    expect(after.model.openings[0].hingeAtStart).toBe(false);
+    expect(after.model.openings[0].swingReversed).toBe(true);
+  });
+
+  it('"hinge" alterna SÓ a dobradiça — espelhar não muda', () => {
+    const { model, openingId } = comPorta();
+    const after = applyCommand(model, { type: 'FlipOpening', openingId, axis: 'hinge' });
+    expect(after.model.openings[0].hingeAtStart).toBe(false);
+    expect(after.model.openings[0].swingReversed).toBe(false);
+  });
+
+  it('"swing" alterna SÓ o lado da folha — dobradiça não muda', () => {
+    const { model, openingId } = comPorta();
+    const after = applyCommand(model, { type: 'FlipOpening', openingId, axis: 'swing' });
+    expect(after.model.openings[0].hingeAtStart).toBe(true);
+    expect(after.model.openings[0].swingReversed).toBe(true);
+  });
+
+  it('os dois eixos alternam de volta ao original — são toggles, não valores fixos', () => {
+    const { model, openingId } = comPorta();
+    const uma = applyCommand(model, { type: 'FlipOpening', openingId, axis: 'hinge' }).model;
+    const duas = applyCommand(uma, { type: 'FlipOpening', openingId, axis: 'hinge' }).model;
+    expect(duas.openings[0].hingeAtStart).toBe(true);
+  });
+
+  it('as 4 combinações são alcançáveis independentemente', () => {
+    const { model, openingId } = comPorta();
+    const flip = (m: BlueprintModel, axis: 'hinge' | 'swing') =>
+      applyCommand(m, { type: 'FlipOpening', openingId, axis }).model;
+
+    const soHinge = flip(model, 'hinge');
+    const soSwing = flip(model, 'swing');
+    const ambos = flip(soHinge, 'swing');
+
+    expect([model, soHinge, soSwing, ambos].map((m) => m.openings[0])).toEqual([
+      { ...model.openings[0], hingeAtStart: true, swingReversed: false },
+      { ...model.openings[0], hingeAtStart: false, swingReversed: false },
+      { ...model.openings[0], hingeAtStart: true, swingReversed: true },
+      { ...model.openings[0], hingeAtStart: false, swingReversed: true },
+    ]);
+  });
+
+  it('não muda offset, largura nem parede hospedeira — só o símbolo', () => {
+    const { model, openingId } = comPorta();
+    const antes = model.openings[0];
+    const depois = applyCommand(model, { type: 'FlipOpening', openingId, axis: 'hinge' }).model
+      .openings[0];
+
+    expect(depois.offsetMm).toBe(antes.offsetMm);
+    expect(depois.widthMm).toBe(antes.widthMm);
+    expect(depois.wallId).toBe(antes.wallId);
+  });
+
+  it('abertura inexistente é rejeitada, como as outras operações sobre abertura', () => {
+    const { model } = comPorta();
+    expect(() =>
+      applyCommand(model, { type: 'FlipOpening', openingId: 'opn_9999', axis: 'hinge' }),
+    ).toThrow(KernelError);
+  });
+
+  it('payload canônico registra os dois eixos, e o hash muda quando eles mudam', () => {
+    const { model, openingId } = comPorta();
+    const girada = applyCommand(model, { type: 'FlipOpening', openingId, axis: 'hinge' }).model;
+
+    expect(canonicalPayload(model)).not.toBe(canonicalPayload(girada));
+    expect(snapshotHash(model)).not.toBe(snapshotHash(girada));
+  });
+
+  it('round-trip do payload preserva os dois eixos', () => {
+    const { model, openingId } = comPorta();
+    const girada = applyCommand(model, { type: 'FlipOpening', openingId, axis: 'swing' }).model;
+
+    const rebuilt = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(girada)));
+    expect(rebuilt.openings[0].hingeAtStart).toBe(true);
+    expect(rebuilt.openings[0].swingReversed).toBe(true);
+  });
+
+  it('payload GRAVADO ANTES dos dois campos existirem reabre com o padrão de sempre', () => {
+    // Simula um snapshot publicado sob kernel < 0.4.0: o JSON gravado não tem
+    // `hingeAtStart`/`swingReversed` nenhum. Reabrir não pode fazer a porta
+    // "virar" sozinha — o padrão tem que ser o mesmo que `AddOpening` sempre usou.
+    const { model } = comPorta();
+    const payload = JSON.parse(canonicalPayload(model));
+    delete payload.openings[0].hingeAtStart;
+    delete payload.openings[0].swingReversed;
+
+    const rebuilt = modelFromCanonicalPayload(payload);
+    expect(rebuilt.openings[0].hingeAtStart).toBe(true);
+    expect(rebuilt.openings[0].swingReversed).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Split / merge (casos 18–21)
 // ─────────────────────────────────────────────────────────────────────────────
 

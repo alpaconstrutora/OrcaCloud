@@ -41,6 +41,22 @@ export interface Opening {
   widthMm: number;
   heightMm: number;
   sillMm: number;
+  /**
+   * Só o SÍMBOLO da porta lê estes dois campos — janela não tem dobradiça nem
+   * lado de giro, e continua desenhada como uma linha simétrica através da
+   * parede. Existem em toda abertura mesmo assim, pela mesma razão de `sillMm`
+   * estar presente em porta: um campo condicional ao `kind` bifurcaria o tipo
+   * sem necessidade.
+   *
+   * Os dois são EIXOS INDEPENDENTES, não um único "girar 180°": um vão de porta
+   * tem 4 variações válidas de símbolo (a mesma convenção do Revit/ArchiCAD —
+   * "flip hand" e "flip facing" — dois botões, quatro estados), e colapsar os
+   * dois numa única ação impediria alcançar metade delas sem combinar botões.
+   */
+  /** De qual ponta do vão sai o eixo de giro. `true` = `wall.a` + `offsetMm`. */
+  hingeAtStart: boolean;
+  /** Para qual lado da parede a folha abre. `false` = normal positiva (padrão). */
+  swingReversed: boolean;
 }
 
 /** Limite sem material físico — divide ambiente sem existir como parede. */

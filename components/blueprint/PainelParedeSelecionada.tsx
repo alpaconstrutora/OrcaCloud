@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Scissors, Combine } from 'lucide-react';
+import { Scissors, Combine, FlipHorizontal, FlipVertical } from 'lucide-react';
 import { mmToMeters, wallLength, type Opening, type Wall } from '../../utils/blueprintKernel';
 
 /**
@@ -35,6 +35,13 @@ interface Props {
   podeUnir: boolean;
   onDividir: () => void;
   onUnir: () => void;
+  /**
+   * Alterna um dos dois eixos do símbolo de porta. `'hinge'` (Girar) move a
+   * dobradiça para a outra ponta do vão; `'swing'` (Espelhar) troca para qual
+   * lado da parede a folha abre. São eixos INDEPENDENTES — as 4 combinações são
+   * as 4 variações padrão de porta em planta — por isso dois botões, não um.
+   */
+  onFlipAbertura: (axis: 'hinge' | 'swing') => void;
 }
 
 export default function PainelParedeSelecionada({
@@ -47,6 +54,7 @@ export default function PainelParedeSelecionada({
   podeUnir,
   onDividir,
   onUnir,
+  onFlipAbertura,
 }: Props) {
   if (!parede && !abertura) return null;
 
@@ -70,11 +78,32 @@ export default function PainelParedeSelecionada({
       )}
 
       {abertura && (
-        <p className="mt-2 text-xs text-slate-600">
-          {abertura.kind === 'door' ? 'Porta' : 'Janela'} de{' '}
-          <span className="font-medium text-slate-800">{abertura.widthMm} mm</span>, a{' '}
-          {(abertura.offsetMm / 1000).toFixed(2)} m do início da parede.
-        </p>
+        <>
+          <p className="mt-2 text-xs text-slate-600">
+            {abertura.kind === 'door' ? 'Porta' : 'Janela'} de{' '}
+            <span className="font-medium text-slate-800">{abertura.widthMm} mm</span>, a{' '}
+            {(abertura.offsetMm / 1000).toFixed(2)} m do início da parede.
+          </p>
+
+          {/* Janela é simétrica no desenho (linha reta através da parede) — não
+              tem dobradiça nem lado de giro para alternar. */}
+          {abertura.kind === 'door' && (
+            <div className="mt-3 flex gap-2">
+              <BotaoTexto
+                icone={FlipHorizontal}
+                rotulo="Girar"
+                onClick={() => onFlipAbertura('hinge')}
+                titulo="Move a dobradiça para a outra ponta do vão"
+              />
+              <BotaoTexto
+                icone={FlipVertical}
+                rotulo="Espelhar"
+                onClick={() => onFlipAbertura('swing')}
+                titulo="Abre para o outro lado da parede"
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

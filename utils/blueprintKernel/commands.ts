@@ -42,6 +42,10 @@ export type Command =
       widthMm: number;
       heightMm: number;
       sillMm: number;
+      /** Omitido = `true`/`false` — o padrão de sempre, para não obrigar todo
+       * chamador existente a decidir orientação numa porta nova. */
+      hingeAtStart?: boolean;
+      swingReversed?: boolean;
     }
   | { type: 'AddBoundary'; levelId: ObjectId; a: Point; b: Point }
   | { type: 'SetThickness'; wallId: ObjectId; thicknessMm: number }
@@ -50,6 +54,12 @@ export type Command =
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
   | { type: 'DeleteWall'; wallId: ObjectId }
   | { type: 'DeleteOpening'; openingId: ObjectId }
+  /**
+   * Alterna um dos dois eixos do símbolo de porta. Os dois são independentes —
+   * ver o comentário de `Opening.hingeAtStart`/`swingReversed` em `model.ts` —
+   * então o comando pede QUAL eixo, nunca os dois de uma vez.
+   */
+  | { type: 'FlipOpening'; openingId: ObjectId; axis: 'hinge' | 'swing' }
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string };
 
@@ -129,6 +139,8 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
         widthMm: command.widthMm,
         heightMm: command.heightMm,
         sillMm: command.sillMm,
+        hingeAtStart: command.hingeAtStart ?? true,
+        swingReversed: command.swingReversed ?? false,
       });
       diff.created.push(id);
       break;
@@ -294,6 +306,25 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       }
       next.openings = next.openings.filter((o) => o.id !== opening.id);
       diff.deleted.push(opening.id);
+      break;
+    }
+
+    case 'FlipOpening': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) {
+        throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      }
+      // Não muda offset/largura/parede hospedeira — é só o SÍMBOLO que muda de
+      // lado. Por isso não há validação de limite aqui: nada que `AddOpening`
+      // já aceitou pode deixar de caber por causa de girar ou espelhar.
+      next.openings = next.openings.map((o) =>
+        o.id !== opening.id
+          ? o
+          : command.axis === 'hinge'
+            ? { ...o, hingeAtStart: !o.hingeAtStart }
+            : { ...o, swingReversed: !o.swingReversed },
+      );
+      diff.updated.push(opening.id);
       break;
     }
 

@@ -16,7 +16,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import PainelParedeSelecionada from '../../components/blueprint/PainelParedeSelecionada';
-import { point, type Wall } from '../../utils/blueprintKernel';
+import { point, type Opening, type Wall } from '../../utils/blueprintKernel';
 
 /** Parede de 4,00 m no eixo horizontal. */
 function parede(over: Partial<Wall> = {}): Wall {
@@ -27,6 +27,22 @@ function parede(over: Partial<Wall> = {}): Wall {
     b: point(4000, 0),
     thicknessMm: 150,
     heightMm: 2800,
+    ...over,
+  };
+}
+
+/** Porta de 900 mm, no padrão de sempre: dobradiça no início, sem espelhar. */
+function porta(over: Partial<Opening> = {}): Opening {
+  return {
+    id: 'opn_1',
+    wallId: 'wal_1',
+    kind: 'door',
+    offsetMm: 1500,
+    widthMm: 900,
+    heightMm: 2100,
+    sillMm: 0,
+    hingeAtStart: true,
+    swingReversed: false,
     ...over,
   };
 }
@@ -42,6 +58,7 @@ function montar(over: Partial<React.ComponentProps<typeof PainelParedeSelecionad
     podeUnir: false,
     onDividir: vi.fn(),
     onUnir: vi.fn(),
+    onFlipAbertura: vi.fn(),
     ...over,
   };
   render(<PainelParedeSelecionada {...props} />);
@@ -65,6 +82,7 @@ describe('PainelParedeSelecionada · sem seleção', () => {
         podeUnir={false}
         onDividir={vi.fn()}
         onUnir={vi.fn()}
+        onFlipAbertura={vi.fn()}
       />,
     );
     expect(container).toBeEmptyDOMElement();
@@ -192,15 +210,7 @@ describe('PainelParedeSelecionada · abertura selecionada', () => {
     render(
       <PainelParedeSelecionada
         parede={null}
-        abertura={{
-          id: 'opn_1',
-          wallId: 'wal_1',
-          kind: 'door',
-          offsetMm: 1500,
-          widthMm: 900,
-          heightMm: 2100,
-          sillMm: 0,
-        }}
+        abertura={porta()}
         pontaQueAnda={null}
         arrastaCanto={false}
         onComprimento={vi.fn()}
@@ -208,11 +218,47 @@ describe('PainelParedeSelecionada · abertura selecionada', () => {
         podeUnir={false}
         onDividir={vi.fn()}
         onUnir={vi.fn()}
+        onFlipAbertura={vi.fn()}
       />,
     );
     expect(screen.getByText(/porta de/i)).toBeInTheDocument();
     expect(screen.getByText(/900 mm/)).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: /comprimento/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('PainelParedeSelecionada · girar e espelhar porta', () => {
+  // Pedido de 14/08/2026: "ao selecionar uma porta, implementar opcao de girar
+  // e espelhar". São dois EIXOS INDEPENDENTES — dobradiça (girar) e lado da
+  // folha (espelhar) — não um único botão de 180°, por decisão confirmada com
+  // o usuário: as 4 combinações são as 4 variações padrão de porta em planta.
+
+  it('porta selecionada oferece Girar e Espelhar', () => {
+    montar({ parede: null, abertura: porta() });
+    expect(screen.getByRole('button', { name: /girar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /espelhar/i })).toBeInTheDocument();
+  });
+
+  it('Girar chama onFlipAbertura com o eixo "hinge"', async () => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta() });
+
+    await user.click(screen.getByRole('button', { name: /girar/i }));
+    expect(props.onFlipAbertura).toHaveBeenCalledExactlyOnceWith('hinge');
+  });
+
+  it('Espelhar chama onFlipAbertura com o eixo "swing"', async () => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta() });
+
+    await user.click(screen.getByRole('button', { name: /espelhar/i }));
+    expect(props.onFlipAbertura).toHaveBeenCalledExactlyOnceWith('swing');
+  });
+
+  it('janela NÃO oferece Girar/Espelhar — não tem dobradiça nem lado de giro', () => {
+    montar({ parede: null, abertura: porta({ kind: 'window', sillMm: 900 }) });
+    expect(screen.queryByRole('button', { name: /girar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /espelhar/i })).not.toBeInTheDocument();
   });
 });
 
@@ -245,5 +291,6 @@ function montarProps(): React.ComponentProps<typeof PainelParedeSelecionada> {
     podeUnir: false,
     onDividir: vi.fn(),
     onUnir: vi.fn(),
+    onFlipAbertura: vi.fn(),
   };
 }

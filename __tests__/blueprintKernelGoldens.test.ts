@@ -1,9 +1,9 @@
 /**
  * Golden files do kernel geométrico (PRD §20.1).
  *
- * ⚠️ Hashes revisados DUAS vezes, e as duas por mudança de FORMATO, nunca de
- * geometria. Nas duas, a contagem de ambientes dos seis casos seguiu idêntica — é
- * essa asserção, e não o hash, que prova que o desenho não mudou. As duas vieram
+ * ⚠️ Hashes revisados TRÊS vezes, e as três por mudança de FORMATO, nunca de
+ * geometria. Nas três, a contagem de ambientes dos seis casos seguiu idêntica — é
+ * essa asserção, e não o hash, que prova que o desenho não mudou. As três vieram
  * acompanhadas de bump de `KERNEL_VERSION`.
  *
  *   0.1.0 → 0.2.0 (08/08/2026): o payload passou a referenciar nível e parede por
@@ -13,6 +13,12 @@
  *   conteúdo, não decoração — renomear um ambiente muda o desenho de forma
  *   observável e precisa mudar o hash, senão publicar depois de renomear seria
  *   idempotente e o nome nunca chegaria ao snapshot.
+ *
+ *   0.3.0 → 0.4.0 (14/08/2026): `Opening` ganhou `hingeAtStart`/`swingReversed`
+ *   (girar/espelhar porta). Nenhum dos seis casos abaixo tem abertura — `openings`
+ *   continua `[]` nos seis — então o hash só mudou pela versão embutida no
+ *   payload, não pelo conteúdo. É exatamente o que este arquivo existe para pegar
+ *   se algum dia NÃO fosse esse o motivo.
  *
  * Trava o payload canônico de seis geometrias. Serve a um propósito específico: o
  * arranjo planar é otimizável de muitas formas — índice espacial, união-busca,
@@ -77,17 +83,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'e207714dd479df85310adaf81a8263dff719318adc2fc8dde4e201235253c06d',
+    hash: '6fe1d7c854d48b56ab642622008e22d58e2ea7d9b3228561b0d34735c10e65bc',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'a9e3d13793e4794e3f5ba03f8ad0ae38097e27d5ad5e5c073391f047879df34c',
+    hash: '82b97b5ccb1b4ea398c858c09176ebf048b69d78ae4077ee1786f88ca7927f10',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'aa86f76c5f299e5fc67c72a1ba8128d7bbc5c21458cbf80a05a448a5d9e626c9',
+    hash: '28f52bc96fea4425a62d0d00c4cd41d5c54332f9d9be11d5e355d35817a68e97',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -95,7 +101,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '16203ab4161ca7097c3d4edb682d4ee874befcc1a75089357ff9d3129846fef6',
+    hash: '72220a2d9877d56b7ad31e9c122dbe8939907eac8035d210d6ced82712bceaca',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -105,7 +111,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'db2d7a0f2b4d3acba8ed3ec265d6c8fd564d63997644663d57a148a7dafdc5ad',
+    hash: 'dcfeecf95df4d4c014ed9537010b318281d95bdd81835bd5abc1263731bd1ca8',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -116,7 +122,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'a7ec9297c06bee707e56e9e7527037d548ecb2107ead91f21fbc3b036fa9ec1d',
+    hash: '1e95593c08306890c4696b869fc9267497bd79906f211d3e058101aaaea1fad3',
   },
 };
 

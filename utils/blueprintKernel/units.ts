@@ -22,8 +22,14 @@
  * de `levelId`/`wallId`. A geometria não mudou; a serialização sim, e por isso todo
  * hash anterior é incompatível por construção. Snapshot gravado com 0.1.0 continua
  * legível pelo `kernel_version` que carrega — é para isso que ele existe.
+ *
+ * 0.4.0 (14/08/2026) — `Opening` ganhou `hingeAtStart`/`swingReversed` (girar e
+ * espelhar o símbolo de porta). Payload gravado sob 0.3.0 não tem os dois campos;
+ * `modelFromCanonicalPayload` os lê com `?? true`/`?? false`, o mesmo padrão de
+ * `labels` na entrada 0.3.0 — snapshot antigo continua legível, só não recalcula
+ * hash igual ao de hoje.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.3.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.4.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

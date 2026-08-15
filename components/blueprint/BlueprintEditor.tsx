@@ -292,6 +292,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     });
   }
 
+  /** Gira (dobradiça) ou espelha (lado da folha) a porta selecionada. */
+  function flipAbertura(axis: 'hinge' | 'swing') {
+    if (!aberturaSel) return;
+    editor.run({ type: 'FlipOpening', openingId: aberturaSel.id, axis });
+  }
+
   function dividirSelecionada() {
     if (!paredeSel) return;
     // Divide no meio: e o unico ponto que sempre existe e nunca coincide com
@@ -1083,6 +1089,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             podeUnir={!!vizinhaParaUnir}
             onDividir={dividirSelecionada}
             onUnir={unirSelecionada}
+            onFlipAbertura={flipAbertura}
           />
 
           {vaosCandidatos.soltas.length > 0 && (

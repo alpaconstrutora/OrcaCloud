@@ -198,6 +198,8 @@ export function canonicalPayload(model: BlueprintModel): string {
         widthMm: o.widthMm,
         heightMm: o.heightMm,
         sillMm: o.sillMm,
+        hingeAtStart: o.hingeAtStart,
+        swingReversed: o.swingReversed,
       })),
     boundaries: [...model.boundaries]
       .sort(
@@ -273,6 +275,9 @@ export interface CanonicalPayload {
     widthMm: number;
     heightMm: number;
     sillMm: number;
+    /** Ausentes em payload gravado sob kernel < 0.4.0. */
+    hingeAtStart?: boolean;
+    swingReversed?: boolean;
   }[];
   boundaries: { level: number; a: { x: number; y: number }; b: { x: number; y: number } }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
@@ -336,6 +341,12 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       widthMm: o.widthMm,
       heightMm: o.heightMm,
       sillMm: o.sillMm,
+      // `?? true`/`?? false`: payload gravado sob kernel < 0.4.0 não tem os
+      // campos. São os mesmos valores que `AddOpening` já usava como padrão
+      // antes deles existirem — reabrir um snapshot antigo não pode fazer as
+      // portas dele "virarem" sozinhas.
+      hingeAtStart: o.hingeAtStart ?? true,
+      swingReversed: o.swingReversed ?? false,
     });
   }
 

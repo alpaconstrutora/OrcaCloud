@@ -61,9 +61,12 @@ vi.mock('../../services/parametricService', () => ({
 }));
 
 // Sub-componentes pesados — stubs mínimos
+// O stub precisa ser <tr>/<td>: desde a conversão da WBS para <table> de verdade,
+// o BudgetRow é renderizado dentro de <tbody>. Um <div> aqui geraria warning de
+// validateDOMNesting e mascararia problemas reais de estrutura.
 vi.mock('../../components/BudgetRow', () => ({
     BudgetRow: ({ item }: { item: BudgetEntry }) => (
-        <div data-testid={`budget-row-${item.id}`}>{item.sinapiItem?.description}</div>
+        <tr data-testid={`budget-row-${item.id}`}><td>{item.sinapiItem?.description}</td></tr>
     ),
 }));
 vi.mock('../../components/WBSImportModal', () => ({

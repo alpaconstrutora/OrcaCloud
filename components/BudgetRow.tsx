@@ -32,6 +32,10 @@ interface BudgetRowProps {
     isLocked?: boolean;
 }
 
+/** Classe base de toda célula de dado — separador vertical + altura de linha (§6.6/§7.2).
+ *  `px-3` (não `px-6`) por §7.3: com 12-15 colunas, 24px de cada lado estouraria a largura. */
+const TD = 'px-3 py-2.5 border-r border-gray-100 last:border-r-0';
+
 const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void) => {
     if (type === SinapiType.COMPOSITION) {
         return (
@@ -63,7 +67,7 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
 };
 
 export const BudgetRow: React.FC<BudgetRowProps> = ({
-  item,
+    item,
     itemIndex,
     subIdDisplay,
     onUpdateQuantity,
@@ -87,25 +91,27 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     auxiliaryItems,
     isLocked
 }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id });
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: item.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+    };
     const [isExpanded, setIsExpanded] = React.useState(false);
     const [isSavingCustom, setIsSavingCustom] = React.useState(false);
     const hasComposition = item.sinapiItem?.composition && item.sinapiItem.composition.length > 0;
     const canOpenCPU = item.sinapiItem?.type === SinapiType.COMPOSITION || hasComposition;
     const hasCalculationMemory = !!(item.calculationMemory?.formula?.trim() || item.calculationMemory?.justification?.trim() || item.calculationMemory?.result !== undefined);
+    // Colunas da tabela (BudgetEditor.tsx monta o mesmo <colgroup>): 12 fixas + 3 de natureza.
+    const totalCols = showNatureBreakdown ? 15 : 12;
 
     const handleToggleCPU = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -129,81 +135,90 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     };
 
     return (
-        <div ref={setNodeRef} style={style} className={`border-t border-gray-50 hover:bg-blue-50/20 group ${isDragging ? 'z-50 relative bg-white shadow-xl ring-2 ring-blue-500' : ''}`}>
-            {/* divide-x = separador vertical entre colunas (§6.6). px-6 literal do guia
-                estouraria colunas de 20px/0.6fr desse grid denso — a borda no meio do
-                gap-2 já existente cumpre a mesma função sem quebrar a largura fixa. */}
-            <div className={`group relative grid divide-x divide-gray-100 ${showNatureBreakdown ? 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 py-2.5 hover:bg-gray-50/80 transition-all items-center border-b border-gray-100 ${isExpanded ? 'bg-blue-50/20' : ''}`}>
-                                <div className="flex items-center gap-1 pr-1">
-                    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0">
+        <>
+            <tr
+                ref={setNodeRef}
+                style={style}
+                className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors group ${isExpanded ? 'bg-blue-50/20' : ''} ${isDragging ? 'relative z-50 bg-white shadow-xl' : ''}`}
+            >
+                <td className={`${TD} text-center`}>
+                    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500" title="Arrastar para reordenar">
                         <GripVertical className="w-3.5 h-3.5" />
                     </button>
-                </div>
-                <div className="text-sm font-normal text-gray-400 flex items-center gap-1.5">
-                    {canOpenCPU && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (viewMode === 'modal') {
-                                    onOpenModal?.(item);
-                                } else {
-                                    setIsExpanded(!isExpanded);
-                                }
-                            }}
-                            className="text-gray-500 hover:text-blue-600 focus:outline-none transition-colors"
-                            title={viewMode === 'modal' ? "Ver CPU em Janela" : (isExpanded ? "Recolher CPU" : "Expandir CPU")}
-                        >
-                            {viewMode === 'modal' ? (
-                                <Maximize2 className="w-3 h-3" />
-                            ) : (
-                                isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />
-                            )}
-                        </button>
-                    )}
-                    {subIdDisplay}{(itemIndex + 1).toString().padStart(2, '0')}
-                </div>
-                <div className="text-xs text-center flex justify-center">
-                    <span className={`px-1.5 py-0.5 rounded-[6px] text-[9px] font-bold border ${item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                </td>
+
+                <td className={`${TD} text-sm font-normal text-gray-400 whitespace-nowrap`}>
+                    <div className="flex items-center gap-1.5">
+                        {canOpenCPU && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (viewMode === 'modal') {
+                                        onOpenModal?.(item);
+                                    } else {
+                                        setIsExpanded(!isExpanded);
+                                    }
+                                }}
+                                className="text-gray-500 hover:text-blue-600 focus:outline-none transition-colors shrink-0"
+                                title={viewMode === 'modal' ? "Ver CPU em Janela" : (isExpanded ? "Recolher CPU" : "Expandir CPU")}
+                            >
+                                {viewMode === 'modal' ? (
+                                    <Maximize2 className="w-3 h-3" />
+                                ) : (
+                                    isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />
+                                )}
+                            </button>
+                        )}
+                        {subIdDisplay}{(itemIndex + 1).toString().padStart(2, '0')}
+                    </div>
+                </td>
+
+                {/* Origem — pílula por §7.3 (exceção da planilha densa) */}
+                <td className={`${TD} text-center`}>
+                    <span className={`inline-block px-1.5 py-0.5 rounded-[6px] text-[9px] font-bold border ${item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                         {item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'PRÓPRIA' : 'SINAPI'}
                     </span>
-                </div>
-                <div className="text-sm font-mono text-gray-600 bg-gray-50 px-1 py-0.5 rounded-[6px] border border-gray-100 text-center">{item.sinapiItem?.code || '---'}</div>
-                <div className="text-sm text-gray-600 leading-tight">
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={(e) => onToggleFavorite?.(e, item.sinapiItem?.code)}
-                                className="text-gray-400 hover:text-amber-500 transition-colors p-1 -ml-1 rounded-full hover:bg-amber-50"
-                                title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-                            >
-                                <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
-                            </button>
-                            {item.sinapiItem && getTypeBadge(item.sinapiItem.type, canOpenCPU ? handleToggleCPU : undefined)}
-                            <span>{item.sinapiItem?.description || 'Descrição não disponível'}</span>
-                        </div>
+                </td>
+
+                {/* Código — font-mono por §7.3 (alinhamento de dígitos entre linhas) */}
+                <td className={`${TD} text-center text-sm font-mono text-gray-600`}>{item.sinapiItem?.code || '---'}</td>
+
+                <td className={`${TD} text-sm text-gray-600 leading-tight`}>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={(e) => onToggleFavorite?.(e, item.sinapiItem?.code)}
+                            className="text-gray-400 hover:text-amber-500 transition-colors p-1 -ml-1 rounded-full hover:bg-amber-50 shrink-0"
+                            title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                        >
+                            <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
+                        </button>
+                        {item.sinapiItem && getTypeBadge(item.sinapiItem.type, canOpenCPU ? handleToggleCPU : undefined)}
+                        <span>{item.sinapiItem?.description || 'Descrição não disponível'}</span>
                     </div>
-                </div>
-                <div>
+                </td>
+
+                <td className={TD}>
                     <input
                         type="number"
                         value={item.quantity}
                         onChange={(e) => onUpdateQuantity(item.id, Number(e.target.value))}
                         disabled={isLocked}
-                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-1 focus:ring-blue-500 ${isLocked ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
+                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-1 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
-                </div>
-                <div className="text-center text-form-input text-gray-500">{item.sinapiItem?.unit || '---'}</div>
+                </td>
 
-                <div className="text-center text-form-label text-gray-600">
+                <td className={`${TD} text-center text-sm text-gray-500`}>{item.sinapiItem?.unit || '---'}</td>
+
+                <td className={TD}>
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
-                        <span className="text-xs text-gray-400">R$</span>
+                        <span className="text-xs text-gray-400 shrink-0">R$</span>
                         <input
                             type="number"
                             step="0.01"
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
                             onChange={(e) => onUpdatePrice(item.id, Number(e.target.value))}
                             disabled={isLocked}
-                            className={`w-full text-center outline-none bg-transparent py-0.5 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : ''}`}
+                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : ''}`}
                         />
                         {item.sinapiItem?.isOverride && (
                             <span title="Item editado pelo usuário">
@@ -211,13 +226,13 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             </span>
                         )}
                     </div>
-                </div>
+                </td>
 
-                <div className="text-center text-sm font-medium text-gray-500">
+                <td className={`${TD} text-right text-sm font-medium text-gray-500 whitespace-nowrap`}>
                     R$ {(item.quantity * (item.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
+                </td>
 
-                <div className="text-center text-form-label text-gray-600">
+                <td className={TD}>
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <input
                             type="number"
@@ -229,153 +244,155 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                 onUpdateBDI(item.id, val === '' ? undefined : Number(val));
                             }}
                             disabled={isLocked}
-                            className={`w-full text-center outline-none bg-transparent py-0.5 placeholder:text-gray-300 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''}`}
+                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 placeholder:text-gray-300 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''}`}
                         />
-                        <span className="text-xs text-gray-400">%</span>
+                        <span className="text-xs text-gray-400 shrink-0">%</span>
                     </div>
-                </div>
+                </td>
 
-                <div className="text-center text-sm font-medium text-blue-600">
+                <td className={`${TD} text-right text-sm font-medium text-blue-600 whitespace-nowrap`}>
                     R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </div>
+                </td>
 
-                <div className="flex flex-col items-end gap-1 py-0.5">
-                    <span className="text-sm font-black text-gray-900">R$ {((item.quantity * (item.sinapiItem?.price || 0)) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    {/* Ações sempre visíveis (§9) — antes ficavam em overlay absoluto sobre o
-                        total, reveladas só no hover; agora empilhadas abaixo dele. */}
-                    <div className="flex items-center gap-1.5">
-                        {onMoveItem && (
-                            <div className="flex items-center border-r border-gray-100 pr-0.5 mr-0.5">
-                                {!isFirst && (
-                                    <ActionIconButton
-                                        kind="move"
-                                        size="sm"
-                                        icon={<ArrowUp className="w-3.5 h-3.5" />}
-                                        title="Mover para Cima"
-                                        onClick={(e) => onMoveItem(e, item.id, 'UP')}
-                                    />
-                                )}
-                                {!isLast && (
-                                    <ActionIconButton
-                                        kind="move"
-                                        size="sm"
-                                        icon={<ArrowDown className="w-3.5 h-3.5" />}
-                                        title="Mover para Baixo"
-                                        onClick={(e) => onMoveItem(e, item.id, 'DOWN')}
-                                    />
-                                )}
-                            </div>
-                        )}
-                        <ActionIconButton
-                            kind="annotate"
-                            size="sm"
-                            tone={hasCalculationMemory ? 'neutral' : 'attention'}
-                            icon={<ClipboardList className={`w-3.5 h-3.5 ${hasCalculationMemory ? 'text-emerald-600' : 'text-amber-500'}`} />}
-                            title={hasCalculationMemory ? "Editar memória de cálculo" : "Item sem memória de cálculo"}
-                            onClick={(e) => { e.stopPropagation(); onOpenDetails?.(item); }}
-                        />
-                        <ActionIconButton
-                            kind="duplicate"
-                            size="sm"
-                            title="Duplicar Item"
-                            onClick={(e) => onDuplicateItem(e, item.id)}
-                        />
-                        <ActionIconButton
-                            kind="download"
-                            size="sm"
-                            icon={isSavingCustom ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                            title="Salvar na Base Própria"
-                            disabled={isSavingCustom || isLocked}
-                            onClick={handleSave}
-                        />
-                        <ActionIconButton
-                            kind="delete"
-                            size="sm"
-                            title="Excluir item"
-                            disabled={isLocked}
-                            onClick={(e) => onDeleteItem(e, item.id)}
-                        />
+                {/* Preço total + ações. Total em font-black por §7.3; ações sempre visíveis (§9). */}
+                <td className={TD}>
+                    <div className="flex flex-col items-end gap-1">
+                        <span className="text-sm font-black text-gray-900 whitespace-nowrap">R$ {((item.quantity * (item.sinapiItem?.price || 0)) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <div className="flex items-center gap-1.5">
+                            {onMoveItem && (
+                                <div className="flex items-center border-r border-gray-100 pr-1.5 mr-0.5 gap-1.5">
+                                    {!isFirst && (
+                                        <ActionIconButton
+                                            kind="move"
+                                            size="sm"
+                                            icon={<ArrowUp className="w-3.5 h-3.5" />}
+                                            title="Mover para Cima"
+                                            onClick={(e) => onMoveItem(e, item.id, 'UP')}
+                                        />
+                                    )}
+                                    {!isLast && (
+                                        <ActionIconButton
+                                            kind="move"
+                                            size="sm"
+                                            icon={<ArrowDown className="w-3.5 h-3.5" />}
+                                            title="Mover para Baixo"
+                                            onClick={(e) => onMoveItem(e, item.id, 'DOWN')}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                            <ActionIconButton
+                                kind="annotate"
+                                size="sm"
+                                tone={hasCalculationMemory ? 'neutral' : 'attention'}
+                                icon={<ClipboardList className={`w-3.5 h-3.5 ${hasCalculationMemory ? 'text-emerald-600' : 'text-amber-500'}`} />}
+                                title={hasCalculationMemory ? "Editar memória de cálculo" : "Item sem memória de cálculo"}
+                                onClick={(e) => { e.stopPropagation(); onOpenDetails?.(item); }}
+                            />
+                            <ActionIconButton
+                                kind="duplicate"
+                                size="sm"
+                                title="Duplicar Item"
+                                onClick={(e) => onDuplicateItem(e, item.id)}
+                            />
+                            <ActionIconButton
+                                kind="download"
+                                size="sm"
+                                icon={isSavingCustom ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+                                title="Salvar na Base Própria"
+                                disabled={isSavingCustom || isLocked}
+                                onClick={handleSave}
+                            />
+                            <ActionIconButton
+                                kind="delete"
+                                size="sm"
+                                title="Excluir item"
+                                disabled={isLocked}
+                                onClick={(e) => onDeleteItem(e, item.id)}
+                            />
+                        </div>
                     </div>
-                </div>
+                </td>
 
                 {showNatureBreakdown && natureBreakdown && (
                     <>
-                        <div className="text-right text-sm text-blue-700 font-medium bg-blue-50/30 rounded-[6px] px-1 border-y border-r border-l-2 border-blue-100/60 ml-2 shadow-sm">{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-sm text-blue-700 font-medium bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 shadow-sm">{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-sm text-blue-700 font-medium bg-blue-50/30 rounded-[6px] px-1 border border-blue-100/60 shadow-sm">{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                     </>
                 )}
-            </div>
+            </tr>
 
-            {/* Render Composition Children (Ingredients) */}
+            {/* Composição (CPU) expandida — linha própria que atravessa a tabela inteira */}
             {viewMode === 'inline' && isExpanded && canOpenCPU && (
-                <div className="bg-gray-50/50 border-t border-gray-100 pr-4 py-2">
-                    {/* CPU Sub-header for Alignment */}
-                    <div className="grid grid-cols-12 gap-2 px-4 mb-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                        <div className="col-span-1 flex items-center gap-1">
-                            <Layers className="w-2.5 h-2.5" />
-                            CPU
+                <tr className="border-b border-gray-100">
+                    <td colSpan={totalCols} className="bg-gray-50/50 px-4 py-2">
+                        <div className="grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-500">
+                            <div className="col-span-1 flex items-center gap-1">
+                                <Layers className="w-2.5 h-2.5" />
+                                CPU
+                            </div>
+                            <div className="col-span-1 text-center">Código</div>
+                            <div className="col-span-4">Descrição dos Insumos/Serviços</div>
+                            <div className="col-span-1 text-center">Qtd</div>
+                            <div className="col-span-1 text-center">Unid.</div>
+                            <div className="col-span-1 text-center">Unitário</div>
+                            <div className="col-span-1 text-center"></div>
+                            <div className="col-span-2 text-right">Subtotal</div>
                         </div>
-                        <div className="col-span-1 text-center">Código</div>
-                        <div className="col-span-4">Descrição dos Insumos/Serviços</div>
-                        <div className="col-span-1 text-center">Qtd</div>
-                        <div className="col-span-1 text-center">Unid.</div>
-                        <div className="col-span-1 text-center">Unitário</div>
-                        <div className="col-span-1 text-center"></div>
-                        <div className="col-span-2 text-right">Subtotal</div>
-                    </div>
 
-                    <div className="space-y-1">
-                        {item.sinapiItem?.composition?.map((comp, idx) => {
-                            const auxItem = auxiliaryItems?.get(comp.code);
-                            const displayPrice = comp.price || auxItem?.price || 0;
-                            const displaySubtotal = item.quantity * (comp.quantity || 0) * displayPrice;
+                        <div className="space-y-1">
+                            {item.sinapiItem?.composition?.map((comp, idx) => {
+                                const auxItem = auxiliaryItems?.get(comp.code);
+                                const displayPrice = comp.price || auxItem?.price || 0;
+                                const displaySubtotal = item.quantity * (comp.quantity || 0) * displayPrice;
 
-                            return (
-                                <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 divide-x divide-gray-100 items-center text-sm text-gray-600 hover:bg-gray-100 py-2.5 px-4 rounded-[6px]">
-                                    <div className="col-span-1"></div>
-                                    <div className="col-span-1 text-center font-mono text-sm text-gray-500 text-center">{comp.code}</div>
-                                    <div className="col-span-4 flex items-center gap-2">
-                                        <span className={`shrink-0 px-1.5 py-0.5 rounded-[6px] text-[9px] font-semibold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                            {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
-                                        </span>
-                                        <span className="leading-tight text-sm" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
-                                    </div>
-                                    <div className="col-span-1 text-center">
-                                        <input
-                                            type="number"
-                                            step="0.0001"
-                                            value={comp.quantity || 0}
-                                            onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
-                                            className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400"
-                                        />
-                                    </div>
-                                    <div className="col-span-1 text-center text-gray-400 text-sm">{comp.unit || '-'}</div>
-                                    <div className="col-span-1 text-center">
-                                        <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
-                                            <span className="text-[9px] text-gray-400">R$</span>
+                                return (
+                                    <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 divide-x divide-gray-100 items-center text-sm text-gray-600 hover:bg-gray-100 py-2.5 px-4 rounded-[6px]">
+                                        <div className="col-span-1"></div>
+                                        <div className="col-span-1 text-center font-mono text-sm text-gray-500">{comp.code}</div>
+                                        <div className="col-span-4 flex items-center gap-2">
+                                            <span className={`shrink-0 px-1.5 py-0.5 rounded-[6px] text-[9px] font-semibold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                                                {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
+                                            </span>
+                                            <span className="leading-tight text-sm" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
+                                        </div>
+                                        <div className="col-span-1 text-center">
                                             <input
                                                 type="number"
-                                                step="0.01"
-                                                value={displayPrice}
-                                                onChange={(e) => onUpdateComposition(item.id, idx, { price: Number(e.target.value) })}
-                                                className="w-full text-center outline-none bg-transparent py-0.5 text-sm"
+                                                step="0.0001"
+                                                value={comp.quantity || 0}
+                                                onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
+                                                className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400"
                                             />
                                         </div>
+                                        <div className="col-span-1 text-center text-gray-400 text-sm">{comp.unit || '-'}</div>
+                                        <div className="col-span-1 text-center">
+                                            <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
+                                                <span className="text-[9px] text-gray-400">R$</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={displayPrice}
+                                                    onChange={(e) => onUpdateComposition(item.id, idx, { price: Number(e.target.value) })}
+                                                    className="w-full text-center outline-none bg-transparent py-0.5 text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="col-span-1"></div>
+                                        <div className="col-span-2 text-right font-medium text-gray-800 text-sm">
+                                            R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </div>
                                     </div>
-                                    <div className="col-span-1"></div>
-                                    <div className="col-span-2 text-right font-medium text-gray-800 text-sm">
-                                        R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    <div className="mt-2 text-right text-xs text-gray-400 border-t border-gray-200 pt-1">
-                        * Valores calculados com base na quantidade do item pai ({item.quantity} {item.sinapiItem?.unit || 'un'})
-                    </div>
-                </div>
+                                );
+                            })}
+                        </div>
+                        <div className="mt-2 text-right text-xs text-gray-400 border-t border-gray-200 pt-1">
+                            * Valores calculados com base na quantidade do item pai ({item.quantity} {item.sinapiItem?.unit || 'un'})
+                        </div>
+                    </td>
+                </tr>
             )}
-        </div>
+        </>
     );
 };

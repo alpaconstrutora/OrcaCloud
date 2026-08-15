@@ -2542,38 +2542,55 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           );
         })()
       }      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-        <div className="flex flex-col">
-          <div className={`grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_2.4fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 pt-2`}>
-            {showNatureBreakdown && (
-              <>
-                <div className="col-span-11"></div>
-                <div className="text-center text-xs font-black text-blue-600 uppercase tracking-widest bg-blue-50/50 rounded-t-lg py-1 border-x border-t border-blue-100/50 ml-2">Distribuição de Custos</div>
-              </>
-            )}
-          </div>
-          <div className={`bg-gray-50 border-y border-gray-200 px-4 py-3 grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wider`}>
-            <div>Item</div>
-            <div className="text-center">Base</div>
-            <div className="text-center">Código</div>
-            <div>Descrição</div>
-            <div className="text-center">Qtd.</div>
-            <div className="text-center">Unid.</div>
-            <div className="text-center">Custo Unit.</div>
-            <div className="text-center">Custo Total</div>
-            <div className="text-center text-red-500">BDI</div>
-            <div className="text-center">Preço Unit.</div>
-            <div className="text-right">Preço Total</div>
-            {showNatureBreakdown && (
-              <>
-                <div className="text-center text-blue-600 bg-blue-50/50 py-1 px-1 border-x border-blue-100/50 ml-2">M.O</div>
-                <div className="text-center text-blue-600 bg-blue-50/50 py-1 px-1 border-x border-blue-100/50">Mat.</div>
-                <div className="text-center text-blue-600 bg-blue-50/50 py-1 px-1 border-x border-blue-100/50">Equip.</div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-auto">
+          <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+            {/* Uma única definição de coluna para TODAS as linhas (cabeçalho, grupo,
+                etapa, subetapa e item) — antes eram 3 templates de grid distintos
+                (11, 9 e 12 colunas), e por isso as colunas nunca alinhavam. */}
+            <colgroup>
+              <col style={{ width: '32px' }} />
+              <col style={{ width: '88px' }} />
+              <col style={{ width: '76px' }} />
+              <col style={{ width: '92px' }} />
+              <col />
+              <col style={{ width: '72px' }} />
+              <col style={{ width: '64px' }} />
+              <col style={{ width: '116px' }} />
+              <col style={{ width: '116px' }} />
+              <col style={{ width: '72px' }} />
+              <col style={{ width: '116px' }} />
+              <col style={{ width: '188px' }} />
+              {showNatureBreakdown && (
+                <>
+                  <col style={{ width: '104px' }} />
+                  <col style={{ width: '104px' }} />
+                  <col style={{ width: '104px' }} />
+                </>
+              )}
+            </colgroup>
+            <thead>
+              <tr className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-500">
+                <th className="px-3 py-2 border-r border-gray-100"></th>
+                <th className="px-3 py-2 border-r border-gray-100">Item</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center">Base</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center">Código</th>
+                <th className="px-3 py-2 border-r border-gray-100">Descrição</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center">Qtd.</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center">Unid.</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center">Custo unit.</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-right">Custo total</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-center text-red-500">BDI</th>
+                <th className="px-3 py-2 border-r border-gray-100 text-right">Preço unit.</th>
+                <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right">Preço total</th>
+                {showNatureBreakdown && (
+                  <>
+                    <th className="px-3 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/50">M.O</th>
+                    <th className="px-3 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/50">Mat.</th>
+                    <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right text-blue-600 bg-blue-50/50">Equip.</th>
+                  </>
+                )}
+              </tr>
+            </thead>
           {(settings?.wbs || []).map((group, gIndex) => {
             if (!group) return null;
             const isGroupExpanded = expandedGroups.includes(group.id);
@@ -2581,55 +2598,56 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             const { name: groupNameDisplay } = splitName(group.name);
 
             return (
-              <div key={group.id} className="border-b-4 border-gray-100 last:border-0 mb-4 bg-white shadow-sm rounded-[10px] overflow-hidden">
+              <tbody key={group.id} className="border-b-4 border-gray-100 last:border-b-0">
                 {/* GROUP HEADER */}
-                <div className={`bg-gray-800 hover:bg-gray-700 px-4 py-3 grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 items-center group relative transition-colors text-white`}>
-                  <div className="flex items-center gap-1 cursor-pointer font-bold text-sm" onClick={() => toggleGroup(group.id)}>
-                    {isGroupExpanded ? <ChevronDown className="w-4 h-4 text-gray-300" /> : <ChevronRight className="w-4 h-4 text-gray-300" />}
-                    {group.id}
-                  </div>
-                  <div></div>
-                  <div></div>
-                  <div className="font-bold text-sm uppercase leading-tight tracking-wide" title={groupNameDisplay}>
-                    {groupNameDisplay}
-                  </div>
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                  <div className="flex items-center justify-end gap-4">
-                    <span className="font-bold text-base">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-
-                    <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-600 pl-2 absolute right-4 bg-gray-800 rounded shadow-sm z-20">
-                      <div className="flex flex-col mr-1">
-                        {gIndex > 0 && (
-                          <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'UP')} className="text-gray-400 hover:text-white p-1" title="Mover para Cima">
-                            <ArrowUp className="w-3 h-3" />
-                          </button>
-                        )}
-                        {gIndex < settings.wbs.length - 1 && (
-                          <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'DOWN')} className="text-gray-400 hover:text-white p-1" title="Mover para Baixo">
-                            <ArrowDown className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                      <button type="button" onClick={(e) => handleDuplicateGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded text-gray-400 hover:text-white" title="Duplicar Grupo"><Copy className="w-3.5 h-3.5" /></button>
-                      <button type="button" onClick={(e) => handleEditGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded text-amber-400" title="Editar Grupo"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded text-blue-300" title="Nova Etapa"><Plus className="w-4 h-4" /></button>
-                      <button type="button" onClick={(e) => handleDeleteGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded text-red-400" title="Excluir Grupo"><Trash2 className="w-4 h-4" /></button>
+                <tr className="bg-gray-800 hover:bg-gray-700 transition-colors text-white group">
+                  <td className="px-3 py-2.5 border-r border-gray-700"></td>
+                  <td className="px-3 py-2.5 border-r border-gray-700">
+                    <div className="flex items-center gap-1 cursor-pointer font-bold text-sm" onClick={() => toggleGroup(group.id)}>
+                      {isGroupExpanded ? <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
+                      {group.id}
                     </div>
-                  </div>
+                  </td>
+                  <td colSpan={3} className="px-3 py-2.5 border-r border-gray-700">
+                    <div className="font-bold text-sm uppercase leading-tight tracking-wide truncate" title={groupNameDisplay}>
+                      {groupNameDisplay}
+                    </div>
+                  </td>
+                  <td colSpan={6} className="px-3 py-2.5 border-r border-gray-700"></td>
+                  <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
+                    <div className="flex items-center justify-end">
+                      <span className="font-bold text-base whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-600 pl-2 absolute right-3 bg-gray-800 rounded-[6px] shadow-sm z-20">
+                        <div className="flex flex-col mr-1">
+                          {gIndex > 0 && (
+                            <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'UP')} className="text-gray-400 hover:text-white p-1" title="Mover para Cima">
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                          )}
+                          {gIndex < settings.wbs.length - 1 && (
+                            <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'DOWN')} className="text-gray-400 hover:text-white p-1" title="Mover para Baixo">
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                        <button type="button" onClick={(e) => handleDuplicateGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-gray-400 hover:text-white" title="Duplicar Grupo"><Copy className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={(e) => handleEditGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-amber-400" title="Editar Grupo"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-blue-300" title="Nova Etapa"><Plus className="w-4 h-4" /></button>
+                        <button type="button" onClick={(e) => handleDeleteGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-red-400" title="Excluir Grupo"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  </td>
                   {showNatureBreakdown && (() => {
                     const nat = calculateGroupNatureTotal(group.name);
                     return (
                       <>
-                        <div className="text-right text-xs font-bold text-blue-200 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-xs font-bold text-blue-200">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-right text-xs font-bold text-blue-200">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                       </>
                     );
                   })()}
-                </div>
+                </tr>
 
                 {/* PHASES LOOP */}
                 {isGroupExpanded && (group.phases || []).map((phase, pIndex) => {
@@ -2639,54 +2657,56 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   const { id: phaseIdDisplay, name: phaseNameDisplay } = splitName(phase.name);
 
                   return (
-                    <div key={phase.id} className="border-t border-gray-100">
+                    <React.Fragment key={phase.id}>
                       {/* PHASE HEADER */}
-                      <div className={`bg-gray-100 hover:bg-gray-200 px-4 py-2 grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 items-center group relative`}>
-                        <div className="flex items-center gap-1 cursor-pointer font-bold text-gray-800 text-sm pl-4" onClick={() => togglePhase(phase.id)}>
-                          {isPhaseExpanded ? <ChevronDown className="w-4 h-4 text-gray-600" /> : <ChevronRight className="w-4 h-4 text-gray-600" />}
-                          {phaseIdDisplay}
-                        </div>
-                        <div></div>
-                        <div></div>
-                        <div className="font-bold text-gray-800 text-xs uppercase leading-tight" title={phaseNameDisplay}>
-                          {phaseNameDisplay}
-                        </div>
-                        <div></div>
-                        <div></div>
-                        <div></div>
-                        <div></div>
-                        <div className="flex items-center justify-end gap-4">
-                          <span className="font-bold text-gray-900 text-sm">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                          <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-300 pl-2 absolute right-4 bg-gray-100/90 rounded shadow-sm z-20">
-                            <div className="flex flex-col mr-1">
-                              {pIndex > 0 && (
-                                <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'UP')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Cima">
-                                  <ArrowUp className="w-3 h-3" />
-                                </button>
-                              )}
-                              {pIndex < group.phases.length - 1 && (
-                                <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'DOWN')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Baixo">
-                                  <ArrowDown className="w-3 h-3" />
-                                </button>
-                              )}
-                            </div>
-                            <button type="button" onClick={(e) => handleDuplicatePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Duplicar Etapa"><Copy className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={(e) => handleEditPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-amber-100 rounded text-amber-600" title="Editar Etapa"><Pencil className="w-3.5 h-3.5" /></button>
-                            <button type="button" onClick={(e) => handleAddSubPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-blue-200 rounded text-blue-700" title="Nova Subetapa"><Plus className="w-4 h-4" /></button>
-                            <button type="button" onClick={(e) => handleDeletePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-red-200 rounded text-red-600" title="Excluir Etapa"><Trash2 className="w-4 h-4" /></button>
+                      <tr className="bg-gray-100 hover:bg-gray-200 border-b border-gray-200 group">
+                        <td className="px-3 py-2.5 border-r border-gray-200"></td>
+                        <td className="px-3 py-2.5 border-r border-gray-200">
+                          <div className="flex items-center gap-1 cursor-pointer font-bold text-gray-800 text-sm" onClick={() => togglePhase(phase.id)}>
+                            {isPhaseExpanded ? <ChevronDown className="w-4 h-4 text-gray-600 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />}
+                            {phaseIdDisplay}
                           </div>
-                        </div>
+                        </td>
+                        <td colSpan={3} className="px-3 py-2.5 border-r border-gray-200">
+                          <div className="font-bold text-gray-800 text-sm uppercase leading-tight truncate" title={phaseNameDisplay}>
+                            {phaseNameDisplay}
+                          </div>
+                        </td>
+                        <td colSpan={6} className="px-3 py-2.5 border-r border-gray-200"></td>
+                        <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
+                          <div className="flex items-center justify-end">
+                            <span className="font-bold text-gray-900 text-sm whitespace-nowrap">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-300 pl-2 absolute right-3 bg-gray-100/95 rounded-[6px] shadow-sm z-20">
+                              <div className="flex flex-col mr-1">
+                                {pIndex > 0 && (
+                                  <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'UP')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Cima">
+                                    <ArrowUp className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {pIndex < group.phases.length - 1 && (
+                                  <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'DOWN')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Baixo">
+                                    <ArrowDown className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                              <button type="button" onClick={(e) => handleDuplicatePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-gray-200 rounded-[6px] text-gray-600" title="Duplicar Etapa"><Copy className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={(e) => handleEditPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-amber-100 rounded-[6px] text-amber-600" title="Editar Etapa"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={(e) => handleAddSubPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Nova Subetapa"><Plus className="w-4 h-4" /></button>
+                              <button type="button" onClick={(e) => handleDeletePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-red-200 rounded-[6px] text-red-600" title="Excluir Etapa"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </div>
+                        </td>
                         {showNatureBreakdown && (() => {
                           const nat = calculatePhaseNatureTotal(group.name, phase.name);
                           return (
                             <>
-                              <div className="text-right text-xs font-bold text-gray-500 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                              <div className="text-right text-xs font-bold text-gray-500">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                              <div className="text-right text-xs font-bold text-gray-500">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                             </>
                           );
                         })()}
-                      </div>
+                      </tr>
 
                       {/* SUBPHASES LOOP */}
                       {isPhaseExpanded && (phase.subPhases || []).map((subPhaseName, spIndex) => {
@@ -2697,107 +2717,116 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         const { id: subIdDisplay, name: subNameDisplay } = splitName(subPhaseName);
 
                         return (
-                          <div key={subPhaseName} className="border-t border-gray-100">
-                            <div className={`bg-gray-50 hover:bg-gray-100 px-4 py-2 grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_8.2fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 items-center group relative`}>
-                              <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-700 text-sm pl-7" onClick={() => toggleSubPhase(subPhaseName)}>
-                                {isSubExpanded ? <FolderOpen className="w-3 h-3 text-blue-500" /> : <Folder className="w-3 h-3 text-blue-500" />}
-                                {subIdDisplay}
-                              </div>
-                              <div></div>
-                              <div></div>
-                              <div className="font-semibold text-gray-700 text-xs leading-tight" title={subNameDisplay}>
-                                {subNameDisplay}
-                              </div>
-                              <div></div>
-                              <div></div>
-                              <div></div>
-                              <div></div>
-                              <div className="flex items-center justify-end gap-4">
-                                <span className="font-medium text-gray-700 text-sm">R$ {subTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-200 pl-2 absolute right-4 bg-gray-50/90 rounded shadow-sm z-20">
-                                  <div className="flex flex-col mr-1">
-                                    {spIndex > 0 && (
-                                      <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'UP')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Cima">
-                                        <ArrowUp className="w-3 h-3" />
-                                      </button>
-                                    )}
-                                    {spIndex < phase.subPhases.length - 1 && (
-                                      <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'DOWN')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Baixo">
-                                        <ArrowDown className="w-3 h-3" />
-                                      </button>
-                                    )}
-                                  </div>
-                                  <button type="button" onClick={(e) => handleDuplicateSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-gray-200 rounded text-gray-600" title="Duplicar Subetapa"><Copy className="w-3 h-3" /></button>
-                                  <button type="button" onClick={(e) => handleEditSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-amber-100 rounded text-amber-600" title="Editar Subetapa"><Pencil className="w-3 h-3" /></button>
-                                  <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-emerald-200 rounded text-emerald-700 flex items-center gap-1 text-button px-2" title="Adicionar Item"><Plus className="w-3 h-3" /></button>
-                                  <button type="button" onClick={(e) => handleDeleteSubPhase(e, gIndex, pIndex, subPhaseName)} className="p-1.5 hover:bg-red-200 rounded text-red-600" title="Excluir Subetapa"><Trash2 className="w-3 h-3" /></button>
+                          <React.Fragment key={subPhaseName}>
+                            <tr className="bg-gray-50 hover:bg-gray-100 border-b border-gray-100 group">
+                              <td className="px-3 py-2.5 border-r border-gray-100"></td>
+                              <td className="px-3 py-2.5 border-r border-gray-100">
+                                <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-700 text-sm" onClick={() => toggleSubPhase(subPhaseName)}>
+                                  {isSubExpanded ? <FolderOpen className="w-3 h-3 text-blue-500 shrink-0" /> : <Folder className="w-3 h-3 text-blue-500 shrink-0" />}
+                                  {subIdDisplay}
                                 </div>
-                              </div>
+                              </td>
+                              <td colSpan={3} className="px-3 py-2.5 border-r border-gray-100">
+                                <div className="font-semibold text-gray-700 text-sm leading-tight truncate" title={subNameDisplay}>
+                                  {subNameDisplay}
+                                </div>
+                              </td>
+                              <td colSpan={6} className="px-3 py-2.5 border-r border-gray-100"></td>
+                              <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
+                                <div className="flex items-center justify-end">
+                                  <span className="font-medium text-gray-700 text-sm whitespace-nowrap">R$ {subTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                  <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity items-center border-l border-gray-200 pl-2 absolute right-3 bg-gray-50/95 rounded-[6px] shadow-sm z-20">
+                                    <div className="flex flex-col mr-1">
+                                      {spIndex > 0 && (
+                                        <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'UP')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Cima">
+                                          <ArrowUp className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                      {spIndex < phase.subPhases.length - 1 && (
+                                        <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'DOWN')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Baixo">
+                                          <ArrowDown className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                    <button type="button" onClick={(e) => handleDuplicateSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-gray-200 rounded-[6px] text-gray-600" title="Duplicar Subetapa"><Copy className="w-3 h-3" /></button>
+                                    <button type="button" onClick={(e) => handleEditSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-amber-100 rounded-[6px] text-amber-600" title="Editar Subetapa"><Pencil className="w-3 h-3" /></button>
+                                    <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-emerald-200 rounded-[6px] text-emerald-700 flex items-center gap-1 text-button px-2" title="Adicionar Item"><Plus className="w-3 h-3" /></button>
+                                    <button type="button" onClick={(e) => handleDeleteSubPhase(e, gIndex, pIndex, subPhaseName)} className="p-1.5 hover:bg-red-200 rounded-[6px] text-red-600" title="Excluir Subetapa"><Trash2 className="w-3 h-3" /></button>
+                                  </div>
+                                </div>
+                              </td>
                               {showNatureBreakdown && (() => {
                                 const nat = calculateSubPhaseNatureTotal(group.name, phase.name, subPhaseName);
                                 return (
                                   <>
-                                    <div className="text-right text-xs font-medium text-gray-600 ml-2">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                    <div className="text-right text-xs font-medium text-gray-600">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                                    <div className="text-right text-xs font-medium text-gray-600">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                   </>
                                 );
                               })()}
-                            </div>
+                            </tr>
 
                             {isSubExpanded && (
-                              <div className="bg-white">
-                                {items.length === 0 ? (
-                                  <div className="pl-16 py-2 text-xs text-gray-400 italic">
+                              items.length === 0 ? (
+                                <tr className="border-b border-gray-100">
+                                  <td colSpan={showNatureBreakdown ? 15 : 12} className="px-3 py-2.5 pl-16 text-sm text-gray-400 italic">
                                     Nenhum item nesta subetapa. Clique em "+ Item" para adicionar.
-                                  </div>
-                                ) : (
-                                  <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                                    {items.map((item, itemIndex) => (
-                                      <BudgetRow
-                                        key={item.id}
-                                        item={item}
-                                        itemIndex={itemIndex}
-                                        subIdDisplay={subIdDisplay}
-                                        onUpdateQuantity={handleUpdateQuantity}
-                                        onUpdatePrice={handleUpdateItemPrice}
-                                        onUpdateBDI={handleUpdateBDI}
-                                        onUpdateComposition={handleUpdateComposition}
-                                        onSaveToCustomDB={handleSaveToCustomDB}
-                                        onDeleteItem={handleDeleteItem}
-                                        onMoveItem={!isLocked ? handleMoveItem : undefined}
-                                        isFirst={itemIndex === 0}
-                                        isLast={itemIndex === items.length - 1}
-                                        globalBDI={settings.bdi}
-                                        viewMode={settings.cpuViewMode}
-                                        onOpenModal={handleOpenCPU}
-                                        onDuplicateItem={handleDuplicateItem}
-                                        onOpenDetails={handleOpenDetails}
-                                        isFavorite={item.sinapiItem ? favorites.includes(item.sinapiItem.code) : false}
-                                        onToggleFavorite={onToggleFavorite}
-                                        showNatureBreakdown={showNatureBreakdown}
-                                        natureBreakdown={showNatureBreakdown ? getNatureBreakdown(item) : undefined}
-                                        auxiliaryItems={auxiliaryItems}
-                                        isLocked={isLocked}
-                                      />
-                                    ))}
-                                  </SortableContext>
-                                )}
-                              </div>
+                                  </td>
+                                </tr>
+                              ) : (
+                                <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                                  {items.map((item, itemIndex) => (
+                                    <BudgetRow
+                                      key={item.id}
+                                      item={item}
+                                      itemIndex={itemIndex}
+                                      subIdDisplay={subIdDisplay}
+                                      onUpdateQuantity={handleUpdateQuantity}
+                                      onUpdatePrice={handleUpdateItemPrice}
+                                      onUpdateBDI={handleUpdateBDI}
+                                      onUpdateComposition={handleUpdateComposition}
+                                      onSaveToCustomDB={handleSaveToCustomDB}
+                                      onDeleteItem={handleDeleteItem}
+                                      onMoveItem={!isLocked ? handleMoveItem : undefined}
+                                      isFirst={itemIndex === 0}
+                                      isLast={itemIndex === items.length - 1}
+                                      globalBDI={settings.bdi}
+                                      viewMode={settings.cpuViewMode}
+                                      onOpenModal={handleOpenCPU}
+                                      onDuplicateItem={handleDuplicateItem}
+                                      onOpenDetails={handleOpenDetails}
+                                      isFavorite={item.sinapiItem ? favorites.includes(item.sinapiItem.code) : false}
+                                      onToggleFavorite={onToggleFavorite}
+                                      showNatureBreakdown={showNatureBreakdown}
+                                      natureBreakdown={showNatureBreakdown ? getNatureBreakdown(item) : undefined}
+                                      auxiliaryItems={auxiliaryItems}
+                                      isLocked={isLocked}
+                                    />
+                                  ))}
+                                </SortableContext>
+                              )
                             )}
-                          </div>
+                          </React.Fragment>
                         );
                       })}
-                    </div>
+                    </React.Fragment>
                   );
                 })}
-              </div>
+              </tbody>
             );
           })}
 
           {(!settings.wbs || settings.wbs.length === 0) && (
-            <div className="p-8 text-center text-gray-400">Nenhum grupo definido. Clique em "Nova Etapa" para começar.</div>
+            <tbody>
+              <tr>
+                <td colSpan={showNatureBreakdown ? 15 : 12} className="p-8 text-center text-gray-400">
+                  Nenhum grupo definido. Clique em "Nova Etapa" para começar.
+                </td>
+              </tr>
+            </tbody>
           )}
+          </table>
           <div className="h-24"></div>
         </div>
       </div>

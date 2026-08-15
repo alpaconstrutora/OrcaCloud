@@ -93,10 +93,39 @@ function App() {
     setModelo(applyCommand(modelo, { type: 'FlipOpening', openingId: aberturaSel.id, axis }).model);
   }
 
+  /**
+   * Redimensiona a abertura. O `catch` reproduz o editor: `editor.run` engole o
+   * `KernelError` e o transforma na faixa de aviso, sem derrubar a tela — aqui
+   * o erro vai para `#erro`, para o passeio conseguir afirmar que a recusa
+   * ACONTECEU (e que o modelo não mudou).
+   */
+  function redimensionarAbertura(campos: { widthMm?: number; heightMm?: number; sillMm?: number }) {
+    if (!aberturaSel) return;
+    try {
+      setModelo(
+        applyCommand(modelo, { type: 'SetOpeningSize', openingId: aberturaSel.id, ...campos }).model,
+      );
+      const el = document.getElementById('erro');
+      if (el) el.textContent = '';
+    } catch (e) {
+      const el = document.getElementById('erro');
+      if (el) el.textContent = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   const dump = document.getElementById('dump');
   if (dump) {
     dump.textContent = JSON.stringify(
-      { selectedId, openings: modelo.openings.map((o) => ({ id: o.id, hingeAtStart: o.hingeAtStart, swingReversed: o.swingReversed })) },
+      {
+        selectedId,
+        openings: modelo.openings.map((o) => ({
+          id: o.id,
+          hingeAtStart: o.hingeAtStart,
+          swingReversed: o.swingReversed,
+          widthMm: o.widthMm,
+          heightMm: o.heightMm,
+        })),
+      },
       null,
       1,
     );
@@ -131,6 +160,7 @@ function App() {
           onDividir={() => {}}
           onUnir={() => {}}
           onFlipAbertura={flipAbertura}
+          onTamanhoAbertura={redimensionarAbertura}
         />
       </div>
     </>

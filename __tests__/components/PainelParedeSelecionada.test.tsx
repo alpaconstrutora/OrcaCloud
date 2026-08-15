@@ -59,6 +59,7 @@ function montar(over: Partial<React.ComponentProps<typeof PainelParedeSelecionad
     onDividir: vi.fn(),
     onUnir: vi.fn(),
     onFlipAbertura: vi.fn(),
+    onTamanhoAbertura: vi.fn(),
     ...over,
   };
   render(<PainelParedeSelecionada {...props} />);
@@ -83,6 +84,7 @@ describe('PainelParedeSelecionada · sem seleção', () => {
         onDividir={vi.fn()}
         onUnir={vi.fn()}
         onFlipAbertura={vi.fn()}
+        onTamanhoAbertura={vi.fn()}
       />,
     );
     expect(container).toBeEmptyDOMElement();
@@ -219,11 +221,121 @@ describe('PainelParedeSelecionada · abertura selecionada', () => {
         onDividir={vi.fn()}
         onUnir={vi.fn()}
         onFlipAbertura={vi.fn()}
+        onTamanhoAbertura={vi.fn()}
       />,
     );
-    expect(screen.getByText(/porta de/i)).toBeInTheDocument();
-    expect(screen.getByText(/900 mm/)).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: /comprimento/i })).not.toBeInTheDocument();
+    // Matcher por elemento: o texto é montado de vários nós (o tipo e o offset
+    // vêm de expressões separadas), e `getByText` com string não cruza nós.
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.tagName === 'P' && /porta a 1,50 m do início da parede/i.test(el.textContent ?? ''),
+      ),
+    ).toBeInTheDocument();
+    // O comprimento é da PAREDE; com abertura selecionada ele não aparece.
+    expect(
+      screen.queryByRole('textbox', { name: /comprimento da parede/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('PainelParedeSelecionada · tamanho da abertura', () => {
+  // Pedido de 14/08/2026: "opcao de edicao do tamaho da porta apos inserir uma
+  // porta". Largura E altura, por decisão confirmada com o usuário: a altura
+  // alimenta o quantitativo (área descontada da parede) e até aqui era um 2100
+  // fixo que ninguém escolheu, nem ao inserir.
+
+  const largura = () =>
+    screen.getByRole('textbox', { name: /largura da abertura/i }) as HTMLInputElement;
+  const altura = () =>
+    screen.getByRole('textbox', { name: /altura da abertura/i }) as HTMLInputElement;
+
+  it('mostra largura e altura da porta, em milímetros', () => {
+    montar({ parede: null, abertura: porta() });
+    expect(largura().value).toBe('900');
+    expect(altura().value).toBe('2100');
+  });
+
+  it('ENTER na largura aplica só a largura', async () => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta() });
+
+    await user.clear(largura());
+    await user.type(largura(), '800');
+    await user.keyboard('{Enter}');
+
+    expect(props.onTamanhoAbertura).toHaveBeenCalledExactlyOnceWith({ widthMm: 800 });
+  });
+
+  it('ENTER na altura aplica só a altura', async () => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta() });
+
+    await user.clear(altura());
+    await user.type(altura(), '2300');
+    await user.keyboard('{Enter}');
+
+    expect(props.onTamanhoAbertura).toHaveBeenCalledExactlyOnceWith({ heightMm: 2300 });
+  });
+
+  it('ESCAPE descarta e devolve o valor exibido', async () => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta() });
+
+    await user.clear(largura());
+    await user.type(largura(), '9999');
+    await user.keyboard('{Escape}');
+
+    expect(props.onTamanhoAbertura).not.toHaveBeenCalled();
+    expect(largura().value).toBe('900');
+  });
+
+  it('valor inválido não emite comando', async () => {
+    const user = userEvent.setup();
+    const props = montar({ parede: null, abertura: porta() });
+
+    for (const invalido of ['0', '-5', 'abc']) {
+      await user.clear(largura());
+      await user.type(largura(), invalido);
+      await user.keyboard('{Enter}');
+    }
+
+    expect(props.onTamanhoAbertura).not.toHaveBeenCalled();
+  });
+
+  it('PORTA não mostra peitoril — o vão nasce no piso', () => {
+    montar({ parede: null, abertura: porta() });
+    expect(screen.queryByRole('textbox', { name: /peitoril/i })).not.toBeInTheDocument();
+  });
+
+  it('JANELA mostra peitoril, e ele aplica sozinho', async () => {
+    const user = userEvent.setup();
+    const props = montar({
+      parede: null,
+      abertura: porta({ kind: 'window', heightMm: 1200, sillMm: 900 }),
+    });
+
+    const peitoril = screen.getByRole('textbox', { name: /peitoril/i }) as HTMLInputElement;
+    expect(peitoril.value).toBe('900');
+
+    await user.clear(peitoril);
+    await user.type(peitoril, '1000');
+    await user.keyboard('{Enter}');
+
+    expect(props.onTamanhoAbertura).toHaveBeenCalledExactlyOnceWith({ sillMm: 1000 });
+  });
+
+  it('o kernel recusando (valor volta ao anterior) RESSINCRONIZA o campo', () => {
+    // Digitar 3500 numa parede onde só cabem 3000: o comando é recusado, o
+    // modelo não muda, e o campo tem que voltar a mostrar o valor real — senão
+    // a tela afirma um número que o desenho não tem.
+    const props = { ...montarProps(), parede: null, abertura: porta() };
+    const { rerender } = render(<PainelParedeSelecionada {...props} />);
+    expect(largura().value).toBe('900');
+
+    // Mesma abertura, mesmo tamanho: é o que chega depois de uma recusa.
+    rerender(<PainelParedeSelecionada {...props} abertura={porta()} />);
+    expect(largura().value).toBe('900');
   });
 });
 
@@ -292,5 +404,6 @@ function montarProps(): React.ComponentProps<typeof PainelParedeSelecionada> {
     onDividir: vi.fn(),
     onUnir: vi.fn(),
     onFlipAbertura: vi.fn(),
+    onTamanhoAbertura: vi.fn(),
   };
 }

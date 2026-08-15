@@ -23,6 +23,7 @@ import {
   buildArrangement,
   canonicalPayload,
   cantosDaParede,
+  computeQuantities,
   eixoDaParede,
   emptyModel,
   pontaEsticada,
@@ -339,6 +340,161 @@ describe('Spike A · aberturas', () => {
         sillMm: 900,
       }),
     ).toThrow(/sobrep/i);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tamanho da abertura depois de inserida (SetOpeningSize)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('SetOpeningSize · editar o tamanho da abertura', () => {
+  /** Sala 4000×3000, parede de 2800 de pé-direito, porta 900×2100 a 1000. */
+  function comPorta() {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    const wallId = built.model.walls[0].id;
+    const withOpening = applyCommand(built.model, {
+      type: 'AddOpening',
+      wallId,
+      kind: 'door',
+      offsetMm: 1000,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    });
+    return { model: withOpening.model, openingId: withOpening.model.openings[0].id, wallId };
+  }
+
+  it('muda a largura e deixa o resto intacto', () => {
+    const { model, openingId } = comPorta();
+    const depois = applyCommand(model, { type: 'SetOpeningSize', openingId, widthMm: 800 }).model;
+
+    expect(depois.openings[0].widthMm).toBe(800);
+    expect(depois.openings[0].heightMm).toBe(2100);
+    expect(depois.openings[0].offsetMm).toBe(1000);
+  });
+
+  it('muda a altura sem tocar na largura', () => {
+    const { model, openingId } = comPorta();
+    const depois = applyCommand(model, { type: 'SetOpeningSize', openingId, heightMm: 2300 }).model;
+
+    expect(depois.openings[0].heightMm).toBe(2300);
+    expect(depois.openings[0].widthMm).toBe(900);
+  });
+
+  it('campo omitido não muda — o painel edita uma medida por vez', () => {
+    const { model, openingId } = comPorta();
+    const antes = model.openings[0];
+    const depois = applyCommand(model, { type: 'SetOpeningSize', openingId }).model.openings[0];
+
+    expect(depois).toEqual(antes);
+  });
+
+  it('A ALTURA CHEGA AO QUANTITATIVO: a área descontada da parede acompanha', () => {
+    // É a razão de a altura ser editável, e não só a largura. Enquanto ela era
+    // um 2100 fixo, o desconto saía de uma suposição que ninguém escolheu.
+    const { model, openingId } = comPorta();
+    const antes = computeQuantities(model).paredes.find((p) => p.areaAberturasM2 > 0)!;
+    expect(antes.areaAberturasM2).toBeCloseTo((900 * 2100) / 1_000_000, 6);
+
+    const depois = applyCommand(model, { type: 'SetOpeningSize', openingId, heightMm: 2400 }).model;
+    const dep = computeQuantities(depois).paredes.find((p) => p.areaAberturasM2 > 0)!;
+
+    expect(dep.areaAberturasM2).toBeCloseTo((900 * 2400) / 1_000_000, 6);
+    expect(dep.areaFaceLiquidaM2).toBeLessThan(antes.areaFaceLiquidaM2);
+  });
+
+  it('largura que estoura a parede é RECUSADA, com a medida máxima na mensagem', () => {
+    // Porta a 1000 mm numa parede de 4000: cabe no máximo 3000 mm.
+    const { model, openingId } = comPorta();
+    expect(() =>
+      applyCommand(model, { type: 'SetOpeningSize', openingId, widthMm: 3500 }),
+    ).toThrow(/3000 mm/);
+  });
+
+  it('ALTURA MAIOR QUE A PAREDE É RECUSADA — senão o volume sairia NEGATIVO', () => {
+    // Sem esta trava, `areaAberturas > areaBruta` e o quantitativo entregaria
+    // área líquida e volume negativos, calado, dentro do orçamento.
+    const { model, openingId } = comPorta();
+    expect(() =>
+      applyCommand(model, { type: 'SetOpeningSize', openingId, heightMm: 3000 }),
+    ).toThrow(/2800 mm/);
+  });
+
+  it('peitoril + altura também precisam caber no pé-direito', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const comJanela = applyCommand(built, {
+      type: 'AddOpening',
+      wallId: built.walls[0].id,
+      kind: 'window',
+      offsetMm: 1000,
+      widthMm: 1200,
+      heightMm: 1200,
+      sillMm: 900,
+    }).model;
+    const openingId = comJanela.openings[0].id;
+
+    // 900 + 1900 = 2800: cabe justo. 900 + 2000 estoura.
+    expect(() =>
+      applyCommand(comJanela, { type: 'SetOpeningSize', openingId, heightMm: 1900 }),
+    ).not.toThrow();
+    expect(() =>
+      applyCommand(comJanela, { type: 'SetOpeningSize', openingId, heightMm: 2000 }),
+    ).toThrow(KernelError);
+  });
+
+  it('largura, altura ou peitoril inválidos são recusados', () => {
+    const { model, openingId } = comPorta();
+    expect(() => applyCommand(model, { type: 'SetOpeningSize', openingId, widthMm: 0 })).toThrow(
+      KernelError,
+    );
+    expect(() => applyCommand(model, { type: 'SetOpeningSize', openingId, heightMm: -1 })).toThrow(
+      KernelError,
+    );
+    expect(() => applyCommand(model, { type: 'SetOpeningSize', openingId, sillMm: -1 })).toThrow(
+      KernelError,
+    );
+  });
+
+  it('alargar por cima da abertura vizinha é recusado', () => {
+    const { model, openingId, wallId } = comPorta();
+    // Segunda porta logo adiante: 2200..3100.
+    const duas = applyCommand(model, {
+      type: 'AddOpening',
+      wallId,
+      kind: 'door',
+      offsetMm: 2200,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    }).model;
+
+    // A primeira começa em 1000; 1500 de largura chegaria a 2500, invadindo.
+    expect(() =>
+      applyCommand(duas, { type: 'SetOpeningSize', openingId, widthMm: 1500 }),
+    ).toThrow(/sobrep/i);
+  });
+
+  it('abertura inexistente é recusada', () => {
+    const { model } = comPorta();
+    expect(() =>
+      applyCommand(model, { type: 'SetOpeningSize', openingId: 'opn_9999', widthMm: 800 }),
+    ).toThrow(KernelError);
+  });
+
+  it('o novo tamanho sobrevive ao round-trip do payload', () => {
+    const { model, openingId } = comPorta();
+    const redim = applyCommand(model, {
+      type: 'SetOpeningSize',
+      openingId,
+      widthMm: 700,
+      heightMm: 2300,
+    }).model;
+
+    const rebuilt = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(redim)));
+    expect(rebuilt.openings[0].widthMm).toBe(700);
+    expect(rebuilt.openings[0].heightMm).toBe(2300);
   });
 });
 

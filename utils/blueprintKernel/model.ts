@@ -240,6 +240,26 @@ export function assertModelInvariants(model: BlueprintModel): void {
         `Abertura ${opening.id} excede a parede ${wall.id} (${opening.offsetMm}+${opening.widthMm} > ${limit})`,
       );
     }
+
+    // A abertura também tem que caber na ALTURA da parede, e isso não é
+    // preciosismo: o quantitativo desconta `largura × altura` da face
+    // (`quantities.ts`), então uma porta mais alta que a parede produziria área
+    // líquida e VOLUME NEGATIVOS — número absurdo saindo calado, no orçamento.
+    //
+    // A trava nasce agora porque só agora a altura virou editável. Enquanto ela
+    // era um 2100 fixo dentro de uma parede de 2800, o caso era inalcançável.
+    if (opening.heightMm <= 0) {
+      throw new KernelError('BAD_OPENING_HEIGHT', `Altura não positiva em ${opening.id}`);
+    }
+    if (opening.sillMm < 0) {
+      throw new KernelError('BAD_SILL', `Peitoril negativo em ${opening.id}`);
+    }
+    if (opening.sillMm + opening.heightMm > wall.heightMm) {
+      throw new KernelError(
+        'OPENING_TALLER_THAN_WALL',
+        `Abertura ${opening.id} não cabe na altura da parede ${wall.id} (${opening.sillMm}+${opening.heightMm} > ${wall.heightMm})`,
+      );
+    }
   }
 
   // Duas aberturas não podem ocupar o mesmo trecho da mesma parede.

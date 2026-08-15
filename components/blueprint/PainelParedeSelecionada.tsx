@@ -12,12 +12,89 @@ import { mmToMeters, wallLength, type Opening, type Wall } from '../../utils/blu
  * fica testável sem precisar simular um clique que jsdom não sabe dar.
  */
 
-/** Lê "4,10" ou "4.10" como metros. `null` se não for um número positivo. */
-function lerMetros(texto: string): number | null {
+/** Lê "4,10" ou "4.10" como número. `null` se não for um número positivo. */
+function lerNumero(texto: string): number | null {
   const normalizado = texto.trim().replace(',', '.');
   if (normalizado === '') return null;
   const valor = Number(normalizado);
   return Number.isFinite(valor) && valor > 0 ? valor : null;
+}
+
+/**
+ * Campo numérico que aplica no Enter e no blur, e desiste no Escape.
+ *
+ * EXTRAÍDO, e não copiado, por causa da armadilha do Escape: `.blur()` dispara
+ * `onBlur` SINCRONAMENTE, dentro do mesmo handler de tecla, antes de o React
+ * aplicar qualquer `setState` pedido ali. Por isso o cancelamento vive numa
+ * `ref`, lida na hora. Uma segunda cópia dessa lógica é uma segunda chance de
+ * perder essa sutileza — foi ela que já deixou o campo reaplicar um valor
+ * abandonado uma vez.
+ *
+ * `chave` remonta o input quando o valor muda POR FORA (trocou a seleção, ou o
+ * arraste no canvas mudou a medida). Sem ela, o campo não controlado ficaria
+ * exibindo o número velho; com `value` controlado, a digitação seria bloqueada
+ * a cada re-render.
+ */
+function CampoMedida({
+  rotulo,
+  valor,
+  casas,
+  sufixo,
+  chave,
+  aoAplicar,
+  ariaLabel,
+}: {
+  rotulo: string;
+  /** Já na unidade EXIBIDA — quem chama converte. */
+  valor: number;
+  casas: number;
+  sufixo: string;
+  chave: string;
+  /** Recebe o valor digitado, na mesma unidade exibida. */
+  aoAplicar: (valor: number) => void;
+  ariaLabel: string;
+}) {
+  const [rascunho, setRascunho] = useState<string | null>(null);
+  const cancelando = useRef(false);
+  const texto = valor.toFixed(casas).replace('.', ',');
+
+  function confirmar(digitado: string) {
+    if (cancelando.current) {
+      cancelando.current = false;
+      return;
+    }
+    const lido = lerNumero(digitado);
+    if (lido !== null) aoAplicar(lido);
+    setRascunho(null);
+  }
+
+  return (
+    <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
+      {rotulo}
+      <input
+        type="text"
+        inputMode="decimal"
+        key={chave}
+        defaultValue={texto}
+        aria-label={ariaLabel}
+        onChange={(e) => setRascunho(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') {
+            cancelando.current = true;
+            // Restaura o TEXTO direto no DOM: o input é não controlado de
+            // propósito (ver o comentário da `chave`), então mexer em estado
+            // do React não devolveria o que está na tela.
+            (e.target as HTMLInputElement).value = texto;
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        onBlur={(e) => confirmar(rascunho ?? e.target.value)}
+        className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
+      />
+      {sufixo}
+    </label>
+  );
 }
 
 interface Props {
@@ -42,6 +119,12 @@ interface Props {
    * as 4 variações padrão de porta em planta — por isso dois botões, não um.
    */
   onFlipAbertura: (axis: 'hinge' | 'swing') => void;
+  /**
+   * Muda o tamanho da abertura selecionada. Campo omitido fica como está — o
+   * painel edita uma medida por vez, e o kernel recusa o que não couber na
+   * parede (em comprimento OU em altura), com a medida máxima na mensagem.
+   */
+  onTamanhoAbertura: (campos: { widthMm?: number; heightMm?: number; sillMm?: number }) => void;
 }
 
 export default function PainelParedeSelecionada({
@@ -55,6 +138,7 @@ export default function PainelParedeSelecionada({
   onDividir,
   onUnir,
   onFlipAbertura,
+  onTamanhoAbertura,
 }: Props) {
   if (!parede && !abertura) return null;
 
@@ -80,10 +164,47 @@ export default function PainelParedeSelecionada({
       {abertura && (
         <>
           <p className="mt-2 text-xs text-slate-600">
-            {abertura.kind === 'door' ? 'Porta' : 'Janela'} de{' '}
-            <span className="font-medium text-slate-800">{abertura.widthMm} mm</span>, a{' '}
-            {(abertura.offsetMm / 1000).toFixed(2)} m do início da parede.
+            {/* Vírgula, não ponto: é a convenção do país e a mesma do campo de
+                comprimento logo acima — duas grafias de decimal na mesma caixa
+                fazem parecer que uma delas é de outro sistema. */}
+            {abertura.kind === 'door' ? 'Porta' : 'Janela'} a{' '}
+            {(abertura.offsetMm / 1000).toFixed(2).replace('.', ',')} m do início da parede.
           </p>
+
+          {/* Em MILÍMETROS, e não em metros como o comprimento de parede: é a
+              unidade em que vão de esquadria se especifica e se compra ("porta
+              80×210"), e é a mesma do seletor de largura da barra ao inserir. */}
+          <CampoMedida
+            rotulo="Largura"
+            valor={abertura.widthMm}
+            casas={0}
+            sufixo="mm"
+            chave={`${abertura.id}:l:${abertura.widthMm}`}
+            aoAplicar={(mm) => onTamanhoAbertura({ widthMm: Math.round(mm) })}
+            ariaLabel="Largura da abertura, em milímetros"
+          />
+          <CampoMedida
+            rotulo="Altura"
+            valor={abertura.heightMm}
+            casas={0}
+            sufixo="mm"
+            chave={`${abertura.id}:a:${abertura.heightMm}`}
+            aoAplicar={(mm) => onTamanhoAbertura({ heightMm: Math.round(mm) })}
+            ariaLabel="Altura da abertura, em milímetros"
+          />
+          {/* Peitoril só na janela: em porta ele é sempre zero (o vão nasce no
+              piso), e um campo que só aceita um valor é ruído. */}
+          {abertura.kind === 'window' && (
+            <CampoMedida
+              rotulo="Peitoril"
+              valor={abertura.sillMm}
+              casas={0}
+              sufixo="mm"
+              chave={`${abertura.id}:p:${abertura.sillMm}`}
+              aoAplicar={(mm) => onTamanhoAbertura({ sillMm: Math.round(mm) })}
+              ariaLabel="Altura do peitoril, em milímetros"
+            />
+          )}
 
           {/* Janela é simétrica no desenho (linha reta através da parede) — não
               tem dobradiça nem lado de giro para alternar. */}
@@ -129,27 +250,6 @@ function ComprimentoEEspessura({
   onUnir: () => void;
 }) {
   const comprimentoMm = wallLength(parede);
-  // Bruto, não sanitizado: guarda exatamente o que a pessoa digitou até o campo
-  // perder o foco ou confirmar, para não "corrigir" o texto no meio da digitação.
-  const [rascunho, setRascunho] = useState<string | null>(null);
-
-  // REF, não estado: o Escape chama `.blur()` na hora, o que dispara `onBlur`
-  // SINCRONAMENTE, dentro do mesmo handler de tecla — antes de o React aplicar
-  // o `setRascunho(null)` que o Escape também pediu. Se `confirmar` lesse o
-  // estado `rascunho`, ele ainda veria o texto digitado (não o `null` recém
-  // pedido) e reaplicaria o valor abandonado. Ref é lida na hora, sem esperar
-  // repintura — é o que faz o cancelamento realmente cancelar.
-  const cancelando = useRef(false);
-
-  function confirmar(texto: string) {
-    if (cancelando.current) {
-      cancelando.current = false;
-      return;
-    }
-    const metros = lerMetros(texto);
-    if (metros !== null) onComprimento(Math.round(metros * 1000));
-    setRascunho(null);
-  }
 
   const dica =
     pontaQueAnda === null
@@ -160,40 +260,15 @@ function ComprimentoEEspessura({
 
   return (
     <>
-      <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">
-        Comprimento
-        <input
-          type="text"
-          inputMode="decimal"
-          // A CHAVE, não um `value` controlado: assim que a seleção troca de
-          // parede, ou o arraste da alça no canvas muda o comprimento por fora,
-          // o campo precisa ressincronizar com o modelo. Um input controlado por
-          // `comprimentoMm` bloquearia a própria digitação a cada re-render; o
-          // `key` composto força o React a remontar o input, e um `defaultValue`
-          // recomeça do valor atual sem se importar em que ponto do gesto o
-          // usuário está.
-          key={`${parede.id}:${comprimentoMm}`}
-          defaultValue={mmToMeters(comprimentoMm).toFixed(2).replace('.', ',')}
-          aria-label={`Comprimento da parede, em metros. ${dica}`}
-          onChange={(e) => setRascunho(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-            if (e.key === 'Escape') {
-              cancelando.current = true;
-              // Restaura o TEXTO na tela diretamente no DOM — é uncontrolled de
-              // propósito (ver o comentário do `key`), então mexer no `value` do
-              // React não bastaria.
-              (e.target as HTMLInputElement).value = mmToMeters(comprimentoMm)
-                .toFixed(2)
-                .replace('.', ',');
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          onBlur={(e) => confirmar(rascunho ?? e.target.value)}
-          className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
-        />
-        m
-      </label>
+      <CampoMedida
+        rotulo="Comprimento"
+        valor={mmToMeters(comprimentoMm)}
+        casas={2}
+        sufixo="m"
+        chave={`${parede.id}:${comprimentoMm}`}
+        aoAplicar={(metros) => onComprimento(Math.round(metros * 1000))}
+        ariaLabel={`Comprimento da parede, em metros. ${dica}`}
+      />
       {dica && <p className="mt-1 text-[11px] text-slate-400">{dica}</p>}
 
       <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-500">

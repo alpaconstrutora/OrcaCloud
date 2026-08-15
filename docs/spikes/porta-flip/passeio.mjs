@@ -124,6 +124,55 @@ await page.waitForTimeout(150);
 const aposGirarDeNovo = estadoDe(await ler());
 if (aposGirarDeNovo.hingeAtStart !== true) falhas.push('Girar duas vezes não voltou ao original');
 
+// ── Tamanho da abertura (pedido de 14/08/2026) ──────────────────────────────
+//
+// A porta está numa parede de 3000 mm, começando em 1050 — cabem no máximo
+// 1950 mm de largura. A parede tem 2800 de pé-direito.
+const campoLargura = page.getByRole('textbox', { name: /largura da abertura/i });
+const campoAltura = page.getByRole('textbox', { name: /altura da abertura/i });
+
+if ((await campoLargura.inputValue()) !== '900') {
+  falhas.push(`largura exibida: "${await campoLargura.inputValue()}", esperado "900"`);
+}
+
+await campoLargura.fill('800');
+await campoLargura.press('Enter');
+await page.waitForTimeout(150);
+const aposLargura = estadoDe(await ler());
+if (aposLargura.widthMm !== 800) falhas.push(`largura não aplicou: ${aposLargura.widthMm}`);
+if (aposLargura.heightMm !== 2100) falhas.push('mexer na largura mexeu na altura');
+await recortar('saida-largura-800.png', meioDoVao.y);
+
+await campoAltura.fill('2400');
+await campoAltura.press('Enter');
+await page.waitForTimeout(150);
+const aposAltura = estadoDe(await ler());
+if (aposAltura.heightMm !== 2400) falhas.push(`altura não aplicou: ${aposAltura.heightMm}`);
+if (aposAltura.widthMm !== 800) falhas.push('mexer na altura mexeu na largura');
+
+// RECUSA: 2500 mm de largura estouraria a parede (1050 + 2500 > 3000).
+await campoLargura.fill('2500');
+await campoLargura.press('Enter');
+await page.waitForTimeout(150);
+const aposRecusa = estadoDe(await ler());
+if (aposRecusa.widthMm !== 800) {
+  falhas.push(`largura impossível foi ACEITA: ${aposRecusa.widthMm}`);
+}
+const textoErro = (await page.locator('#erro').textContent()) ?? '';
+if (!/1950 mm/.test(textoErro)) {
+  falhas.push(`a recusa não disse a largura máxima: "${textoErro}"`);
+}
+
+// RECUSA: altura de 3000 num pé-direito de 2800 — é a trava que impede área
+// líquida e volume NEGATIVOS no quantitativo.
+await campoAltura.fill('3000');
+await campoAltura.press('Enter');
+await page.waitForTimeout(150);
+if (estadoDe(await ler()).heightMm !== 2400) falhas.push('altura maior que a parede foi ACEITA');
+if (!/2800 mm/.test((await page.locator('#erro').textContent()) ?? '')) {
+  falhas.push('a recusa de altura não citou o pé-direito');
+}
+
 // As outras três portas não podem ter sido tocadas.
 const finais = (await ler()).openings.filter((o) => o.id !== alvo);
 const esperadoOutras = [
@@ -135,6 +184,11 @@ finais.forEach((o, i) => {
   const e = esperadoOutras[i];
   if (o.hingeAtStart !== e.hingeAtStart || o.swingReversed !== e.swingReversed) {
     falhas.push(`porta vizinha ${o.id} foi alterada: ${JSON.stringify(o)}`);
+  }
+  // O tamanho das vizinhas também tem que estar intacto: redimensionar é por
+  // abertura, não por parede.
+  if (o.widthMm !== 900 || o.heightMm !== 2100) {
+    falhas.push(`tamanho da vizinha ${o.id} foi alterado: ${JSON.stringify(o)}`);
   }
 });
 

@@ -60,6 +60,18 @@ export type Command =
    * então o comando pede QUAL eixo, nunca os dois de uma vez.
    */
   | { type: 'FlipOpening'; openingId: ObjectId; axis: 'hinge' | 'swing' }
+  /**
+   * Muda o tamanho de uma abertura já inserida. Campo omitido fica como está —
+   * o painel edita uma medida de cada vez, e mandar as três a cada tecla faria
+   * um comando dizer que mexeu no que ninguém tocou.
+   */
+  | {
+      type: 'SetOpeningSize';
+      openingId: ObjectId;
+      widthMm?: number;
+      heightMm?: number;
+      sillMm?: number;
+    }
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string };
 
@@ -306,6 +318,54 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       }
       next.openings = next.openings.filter((o) => o.id !== opening.id);
       diff.deleted.push(opening.id);
+      break;
+    }
+
+    case 'SetOpeningSize': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) {
+        throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      }
+      const wall = findWall(next, opening.wallId);
+
+      const largura = command.widthMm ?? opening.widthMm;
+      const altura = command.heightMm ?? opening.heightMm;
+      const peitoril = command.sillMm ?? opening.sillMm;
+
+      // Recusar ANTES de gravar, com a medida no texto. `assertModelInvariants`
+      // pegaria os mesmos casos no fim do comando, mas a mensagem dela fala de
+      // um id de abertura — aqui dá para dizer quanto sobrou, que é o que a
+      // pessoa precisa saber para escolher outro número.
+      if (largura <= 0) {
+        throw new KernelError('BAD_OPENING_WIDTH', 'Largura tem que ser maior que zero');
+      }
+      if (altura <= 0) {
+        throw new KernelError('BAD_OPENING_HEIGHT', 'Altura tem que ser maior que zero');
+      }
+      if (peitoril < 0) {
+        throw new KernelError('BAD_SILL', 'Peitoril não pode ser negativo');
+      }
+
+      const limite = wallLength(wall);
+      if (opening.offsetMm + largura > limite) {
+        throw new KernelError(
+          'OPENING_OUT_OF_BOUNDS',
+          `Largura máxima aqui é ${limite - opening.offsetMm} mm — a abertura começa a ${opening.offsetMm} mm de uma parede de ${limite} mm`,
+        );
+      }
+      if (peitoril + altura > wall.heightMm) {
+        throw new KernelError(
+          'OPENING_TALLER_THAN_WALL',
+          `Altura máxima aqui é ${wall.heightMm - peitoril} mm — a parede tem ${wall.heightMm} mm e o peitoril está em ${peitoril} mm`,
+        );
+      }
+
+      next.openings = next.openings.map((o) =>
+        o.id !== opening.id
+          ? o
+          : { ...o, widthMm: largura, heightMm: altura, sillMm: peitoril },
+      );
+      diff.updated.push(opening.id);
       break;
     }
 

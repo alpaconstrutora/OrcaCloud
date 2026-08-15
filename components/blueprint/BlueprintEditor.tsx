@@ -298,6 +298,23 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.run({ type: 'FlipOpening', openingId: aberturaSel.id, axis });
   }
 
+  /**
+   * Muda largura/altura/peitoril da abertura selecionada.
+   *
+   * Sem tratamento de erro aqui de propósito: o kernel recusa o que não couber
+   * (largura além da parede, altura além do pé-direito, sobreposição com outra
+   * abertura) e `editor.run` transforma o `KernelError` na faixa de aviso do
+   * topo — que já traz a medida máxima no texto.
+   */
+  function redimensionarAbertura(campos: {
+    widthMm?: number;
+    heightMm?: number;
+    sillMm?: number;
+  }) {
+    if (!aberturaSel) return;
+    editor.run({ type: 'SetOpeningSize', openingId: aberturaSel.id, ...campos });
+  }
+
   function dividirSelecionada() {
     if (!paredeSel) return;
     // Divide no meio: e o unico ponto que sempre existe e nunca coincide com
@@ -1090,6 +1107,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             onDividir={dividirSelecionada}
             onUnir={unirSelecionada}
             onFlipAbertura={flipAbertura}
+            onTamanhoAbertura={redimensionarAbertura}
           />
 
           {vaosCandidatos.soltas.length > 0 && (

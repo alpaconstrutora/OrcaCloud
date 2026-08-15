@@ -427,7 +427,30 @@ Lado admin: aba **Comunicação** no condomínio (avisos com contagem de leitura
 
 Pronto quando: dois moradores de unidades diferentes abrem seus links e cada um vê só a própria unidade — verificado no navegador, não por `tsc`.
 
-### 🚪 Portão
+### 💰 Financeiro condominial — fatia 1: o RATEIO (14/08/2026)
+
+O usuário optou por abrir o portão **antes** de rodar o piloto; a ressalva de que as telas seguem sem verificação foi registrada e mantida.
+
+**Decisão do usuário, melhor que as opções oferecidas:** *"Cada condomínio pode ter uma organização própria ou não. Mas **a âncora é o centro de custo**. Cada condomínio, independente de ter organização própria ou não, terá seu próprio centro de custo."*
+
+Isso resolve a segregação sem depender da organização: a despesa do condomínio é a que cai no centro de custo dele, e `internal_transactions.cost_center_id` já aponta para `cost_centers_v2`, que já é dimensão de DRE e balancete. Org própria vira decisão **ortogonal** (fiscal), não pré-requisito.
+
+⚠️ `cost_centers_v2.empreendimento_id` **coexiste** com `project_id`, que outra frente acrescentou em `20270907000000` para derivar empreendimento **a partir da obra**. Aquele caminho não serve aqui: condomínio em operação — ainda mais retrofit — pode não ter obra nenhuma. Dois vínculos para dois casos, não duplicata.
+
+**Critérios (todos, escolhidos pelo síndico):** fração ideal, valor igual, área privativa, grupo de unidades, valor fixo.
+
+| Decisão | Por quê |
+|---|---|
+| **ORDINÁRIO × EXTRAORDINÁRIO separados desde o começo** | Obra e benfeitoria são juridicamente do PROPRIETÁRIO, não do inquilino. Num valor só, não há como saber de quem cobrar quando a unidade está alugada |
+| **Rateio FECHADO não aceita alteração** (trigger) | Vira base de cobrança; se o valor mudar depois, o boleto emitido deixa de bater. Editar exige cancelar e refazer |
+| **A soma das cotas fecha ao centavo** | 1000,00 entre 3 daria 999,99 com arredondamento ingênuo — um centavo por rateio vira furo inexplicável na prestação de contas, que é aprovada em assembleia. O resto vai para as maiores frações perdidas (critério do "maior resto"). **8 testes em `__tests__/condominioRateio.test.ts`** |
+| **Guarda o PESO usado, não só o valor** | Meses depois a fração pode ter sido averbada e a área corrigida; sem o peso, ninguém reconstrói por que aquela unidade pagou aquilo |
+| **Guarda a LISTA de despesas**, não só o total | A prestação de contas precisa mostrar o que compôs a cota, e despesa lançada depois não pode mudar rateio fechado em silêncio |
+| **Sem responsável financeiro, não há de quem cobrar** | A cota é calculada e a tela avisa. Cobrar do "provavelmente o dono" é como nasce cobrança para a pessoa errada |
+
+**Fatias seguintes:** cobrança (boleto/PIX via Asaas, que já existe), fundo de reserva e específicos, inadimplência com multa e juros, acordos, e prestação de contas mensal.
+
+### 🚪 Portão — assembleias e reservas (ainda fechado)
 
 Só depois de um piloto real em operação decidir sobre: financeiro condominial (rateio por fração ideal, fundos, multa/juros, acordos, prestação de contas), assembleias e reservas. **Nenhum dos três entra antes.** Assembleia e reserva parecem baratas e não são: assembleia tem quórum, procuração e peso de voto; reserva tem calendário, regra e caução.
 

@@ -5,17 +5,18 @@
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import React from 'react';
-import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone } from 'lucide-react';
+import { ArrowLeft, FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet } from 'lucide-react';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
 import FracoesTab from './FracoesTab';
 import AtivosTab from './AtivosTab';
 import ComunicacaoTab from './ComunicacaoTab';
+import FinanceiroTab from './FinanceiroTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
 import type { Empreendimento } from '../../types/empreendimento';
 
-type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao' | 'comunicacao';
+type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
 
 /** §19.1 — cada aba troca o assunto da tela, então troca o título junto. */
 const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
@@ -24,6 +25,7 @@ const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
     fracoes: { titulo: 'Frações ideais', subtitulo: 'transcrição da convenção registrada' },
     ativos: { titulo: 'Ativos do edifício', subtitulo: 'equipamentos e garantia do fornecedor' },
     manutencao: { titulo: 'Manutenção predial', subtitulo: 'plano NBR 5674 e ordens de serviço' },
+    financeiro: { titulo: 'Financeiro', subtitulo: 'rateio das despesas entre as unidades' },
     comunicacao: { titulo: 'Comunicação', subtitulo: 'avisos e documentos do portal' },
 };
 
@@ -95,6 +97,8 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
         // cadastrado, o plano fala de "elevador" no abstrato.
         { id: 'ativos', label: 'Ativos', icon: Package },
         { id: 'manutencao', label: 'Manutenção', icon: Wrench },
+        // Depois de Manutenção porque é dela que sai boa parte da despesa a ratear.
+        { id: 'financeiro', label: 'Financeiro', icon: Wallet },
         // Última porque é o que SAI do condomínio para o condômino — as demais
         // são o que se sabe sobre ele.
         { id: 'comunicacao', label: 'Comunicação', icon: Megaphone },
@@ -236,6 +240,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, onBack, onChanged }
             {aba === 'fracoes' && <FracoesTab empreendimento={e} />}
             {aba === 'ativos' && <AtivosTab empreendimento={e} />}
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
+            {aba === 'financeiro' && <FinanceiroTab empreendimento={e} />}
             {aba === 'comunicacao' && <ComunicacaoTab empreendimento={e} />}
 
             {notification && (

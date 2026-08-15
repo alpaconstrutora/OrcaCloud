@@ -30,11 +30,11 @@ interface BoletoManagerProps {
     organizations?: Organization[];
     onOrgChange?: (id: string | null) => void;
     /**
-     * Barra de abas do módulo pai (§3/§3.1). Vem por prop porque a anatomia do §1
-     * exige título → KPIs → ABAS → botões → tabela: as abas são do Financeiro, mas
-     * título e KPIs são desta tela, então quem posiciona a barra é o filho.
-     * Ausente quando a tela roda como rota própria (AppRouter 'boletos-pagar'),
-     * onde de fato não há abas.
+     * Barra de abas do módulo pai (§19.1/§19.3). Vem por prop porque a anatomia
+     * canônica exige título → ABAS → KPIs → botões → tabela: as abas são do
+     * Financeiro, mas título e KPIs são desta tela, então quem posiciona a
+     * barra é o filho. Ausente quando a tela roda como rota própria (AppRouter
+     * 'boletos-pagar'), onde de fato não há abas.
      */
     tabsSlot?: React.ReactNode;
 }
@@ -88,7 +88,7 @@ const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     capturado_em: { label: 'Capturado em', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     capturado_por: { label: 'Capturado por', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    actions: { label: 'Ações', sortable: false, uppercase: true, className: 'px-6 py-2 text-right' },
+    actions: { label: 'Ações', sortable: false, className: 'px-6 py-2 text-right' },
 };
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
@@ -140,31 +140,35 @@ function renderBoletoCell(
                     {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
                 </span>
             );
-        case 'beneficiario':
+        case 'beneficiario': {
+            const nome = b.supplier_id
+                ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                : (b.beneficiario_nome ?? b.documento_nome);
             return (
                 <div className="text-sm font-normal text-gray-700 max-w-[200px]">
-                    <p className="truncate">
-                        {b.supplier_id
-                            ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                            : (b.beneficiario_nome ?? b.documento_nome)}
-                    </p>
+                    <p className="truncate" title={nome ?? undefined}>{nome}</p>
                     {b.beneficiario_cnpj && !b.supplier_id && (
-                        <p className="text-xs text-gray-400 font-normal truncate">{b.beneficiario_cnpj}</p>
+                        <p className="text-xs text-gray-400 font-normal truncate" title={b.beneficiario_cnpj}>{b.beneficiario_cnpj}</p>
                     )}
                 </div>
             );
-        case 'obra':
+        }
+        case 'obra': {
+            const obraNome = b.project_id ? (projectMap[b.project_id] ?? '—') : '—';
             return (
-                <p className="truncate text-sm font-normal text-gray-600 max-w-[160px]">
-                    {b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}
+                <p className="truncate text-sm font-normal text-gray-700 max-w-[160px]" title={obraNome}>
+                    {obraNome}
                 </p>
             );
-        case 'centro_custo':
+        }
+        case 'centro_custo': {
+            const ccNome = b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—';
             return (
-                <p className="truncate text-sm font-normal text-gray-600 max-w-[140px]">
-                    {b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}
+                <p className="truncate text-sm font-normal text-gray-600 max-w-[140px]" title={ccNome}>
+                    {ccNome}
                 </p>
             );
+        }
         case 'valor':
             return (
                 <div className="text-sm font-medium text-gray-800 text-right whitespace-nowrap">
@@ -347,7 +351,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     checked={selected}
                     onMouseDown={onCheckboxMouseDown}
                     onChange={e => onCheckboxChange(e.target.checked, b.id, idx)}
-                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                 />
             </td>
             {orderedVisibleColumns.map(key => (
@@ -794,7 +798,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </p>
             </div>
 
-            {/* Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
+            {/* 2. Toolbar de abas (§19.1/§19.3) — vem do módulo pai (Financeiro) e é
+                posicionada aqui, entre o título e os KPIs, como manda a anatomia
+                canônica (título → abas → KPIs, corrigida em 2026-08-02). Ausente
+                quando a tela é usada como rota própria (AppRouter 'boletos-pagar'). */}
+            {tabsSlot}
+
+            {/* 3. Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
             {!loading && boletos.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard
@@ -827,11 +837,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     />
                 </div>
             )}
-
-            {/* 3. Toolbar de abas (§3) — vem do módulo pai (Financeiro) e é posicionada
-                aqui, entre os KPIs e a toolbar de botões, como manda a anatomia do §1.
-                Ausente quando a tela é usada como rota própria (AppRouter 'boletos-pagar'). */}
-            {tabsSlot}
 
             {/* 4. Toolbar de botões (§4) — escopo à esquerda (organização), ação
                 primária à direita. Estavam todos na linha do título antes. */}
@@ -1187,7 +1192,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         type="checkbox"
                                         checked={filtered.length > 0 && filtered.every(b => selectedIds.has(b.id))}
                                         onChange={() => filtered.every(b => selectedIds.has(b.id)) ? clearSelection() : selectAllFiltered()}
-                                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                         title="Selecionar todos"
                                     />
                                 </th>

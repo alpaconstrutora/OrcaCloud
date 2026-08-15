@@ -54,7 +54,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 }) => {
     // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
-    const { organizations: storeOrganizations } = useStore();
+    const { organizations: storeOrganizations, projects: storeObras } = useStore();
+
+    // A prop `projectId` é o projeto do seletor GLOBAL do topo, que pode ser
+    // orçamento, planejamento ou diário — não só obra. Contrato só aceita OBRA
+    // (CLAUDE.md regra #3, na camada de ESCRITA). Semeada crua, ela fazia o campo
+    // nascer apontando para um planejamento que o dropdown (onlyObras) nem lista:
+    // o usuário via o select vazio, mas o id ia junto no submit e a numeração
+    // CT-{empreendimento}-{obra}-{seq} estourava exigindo empreendimento de um
+    // planejamento. `useStore().projects` já é só obra.
+    const seedProjectId = React.useMemo(
+        () => (projectId && storeObras.some(p => p.id === projectId) ? projectId : ''),
+        [projectId, storeObras],
+    );
+
     const [pickedOrgId, setPickedOrgId] = React.useState<string>('');
     const organizationId = organizationIdProp || pickedOrgId || initialData?.organization_id || undefined;
     const needsOrgPicker = !organizationIdProp && !initialData?.id;
@@ -72,7 +85,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         reajuste_index: 'INCC',
         payment_method: 'Boleto Bancário',
         payment_installments: 1,
-        project_id: (projectId || initialData?.project_id || '') as string,
+        project_id: (seedProjectId || initialData?.project_id || '') as string,
         budget_id: initialData?.budget_id,
         is_recurring: false,
         billing_cycle: 'Mensal',
@@ -152,7 +165,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                     reajuste_index: 'INCC',
                     payment_method: 'Boleto Bancário',
                     payment_installments: 1,
-                    project_id: projectId || '',
+                    project_id: seedProjectId,
                     is_recurring: false,
                     billing_cycle: 'Mensal',
                     due_day: 10,

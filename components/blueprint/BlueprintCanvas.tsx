@@ -52,6 +52,19 @@ const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
 const COR_GRADE = '#e2e8f0';
 const COR_GRADE_FORTE = '#cbd5e1';
+/** Cinza neutro para a cota de parede — distinto do preto da própria parede e
+ * do azul/vermelho de prévia/seleção, para não competir com eles. */
+const COR_COTA = '#64748b';
+
+/**
+ * Abaixo disto, em pixels de tela, a parede não ganha rótulo de comprimento.
+ *
+ * Uma parede cortada em vários trechos curtos (perto de aberturas, ou depois de
+ * `SplitWall`) mostraria uma cota por fragmento — números pequenos demais para
+ * ler, empilhados uns sobre os outros. Sem o limiar, "mostrar medidas" numa
+ * planta com esses cortes vira mancha de texto, não informação.
+ */
+const MIN_PX_COTA_PAREDE = 24;
 
 /**
  * Escada de passos de grade, em mm — série 1-2-5, que é a que o olho lê como
@@ -222,6 +235,8 @@ interface Props {
   pontasSoltas?: Point[];
   /** Trava ortogonal ligada. Shift INVERTE o estado, como em todo CAD. */
   ortogonal?: boolean;
+  /** Escreve o comprimento de CADA parede junto dela, como uma cota de planta. */
+  mostrarMedidasParedes?: boolean;
   /** Planta de fundo já carregada, com o posicionamento aferido. */
   fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number } | null;
   /** Em calibração: recebe os dois pontos clicados, em PIXEL DA IMAGEM. */
@@ -269,6 +284,7 @@ export default function BlueprintCanvas({
   vaos = [],
   pontasSoltas = [],
   ortogonal = false,
+  mostrarMedidasParedes = false,
   fundo = null,
   onMoveVertex,
   onCalibrar,
@@ -837,6 +853,32 @@ export default function BlueprintCanvas({
       }
     }
 
+    // Medidas das paredes — opcional, ligado pelo botão "Medidas" da barra.
+    //
+    // Reaproveita o MESMO `traco` da silhueta: os pontos em tela já saem
+    // corretos para qualquer zoom/deslocamento, e a espessura em pixel
+    // (`t.cheia`) é o que `rotuloDoTraco` usa para afastar o número de cima da
+    // faixa da parede — o defeito que motivou `rotuloDoTraco` para começo de
+    // conversa (a cota caindo por cima da própria parede em zoom out).
+    //
+    // Cota de EIXO, não de face: é o que o kernel guarda e o que o campo
+    // "Comprimento" do painel de propriedades já mostra. Cotar a face exigiria
+    // descontar espessura aqui E lá, e as duas cópias divergem cedo ou tarde.
+    if (mostrarMedidasParedes) {
+      for (const t of traco) {
+        if (t.comp < MIN_PX_COTA_PAREDE) continue;
+        const mm = wallLength(t.w);
+        rotuloDoTraco(
+          ctx,
+          `${(mm / 1000).toFixed(2).replace('.', ',')} m`,
+          t.a,
+          t.b,
+          t.cheia,
+          COR_COTA,
+        );
+      }
+    }
+
     // Prévia da parede em curso.
     //
     // A faixa é desenhada sobre o EIXO RESOLVIDO, não sobre o traçado: no
@@ -1130,6 +1172,7 @@ export default function BlueprintCanvas({
     previaAbertura,
     vaos,
     pontasSoltas,
+    mostrarMedidasParedes,
     fundo,
     calibP1,
     medicoes,

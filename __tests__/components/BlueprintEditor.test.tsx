@@ -381,3 +381,25 @@ describe('BlueprintEditor · orto e mover ponta', () => {
     expect(screen.getByText(/orto \(Shift libera\)/i)).toBeInTheDocument();
   });
 });
+
+describe('BlueprintEditor · mostrar/ocultar medidas das paredes', () => {
+  it('nasce DESLIGADO — cota em toda parede é poluição visual até ser pedida', async () => {
+    await montar();
+    expect(botao(/medidas/i)).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('o botão alterna e o título muda de acordo', async () => {
+    await montar();
+    const user = userEvent.setup();
+
+    expect(botao(/medidas/i).title).toMatch(/mostrar/i);
+
+    await user.click(botao(/medidas/i));
+    expect(botao(/medidas/i)).toHaveAttribute('aria-pressed', 'true');
+    expect(botao(/medidas/i).title).toMatch(/ocultar/i);
+
+    await user.click(botao(/medidas/i));
+    expect(botao(/medidas/i)).toHaveAttribute('aria-pressed', 'false');
+    expect(botao(/medidas/i).title).toMatch(/mostrar/i);
+  });
+});

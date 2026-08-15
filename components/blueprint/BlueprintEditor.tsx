@@ -14,6 +14,7 @@ import {
   Calculator,
   Pencil,
   Grid3x3,
+  Ruler,
   Square,
   Spline,
   Hash,
@@ -96,6 +97,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [aba, setAba] = useState<AbaDoPainel>('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [ortogonal, setOrtogonal] = useState(true);
+  /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
+  const [mostrarMedidas, setMostrarMedidas] = useState(false);
   /**
    * Onde o clique cai: no eixo ou na face da parede.
    *
@@ -812,6 +815,30 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           </select>
         </label>
 
+        {/* MEDIDAS. Escreve o comprimento de cada parede na tela, como uma cota
+            de planta — útil para conferir o desenho contra as cotas do
+            projetista sem abrir o painel de propriedades parede por parede.
+            Desligado por padrão: numa planta cheia, cota em toda parede vira
+            poluição visual antes de virar informação. */}
+        <button
+          type="button"
+          onClick={() => setMostrarMedidas((v) => !v)}
+          aria-pressed={mostrarMedidas}
+          title={
+            mostrarMedidas
+              ? 'Ocultar o comprimento das paredes no desenho'
+              : 'Mostrar o comprimento de cada parede no desenho'
+          }
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+            mostrarMedidas
+              ? 'border-blue-600 bg-blue-50 text-blue-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Ruler className="h-3.5 w-3.5" />
+          Medidas
+        </button>
+
         <span className="mx-2 h-5 w-px bg-slate-200" aria-hidden />
 
         <BotaoBarra
@@ -963,6 +990,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               vaos={vaosCandidatos.vaos}
               pontasSoltas={vaosCandidatos.soltas}
               ortogonal={ortogonal}
+              mostrarMedidasParedes={mostrarMedidas}
               onMoveVertex={moverPonta}
               fundo={
                 fundo.imagem && fundo.underlay

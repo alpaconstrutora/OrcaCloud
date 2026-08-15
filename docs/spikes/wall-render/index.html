@@ -5,6 +5,12 @@
 <title>Harness — desenho de parede</title>
 <style>
   html, body, #raiz { margin: 0; height: 100%; }
+  /* Sem Tailwind aqui: `h-full w-full` do container do canvas não vale nada
+     sozinho. Ver a armadilha registrada nos outros harnesses de blueprint —
+     sem isto a vista inicial engana enquadrando um container do tamanho
+     errado, medido só na primeira vez. */
+  #raiz > div { position: absolute; inset: 0; }
+  canvas { display: block; }
 </style>
 </head>
 <body>

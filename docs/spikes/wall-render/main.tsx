@@ -90,6 +90,10 @@ function construir() {
 
 const modelo = construir();
 
+// ?medidas=1 liga o toggle "Medidas" — harness estático, sem botão de verdade,
+// mas o mesmo prop que o botão da barra acende.
+const mostrarMedidas = new URLSearchParams(location.search).get('medidas') === '1';
+
 function App() {
   return (
     <BlueprintCanvas
@@ -106,6 +110,7 @@ function App() {
       passoGradeMm={null}
       vaos={[{ a: point(8000, 4500), b: point(8000, 5400), mm: 900 }]}
       pontasSoltas={[point(8000, 4500), point(8000, 5400)]}
+      mostrarMedidasParedes={mostrarMedidas}
     />
   );
 }

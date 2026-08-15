@@ -145,10 +145,10 @@ function renderBoletoCell(
                 ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
                 : (b.beneficiario_nome ?? b.documento_nome);
             return (
-                <div className="text-sm font-normal text-gray-700 max-w-[200px]">
-                    <p className="truncate" title={nome ?? undefined}>{nome}</p>
+                <div className="text-sm font-normal text-gray-700">
+                    <p className="break-words">{nome}</p>
                     {b.beneficiario_cnpj && !b.supplier_id && (
-                        <p className="text-xs text-gray-400 font-normal truncate" title={b.beneficiario_cnpj}>{b.beneficiario_cnpj}</p>
+                        <p className="text-xs text-gray-400 font-normal break-words">{b.beneficiario_cnpj}</p>
                     )}
                 </div>
             );
@@ -156,7 +156,7 @@ function renderBoletoCell(
         case 'obra': {
             const obraNome = b.project_id ? (projectMap[b.project_id] ?? '—') : '—';
             return (
-                <p className="truncate text-sm font-normal text-gray-700 max-w-[160px]" title={obraNome}>
+                <p className="break-words text-sm font-normal text-gray-700">
                     {obraNome}
                 </p>
             );
@@ -164,7 +164,7 @@ function renderBoletoCell(
         case 'centro_custo': {
             const ccNome = b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—';
             return (
-                <p className="truncate text-sm font-normal text-gray-600 max-w-[140px]" title={ccNome}>
+                <p className="break-words text-sm font-normal text-gray-600">
                     {ccNome}
                 </p>
             );

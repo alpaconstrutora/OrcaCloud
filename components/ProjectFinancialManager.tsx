@@ -68,13 +68,11 @@ import { clientService } from '../services/clientService';
 import { exportService } from '../services/exportService';
 import { supabase } from '../lib/supabase';
 import FinancialOrderDetails from './FinancialOrderDetails';
-import BankReconciliation from './BankReconciliation';
-import BoletoManager from './BoletoManager';
-import ContasPagarManager from './ContasPagarManager';
 import { financialSyncService } from '../services/financialSyncService';
 import { getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import { KpiCard } from './ui/KpiCard';
+import { usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 import { mergeInstallments, computeProfitabilityByProperty, type MergeInstallmentsInput } from '../utils/commercialInstallments';
 // Harness temporário da Fase 2 — remover junto com o painel após o portão.
@@ -84,21 +82,14 @@ interface ProjectFinancialManagerProps {
     settings: ProjectSettings;
     projectId?: string;
     organizationId?: string;
-    organizations?: Organization[];
-    userEmail?: string;
-    onOrgChange?: (id: string | null) => void;
+    /* `organizations`, `userEmail` e `onOrgChange` foram removidos em 2026-08-15:
+       só existiam para repassar ao BoletoManager/ContasPagarManager que eram abas
+       daqui. O seletor de organização do modo "Gestão Comercial" usa `allOrgs`,
+       carregado internamente. */
     onUpdateSettings: (settings: ProjectSettings) => void;
     budget?: BudgetEntry[];
     dealTypeFilter?: 'SALE' | 'RENTAL';
     onViewOrder?: (id: string) => void;
-    /**
-     * Aba a abrir quando a rota é explícita sobre o destino (ex.: o item de menu
-     * "Contas a pagar" navega para `contas-a-pagar`). Tem precedência sobre a
-     * aba persistida em `localStorage` — sem isso, clicar em "Contas a pagar"
-     * abria na última aba visitada (Rentabilidade, Fluxo...), o que fazia a tela
-     * parecer um módulo duplicado.
-     */
-    initialTab?: TabKey;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -122,13 +113,22 @@ const fmtShort = (v: unknown): string => {
     return fmt(v);
 };
 
-type TabKey = 'resumo' | 'receitas' | 'despesas' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar';
+type TabKey = 'resumo' | 'receitas' | 'despesas' | 'rentabilidade' | 'extrato';
 
 /** Abas que já existiram e foram removidas. Quem tinha uma delas persistida em
- *  `localStorage` cairia numa aba inexistente (tela vazia) — cai no Resumo. */
-const RETIRED_TABS = ['fluxo'];
+ *  `localStorage` cairia numa aba inexistente (tela vazia) — cai no Resumo.
+ *
+ *  `fluxo`: era a 4ª versão do fluxo de caixa, em memória e sem período — o
+ *  fluxo vive na Controladoria (contábil) e no FP&A (projetado).
+ *
+ *  `contas_pagar`/`boletos`/`conciliacao` (2026-08-15): eram, literalmente, os
+ *  mesmos `ContasPagarManager`/`BoletoManager`/`BankReconciliation` que já são
+ *  item de menu com rota própria. Esta tela é o financeiro DE UMA OBRA; as três
+ *  são de escopo organização e não olham obra nenhuma. Ver
+ *  docs/planos/2026-08-15-contas-a-pagar-tela-dedicada.md */
+const RETIRED_TABS = ['fluxo', 'contas_pagar', 'boletos', 'conciliacao'];
 
-const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, organizations = [], userEmail, onOrgChange, onUpdateSettings, budget = [], dealTypeFilter, initialTab }) => {
+const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, onUpdateSettings, budget = [], dealTypeFilter }) => {
     const confirm = useConfirm();
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -137,16 +137,10 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         setTimeout(() => setNotification(null), 4500);
     };
     const [activeTab, setActiveTab] = useState<TabKey>(() => {
-        if (initialTab) return initialTab;
         const saved = localStorage.getItem('financial_active_tab');
         if (!saved || RETIRED_TABS.includes(saved)) return 'resumo';
         return saved as TabKey;
     });
-    // Rota explícita sempre ganha da aba persistida — inclusive quando o
-    // componente já está montado (AppRouter não remonta ao trocar de view).
-    useEffect(() => {
-        if (initialTab) setActiveTab(initialTab);
-    }, [initialTab]);
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isAddingTransaction, setIsAddingTransaction] = useState(false);
@@ -155,7 +149,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     const [linkedTransactions, setLinkedTransactions] = useState<FinancialTransaction[]>([]);
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [originFilter, setOriginFilter] = useState<string>('all');
-    const [expenseSearchTerm, setExpenseSearchTerm] = useState('');
+    // §3: busca persistida — sobrevive a navegação/reload.
+    const [expenseSearchTerm, setExpenseSearchTerm] = usePersistedState<string>('projectFinancial:expenseSearch', '');
     const [filterDateFrom, setFilterDateFrom] = useState('');
     const [filterDateTo, setFilterDateTo] = useState('');
     const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -1034,8 +1029,18 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                             <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-normal">Entradas vs Saídas Mensais</p>
                         </div>
                         <div className="flex gap-4">
-                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500" /><span className="text-xs font-normal uppercase tracking-widest text-gray-400">Receita</span></div>
-                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-xs font-normal uppercase tracking-widest text-gray-400">Despesa</span></div>
+                            {/* Legenda do gráfico, não status badge (§8): o `rounded-full`
+                                é o marcador de COR da série (12×12px, sem texto), e o
+                                `uppercase` está no <span> irmão. Quebrado em linhas para o
+                                check textual não acusar os dois na mesma linha física. */}
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-blue-500" />
+                                <span className="text-xs font-normal uppercase tracking-widest text-gray-400">Receita</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-red-400" />
+                                <span className="text-xs font-normal uppercase tracking-widest text-gray-400">Despesa</span>
+                            </div>
                         </div>
                     </div>
                     <div className="flex-1 min-h-0">
@@ -1388,7 +1393,8 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
                         <h3 className="text-sm font-normal text-gray-400 uppercase tracking-widest">Performance por Imóvel</h3>
-                        <div className="p-1 px-3 bg-indigo-50 text-indigo-600 rounded-full text-sm font-normal uppercase">KPIs Consolidados</div>
+                        {/* §8: texto simples colorido — sem pílula, fundo ou uppercase. */}
+                        <span className="text-sm font-normal text-indigo-600">KPIs consolidados</span>
                     </div>
                     <table className="w-full text-left text-sm">
                         <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
@@ -1522,20 +1528,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
            gráfico do Resumo segue usando `cashFlowData`. */
         { key: 'rentabilidade', label: 'Rentabilidade' },
         { key: 'extrato', label: 'Extrato' },
-        { key: 'conciliacao', label: 'Conciliação' },
-        /* "Boletos a Pagar" e não só "Boletos": esta aba é o BoletoManager
-           (boleto de fornecedor capturado por PDF, direction DEBIT). O
-           "Boletos ao Cliente" do menu é outra coisa — cobrança emitida via
-           Asaas (client_charges), a receber. */
-        { key: 'boletos', label: 'Boletos a Pagar' },
-        { key: 'contas_pagar', label: 'Contas a Pagar' },
+        /* Abas "Conciliação", "Boletos a Pagar" e "Contas a Pagar" removidas em
+           2026-08-15: renderizavam os MESMOS componentes que já são item de menu
+           com rota própria (BankReconciliation, BoletoManager,
+           ContasPagarManager). Ver RETIRED_TABS acima. */
     ];
 
-    /* Botões de exportação — extraídos da barra de abas para poder ir tanto aqui
-       (telas que ainda recebem tudo junto) quanto isolados no `actionsSlot` de
-       um filho que tem sua PRÓPRIA toolbar de botões (§5.3) — caso de
-       ContasPagarManager: abas (§19.1) e ação primária (§5.3/§17) são barras
-       diferentes, não deveriam vir coladas no mesmo `tabsSlot`. */
+    /* Botões de exportação, à direita da barra de abas (§8). */
     const exportButtons = (
         <div className="flex items-center gap-2 shrink-0">
             <button
@@ -1574,33 +1573,9 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         </div>
     );
 
-    /* Só as abas, sem export — para o filho que tem toolbar de botões própria
-       (ContasPagarManager) e posiciona o export ali, não colado na navegação. */
-    const tabsOnlyBar = (
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
-                <TabsList>
-                    {tabs.map((tab) => (
-                        <TabsTrigger key={tab.key} value={tab.key}>
-                            {tab.label}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
-            </Tabs>
-        </div>
-    );
-
-    /* Anatomia do §1: título → KPIs → ABAS → botões → tabela. As abas precisam vir
-       DEPOIS dos KPIs, mas título e KPIs pertencem a cada filho — então o filho
-       migrado recebe a barra por `tabsSlot` e a posiciona no lugar certo. Enquanto
-       uma aba não for migrada, o pai desenha a barra em cima (comportamento atual),
-       para nenhuma tela ficar sem navegação. Migrar = aceitar `tabsSlot` e listar aqui. */
-    const TABS_RENDERED_BY_CHILD: TabKey[] = ['contas_pagar', 'boletos'];
-    const childOwnsTabsBar = TABS_RENDERED_BY_CHILD.includes(activeTab);
-
     return (
         <div className="p-2 space-y-6 animate-in fade-in duration-500">
-            {!childOwnsTabsBar && tabsBar}
+            {tabsBar}
 
             {settings.name === 'Gestão Comercial' && (
                 <div className="flex flex-wrap items-center gap-4">
@@ -1640,12 +1615,6 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             {activeTab === 'despesas' && renderDespesas()}
             {activeTab === 'rentabilidade' && renderRentabilidade()}
             { activeTab === 'extrato' && renderExtrato() }
-            { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }
-            { activeTab === 'boletos' && <BoletoManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} userEmail={userEmail} organizations={organizations} onOrgChange={onOrgChange || (() => {})} tabsSlot={tabsBar} /> }
-            {/* Sem actionsSlot: ContasPagarManager tem export próprio, amarrado às
-                parcelas/notas realmente exibidas — não ao Extrato/Fluxo do projeto
-                que `exportButtons` gera (dado errado para esta tela). */}
-            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} tabsSlot={tabsOnlyBar} /> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}
 
@@ -1721,11 +1690,12 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                     </div>
                                     {item.match ? (
                                         <div className="text-right">
-                                            <span className="text-sm font-normal text-emerald-600 uppercase tracking-tighter bg-white px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">Correspondência Encontrada</span>
+                                            {/* §8: status do match = texto simples colorido. */}
+                                            <span className="text-sm font-normal text-emerald-600">Correspondência encontrada</span>
                                             <p className="text-sm font-normal text-gray-400 mt-1">{item.match.description}</p>
                                         </div>
                                     ) : (
-                                        <span className="text-sm font-normal text-gray-400 uppercase tracking-tighter">Sem correspondência</span>
+                                        <span className="text-sm font-normal text-gray-400">Sem correspondência</span>
                                     )}
                                 </div>
                             ))}

@@ -84,6 +84,7 @@ const ClientChargesModule      = React.lazy(() => import('./ClientChargesModule'
 const BoletoManager            = React.lazy(() => import('./BoletoManager'));
 const BankReconciliation       = React.lazy(() => import('./BankReconciliation'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
+const ContasPagarManager    = React.lazy(() => import('./ContasPagarManager'));
 const TributosAPagarManager  = React.lazy(() => import('./TributosAPagarManager'));
 const FinancialApprovalModule = React.lazy(() => import('./FinancialApprovalModule'));
 const ProcessosModule        = React.lazy(() => import('./ProcessosModule'));
@@ -794,8 +795,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
-    case 'financial-categories':
-    case 'contas-a-pagar':
+    /* `project-financial` é o Financeiro DA OBRA (Resumo/Receitas/Despesas/
+       Rentabilidade/Extrato) — escopo de um projeto ou do vault "Gestão
+       Comercial". Contas a Pagar, Boletos a Pagar e Conciliação eram abas daqui
+       e viraram/voltaram a ser rota própria: são de escopo ORGANIZAÇÃO, nunca
+       olharam obra. Ver docs/planos/2026-08-15-contas-a-pagar-tela-dedicada.md */
     case 'project-financial':
       return (
         <ProjectFinancialManager
@@ -803,16 +807,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           settings={!projectId ? { ...INITIAL_PROJECT_SETTINGS, name: 'Gestão Comercial', classification: 'OBRA' } : settingsWithId}
           projectId={projectId || undefined}
           organizationId={activeOrganizationId || undefined}
-          organizations={organizations}
-          userEmail={session?.user?.email}
-          onOrgChange={(id) => setActiveOrganizationId(id)}
           budget={budget}
           onUpdateSettings={handleUpdateSettings}
           onViewOrder={(id: string) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }}
-          /* `contas-a-pagar` é rota explícita (item de menu "Contas a pagar" e
-             deep-link do Fiscal): abre na aba certa em vez da última visitada.
-             `project-financial` é a tela consolidada — respeita o localStorage. */
-          initialTab={activeView === 'contas-a-pagar' ? 'contas_pagar' : undefined}
         />
       );
 
@@ -972,7 +969,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <FiscalModuleL
           onViewOrder={(id: string) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }}
-          onViewPayable={(pid: string | null) => { setProjectId(pid); setActiveView('contas-a-pagar'); }}
+          /* Sem `setProjectId`: Contas a Pagar é de escopo organização e nunca
+             recebeu `projectId` — trocar a obra do topo aqui só mexia no
+             contexto global do app sem efeito nenhum na tela de destino. */
+          onViewPayable={() => { setActiveView('contas-a-pagar'); }}
         />
       );
 
@@ -1448,6 +1448,25 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <ContasReceberManager
             organizationId={activeOrganizationId || ''}
+            organizations={organizations}
+          />
+        </React.Suspense>
+      );
+
+    // ── Contas a Pagar (títulos de fornecedor) ────────────────────────────────
+    // Espelho exato de `contas-a-receber`. Até 2026-08-15 esta view caía no
+    // ProjectFinancialManager com `initialTab='contas_pagar'`, o que fazia o
+    // item de menu parecer duplicado da "Gestão Financeira" — a mesma tela
+    // abria pelos dois caminhos. O escopo aqui é ORGANIZAÇÃO, não obra: o
+    // componente nunca recebeu `projectId`.
+    case 'contas-a-pagar':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          {/* `?? undefined` e não `|| ''`: a sentinela de "Todas as organizações"
+              é ausência, não string vazia (CLAUDE.md REGRA #5). O componente já
+              normaliza com `organizationId || undefined`. */}
+          <ContasPagarManager
+            organizationId={activeOrganizationId ?? undefined}
             organizations={organizations}
           />
         </React.Suspense>

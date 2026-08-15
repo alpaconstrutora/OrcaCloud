@@ -521,8 +521,9 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'supplies-orders', label: 'Pedidos', group: 'Suprimentos', icon: Package },
       { id: 'financial-dashboard', label: 'Dashboard financeiro', group: 'Financeiro', icon: DollarSign },
       { id: 'contas-a-pagar', label: 'Contas a pagar', group: 'Financeiro', icon: DollarSign },
-      { id: 'project-financial', label: 'Gestão financeira', group: 'Financeiro', icon: BarChart3 },
+      { id: 'project-financial', label: 'Financeiro da obra', group: 'Financeiro', icon: BarChart3 },
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
+      { id: 'boletos-pagar', label: 'Boletos a pagar', group: 'Financeiro', icon: Banknote },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
       { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
       { id: 'regulatory-maps', label: 'Mapa Regulatório', group: 'Comercial', icon: Map },
@@ -1038,22 +1039,40 @@ const Layout: React.FC<LayoutProps> = ({
                   >
                     {(mod.financeiro || isDev) && (
                       <>
-                        <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
-                        <DropdownItem id="fpa-module" label="FP&A" icon={Calculator} />
+                        {/* Agrupado por PROCESSO (a receber / a pagar / tesouraria /
+                            análise) desde 2026-08-15. Antes era uma lista corrida de
+                            13 itens onde "Contas a Pagar" e "Gestão Financeira"
+                            abriam a mesma tela — ver
+                            docs/planos/2026-08-15-contas-a-pagar-tela-dedicada.md */}
+                        <DropdownGroupLabel label="A Receber" />
                         <DropdownItem id="contas-a-receber" label="Contas a Receber" icon={TrendingUp} />
                         <DropdownItem id="financial-boletos" label="Boletos ao Cliente" icon={Receipt} />
+
+                        <DropdownGroupLabel label="A Pagar" />
                         <DropdownItem id="contas-a-pagar" label="Contas a Pagar" icon={DollarSign} />
+                        {/* "Boletos a Pagar" e não "Captura de Boletos": o nome antigo
+                            descrevia o COMO (captura por PDF), não o quê. Faz par com
+                            "Boletos ao Cliente" — este é boleto de fornecedor (DEBIT). */}
+                        <DropdownItem id="boletos-pagar" label="Boletos a Pagar" icon={Banknote} />
                         <DropdownItem id="tributos-a-pagar" label="Tributos a Pagar" icon={Percent} />
-                        <DropdownItem id="boletos-pagar" label="Captura de Boletos" icon={Banknote} />
+
+                        <DropdownGroupLabel label="Tesouraria" />
                         {/* `extrato-bancario` foi removido do menu: caía no mesmo
                             BankReconciliation de "Conciliação Bancária" (rota duplicada).
                             A rota segue viva no AppRouter para links antigos. */}
                         <DropdownItem id="bank-reconciliation" label="Conciliação Bancária" icon={ArrowRightLeft} />
-                        <DropdownItem id="project-financial" label="Gestão Financeira" icon={BarChart3} />
                         <DropdownItem id="financial-calendar" label="Calendário" icon={Calendar} />
                         <DropdownItem id="dunning" label="Cobrança Auto." icon={Bell} />
                         <DropdownItem id="financial-approval" label="Aprovações" icon={Shield} />
+
+                        <DropdownGroupLabel label="Análise" />
+                        <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
+                        <DropdownItem id="fpa-module" label="FP&A" icon={Calculator} />
                         <DropdownItem id="financial-intelligence" label="Inteligência" icon={Brain} />
+                        {/* "Financeiro da Obra" e não "Gestão Financeira": o escopo é UM
+                            projeto (ou o vault "Gestão Comercial"), não o financeiro da
+                            empresa — o nome antigo competia com todos os itens acima. */}
+                        <DropdownItem id="project-financial" label="Financeiro da Obra" icon={BarChart3} />
                       </>
                     )}
                   </NavDropdown>

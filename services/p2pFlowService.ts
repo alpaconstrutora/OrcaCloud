@@ -143,13 +143,13 @@ export const p2pFlowService = {
       },
       {
         id: 'financeiro', label: 'Contas a Pagar', owner: 'Financeiro',
-        view: 'project-financial', count: contasPagar, pending: contasPagar,
+        view: 'contas-a-pagar', count: contasPagar, pending: contasPagar,
         inboundSeam: 'manual',
         inboundNote: 'Título nasce do recebimento+nota (parcial); NF-e isolada não gera título',
       },
       {
         id: 'pagamento', label: 'Pago / Baixado', owner: 'Tesouraria',
-        view: 'project-financial', count: pagos,
+        view: 'contas-a-pagar', count: pagos,
         inboundSeam: 'manual', inboundNote: 'Baixa via conciliação bancária',
       },
     ];

@@ -167,13 +167,11 @@ interface Props {
     organizationId?: string;
     /** Só para resolver o nome da org no cabeçalho do PDF — não há seletor nesta tela. */
     organizations?: Organization[];
-    /**
-     * Barra de abas do módulo pai (§3). Vem por prop porque a anatomia do §1 exige
-     * título → KPIs → ABAS → botões → tabela: as abas são do pai, mas título e KPIs
-     * são desta tela, então quem posiciona a barra no lugar certo é o filho.
-     * Ausente = a tela é usada fora do Financeiro e simplesmente não tem abas.
-     */
-    tabsSlot?: React.ReactNode;
+    /* `tabsSlot` removido em 2026-08-15: só o ProjectFinancialManager o passava,
+       quando esta tela era aba dele. Agora é rota própria (AppRouter
+       'contas-a-pagar'), simétrica a Contas a Receber. A navegação interna
+       (Parcelas / Notas fiscais / Fechamento por CC) é o controle segmentado
+       desta própria tela. */
 }
 
 /**
@@ -210,7 +208,7 @@ const VISAO_LABELS: Record<Visao, string> = {
     fechamento: 'Fechamento por CC',
 };
 
-export default function ContasPagarManager({ organizationId, organizations, tabsSlot }: Props) {
+export default function ContasPagarManager({ organizationId, organizations }: Props) {
     const [visao, setVisao] = usePersistedState<Visao>('contasPagarManager:visao', 'parcelas');
     const [payables, setPayables] = useState<Payable[]>([]);
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
@@ -738,11 +736,6 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                         />
                     </div>
             )}
-
-                    {/* Toolbar de abas (§3) — entre os KPIs e a toolbar de botões, na
-                        ordem da anatomia do §1. Renderizada pelo módulo pai e posicionada
-                        aqui (ver prop `tabsSlot`). */}
-                    {tabsSlot}
 
                     {/* Toolbar de botões (§5.3) — controles de ESCOPO: sobre qual recorte de
                         dados a tela está olhando (visão, organização, período de vencimento).

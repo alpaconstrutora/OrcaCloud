@@ -226,14 +226,14 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
                             value={formatBRLShort(kpis?.a_receber ?? 0)}
                             icon={<TrendingUp className="w-5 h-5" />}
                             color="blue"
-                            onClick={() => onNavigate?.('project-financial')}
+                            onClick={() => onNavigate?.('contas-a-receber')}
                         />
                         <KpiCard
                             label="Recebido"
                             value={formatBRLShort(kpis?.recebido ?? 0)}
                             icon={<ArrowUpRight className="w-5 h-5" />}
                             color="emerald"
-                            onClick={() => onNavigate?.('project-financial')}
+                            onClick={() => onNavigate?.('contas-a-receber')}
                         />
                         <KpiCard
                             label="A Pagar"

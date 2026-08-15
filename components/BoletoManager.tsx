@@ -29,14 +29,9 @@ interface BoletoManagerProps {
     projectId?: string;
     organizations?: Organization[];
     onOrgChange?: (id: string | null) => void;
-    /**
-     * Barra de abas do módulo pai (§19.1/§19.3). Vem por prop porque a anatomia
-     * canônica exige título → ABAS → KPIs → botões → tabela: as abas são do
-     * Financeiro, mas título e KPIs são desta tela, então quem posiciona a
-     * barra é o filho. Ausente quando a tela roda como rota própria (AppRouter
-     * 'boletos-pagar'), onde de fato não há abas.
-     */
-    tabsSlot?: React.ReactNode;
+    /* `tabsSlot` removido em 2026-08-15: só o ProjectFinancialManager o passava,
+       quando esta tela era aba dele. Agora ela é sempre rota própria
+       (AppRouter 'boletos-pagar') e não tem barra de abas de pai nenhum. */
 }
 
 const STATUS_LABELS: Record<BoletoStatus, string> = {
@@ -370,7 +365,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
 });
 
 const BoletoManager: React.FC<BoletoManagerProps> = ({
-    organizationId, userEmail, projectId, organizations = [], onOrgChange, tabsSlot,
+    organizationId, userEmail, projectId, organizations = [], onOrgChange,
 }) => {
     const [boletos, setBoletos] = useState<Boleto[]>([]);
     // Totais agregados no servidor — independem de quantos boletos estão na tela.
@@ -792,17 +787,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             {/* 1. Título — h1 solto (§1). Escopo e ações moram na barra da §4, abaixo
                 dos KPIs; antes estavam espremidos aqui na mesma linha do título. */}
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Captura de Boletos</h1>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Boletos a Pagar</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
                     Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.
                 </p>
             </div>
-
-            {/* 2. Toolbar de abas (§19.1/§19.3) — vem do módulo pai (Financeiro) e é
-                posicionada aqui, entre o título e os KPIs, como manda a anatomia
-                canônica (título → abas → KPIs, corrigida em 2026-08-02). Ausente
-                quando a tela é usada como rota própria (AppRouter 'boletos-pagar'). */}
-            {tabsSlot}
 
             {/* 3. Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
             {!loading && boletos.length > 0 && (

@@ -1995,33 +1995,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         }}
       />
 
-      {/* Toolbar acoplada à tabela (§5.2): toolbar e WBS dividem UM card —
-          border/rounded/shadow/overflow só neste pai, e a régua interna sem
-          moldura própria, separada do conteúdo pelo border-b. */}
-      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
-      <div className="p-3 border-b border-gray-100 flex flex-wrap gap-3 items-center justify-between">
+      {/* Toolbar de botões (§5.3): controles de escopo/visualização + ação
+          primária. Barra PRÓPRIA, acima da toolbar acoplada — muda o que a tela
+          mostra, não o recorte das linhas. */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Busca da WBS — parte do conjunto padrão da toolbar acoplada */}
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Buscar item por código ou descrição..."
-              value={wbsSearch}
-              onChange={(e) => setWbsSearch(e.target.value)}
-              className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-            />
-            {isSearching_wbs && (
-              <button
-                onClick={() => setWbsSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-[6px] hover:bg-gray-100"
-                title="Limpar busca"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
           {isLocked && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-[6px] border border-amber-200 text-xs font-bold animate-pulse">
               <AlertTriangle className="w-4 h-4" />
@@ -2071,17 +2049,6 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             >
               {expandedGroups.length > 0 ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
               {expandedGroups.length > 0 ? 'Recolher' : 'Expandir'}
-            </button>
-
-            {/* Auto-ajuste de largura (§6.1.2) — sob comando explícito, nunca
-                automático: recalcular a cada digitação faria as colunas dançarem.
-                Neutro (não é toggle, não fica azul). */}
-            <button
-              onClick={() => cols.autoFit()}
-              className="p-2 rounded-[6px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
-              title="Ajustar largura das colunas ao conteúdo"
-            >
-              <MoveHorizontal className="w-4 h-4" />
             </button>
 
             <div className="h-6 w-px bg-gray-200 mx-1" />
@@ -2239,7 +2206,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             )}
           </div>
 
-          {/* Ação primária */}
+          {/* Ação primária (§17) — mora aqui, na toolbar de botões */}
           <Button
             onClick={handleAddGroup}
             className="gap-2 text-button"
@@ -2249,6 +2216,47 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Toolbar acoplada à tabela (§5.2): régua e WBS dividem UM card —
+          border/rounded/shadow/overflow só neste pai, régua sem moldura própria,
+          separada do conteúdo pelo border-b. Aqui ficam só os controles do
+          RECORTE das linhas (busca) e da apresentação das colunas (autofit) —
+          o resto é escopo e mora na toolbar de botões acima (§5.3). */}
+      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
+        <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
+          <div className="flex-1 relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar item por código ou descrição..."
+              value={wbsSearch}
+              onChange={(e) => setWbsSearch(e.target.value)}
+              className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            />
+            {isSearching_wbs && (
+              <button
+                onClick={() => setWbsSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded-[6px] hover:bg-gray-100"
+                title="Limpar busca"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Auto-ajuste de largura ao conteúdo (§6.1.2) — sob comando explícito,
+              nunca automático: recalcular a cada tecla faria as colunas dançarem
+              enquanto o usuário digita. Neutro: não é toggle, não fica azul. */}
+          <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+            <button
+              onClick={() => cols.autoFit()}
+              className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+              title="Ajustar largura das colunas ao conteúdo"
+            >
+              <MoveHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
       {
         showHistory && (

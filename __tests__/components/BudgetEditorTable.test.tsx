@@ -231,6 +231,35 @@ describe('Estrutura da tabela da WBS', () => {
         expect(toolbar!.className).not.toMatch(/shadow-sm/);
     });
 
+    it('o botão de autofit fica NA toolbar acoplada, junto da busca (§6.1.2)', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        const table = getWbsTable(container);
+        const card = table.closest('.rounded-\\[10px\\].border.shadow-sm') as HTMLElement;
+
+        const autofit = within(card).getByTitle(/ajustar largura das colunas/i);
+        expect(autofit).toBeDefined();
+
+        // Tem que estar na MESMA régua da busca — não solto em outro bloco.
+        const search = within(card).getByPlaceholderText(/buscar item/i);
+        const rulerOfSearch = search.closest('.border-b');
+        expect(rulerOfSearch?.contains(autofit)).toBe(true);
+    });
+
+    it('os controles de escopo ficam FORA do card acoplado, na toolbar de botões (§5.3)', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        const table = getWbsTable(container);
+        const card = table.closest('.rounded-\\[10px\\].border.shadow-sm') as HTMLElement;
+
+        // A régua acoplada carrega só busca + autofit; escopo e ação primária
+        // moram na barra própria acima.
+        for (const label of [/novo grupo/i, /ferramentas/i, /gerenciar eap/i, /salvar versão/i]) {
+            const found = within(card).queryByText(label);
+            expect(found, `"${label}" não pode estar dentro do card acoplado`).toBeNull();
+            // ...mas tem que existir em algum lugar da tela.
+            expect(within(container).queryByText(label)).not.toBeNull();
+        }
+    });
+
     it('a busca filtra os itens e abre a árvore para mostrar o resultado', () => {
         const { container } = renderEditor([makeEntry('1'), makeEntry('2')]);
         const search = container.querySelector('input[placeholder*="Buscar item"]') as HTMLInputElement;

@@ -462,7 +462,22 @@ Isso resolve a segregação sem depender da organização: a despesa do condomí
 
 **No ar:** Comercial › Condomínios, com 7 abas (Ficha, Ocupações, Frações, Ativos, Manutenção, Financeiro, Comunicação) + Portal do Condômino em `/portal-condomino?token=`.
 
-**Dívida de verificação — a maior desta frente.** Do que foi construído, o usuário exercitou: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos acima). **Nunca abertas:** Ficha, Frações, Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
+**Auditoria de schema/RLS das migrations `000017`–`000024` — FECHADA (14/08/2026).** 8 blocos de verificação SQL (itens 17–24, um por migration, o 18 cobrindo as 4 tabelas de Manutenção de uma vez), rodados pelo usuário no SQL Editor:
+
+| # | Migration/área | com_rls | anon_policies | Invariantes específicos conferidos |
+|---|---|---|---|---|
+| 17 | Ocupações | 1/1 | 0 | 4 policies, 2 FKs, unique de responsável, trigger de cascata de org, filtro `EM_OPERACAO` |
+| 18 | Manutenção (4 tabelas) | 4/4 | 0 | 16 policies, unique de plano vigente, trigger de ciclo, `fn_next_due`, 4 colunas em `assets` |
+| 19 | Frações — coluna origem | — | — | FK presente, unique de origem; ⚠️ `fk_on_delete = n` — a confirmar se é decisão (ver abaixo) |
+| 20 | Cron manutenção | — | — | job único, agenda `0 9 * * *` |
+| 21 | Frações — trigger origem | — | — | trigger presente; `marcadas_motor=0`, `marcadas_convencao=0` — **confirma por dado real que a aba Frações nunca foi usada no piloto**, não é falha da migration |
+| 22 | Cron alertas | — | — | 1 job consolidado rodando `fn_maintenance_due_alerts(30)` + `fn_supplier_warranty_alerts(90)` |
+| 23 | Ativos (4 tabelas) | 4/4 | 0 | 3 RPCs, FK de chamado→unidade |
+| 24 | Financeiro/rateio (3 tabelas) | 3/3 | 0 | unique de competência, trigger que trava período fechado, coluna de empreendimento |
+
+**Resultado: zero policy de anon em qualquer uma das 24 tabelas novas, e todo invariante de negócio (cascata de org, responsável único, plano vigente único, competência única, trava de período fechado, trava de convenção) existe como trigger ou unique index — não só validação de aplicação.** Único ponto ainda em aberto: item 19, `fk_on_delete = n` na coluna de origem de Frações — checar se é `NO ACTION` intencional (não apagar fração de convenção por exclusão em cascata) ou default esquecido.
+
+**Dívida de verificação de UI — a que resta, e é a maior desta frente agora.** Isso é uso de tela, não schema. Do que foi construído, o usuário exercitou: importação de ocupações de locações, painel de importar empreendimento, cron de manutenção (provado com dado real), e o centro de custo (que revelou os dois defeitos de schema já corrigidos). **Nunca abertas:** Ficha, Frações, Ativos, Comunicação, Portal do Condômino, e a criação de plano com catálogo. `tsc` e `check-ui-standard.sh` não enxergam bloco fora de ordem, lista renderizando vazia nem separador faltando.
 
 **Piloto ainda não rodou.** `010 - Galeria Altavista` tem plano de manutenção com 2 itens (um de teste, "cc") e nada mais: sem ocupações, sem frações, sem ativos, sem centro de custo vinculado. `007 - Bella Vista` está EM_OPERACAO e tem o centro de custo `009` solto (a arrumar: desvincular/excluir e vincular o `007 — Condomínio Bella Vista`).
 

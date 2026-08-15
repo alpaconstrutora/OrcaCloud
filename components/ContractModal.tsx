@@ -194,9 +194,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const contractDirection = direction ?? (initialData?.direction as string | undefined);
 
     // Numeração de Contratos (Suprimentos) — Configurações do Sistema › Nomenclatura.
-    // Cópia do mecanismo de Numeração de Pedidos: sempre ativa para domain='SUPRIMENTOS',
-    // sem toggle. Serviços e Vendas continuam com o formato legado (3 dígitos).
-    const useNewNumbering = domain === 'SUPRIMENTOS';
+    // Cópia do mecanismo de Numeração de Pedidos: ativa para domain='SUPRIMENTOS' quando
+    // há obra vinculada (a máscara usa o código da obra). Sem obra — despesa administrativa,
+    // que não tem por que ter obra — cai no formato manual legado (3 dígitos), igual
+    // Serviços e Vendas.
+    const useNewNumbering = domain === 'SUPRIMENTOS' && !!formData.project_id;
 
     React.useEffect(() => {
         if (!isOpen || initialData?.id || !organizationId) return;
@@ -359,15 +361,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
         const isNewContract = !initialData?.id;
 
-        if (!(useNewNumbering && isNewContract)) {
+        if (!useNewNumbering) {
             const currentNumber = (numberInputRef.current || formData.number || '');
             if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
                 setNumberError('Formato inválido. Use 3 dígitos (ex: 001, 042, 123).');
                 return;
             }
-        } else if (!formData.project_id) {
-            setNumberError('Selecione a obra — a numeração de contratos de Suprimentos usa o código da obra.');
-            return;
         }
 
         setIsSubmitting(true);
@@ -1422,16 +1421,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada (Opcional)</label>
                                     <div className="relative group">
                                         <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                         <select
-                                            required
                                             value={formData.project_id || ''}
                                             onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
                                             className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                         >
-                                            <option value="">Selecione uma obra</option>
+                                            <option value="">Nenhuma (despesa administrativa)</option>
                                             {obrasList.map(p => (
                                                 <option key={p.id} value={p.id}>{p.name}</option>
                                             ))}

@@ -4,6 +4,8 @@ import { projectService } from './projectService';
 import { approvalService } from './approvalService';
 import { normalizeIndexName } from './contractIndexService';
 import { commercialFinanceService } from './commercialFinanceService';
+import { generateRentalContractNumber } from './rentalContractNumberingService';
+import { generateUnitSaleContractNumber } from './unitSaleContractNumberingService';
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
 import {
@@ -264,23 +266,18 @@ export async function removeContractTransactionsFrom(
 
 /**
  * Próximo número da sequência de LOCAÇÃO (`CL-{ano}-{seq}`), independente da de
- * vendas. Deriva do MAIOR sufixo existente, não de COUNT(*): com contagem, a
- * exclusão de um contrato faz o próximo número repetir um já usado e a
- * idempotência por número passa a casar com contrato alheio.
- * Usado por `createFromDeal` e pela renovação (contractRenewalService).
+ * vendas. Usado por `createFromDeal` e pela renovação (contractRenewalService).
+ *
+ * A máscara e o contador vivem em `rentalContractNumberingService` desde
+ * 15/08/2026 (Configurações do Sistema › Nomenclatura › Contratos de Locação).
+ * Antes o sequencial saía do MAIOR sufixo existente lido AQUI, no navegador —
+ * o que já evitava a repetição que COUNT(*) causa após exclusão, mas não
+ * impedia dois usuários de lerem o mesmo máximo e gerarem o mesmo número. O
+ * contador agora é atômico no banco; esta função continua existindo só como o
+ * ponto de entrada que os dois chamadores já conheciam.
  */
 export async function nextRentalNumber(orgId: string, year: number): Promise<string> {
-    const { data: last } = await supabase
-        .from('contracts')
-        .select('number')
-        .eq('organization_id', orgId)
-        .eq('domain', 'LOCACAO')
-        .like('number', `CL-${year}-%`)
-        .order('number', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-    const lastSeq = parseInt((last?.number || '').split('-').pop() || '0', 10) || 0;
-    return `CL-${year}-${String(lastSeq + 1).padStart(3, '0')}`;
+    return generateRentalContractNumber(orgId, year);
 }
 
 /**
@@ -1260,8 +1257,10 @@ export const contractService = {
 
         const isRental = domain === 'LOCACAO';
         const cfg = isRental
-            ? { contractType: 'Contrato Recorrente', nature: 'Locação', titlePrefix: 'Contrato de Locação', titleFallback: 'Contrato de Locação', numberPrefix: 'CL' }
-            : { contractType: 'Compra e Venda', nature: 'Outros', titlePrefix: 'Contrato de Venda', titleFallback: 'Contrato de Compra e Venda', numberPrefix: 'CV' };
+            // Sem `numberPrefix`: o prefixo passou a ser configurável e mora na
+            // máscara de cada domínio (rental/unitSale ContractNumberingService).
+            ? { contractType: 'Contrato Recorrente', nature: 'Locação', titlePrefix: 'Contrato de Locação', titleFallback: 'Contrato de Locação' }
+            : { contractType: 'Compra e Venda', nature: 'Outros', titlePrefix: 'Contrato de Venda', titleFallback: 'Contrato de Compra e Venda' };
 
         // Unidades da negociação: nome (para o título), empresa dona (locador) e
         // endereço da unidade principal. Resolvido ANTES da idempotência porque
@@ -1315,25 +1314,11 @@ export const contractService = {
             : '';
         if (!number) {
             const year = new Date().getFullYear();
-            if (isRental) {
-                // Locação tem sua própria sequência (CL-), independente das vendas.
-                number = await nextRentalNumber(deal.organization_id, year);
-            } else {
-                try {
-                    number = await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
-                } catch {
-                    number = `${cfg.numberPrefix}-${year}-${Date.now().toString().slice(-4)}`;
-                }
-                if (!number || number === '001') {
-                    // RPC inexistente retorna '001' — fallback por contagem local
-                    const { count } = await supabase
-                        .from('contracts')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('organization_id', deal.organization_id)
-                        .eq('direction', 'OUTGOING');
-                    number = `${cfg.numberPrefix}-${year}-${String((count || 0) + 1).padStart(3, '0')}`;
-                }
-            }
+            // Cada domínio tem sua própria sequência e sua própria máscara,
+            // configuráveis em Configurações do Sistema › Nomenclatura.
+            number = isRental
+                ? await nextRentalNumber(deal.organization_id, year)
+                : await generateUnitSaleContractNumber(deal.organization_id, year);
         }
 
         // Idempotência secundária: contrato com este número já existe?

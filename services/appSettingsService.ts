@@ -23,6 +23,19 @@ export interface AppSettings {
     /** Casas do sequencial por obra (zeros à esquerda). */
     quotationSeqPadding: number;
 
+    // Contratos de LOCAÇÃO — mesmo padrão, mas o sequencial é por organização e
+    // ano: contrato de locação não tem obra. Tokens: {prefixo} {ano} {seq}.
+    rentalContractPrefix: string;
+    rentalContractNumberPattern: string;
+    /** Casas do sequencial (zeros à esquerda). */
+    rentalContractSeqPadding: number;
+
+    // Contratos de VENDA DE UNIDADES — idem locação, sequência independente.
+    unitSaleContractPrefix: string;
+    unitSaleContractNumberPattern: string;
+    /** Casas do sequencial (zeros à esquerda). */
+    unitSaleContractSeqPadding: number;
+
     // Exibição de fornecedores: razão social ou apelido curto
     supplierNameDisplay: 'razao' | 'apelido';
 
@@ -49,6 +62,17 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
     quotationNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
     quotationSeqPadding: 4,
 
+    // Padding 3 (não 4, como os de Suprimentos): reproduz exatamente o formato
+    // que já está em produção — CL-2026-001, CV-2026-001. Mudar aqui faz o
+    // próximo contrato sair com largura diferente dos anteriores.
+    rentalContractPrefix: 'CL',
+    rentalContractNumberPattern: '{prefixo}-{ano}-{seq}',
+    rentalContractSeqPadding: 3,
+
+    unitSaleContractPrefix: 'CV',
+    unitSaleContractNumberPattern: '{prefixo}-{ano}-{seq}',
+    unitSaleContractSeqPadding: 3,
+
     supplierNameDisplay: 'razao',
 
     whatsappOrderSentTemplate:
@@ -66,6 +90,10 @@ export const TEMPLATE_VARS = {
     orderNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     contractNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
     quotationNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
+    // Sem {empreendimento}/{obra}: contrato de locação e de venda de unidade
+    // não tem obra vinculada, os tokens sairiam vazios.
+    rentalContractNumber: ['{prefixo}', '{ano}', '{seq}'],
+    unitSaleContractNumber: ['{prefixo}', '{ano}', '{seq}'],
     whatsappOrderSent: ['{fornecedor}', '{pedido}', '{obra}', '{itens}', '{total}', '{entrega}'],
     whatsappStatusChange: ['{fornecedor}', '{pedido}', '{status}'],
     email: ['{pedido}', '{status}'],

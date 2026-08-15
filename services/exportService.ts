@@ -117,6 +117,19 @@ interface InvoiceExportRow {
     status: string;
 }
 
+/**
+ * Consolidado do Fechamento por Centro de Custo — uma linha por CC, não por
+ * título. Tipo próprio porque as colunas são outras (não há credor, obra nem
+ * vencimento: a competência é o cabeçalho, não a coluna).
+ */
+interface ClosingExportRow {
+    centroCusto: string;
+    previsto: number;
+    pago: number;
+    emAberto: number;
+    titulos: number;
+}
+
 // Typed rows for milestone/SCurve reports
 interface MilestoneRow {
     label: string;
@@ -463,6 +476,88 @@ export const exportService = {
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Notas Fiscais");
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+        saveAs(blob, `${options.fileName}.xlsx`);
+    },
+
+    /**
+     * Contas a Pagar — Fechamento por Centro de Custo (consolidado da competência).
+     * `situacao` entra no cabeçalho, não como coluna: é atributo do fechamento
+     * inteiro. Sem ele, dois PDFs do mesmo mês — um antes e um depois de fechar —
+     * ficariam indistinguíveis.
+     */
+    generateClosingPDF(
+        rows: ClosingExportRow[],
+        options: { organization?: Organization; fileName: string; title: string; competencia: string; situacao: string },
+    ) {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const primaryColor: [number, number, number] = [30, 41, 59];
+        const money = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 0, pageWidth, 35, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text(options.title.toUpperCase(), 15, 22);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${options.organization?.name || 'OPURA'} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 15, 30);
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Competência: ${options.competencia}`, 15, 42);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Situação: ${options.situacao}`, pageWidth - 15, 42, { align: 'right' });
+
+        autoTable(doc, {
+            startY: 48,
+            head: [['Centro de Custo', 'Títulos', 'Previsto', 'Pago', 'Em aberto']],
+            body: rows.map(r => [
+                r.centroCusto,
+                String(r.titulos),
+                money(r.previsto),
+                money(r.pago),
+                money(r.emAberto),
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: primaryColor, fontSize: 9 },
+            styles: { fontSize: 8 },
+            columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+        });
+
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
+        const totalPrevisto = rows.reduce((s, r) => s + r.previsto, 0);
+        const totalPago     = rows.reduce((s, r) => s + r.pago, 0);
+        const totalAberto   = rows.reduce((s, r) => s + r.emAberto, 0);
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Previsto: ${money(totalPrevisto)}   ·   Pago: ${money(totalPago)}   ·   Em aberto: ${money(totalAberto)}`, 15, finalY);
+
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Relatório gerado via Opura Financial Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+        doc.save(`${options.fileName}.pdf`);
+    },
+
+    generateClosingExcel(rows: ClosingExportRow[], options: { fileName: string }) {
+        const exportData = rows.map(r => ({
+            'Centro de Custo': r.centroCusto,
+            'Títulos': r.titulos,
+            'Previsto': r.previsto,
+            'Pago': r.pago,
+            'Em aberto': r.emAberto,
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Fechamento");
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
         saveAs(blob, `${options.fileName}.xlsx`);

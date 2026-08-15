@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check,
     Clock, ExternalLink, FileDown, FileText, Landmark, Loader2, RefreshCw,
-    Search, X, DollarSign, AlertTriangle, MoveHorizontal,
+    Search, X, DollarSign, AlertTriangle, MoveHorizontal, Layers,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
 import { payableService, payableParty } from '../services/payableService';
@@ -10,6 +10,8 @@ import { exportService } from '../services/exportService';
 import { Invoice, Payable } from '../types/financial';
 import type { Organization } from '../types';
 import ContasPagarParcelas, { origemLabel as payableOrigemLabel, STATUS_PT as PAYABLE_STATUS_PT } from './ContasPagarParcelas';
+import FechamentoCentroCusto, { type LinhaFechamento } from './financeiro/FechamentoCentroCusto';
+import type { CostCenterClosing } from '../services/costCenterClosingService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
@@ -107,11 +109,16 @@ function StatusBadge({ inv }: { inv: InvoiceRow }) {
     );
 }
 
-// Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
-// possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
-// repetir um bloco condicional fixo por coluna. Alinhamento/cor que antes viviam
-// na classe do <td> (text-right/text-center, cor condicional de vencimento) foram
-// movidos para dentro do conteúdo — o <td> em si usa uma classe base comum.
+// Conteúdo de cada célula por coluna — extraído para função pura para que o corpo
+// da tabela possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável)
+// em vez de repetir um bloco condicional fixo por coluna. Alinhamento/cor que
+// antes viviam na classe da célula (text-right/text-center, cor condicional de
+// vencimento) foram movidos para dentro do conteúdo — a célula usa classe base comum.
+//
+// ⚠️ Este comentário evita escrever a tag de célula literal de propósito: dentro
+// de comentário ela deixa o parser do check-ui-standard.sh aberto, e ele passa a
+// acusar falso positivo de §7 em todo `font-bold` abaixo (o <h1> do §20 e o <h3>
+// do empty state, §12) — era o que acontecia aqui até 15/08/2026.
 function renderContaCell(key: string, inv: InvoiceRow, fromBoleto: boolean, overdue: boolean, dueDate: Date | null): React.ReactNode {
     switch (key) {
         case 'supplier':
@@ -175,9 +182,12 @@ interface Props {
  *   de Contratos de Suprimentos. É a visão principal do Contas a Pagar.
  * - `notas`: notas fiscais anexadas ao pedido (tabela `invoices`), que é tudo
  *   que esta tela mostrava antes de 2026-07-29. Conferência de NF, não título.
+ * - `fechamento`: os MESMOS títulos de `parcelas`, consolidados por Centro de
+ *   Custo dentro de uma competência, com a ação de fechar/travar o mês. Não
+ *   carrega nada a mais — reaproveita `payables`.
  * Por serem escopos (§5.3), o seletor mora na barra de botões, não na busca.
  */
-type Visao = 'parcelas' | 'notas';
+type Visao = 'parcelas' | 'notas' | 'fechamento';
 
 const VISAO_HEADERS: Record<Visao, { titulo: string; subtitulo: string }> = {
     parcelas: {
@@ -188,6 +198,16 @@ const VISAO_HEADERS: Record<Visao, { titulo: string; subtitulo: string }> = {
         titulo: 'Notas Fiscais',
         subtitulo: 'Notas e boletos anexados aos pedidos, aprovados para pagamento.',
     },
+    fechamento: {
+        titulo: 'Fechamento por Centro de Custo',
+        subtitulo: 'Consolidado da competência por centro de custo, com fechamento e trava do mês.',
+    },
+};
+
+const VISAO_LABELS: Record<Visao, string> = {
+    parcelas: 'Parcelas',
+    notas: 'Notas fiscais',
+    fechamento: 'Fechamento por CC',
 };
 
 export default function ContasPagarManager({ organizationId, organizations, tabsSlot }: Props) {
@@ -196,6 +216,11 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
     // o export (abaixo) sair igual ao que a tabela mostra, não a lista inteira.
     const [payablesVisible, setPayablesVisible] = useState<Payable[]>([]);
+    // Consolidado e fechamento vigente reportados pela visão de Fechamento —
+    // o pai precisa deles para os KPIs (que vêm ANTES da tabela, §1) e para o
+    // export sair igual ao que a tela mostra.
+    const [consolidado, setConsolidado] = useState<LinhaFechamento[]>([]);
+    const [fechamento, setFechamento] = useState<CostCenterClosing | null>(null);
     const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -237,7 +262,9 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
         setLoading(true);
         setError(null);
         try {
-            if (visao === 'parcelas') {
+            // Fechamento lê a MESMA lista de parcelas (consolida no cliente),
+            // então cai no mesmo ramo — não há consulta própria para ela.
+            if (visao === 'parcelas' || visao === 'fechamento') {
                 // orgId undefined = "Todas as Organizações": o service não filtra e a
                 // RLS recorta o que o usuário pode ver (REGRA #5 — leitura não bloqueia).
                 // Período NÃO vai como filtro de servidor: `due_date >= x` exclui
@@ -260,9 +287,12 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
         }
     }
 
-    // Sem vencDe/vencAte nas deps: o período é recorte de cliente nas duas visões,
+    // Sem vencDe/vencAte nas deps: o período é recorte de cliente nas três visões,
     // recarregar do servidor a cada mudança de data seria consulta jogada fora.
-    useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, visao]);
+    // A dep é a FONTE de dados, não a visão: Parcelas e Fechamento leem a mesma
+    // lista, e alternar entre elas não pode disparar consulta nova.
+    const fonteDeDados = visao === 'notas' ? 'notas' : 'parcelas';
+    useEffect(() => { carregar(effectiveOrgId); }, [effectiveOrgId, fonteDeDados]);
 
     /** competência 'YYYY-MM' → { from: 'YYYY-MM-01', to: 'YYYY-MM-<último dia>' } */
     function competenciaToRange(comp: string): { from: string; to: string } {
@@ -486,6 +516,22 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
         return { aPagar, venc7, atrasado, pagoMes, qtdAPagar, qtdVenc7, qtdAtrasado, qtdPagoMes };
     }, [invoices]);
 
+    /**
+     * KPIs da visão de Fechamento. São OUTRA pergunta, não os mesmos números com
+     * outro rótulo: aqui o recorte é a competência inteira (não "em aberto hoje")
+     * e o que importa é quanto do mês já foi pago e quantos centros de custo o
+     * mês tocou. Reaproveitar `summaryParcelas` faria o card contradizer a tabela.
+     */
+    const summaryFechamento = useMemo(() => {
+        const previsto = consolidado.reduce((s, l) => s + l.previsto, 0);
+        const pago = consolidado.reduce((s, l) => s + l.pago, 0);
+        const aberto = consolidado.reduce((s, l) => s + l.aberto, 0);
+        const titulos = consolidado.reduce((s, l) => s + l.titulos, 0);
+        // Sem centro de custo: o número que diz quanto do mês ninguém classificou.
+        const semCC = consolidado.find(l => l.costCenterId === null)?.previsto ?? 0;
+        return { previsto, pago, aberto, titulos, semCC, centros: consolidado.length };
+    }, [consolidado]);
+
     const summary = visao === 'parcelas' ? summaryParcelas : summaryNotas;
     const header = VISAO_HEADERS[visao];
 
@@ -499,8 +545,33 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
      * Contas a Pagar). `payablesVisible`/`filtered` já refletem busca, status e
      * período.
      */
+    /** Competência por extenso ('agosto de 2026') — cabeçalho do export. */
+    const competenciaExtenso = competencia
+        ? new Date(`${competencia}-01T00:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        : 'Todas as competências';
+
+    /** Linhas do consolidado prontas para o export — mesma ordem da tela. */
+    const linhasFechamentoExport = () => consolidado.map(l => ({
+        centroCusto: l.nome,
+        previsto: l.previsto,
+        pago: l.pago,
+        emAberto: l.aberto,
+        titulos: l.titulos,
+    }));
+
     function exportarPDF() {
-        if (visao === 'parcelas') {
+        if (visao === 'fechamento') {
+            exportService.generateClosingPDF(linhasFechamentoExport(), {
+                organization: orgAtual,
+                fileName: `Fechamento_CentroCusto_${competencia || 'todos'}`,
+                title: 'Fechamento por Centro de Custo',
+                competencia: competenciaExtenso,
+                // Situação vai no cabeçalho, não numa coluna: é atributo do mês
+                // inteiro. Sem ela, o PDF de antes e o de depois de fechar
+                // ficariam indistinguíveis.
+                situacao: fechamento?.status === 'FECHADO' ? 'Fechada' : 'Aberta',
+            });
+        } else if (visao === 'parcelas') {
             exportService.generatePayablesPDF(
                 payablesVisible.map(p => ({
                     credor: p.credor_display || payableParty(p),
@@ -529,7 +600,11 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
     }
 
     function exportarExcel() {
-        if (visao === 'parcelas') {
+        if (visao === 'fechamento') {
+            exportService.generateClosingExcel(linhasFechamentoExport(), {
+                fileName: `Fechamento_CentroCusto_${competencia || 'todos'}`,
+            });
+        } else if (visao === 'parcelas') {
             exportService.generatePayablesExcel(
                 payablesVisible.map(p => ({
                     credor: p.credor_display || payableParty(p),
@@ -587,7 +662,47 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitulo}</p>
             </div>
 
-            {/* KPI Cards — mb-3 (ritmo §20.1): próximo bloco é a toolbar acoplada (§5.2) */}
+            {/* KPI Cards — mb-3 (ritmo §20.1): próximo bloco é a toolbar acoplada (§5.2).
+                A visão de Fechamento tem grade PRÓPRIA: os quatro cards de sempre
+                respondem "o que devo hoje?", e essa é outra pergunta do que "como
+                fechou o mês?" — reaproveitá-los aqui faria o card contradizer a
+                tabela logo abaixo. */}
+            {visao === 'fechamento' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                    <KpiCard
+                        label="Previsto na Competência"
+                        value={formatMoney(summaryFechamento.previsto)}
+                        sub={`${summaryFechamento.titulos} título${summaryFechamento.titulos !== 1 ? 's' : ''} no mês`}
+                        icon={<DollarSign className="w-5 h-5" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        label="Pago"
+                        value={formatMoney(summaryFechamento.pago)}
+                        sub={summaryFechamento.previsto > 0
+                            ? `${Math.round((summaryFechamento.pago / summaryFechamento.previsto) * 100)}% da competência`
+                            : 'Nada pago ainda'}
+                        icon={<Check className="w-5 h-5" />}
+                        color="emerald"
+                    />
+                    <KpiCard
+                        label="Em Aberto"
+                        value={formatMoney(summaryFechamento.aberto)}
+                        sub="A liquidar neste mês"
+                        icon={<Clock className="w-5 h-5" />}
+                        color="amber"
+                    />
+                    <KpiCard
+                        label="Centros de Custo"
+                        value={summaryFechamento.centros}
+                        sub={summaryFechamento.semCC > 0
+                            ? `${formatMoney(summaryFechamento.semCC)} sem centro de custo`
+                            : 'Tudo classificado'}
+                        icon={<Layers className="w-5 h-5" />}
+                        color={summaryFechamento.semCC > 0 ? 'red' : 'violet'}
+                    />
+                </div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                         <KpiCard
                             label="A Pagar"
@@ -622,6 +737,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                             onClick={() => setStatusFilter('paid')}
                         />
                     </div>
+            )}
 
                     {/* Toolbar de abas (§3) — entre os KPIs e a toolbar de botões, na
                         ordem da anatomia do §1. Renderizada pelo módulo pai e posicionada
@@ -641,7 +757,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                                 troca a pergunta de "quais títulos devo?" para "quais notas
                                 chegaram?". Controle segmentado, mesmo vocabulário do §19.1. */}
                             <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                                {(['parcelas', 'notas'] as Visao[]).map(v => (
+                                {(['parcelas', 'notas', 'fechamento'] as Visao[]).map(v => (
                                     <button
                                         key={v}
                                         onClick={() => setVisao(v)}
@@ -649,7 +765,7 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                                             visao === v ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                                         }`}
                                     >
-                                        {v === 'parcelas' ? 'Parcelas' : 'Notas fiscais'}
+                                        {VISAO_LABELS[v]}
                                     </button>
                                 ))}
                             </div>
@@ -698,13 +814,28 @@ export default function ContasPagarManager({ organizationId, organizations, tabs
                             <span className="text-sm font-normal text-gray-400">
                                 {visao === 'parcelas'
                                     ? `${payables.length} parcela${payables.length !== 1 ? 's' : ''}`
-                                    : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
+                                    : visao === 'fechamento'
+                                        ? `${consolidado.length} centro${consolidado.length !== 1 ? 's' : ''} de custo`
+                                        : `${filtered.length} de ${invoices.length} nota${invoices.length !== 1 ? 's' : ''}`}
                             </span>
                             {exportButtons}
                         </div>
                     </div>
 
-                    {visao === 'parcelas' ? (
+                    {visao === 'fechamento' ? (
+                        <FechamentoCentroCusto
+                            rows={payables}
+                            organizationId={effectiveOrgId}
+                            competencia={competencia}
+                            onCompetenciaChange={handleCompetenciaChange}
+                            loading={loading}
+                            error={error}
+                            onReload={() => carregar(effectiveOrgId)}
+                            notify={notify}
+                            onConsolidadoChange={setConsolidado}
+                            onFechamentoChange={setFechamento}
+                        />
+                    ) : visao === 'parcelas' ? (
                         <ContasPagarParcelas
                             rows={payables}
                             organizationId={effectiveOrgId}

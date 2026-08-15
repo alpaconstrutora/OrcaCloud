@@ -2043,17 +2043,6 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             <div className="h-6 w-px bg-gray-200 mx-1" />
 
             <button
-              onClick={expandedGroups.length > 0 ? handleCollapseAll : handleExpandAll}
-              title={expandedGroups.length > 0 ? 'Recolher tudo' : 'Expandir tudo'}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-[6px] text-button font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
-            >
-              {expandedGroups.length > 0 ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
-              {expandedGroups.length > 0 ? 'Recolher' : 'Expandir'}
-            </button>
-
-            <div className="h-6 w-px bg-gray-200 mx-1" />
-
-            <button
               onClick={() => setShowNatureBreakdown(!showNatureBreakdown)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] text-xs font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
               title="Mostrar detalhamento de custos (Mão de Obra, Material, Equipamento)"
@@ -2243,6 +2232,15 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               </button>
             )}
           </div>
+
+          <button
+            onClick={expandedGroups.length > 0 ? handleCollapseAll : handleExpandAll}
+            title={expandedGroups.length > 0 ? 'Recolher tudo' : 'Expandir tudo'}
+            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-button font-bold border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 bg-white transition-all shrink-0"
+          >
+            {expandedGroups.length > 0 ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
+            {expandedGroups.length > 0 ? 'Recolher' : 'Expandir'}
+          </button>
 
           {/* Auto-ajuste de largura ao conteúdo (§6.1.2) — sob comando explícito,
               nunca automático: recalcular a cada tecla faria as colunas dançarem

@@ -245,6 +245,20 @@ describe('Estrutura da tabela da WBS', () => {
         expect(rulerOfSearch?.contains(autofit)).toBe(true);
     });
 
+    it('Recolher/Expandir tudo fica NA toolbar acoplada, junto de busca e autofit', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        const table = getWbsTable(container);
+        const card = table.closest('.rounded-\\[10px\\].border.shadow-sm') as HTMLElement;
+
+        const toggle = within(card).getByTitle(/expandir tudo|recolher tudo/i);
+        expect(toggle).toBeDefined();
+
+        // Mesma régua da busca/autofit — não voltou para a toolbar de botões.
+        const search = within(card).getByPlaceholderText(/buscar item/i);
+        const rulerOfSearch = search.closest('.border-b');
+        expect(rulerOfSearch?.contains(toggle)).toBe(true);
+    });
+
     it('os controles de escopo ficam FORA do card acoplado, na toolbar de botões (§5.3)', () => {
         const { container } = renderEditor([makeEntry('1')]);
         const table = getWbsTable(container);

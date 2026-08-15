@@ -562,6 +562,34 @@ describe('vão livre · abertura sem esquadria', () => {
     expect(alto).toBeGreaterThan(rasteiro);
   });
 
+  it('PORTA-JANELA interrompe o rodapé — corrigido em 15/08/2026', () => {
+    // O DEFEITO: a regra perguntava `kind === 'door'`, então uma janela com
+    // peitoril ZERO — porta-janela, que se atravessa a pé — contava rodapé ao
+    // longo de um vão onde não há parede para pregá-lo. Vinha rodapé a mais no
+    // orçamento, calado, com o desenho na tela certo o tempo todo.
+    const portaJanela = computeQuantities(comAbertura('window', 0));
+    const porta = computeQuantities(comAbertura('door'));
+
+    expect(portaJanela.totais.comprimentoRodapeM).toBeCloseTo(
+      porta.totais.comprimentoRodapeM,
+      9,
+    );
+    // E é MENOR que o perímetro: o vão saiu da conta.
+    expect(portaJanela.totais.comprimentoRodapeM).toBeLessThan(
+      portaJanela.ambientes[0].perimetroEixoM,
+    );
+  });
+
+  it('janela com peitoril NÃO interrompe — o rodapé passa por baixo dela', () => {
+    // O outro lado da mesma regra: mudar o critério para o peitoril não podia
+    // fazer toda janela virar interrupção.
+    const janela = computeQuantities(comAbertura('window', 900));
+    expect(janela.totais.comprimentoRodapeM).toBeCloseTo(
+      janela.ambientes[0].perimetroEixoM,
+      9,
+    );
+  });
+
   it('conta separado de porta e janela nos totais', () => {
     const t = computeQuantities(comAbertura('passage')).totais;
     expect(t.vaosLivres).toBe(1);

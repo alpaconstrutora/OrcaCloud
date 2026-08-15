@@ -222,6 +222,18 @@ describe('quantitativos · política', () => {
 
     expect(computeQuantities(built).ambientes[0].formulaAreaPiso).toContain('A_eixo');
   });
+
+  it('MUDOU A FÓRMULA? A VERSÃO TEM QUE SUBIR — o cache é chaveado por ela', () => {
+    // `computeAndStoreQuantities` é idempotente por (snapshot, versão): com a
+    // mesma versão ele devolve o registro GRAVADO e não recalcula. Uma correção
+    // de fórmula sem bump fica invisível em todo estudo já quantificado — o
+    // sistema segue servindo o número velho, e a tela afirma que está atual.
+    //
+    // Este caso existe para quebrar quando alguém mexer na conta e esquecer o
+    // bump. Ao alterar uma fórmula de propósito: suba `POLITICA_PADRAO.version`
+    // e atualize a linha abaixo, com o motivo no comentário da constante.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.1.0');
+  });
 });
 
 describe('quantitativos · reprodutibilidade (CA-08)', () => {

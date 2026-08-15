@@ -232,8 +232,11 @@ describe('de-para · quantidade gerada', () => {
 });
 
 describe('de-para · vão livre não é esquadria', () => {
-  /** Sala 4 × 3 com uma abertura de 900 × 2100 na parede de baixo. */
-  function salaCom(kind: 'door' | 'window' | 'passage'): Quantitativos {
+  /** Sala 4 × 3 com uma abertura de 900 mm na parede de baixo. */
+  function salaComPeitoril(
+    kind: 'door' | 'window' | 'passage',
+    sillMm: number,
+  ): Quantitativos {
     const r = applyCommand(emptyModel(), {
       type: 'AddLevel',
       name: 'Térreo',
@@ -262,12 +265,17 @@ describe('de-para · vão livre não é esquadria', () => {
       kind,
       offsetMm: 1000,
       widthMm: 900,
-      heightMm: 2100,
-      sillMm: 0,
+      // A altura acompanha o peitoril: o kernel recusa `peitoril + altura`
+      // maior que o pé-direito de 2800.
+      heightMm: sillMm > 0 ? 1200 : 2100,
+      sillMm,
     }).model;
 
     return computeQuantities(comAbertura);
   }
+
+  /** Atalho para os casos que só olham o tipo — abertura rasteira. */
+  const salaCom = (kind: 'door' | 'window' | 'passage') => salaComPeitoril(kind, 0);
 
   it('ÁREA DE ESQUADRIAS ignora o vão livre — não há caixilho para comprar', () => {
     const comVao = gerarLancamentos(
@@ -304,6 +312,28 @@ describe('de-para · vão livre não é esquadria', () => {
       CTX,
     );
     expect(r.entries[0].quantity).toBeCloseTo(39.2 - 1.89, 2);
+  });
+
+  it('PORTA-JANELA também interrompe o rodapé — correção de 15/08/2026', () => {
+    // Janela de peitoril zero é porta-janela: atravessa-se a pé, e não há
+    // parede onde pregar rodapé. Antes ela era tratada como janela comum e o
+    // lançamento saía com 14,00 m em vez de 13,10 — 90 cm de rodapé a mais,
+    // comprados sem que nada na tela indicasse o erro.
+    const r = gerarLancamentos(
+      salaComPeitoril('window', 0),
+      resolvido(mapa({ medida: 'COMPRIMENTO_RODAPE' }), item('88489', 'M')),
+      CTX,
+    );
+    expect(r.entries[0].quantity).toBeCloseTo(13.1, 2);
+  });
+
+  it('janela comum segue sem interromper — o rodapé passa por baixo', () => {
+    const r = gerarLancamentos(
+      salaComPeitoril('window', 900),
+      resolvido(mapa({ medida: 'COMPRIMENTO_RODAPE' }), item('88489', 'M')),
+      CTX,
+    );
+    expect(r.entries[0].quantity).toBeCloseTo(14, 2);
   });
 
   it('e INTERROMPE o rodapé, como porta', () => {

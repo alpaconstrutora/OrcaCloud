@@ -47,8 +47,24 @@ export interface QuantityPolicy {
   casas: number;
 }
 
+/**
+ * `version` NÃO É DECORAÇÃO — é a chave do cache do quantitativo.
+ *
+ * `computeAndStoreQuantities` é idempotente por `(snapshot, version)`: com a
+ * mesma versão ele devolve o registro gravado e NÃO recalcula. Então toda
+ * mudança de FÓRMULA obriga a subir a versão, senão todo estudo já quantificado
+ * serve o número velho para sempre e a correção fica invisível — pior que não
+ * ter corrigido, porque parece corrigida.
+ *
+ * Trocar a versão cria um registro novo e preserva o antigo, que é o que mantém
+ * auditável o número que um orçamento já citou.
+ *
+ * 1.0.0 → 1.1.0 (15/08/2026): o rodapé passou a ser interrompido por peitoril
+ * zero, e não por `kind === 'door'`. Corrige a porta-janela, que contava rodapé
+ * ao longo de um vão sem parede.
+ */
 export const POLITICA_PADRAO: QuantityPolicy = {
-  version: 'quant-1.0.0',
+  version: 'quant-1.1.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -258,17 +274,22 @@ export function computeQuantities(
     }, 0);
     const pisoLiquidoMm2 = Math.max(0, pisoMm2 - buracosMm2);
 
-    // Rodapé: perímetro menos o que INTERROMPE o rodapé, que é o vão que chega
-    // ao piso. Porta sempre chega (peitoril é zero por construção). Vão livre
-    // chega quando o peitoril é zero — um passa-prato, que é vão sem esquadria
-    // com peitoril alto, tem rodapé passando por baixo como janela.
+    // Rodapé: perímetro menos o que INTERROMPE o rodapé.
     //
-    // A regra fisicamente correta seria só `sillMm === 0`, sem olhar o tipo, e
-    // ela consertaria de quebra a porta-janela (janela com peitoril zero, que
-    // hoje conta rodapé onde não há parede). NÃO foi adotada aqui: mudaria
-    // silenciosamente o rodapé de projetos que já existem, e isso é orçamento.
+    // O QUE INTERROMPE É O VÃO QUE CHEGA AO PISO — `sillMm === 0`, e só isso. O
+    // tipo não entra na conta, e essa é a correção de 15/08/2026: a regra
+    // anterior perguntava `kind === 'door'`, então a PORTA-JANELA (janela com
+    // peitoril zero, que se atravessa a pé) contava rodapé ao longo de um vão
+    // onde não existe parede para pregá-lo. Vinha rodapé a mais no orçamento,
+    // calado, e o desenho na tela estava certo o tempo todo.
+    //
+    // A regra por peitoril cobre os três tipos sem enumerá-los, e continua
+    // correta para os casos que já estavam certos: porta nasce com peitoril
+    // zero e segue interrompendo; janela normal (peitoril 900) não interrompe,
+    // o rodapé passa por baixo; passa-prato — vão sem esquadria com peitoril
+    // alto — também não.
     const interrompemRodape = aberturasDoAmbiente(s, model.walls, model.openings).filter(
-      (o) => o.kind === 'door' || (o.kind === 'passage' && o.sillMm === 0),
+      (o) => o.sillMm === 0,
     );
     const vaoPortasMm = interrompemRodape.reduce((soma, o) => soma + o.widthMm, 0);
     const rodapeMm = Math.max(0, s.perimeterMm - vaoPortasMm);

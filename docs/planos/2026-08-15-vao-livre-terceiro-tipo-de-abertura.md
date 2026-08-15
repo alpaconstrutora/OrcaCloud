@@ -32,13 +32,16 @@ nome — daí o `title` no seletor da barra dizendo o que ele faz:
   passagem — com peitoril alto é passa-prato/guichê, e aí o rodapé passa por
   baixo, como em janela. Por isso a regra olha o peitoril, não só o tipo.
 
-### Um defeito vizinho que NÃO foi corrigido junto (decisão consciente)
+### Um defeito vizinho que NÃO foi corrigido junto — ✅ CORRIGIDO em 15/08
 
 A regra fisicamente correta do rodapé é só `sillMm === 0`, sem olhar o tipo. Ela
-consertaria de quebra a **porta-janela** — janela com peitoril zero, que hoje
-conta rodapé onde não existe parede. Não adotei: mudaria silenciosamente o
-rodapé de projetos que já existem, e isso é orçamento. Fica registrado como
-achado, para ser decidido à parte.
+consertaria de quebra a **porta-janela** — janela com peitoril zero, que conta
+rodapé onde não existe parede. Não adotei aqui: mudaria silenciosamente o rodapé
+de projetos que já existem, e isso é orçamento.
+
+**Foi corrigido no mesmo dia**, a pedido do usuário, junto com o bump da versão
+da política de quantitativos — sem o qual a correção ficaria invisível.
+Ver `docs/planos/2026-08-15-rodape-porta-janela.md`.
 
 ## O que mudou
 

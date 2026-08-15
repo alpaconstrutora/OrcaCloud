@@ -1,6 +1,12 @@
 import React, { useRef, useState } from 'react';
 import { Scissors, Combine, FlipHorizontal, FlipVertical } from 'lucide-react';
-import { mmToMeters, wallLength, type Opening, type Wall } from '../../utils/blueprintKernel';
+import {
+  mmToMeters,
+  nomeDoTipoDeAbertura,
+  wallLength,
+  type Opening,
+  type Wall,
+} from '../../utils/blueprintKernel';
 
 /**
  * Caixa "Parede selecionada" / "Abertura selecionada" do painel de Ambientes.
@@ -167,7 +173,7 @@ export default function PainelParedeSelecionada({
             {/* Vírgula, não ponto: é a convenção do país e a mesma do campo de
                 comprimento logo acima — duas grafias de decimal na mesma caixa
                 fazem parecer que uma delas é de outro sistema. */}
-            {abertura.kind === 'door' ? 'Porta' : 'Janela'} a{' '}
+            {nomeDoTipoDeAbertura(abertura.kind)} a{' '}
             {(abertura.offsetMm / 1000).toFixed(2).replace('.', ',')} m do início da parede.
           </p>
 
@@ -192,9 +198,10 @@ export default function PainelParedeSelecionada({
             aoAplicar={(mm) => onTamanhoAbertura({ heightMm: Math.round(mm) })}
             ariaLabel="Altura da abertura, em milímetros"
           />
-          {/* Peitoril só na janela: em porta ele é sempre zero (o vão nasce no
-              piso), e um campo que só aceita um valor é ruído. */}
-          {abertura.kind === 'window' && (
+          {/* Peitoril fica de fora só na PORTA, onde é sempre zero (o vão nasce
+              no piso) e um campo de um valor só é ruído. Vão livre tem: subir o
+              peitoril é o que transforma uma passagem num passa-prato. */}
+          {abertura.kind !== 'door' && (
             <CampoMedida
               rotulo="Peitoril"
               valor={abertura.sillMm}
@@ -206,8 +213,9 @@ export default function PainelParedeSelecionada({
             />
           )}
 
-          {/* Janela é simétrica no desenho (linha reta através da parede) — não
-              tem dobradiça nem lado de giro para alternar. */}
+          {/* Só PORTA tem folha. Janela é simétrica no desenho (linha reta
+              através da parede) e vão livre não tem símbolo nenhum — nos dois,
+              girar e espelhar não teriam o que mover. */}
           {abertura.kind === 'door' && (
             <div className="mt-3 flex gap-2">
               <BotaoTexto

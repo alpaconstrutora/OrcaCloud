@@ -31,6 +31,7 @@
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import type { Quantitativos } from './blueprintKernel';
+import { nomeDoTipoDeAbertura as nomeDoTipo } from './blueprintKernel';
 
 /** Dimensão física de uma medida. É o que a unidade do item tem que respeitar. */
 export type Dimensao = 'M2' | 'M' | 'M3' | 'UN';
@@ -286,12 +287,16 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[]): ValorM
       const tipo = medidaId === 'CONTAGEM_PORTAS' ? 'door' : 'window';
       const alvo =
         medidaId === 'AREA_ESQUADRIAS'
-          ? quant.aberturas
+          ? // VÃO LIVRE FICA DE FORA: esquadria é o caixilho que se compra, e um
+            // vão sem esquadria não tem o que orçar aqui. Ele já aparece no
+            // quantitativo por outro caminho — desconta área de parede e
+            // interrompe rodapé.
+            quant.aberturas.filter((o) => o.tipo !== 'passage')
           : quant.aberturas.filter((o) => o.tipo === tipo);
 
       return alvo.map((o) => ({
         ref: o.openingId,
-        rotulo: `${o.tipo === 'door' ? 'Porta' : 'Janela'} ${o.larguraM.toFixed(2)} × ${o.alturaM.toFixed(2)} m`,
+        rotulo: `${nomeDoTipo(o.tipo)} ${o.larguraM.toFixed(2)} × ${o.alturaM.toFixed(2)} m`,
         valor: medidaId === 'AREA_ESQUADRIAS' ? o.areaM2 : 1,
         formula: medidaId === 'AREA_ESQUADRIAS' ? 'largura × altura' : 'contagem',
         variaveis: { larguraM: o.larguraM, alturaM: o.alturaM },

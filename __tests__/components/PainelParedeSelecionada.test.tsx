@@ -308,6 +308,11 @@ describe('PainelParedeSelecionada · tamanho da abertura', () => {
     expect(screen.queryByRole('textbox', { name: /peitoril/i })).not.toBeInTheDocument();
   });
 
+  it('VÃO LIVRE mostra peitoril — subir o peitoril é o que faz um passa-prato', () => {
+    montar({ parede: null, abertura: porta({ kind: 'passage' }) });
+    expect(screen.getByRole('textbox', { name: /peitoril/i })).toBeInTheDocument();
+  });
+
   it('JANELA mostra peitoril, e ele aplica sozinho', async () => {
     const user = userEvent.setup();
     const props = montar({
@@ -371,6 +376,25 @@ describe('PainelParedeSelecionada · girar e espelhar porta', () => {
     montar({ parede: null, abertura: porta({ kind: 'window', sillMm: 900 }) });
     expect(screen.queryByRole('button', { name: /girar/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /espelhar/i })).not.toBeInTheDocument();
+  });
+
+  it('VÃO LIVRE também não — não tem folha para girar', () => {
+    montar({ parede: null, abertura: porta({ kind: 'passage' }) });
+    expect(screen.queryByRole('button', { name: /girar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /espelhar/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('PainelParedeSelecionada · nome do tipo', () => {
+  it.each([
+    ['door', /porta a 1,50 m/i],
+    ['window', /janela a 1,50 m/i],
+    ['passage', /vão livre a 1,50 m/i],
+  ] as const)('%s aparece com o nome certo', (kind, esperado) => {
+    montar({ parede: null, abertura: porta({ kind, sillMm: kind === 'window' ? 900 : 0 }) });
+    expect(
+      screen.getByText((_, el) => el?.tagName === 'P' && esperado.test(el.textContent ?? '')),
+    ).toBeInTheDocument();
   });
 });
 

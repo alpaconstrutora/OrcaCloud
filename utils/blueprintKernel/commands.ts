@@ -37,7 +37,7 @@ export type Command =
   | {
       type: 'AddOpening';
       wallId: ObjectId;
-      kind: 'door' | 'window';
+      kind: 'door' | 'window' | 'passage';
       offsetMm: number;
       widthMm: number;
       heightMm: number;

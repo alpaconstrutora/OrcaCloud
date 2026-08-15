@@ -29,6 +29,7 @@ import {
   pontaEsticada,
   interiorPoint,
   modelFromCanonicalPayload,
+  nomeDoTipoDeAbertura,
   parseCanonicalPayload,
   pointInPolygon,
   intersectSegments,
@@ -495,6 +496,107 @@ describe('SetOpeningSize · editar o tamanho da abertura', () => {
     const rebuilt = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(redim)));
     expect(rebuilt.openings[0].widthMm).toBe(700);
     expect(rebuilt.openings[0].heightMm).toBe(2300);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vão livre — abertura sem esquadria (kind: 'passage')
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('vão livre · abertura sem esquadria', () => {
+  /**
+   * Sala 4000×3000 com uma abertura de 900 mm na parede de baixo.
+   *
+   * A altura acompanha o peitoril porque a parede tem 2800 de pé-direito e o
+   * kernel recusa `peitoril + altura` maior que isso — a trava que entrou junto
+   * com a altura editável.
+   */
+  function comAbertura(kind: 'door' | 'window' | 'passage', sillMm = 0) {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    return applyCommand(built, {
+      type: 'AddOpening',
+      wallId: built.walls[0].id,
+      kind,
+      offsetMm: 1000,
+      widthMm: 900,
+      heightMm: sillMm > 0 ? 1200 : 2100,
+      sillMm,
+    }).model;
+  }
+
+  it('o kernel aceita o tipo novo', () => {
+    expect(comAbertura('passage').openings[0].kind).toBe('passage');
+  });
+
+  it('desconta área da parede como qualquer abertura — é um buraco', () => {
+    const comVao = computeQuantities(comAbertura('passage'));
+    const comPorta = computeQuantities(comAbertura('door'));
+    const parede = (q: typeof comVao) => q.paredes.find((p) => p.areaAberturasM2 > 0)!;
+
+    expect(parede(comVao).areaAberturasM2).toBeCloseTo(parede(comPorta).areaAberturasM2, 9);
+    expect(parede(comVao).areaFaceLiquidaM2).toBeCloseTo(parede(comPorta).areaFaceLiquidaM2, 9);
+  });
+
+  it('INTERROMPE O RODAPÉ como porta — não há parede no piso ali', () => {
+    const comVao = computeQuantities(comAbertura('passage'));
+    const comPorta = computeQuantities(comAbertura('door'));
+    const comJanela = computeQuantities(comAbertura('window', 900));
+
+    expect(comVao.totais.comprimentoRodapeM).toBeCloseTo(
+      comPorta.totais.comprimentoRodapeM,
+      9,
+    );
+    // Janela não interrompe: o rodapé passa por baixo dela.
+    expect(comJanela.totais.comprimentoRodapeM).toBeGreaterThan(
+      comVao.totais.comprimentoRodapeM,
+    );
+  });
+
+  it('com PEITORIL ALTO (passa-prato) o rodapé volta a passar por baixo', () => {
+    // Vão sem esquadria não é sempre passagem: com peitoril, é guichê/balcão, e
+    // aí existe parede embaixo dele para receber rodapé.
+    const rasteiro = computeQuantities(comAbertura('passage', 0)).totais.comprimentoRodapeM;
+    const alto = computeQuantities(comAbertura('passage', 900)).totais.comprimentoRodapeM;
+
+    expect(alto).toBeGreaterThan(rasteiro);
+  });
+
+  it('conta separado de porta e janela nos totais', () => {
+    const t = computeQuantities(comAbertura('passage')).totais;
+    expect(t.vaosLivres).toBe(1);
+    expect(t.portas).toBe(0);
+    expect(t.janelas).toBe(0);
+  });
+
+  it('sobrevive ao round-trip do payload', () => {
+    const modelo = comAbertura('passage');
+    const rebuilt = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(modelo)));
+    expect(rebuilt.openings[0].kind).toBe('passage');
+  });
+
+  it('planta SEM vão livre continua com o mesmo hash de antes', () => {
+    // O tipo novo alarga a união, mas não muda o formato do payload: quem nunca
+    // usou vão livre não pode ver o hash do seu estudo mudar por causa disso.
+    const modelo = comAbertura('door');
+    const payload = JSON.parse(canonicalPayload(modelo));
+    expect(payload.openings[0].kind).toBe('door');
+    expect(Object.keys(payload.openings[0]).sort()).toEqual([
+      'heightMm',
+      'hingeAtStart',
+      'kind',
+      'offsetMm',
+      'sillMm',
+      'swingReversed',
+      'wall',
+      'widthMm',
+    ]);
+  });
+
+  it('o rótulo do tipo é fonte única, e cobre os três', () => {
+    expect(nomeDoTipoDeAbertura('door')).toBe('Porta');
+    expect(nomeDoTipoDeAbertura('window')).toBe('Janela');
+    expect(nomeDoTipoDeAbertura('passage')).toBe('Vão livre');
   });
 });
 

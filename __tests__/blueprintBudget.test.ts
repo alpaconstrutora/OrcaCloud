@@ -231,6 +231,92 @@ describe('de-para · quantidade gerada', () => {
   });
 });
 
+describe('de-para · vão livre não é esquadria', () => {
+  /** Sala 4 × 3 com uma abertura de 900 × 2100 na parede de baixo. */
+  function salaCom(kind: 'door' | 'window' | 'passage'): Quantitativos {
+    const r = applyCommand(emptyModel(), {
+      type: 'AddLevel',
+      name: 'Térreo',
+      elevationMm: 0,
+      defaultHeightMm: H,
+    });
+    const levelId = r.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({
+      type: 'AddWall',
+      levelId,
+      a: point(ax, ay),
+      b: point(bx, by),
+      thicknessMm: T,
+      heightMm: H,
+    });
+    const built = applyBatch(r.model, [
+      w(0, 0, 4000, 0),
+      w(4000, 0, 4000, 3000),
+      w(4000, 3000, 0, 3000),
+      w(0, 3000, 0, 0),
+    ]).model;
+
+    const comAbertura = applyCommand(built, {
+      type: 'AddOpening',
+      wallId: built.walls[0].id,
+      kind,
+      offsetMm: 1000,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    }).model;
+
+    return computeQuantities(comAbertura);
+  }
+
+  it('ÁREA DE ESQUADRIAS ignora o vão livre — não há caixilho para comprar', () => {
+    const comVao = gerarLancamentos(
+      salaCom('passage'),
+      resolvido(mapa({ medida: 'AREA_ESQUADRIAS' }), item('X', 'M2')),
+      CTX,
+    );
+    expect(comVao.entries).toHaveLength(0);
+
+    // A mesma abertura, agora como porta, entra normalmente: o que muda é o
+    // TIPO, não a geometria.
+    const comPorta = gerarLancamentos(
+      salaCom('door'),
+      resolvido(mapa({ medida: 'AREA_ESQUADRIAS' }), item('X', 'M2')),
+      CTX,
+    );
+    expect(comPorta.entries).toHaveLength(1);
+    expect(comPorta.entries[0].quantity).toBeCloseTo(0.9 * 2.1, 4);
+  });
+
+  it('não entra nem em contagem de portas nem na de janelas', () => {
+    const q = salaCom('passage');
+    for (const medida of ['CONTAGEM_PORTAS', 'CONTAGEM_JANELAS'] as const) {
+      const r = gerarLancamentos(q, resolvido(mapa({ medida }), item('X', 'UN')), CTX);
+      expect(r.entries, `${medida} contou um vão livre`).toHaveLength(0);
+    }
+  });
+
+  it('mas DESCONTA área de parede, como qualquer buraco', () => {
+    // Face líquida de uma face: 14,00 × 2,80 − (0,90 × 2,10) = 37,31 m².
+    const r = gerarLancamentos(
+      salaCom('passage'),
+      resolvido(mapa({ medida: 'AREA_PAREDE_UMA_FACE' }), item('X', 'M2')),
+      CTX,
+    );
+    expect(r.entries[0].quantity).toBeCloseTo(39.2 - 1.89, 2);
+  });
+
+  it('e INTERROMPE o rodapé, como porta', () => {
+    // Perímetro de eixo 14,00 m menos os 0,90 m do vão.
+    const r = gerarLancamentos(
+      salaCom('passage'),
+      resolvido(mapa({ medida: 'COMPRIMENTO_RODAPE' }), item('88489', 'M')),
+      CTX,
+    );
+    expect(r.entries[0].quantity).toBeCloseTo(13.1, 2);
+  });
+});
+
 describe('de-para · agrupamento e filtro', () => {
   function duasSalas(): Quantitativos {
     const r = applyCommand(emptyModel(), {

@@ -270,7 +270,7 @@ export interface CanonicalPayload {
   }[];
   openings: {
     wall: number;
-    kind: 'door' | 'window';
+    kind: 'door' | 'window' | 'passage';
     offsetMm: number;
     widthMm: number;
     heightMm: number;

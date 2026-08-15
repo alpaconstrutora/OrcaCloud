@@ -86,7 +86,7 @@ export interface QuantidadeParede {
 
 export interface QuantidadeAbertura {
   openingId: string;
-  tipo: 'door' | 'window';
+  tipo: 'door' | 'window' | 'passage';
   larguraM: number;
   alturaM: number;
   areaM2: number;
@@ -107,6 +107,8 @@ export interface Quantitativos {
     comprimentoRodapeM: number;
     portas: number;
     janelas: number;
+    /** Vãos livres — sem esquadria, então contados à parte de porta e janela. */
+    vaosLivres: number;
     areaAberturasM2: number;
   };
 }
@@ -256,12 +258,19 @@ export function computeQuantities(
     }, 0);
     const pisoLiquidoMm2 = Math.max(0, pisoMm2 - buracosMm2);
 
-    // Rodapé: perímetro menos os vãos de PORTA. Janela não interrompe rodapé —
-    // ele passa por baixo dela.
-    const portas = aberturasDoAmbiente(s, model.walls, model.openings).filter(
-      (o) => o.kind === 'door',
+    // Rodapé: perímetro menos o que INTERROMPE o rodapé, que é o vão que chega
+    // ao piso. Porta sempre chega (peitoril é zero por construção). Vão livre
+    // chega quando o peitoril é zero — um passa-prato, que é vão sem esquadria
+    // com peitoril alto, tem rodapé passando por baixo como janela.
+    //
+    // A regra fisicamente correta seria só `sillMm === 0`, sem olhar o tipo, e
+    // ela consertaria de quebra a porta-janela (janela com peitoril zero, que
+    // hoje conta rodapé onde não há parede). NÃO foi adotada aqui: mudaria
+    // silenciosamente o rodapé de projetos que já existem, e isso é orçamento.
+    const interrompemRodape = aberturasDoAmbiente(s, model.walls, model.openings).filter(
+      (o) => o.kind === 'door' || (o.kind === 'passage' && o.sillMm === 0),
     );
-    const vaoPortasMm = portas.reduce((soma, o) => soma + o.widthMm, 0);
+    const vaoPortasMm = interrompemRodape.reduce((soma, o) => soma + o.widthMm, 0);
     const rodapeMm = Math.max(0, s.perimeterMm - vaoPortasMm);
 
     return {
@@ -296,6 +305,7 @@ export function computeQuantities(
       comprimentoRodapeM: (ambientes.reduce((s, a) => s + a.comprimentoRodapeM, 0)),
       portas: aberturas.filter((o) => o.tipo === 'door').length,
       janelas: aberturas.filter((o) => o.tipo === 'window').length,
+      vaosLivres: aberturas.filter((o) => o.tipo === 'passage').length,
       areaAberturasM2: (aberturas.reduce((s, o) => s + o.areaM2, 0)),
     },
   };

@@ -36,7 +36,13 @@ export interface Wall {
 export interface Opening {
   id: ObjectId;
   wallId: ObjectId;
-  kind: 'door' | 'window';
+  /**
+   * `passage` é o vão SEM ESQUADRIA — "vão livre" na tela. Não é decoração de
+   * porta: ele muda o orçamento em dois lugares. Não entra em área de
+   * esquadrias (não há caixilho para comprar) e, quando nasce no piso,
+   * interrompe o rodapé como uma porta interrompe.
+   */
+  kind: 'door' | 'window' | 'passage';
   offsetMm: number;
   widthMm: number;
   heightMm: number;
@@ -57,6 +63,21 @@ export interface Opening {
   hingeAtStart: boolean;
   /** Para qual lado da parede a folha abre. `false` = normal positiva (padrão). */
   swingReversed: boolean;
+}
+
+/**
+ * Como cada tipo de abertura se chama na tela.
+ *
+ * FONTE ÚNICA. O rótulo era escrito à mão em quatro lugares (painel, diff,
+ * de-para do orçamento, barra), todos com o mesmo ternário `door ? 'Porta' :
+ * 'Janela'` — que, com um terceiro tipo, passa a chamar vão livre de "Janela"
+ * em cada um deles. Um ternário de dois ramos não sobrevive a um tipo novo, e
+ * quatro cópias dele são quatro lugares para esquecer.
+ */
+export function nomeDoTipoDeAbertura(kind: Opening['kind']): string {
+  if (kind === 'door') return 'Porta';
+  if (kind === 'window') return 'Janela';
+  return 'Vão livre';
 }
 
 /** Limite sem material físico — divide ambiente sem existir como parede. */

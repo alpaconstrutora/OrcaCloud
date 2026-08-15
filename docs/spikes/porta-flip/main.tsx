@@ -37,11 +37,19 @@ const LARGURA_PORTA = 900;
 const OFFSET_PORTA = (LARGURA_PAREDE - LARGURA_PORTA) / 2;
 const ESPACO_Y = 4000;
 
-const COMBINACOES: { hingeAtStart: boolean; swingReversed: boolean; rotulo: string }[] = [
+const COMBINACOES: {
+  hingeAtStart: boolean;
+  swingReversed: boolean;
+  rotulo: string;
+  kind?: 'door' | 'window' | 'passage';
+}[] = [
   { hingeAtStart: true, swingReversed: false, rotulo: 'padrão (0,0) — dobradiça início, sem espelhar' },
   { hingeAtStart: false, swingReversed: false, rotulo: 'GIRAR (1,0) — dobradiça na ponta final' },
   { hingeAtStart: true, swingReversed: true, rotulo: 'ESPELHAR (0,1) — abre para o outro lado' },
   { hingeAtStart: false, swingReversed: true, rotulo: 'os DOIS (1,1) — dobradiça final + espelhado' },
+  // Quinta parede: o tipo novo. Sem folha e sem arco — só o buraco e os
+  // batentes. É o desenho que nenhum teste de unidade enxerga.
+  { hingeAtStart: true, swingReversed: false, rotulo: 'VÃO LIVRE — sem esquadria', kind: 'passage' },
 ];
 
 function construir() {
@@ -71,7 +79,7 @@ function construir() {
     modelo = applyCommand(modelo, {
       type: 'AddOpening',
       wallId: comParedes.walls[i].id,
-      kind: 'door',
+      kind: combo.kind ?? 'door',
       offsetMm: OFFSET_PORTA,
       widthMm: LARGURA_PORTA,
       heightMm: 2100,

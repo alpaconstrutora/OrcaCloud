@@ -879,7 +879,11 @@ export default function BlueprintCanvas({
       if (larguraTela < 4) continue;
 
       // 3. simbolo
-      if (o.kind === 'window') {
+      if (o.kind === 'passage') {
+        // VÃO LIVRE não tem símbolo: é o buraco na parede, e os batentes que a
+        // etapa 2 já desenhou são tudo que existe para mostrar. Desenhar folha
+        // ou arco aqui afirmaria uma esquadria que ninguém vai comprar.
+      } else if (o.kind === 'window') {
         // Janela: folha fina no eixo da parede.
         const e1 = paraTela(ini as Point);
         const e2 = paraTela(fim as Point);

@@ -173,13 +173,27 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     }
   });
 
-  it('a ferramenta Abertura oferece porta e janela', async () => {
+  it('a ferramenta Abertura oferece porta, janela e vão livre', async () => {
     await montar();
     const user = userEvent.setup();
     await user.click(botao(/abertura/i));
 
     expect(screen.getByRole('option', { name: /porta/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /janela/i })).toBeInTheDocument();
+    // Vão livre entrou em 15/08/2026: vão sem esquadria (passagem, arco).
+    expect(screen.getByRole('option', { name: /vão livre/i })).toBeInTheDocument();
+  });
+
+  it('o seletor de tipo explica o que o vão livre faz no orçamento', async () => {
+    // O tipo novo muda dois números (não entra em esquadrias, interrompe
+    // rodapé) e nada disso se deduz do nome. O título do seletor é onde isso
+    // fica ao alcance de quem escolhe.
+    await montar();
+    await userEvent.setup().click(botao(/abertura/i));
+
+    const seletor = screen.getByRole('combobox', { name: /tipo/i });
+    expect(seletor.title).toMatch(/esquadria/i);
+    expect(seletor.title).toMatch(/rodapé/i);
   });
 });
 

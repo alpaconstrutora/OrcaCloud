@@ -78,8 +78,9 @@ const recortar = async (arquivo, centroY) => {
   await page.locator('#dump').evaluate((el) => (el.style.visibility = 'visible'));
 };
 
-// As quatro portas nascem com uma combinação cada — o print prova a geometria.
-for (let i = 0; i < 4; i++) {
+// Cada parede nasce com uma combinação — o print prova a geometria. A 5ª é o
+// VÃO LIVRE: tem de sair só com o buraco e os batentes, sem folha e sem arco.
+for (let i = 0; i < 5; i++) {
   await recortar(`saida-combinacao-${i}.png`, tela({ x: 0, y: i * 4000 }).y);
 }
 
@@ -254,6 +255,9 @@ const esperadoOutras = [
   { hingeAtStart: false, swingReversed: false },
   { hingeAtStart: true, swingReversed: true },
   { hingeAtStart: false, swingReversed: true },
+  // 5ª parede: o vão livre. Os dois eixos existem no modelo mas não são usados
+  // no desenho dele — ficam no padrão.
+  { hingeAtStart: true, swingReversed: false },
 ];
 finais.forEach((o, i) => {
   const e = esperadoOutras[i];

@@ -47,6 +47,7 @@ import {
   pontaEsticada,
   type AlinhamentoParede,
   type Command,
+  type Opening,
   type Point,
 } from '../../utils/blueprintKernel';
 
@@ -67,6 +68,9 @@ import {
 function inverterLado(atual: AlinhamentoParede): AlinhamentoParede {
   return atual === 'ESQUERDA' ? 'DIREITA' : atual === 'DIREITA' ? 'ESQUERDA' : 'DIREITA';
 }
+
+/** Os três tipos de abertura, na ordem em que a barra os oferece. */
+type TipoAbertura = Opening['kind'];
 
 const ESPESSURA_PADRAO_MM = 150;
 const ALTURA_PADRAO_MM = 2800;
@@ -114,7 +118,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [alinharNaAfericao, setAlinharNaAfericao] = useState(false);
   const [qtdOficial, setQtdOficial] = useState<BlueprintQuantitySnapshot | null>(null);
   const [gerando, setGerando] = useState(false);
-  const [tipoAbertura, setTipoAbertura] = useState<'door' | 'window'>('door');
+  const [tipoAbertura, setTipoAbertura] = useState<TipoAbertura>('door');
 
   const levelId = editor.model.levels[0]?.id ?? null;
 
@@ -281,14 +285,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const aberturaSel = editor.model.openings.find((o) => o.id === editor.selectedId) ?? null;
 
   function adicionarAbertura(wallId: string, offsetMm: number) {
+    // Vão livre nasce como porta: do piso (peitoril zero) até a altura de verga.
+    // Passa-prato — vão sem esquadria com peitoril alto — se faz subindo o
+    // peitoril depois, no painel.
+    const comoPorta = tipoAbertura === 'door' || tipoAbertura === 'passage';
     editor.run({
       type: 'AddOpening',
       wallId,
       kind: tipoAbertura,
       offsetMm,
       widthMm: larguraAbertura,
-      heightMm: tipoAbertura === 'door' ? 2100 : 1200,
-      sillMm: tipoAbertura === 'door' ? 0 : 900,
+      heightMm: comoPorta ? 2100 : 1200,
+      sillMm: comoPorta ? 0 : 900,
     });
   }
 
@@ -725,11 +733,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               Tipo
               <select
                 value={tipoAbertura}
-                onChange={(e) => setTipoAbertura(e.target.value as 'door' | 'window')}
+                onChange={(e) => setTipoAbertura(e.target.value as TipoAbertura)}
                 className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                title="Vão livre é o vão sem esquadria — passagem, arco. Desconta área de parede e interrompe o rodapé, mas não entra em área de esquadrias."
               >
                 <option value="door">Porta</option>
                 <option value="window">Janela</option>
+                <option value="passage">Vão livre</option>
               </select>
             </label>
             <label className="flex items-center gap-2 text-xs text-slate-600">

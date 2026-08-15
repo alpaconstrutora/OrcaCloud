@@ -20,7 +20,7 @@
  */
 
 import type { BlueprintModel, Opening, Space, Wall } from './blueprintKernel';
-import { wallLength } from './blueprintKernel';
+import { nomeDoTipoDeAbertura, wallLength } from './blueprintKernel';
 
 export type TipoAlteracao =
   | 'PAREDE_ADICIONADA'
@@ -146,7 +146,7 @@ export function diffSnapshots(antes: BlueprintModel, depois: BlueprintModel): Di
   const abDepois = new Map(depois.openings.map((o) => [chaveAbertura(o, idsDepois), o]));
 
   const nomeAbertura = (o: Opening) =>
-    `${o.kind === 'door' ? 'Porta' : 'Janela'} de ${metros(o.widthMm)} m`;
+    `${nomeDoTipoDeAbertura(o.kind)} de ${metros(o.widthMm)} m`;
 
   for (const [chave, o] of abDepois) {
     if (!abAntes.has(chave)) {

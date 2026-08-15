@@ -42,11 +42,10 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
             <button
                 onClick={onClick}
                 type="button"
-                className={`flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-1.5 py-0.5 rounded-[6px] font-semibold border border-blue-200 transition-all ${onClick ? 'hover:bg-blue-200 hover:border-blue-300 active:scale-95 cursor-pointer' : ''}`}
-                title={onClick ? "Ver detalhes da composição" : undefined}
+                className={`flex items-center justify-center bg-blue-100 text-blue-700 p-1 rounded-[6px] border border-blue-200 transition-all ${onClick ? 'hover:bg-blue-200 hover:border-blue-300 active:scale-95 cursor-pointer' : ''}`}
+                title={onClick ? "Ver detalhes da composição" : "Composição"}
             >
                 <Layers className="w-3 h-3" />
-                COMPOSIÇÃO
             </button>
         );
     }

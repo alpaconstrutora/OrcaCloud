@@ -294,6 +294,10 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
 
     const orgId = activeOrganizationId || '';
     const isAllOrgsMode = !currentOrgId;
+    // Governa se a faixa de banners existe de verdade — precisa disso (e não só
+    // renderizar a div vazia) para o `space-y-6` do pai não empurrar o conteúdo
+    // 24px extra quando não há banner nenhum (ver comentário do `return` abaixo).
+    const hasBanners = failedLabels.length > 0 || (!isAllOrgsMode && legacyCount > 0);
 
     if (isLoading && employees.length === 0) {
         return (
@@ -306,10 +310,23 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
         );
     }
 
+    // Sempre dentro do <Layout> (é o wrapper das ~31 abas de Recursos Humanos —
+    // SECTION_TO_TAB — nenhuma delas é standalone). O `h-full` sozinho é seguro
+    // (só preenche a área de conteúdo já com o padding de <main> descontado, sem
+    // truque de margem negativa); o problema era o `px-6`/`p-6` PRÓPRIOS somando
+    // com o gutter do Layout — 48px em vez de 24px em TODA tela de RH (medido
+    // com Playwright, 2026-08-08). `space-y-6` no pai reproduz o respiro entre
+    // banner e conteúdo sem duplicar lateral; `pb-6` no conteúdo é só o
+    // respiro de fim de scroll (a caixa rola por dentro, o pb-* de <main>
+    // nunca chega a ser exercitado).
     return (
-        <div className="flex flex-col h-full">
-            {/* Banners */}
-            <div className="px-6 space-y-3 shrink-0">
+        <div className="flex flex-col h-full space-y-6">
+            {/* Banners — só entra no fluxo (e só então o `space-y-6` do pai conta
+                como respiro real) quando existe algo pra mostrar; senão o
+                conteúdo vira o PRIMEIRO filho e fica nos 24px do Layout, sem o
+                gap extra. */}
+            {hasBanners && (
+            <div className="space-y-3 shrink-0">
             {/* Banner de falhas parciais de carregamento */}
             {failedLabels.length > 0 && (
                 <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-amber-800 text-sm">
@@ -374,10 +391,11 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                 </div>
             )}
 
-            </div>{/* /Banners */}
+            </div>
+            )}{/* /Banners */}
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto pb-6">
                     {activeTab === 'dashboard' && (
                         <LaborDashboardTab
                             employees={employees}

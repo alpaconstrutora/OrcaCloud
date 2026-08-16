@@ -3703,49 +3703,54 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             {/* Header / Stats — variante flat (bare icon, sentence case, sem sombra),
                 igual à tela de referência SupplierList.tsx. Grade simétrica: os 4 KPIs
-                são métricas independentes, sem relação total→decomposição (guia §4.2). */}
+                são métricas independentes, sem relação total→decomposição (guia §4.2).
+                Só na aba Dashboard: os KPIs refletem a aba ativa (guia — ANATOMIA DA
+                TELA), e "Pendentes"/"Automação"/"Regras ativas"/"Atenção" são uma visão
+                geral do módulo, não dado específico de Extrato/Central/Regras/etc. */}
             {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (KPIs → botões →
                 toolbar acoplada) respira 12px, metade do space-y-6 do container raiz. */}
-            <div className="relative mb-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Pendentes"
-                        value={bankTransactions.length}
-                        sub="Transações no extrato"
-                        icon={<ArrowRightLeft className="w-4 h-4" />}
-                        color="blue"
-                    />
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Automação"
-                        value={`${stats.automationRate}%`}
-                        sub="Conciliadas por regra"
-                        icon={<Zap className="w-4 h-4" />}
-                        color="emerald"
-                    />
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Regras ativas"
-                        value={rules.length}
-                        sub="Regras de conciliação"
-                        icon={<ShieldCheck className="w-4 h-4" />}
-                        color="purple"
-                    />
-                    <KpiCard
-                        shadow={false}
-                        size="sm"
-                        label="Atenção"
-                        value={internalTransactions.length}
-                        sub="Lançamentos internos pendentes"
-                        icon={<AlertCircle className="w-4 h-4" />}
-                        color="amber"
-                    />
-            </div>
-        </div>
+            {activeView === 'dashboard' && (
+                <div className="relative mb-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Pendentes"
+                            value={bankTransactions.length}
+                            sub="Transações no extrato"
+                            icon={<ArrowRightLeft className="w-4 h-4" />}
+                            color="blue"
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Automação"
+                            value={`${stats.automationRate}%`}
+                            sub="Conciliadas por regra"
+                            icon={<Zap className="w-4 h-4" />}
+                            color="emerald"
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Regras ativas"
+                            value={rules.length}
+                            sub="Regras de conciliação"
+                            icon={<ShieldCheck className="w-4 h-4" />}
+                            color="purple"
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Atenção"
+                            value={internalTransactions.length}
+                            sub="Lançamentos internos pendentes"
+                            icon={<AlertCircle className="w-4 h-4" />}
+                            color="amber"
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Toolbar de botões — guia §5.3/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">

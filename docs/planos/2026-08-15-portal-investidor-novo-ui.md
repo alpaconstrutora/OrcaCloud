@@ -93,6 +93,39 @@ indigo/azul para coral.
 **Pronto quando:** o portal por token mostra o novo UI nas 4 abas e o app interno
 (admin, abas Financeiro/Fiscal/SPE/Relatórios) segue inalterado.
 
+### 9. Correções pós-entrega (2026-08-16)
+
+Reportado pelo usuário: *"selecionar as abas visiveis no portal do investidor (app)
+nao reflete na visão do investidor (token)"* e, depois, *"desliguei tudo e continua
+aparecendo para o investidor. carteira so existe para o investidor. no app nao existe."*
+
+**Causas encontradas (três, independentes):**
+
+1. **Lista vazia lida como "não configurado"** — `deriveTabIds` fazia
+   `saved.length > 0 ? saved : TODAS`. Desligar todas gravava `[]` e o portal
+   voltava com **todas** as abas. Agora só `undefined`/`null` significa "nunca
+   configurado" (`Array.isArray(saved)`).
+2. **Segundo fallback** — `navTabs` fazia `visibleTabs.length > 0 ? ... : dashboard`,
+   reacendendo Resumo mesmo com tudo desligado. Removido; sem aba habilitada o
+   portal mostra o aviso "Portal em configuração" em vez de reabrir aba sozinho.
+3. **6 interruptores mortos** — o modal oferecia as 10 abas do app, mas o portal
+   só renderiza 4 (`PUBLIC_RENDERABLE_TAB_IDS`). Simulador, Financeiro, Fiscal,
+   Comunicados, SPE e Relatórios não faziam nada. O modal agora lista só as 4 e
+   explica as demais num bloco "Exclusivas do gestor".
+4. **Dois nomes para a mesma aba** — app dizia "Evolução"/"Cotas", investidor lia
+   "Resumo"/"Carteira". `PUBLIC_TAB_LABELS` foi eliminado: `TABS` passa a ter um
+   nome só, o que o investidor lê.
+
+**Conformidade do arquivo tocado** (verificação estrutural acusou 3 divergências
+pré-existentes na visão do GESTOR, fora do escopo da §24 — corrigidas):
+§20 (`h1` `text-4xl` + etiqueta em caixa alta → `text-3xl` + subtítulo `mt-1.5`,
+raiz `space-y-6`), §19.1 (abas em azul sólido com `overflow-x-auto` → card +
+trilho, ativa branca, `h-7`, `flex-wrap`), §14 (modal de confirmação local →
+`useConfirm()`).
+
+**Verificado no navegador:** 3 configurações (nunca configurado → 4 abas; só duas
+→ 2 abas; tudo desligado → 0 abas + aviso) e a visão do gestor após as correções.
+
 ### 8. Verificação
 **Pronto quando:** `npx tsc --noEmit` limpo; harness Playwright em 1440px e 390px
 com print das 4 abas; `check-ui-standard.sh` rodado e cada acusação apontada para

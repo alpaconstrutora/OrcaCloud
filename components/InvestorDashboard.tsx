@@ -7,6 +7,7 @@ import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCateg
 import { announcementsService } from '../services/announcementsService';
 import CommunicationCenter from './investor/CommunicationCenter';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { investorPortalTokenService } from '../services/investorPortalTokenService';
 import SpeManager from './investor/SpeManager';
@@ -49,10 +50,13 @@ interface InvestorDashboardProps {
 
 type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
 
+// ⚠️ Um nome por aba, para o gestor e para o investidor. Havia dois vocabulários
+// ("Evolução"/"Cotas" no app, "Resumo"/"Carteira" no portal) e o gestor não
+// achava no app a aba que o investidor citava.
 const TABS = [
-    { id: 'dashboard', label: 'Evolução', icon: <TrendingUp className="w-4 h-4" /> },
+    { id: 'dashboard', label: 'Resumo', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'simulator', label: 'Simulador', icon: <Calculator className="w-4 h-4" /> },
-    { id: 'holdings', label: 'Cotas', icon: <PieChartIcon className="w-4 h-4" /> },
+    { id: 'holdings', label: 'Carteira', icon: <PieChartIcon className="w-4 h-4" /> },
     { id: 'financeiro', label: 'Financeiro', icon: <Wallet className="w-4 h-4" /> },
     { id: 'fiscal', label: 'Fiscal e Tributário', icon: <FileText className="w-4 h-4" /> },
     { id: 'opportunities', label: 'Oportunidades', icon: <Building2 className="w-4 h-4" /> },
@@ -69,16 +73,9 @@ const PUBLIC_RENDERABLE_TAB_IDS: TabId[] = [
     'reports',
 ];
 
-const PUBLIC_TAB_LABELS: Partial<Record<TabId, string>> = {
-    dashboard: 'Resumo',
-    holdings: 'Carteira',
-    opportunities: 'Oportunidades',
-    reports: 'Documentos',
-};
-
 const TAB_TITLES: Record<TabId, string> = {
     dashboard: 'Meu Patrimônio',
-    holdings: 'Minhas Cotas',
+    holdings: 'Minha Carteira',
     financeiro: 'Gestão Financeira',
     fiscal: 'Fiscal e Tributário',
     opportunities: 'Oportunidades',
@@ -114,7 +111,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [showSelic, setShowSelic] = React.useState(false);
     const [showIpca, setShowIpca] = React.useState(false);
     const [showIgpm, setShowIgpm] = React.useState(false);
-    const [confirmModal, setConfirmModal] = React.useState<{ msg: string; onConfirm: () => void } | null>(null);
     const [inputModal, setInputModal] = React.useState<{ label: string; onConfirm: (val: string) => void } | null>(null);
     const [inputValue, setInputValue] = React.useState('');
 
@@ -147,7 +143,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const deriveTabIds = () => {
         if (overrideEnabledTabIds) return overrideEnabledTabIds;
         const saved = investorProfile?.settings?.investorPortalTabs;
-        return (saved ?? []).length > 0 ? saved! : TABS.map(t => t.id as string);
+        // ⚠️ Lista VAZIA é configuração ("nenhuma aba"), não ausência de
+        // configuração. Enquanto isto foi `saved.length > 0 ? saved : todas`, o
+        // gestor que desligava todas as abas via o portal voltar com TODAS —
+        // o oposto do que pediu. Só `undefined`/`null` significa "nunca configurado".
+        return Array.isArray(saved) ? saved : TABS.map(t => t.id as string);
     };
     const [enabledTabIds, setEnabledTabIds] = React.useState<string[]>(deriveTabIds);
 
@@ -162,12 +162,17 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     }, [isPublicExperience]);
 
     // Admin ve todas para configurar; investidor ve so as habilitadas e renderizaveis.
-    const navTabs = React.useMemo(() => {
-        const visibleTabs = isAdmin ? TABS : renderableTabs.filter(t => enabledTabIds.includes(t.id));
-        return visibleTabs.length > 0 ? visibleTabs : renderableTabs.filter(t => t.id === 'dashboard');
-    }, [enabledTabIds, isAdmin, renderableTabs]);
+    // Sem fallback: o segundo `length > 0 ? ... : dashboard` daqui reacendia a aba
+    // Resumo mesmo com tudo desligado. Nenhuma aba habilitada = portal sem
+    // conteudo, tratado com aviso proprio no lugar de reabrir uma aba sozinho.
+    const navTabs = React.useMemo(
+        () => (isAdmin ? [...TABS] : renderableTabs.filter(t => enabledTabIds.includes(t.id))),
+        [enabledTabIds, isAdmin, renderableTabs],
+    );
+    const semAbasHabilitadas = isPublicExperience && navTabs.length === 0;
 
     React.useEffect(() => {
+        if (navTabs.length === 0) return;   // nada habilitado: não force aba nenhuma
         const canRenderActiveTab = navTabs.some(t => t.id === activeTab);
         if (!canRenderActiveTab) {
             setActiveTab((navTabs[0]?.id as TabId) ?? 'dashboard');
@@ -194,7 +199,12 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         }
     };
 
-    const openConfirm = (msg: string, onConfirm: () => void) => setConfirmModal({ msg, onConfirm });
+    // §14 — confirmação destrutiva usa o useConfirm() global. A assinatura
+    // (msg, onConfirm) é mantida porque OpportunitiesTab/ReportsTab a recebem por prop.
+    const confirm = useConfirm();
+    const openConfirm = async (msg: string, onConfirm: () => void) => {
+        if (await confirm({ title: msg, variant: 'danger', confirmLabel: 'Remover' })) onConfirm();
+    };
     const openInput = (label: string, defaultValue: string, onConfirm: (val: string) => void) => {
         setInputValue(defaultValue);
         setInputModal({ label, onConfirm });
@@ -568,13 +578,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     // (isStandalone). No app autenticado a navegação já vem do Layout global.
     const isStandalone = !!portalToken;
     const investorDisplayName = investorProfile?.name || 'Investidor';
-    const tabLabel = (tab: { id: string; label: string }) =>
-        isPublicExperience ? (PUBLIC_TAB_LABELS[tab.id as TabId] ?? tab.label) : tab.label;
 
     return (
         <div className={isStandalone
             ? 'portal-mobile-font min-h-screen bg-[#F2F2F4] pb-24 md:pb-0 md:h-screen md:flex md:flex-col md:overflow-hidden'
-            : 'portal-mobile-font space-y-8 pb-24 md:pb-12'}>
+            : 'portal-mobile-font space-y-6 pb-24 md:pb-12'}>{/* §20 — space-y-6 na raiz */}
 
             {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Cliente) ══ */}
             {isStandalone && (
@@ -647,7 +655,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 }`}
                             >
                                 {tab.icon}
-                                <span>{tabLabel(tab)}</span>
+                                <span>{tab.label}</span>
                             </button>
                         ))}
                     </aside>
@@ -686,8 +694,13 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 <X className="w-5 h-5" />
                             </Button>
                         </div>
+                        {/* Só as abas que o portal sabe renderizar entram como
+                            interruptor. As demais existiam aqui e não faziam nada
+                            no acesso por token — o gestor desligava e nada mudava
+                            para o investidor. Agora aparecem como informação, não
+                            como controle. */}
                         <div className="p-8 space-y-3">
-                            {TABS.map(tab => {
+                            {TABS.filter(t => PUBLIC_RENDERABLE_TAB_IDS.includes(t.id as TabId)).map(tab => {
                                 const isVisible = enabledTabIds.includes(tab.id);
                                 return (
                                     <button
@@ -710,10 +723,20 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 );
                             })}
                         </div>
-                        <div className="px-8 pb-8">
+                        <div className="px-8 pb-8 space-y-4">
                             <p className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest">
                                 Clique em cada aba para alternar a visibilidade do investidor
                             </p>
+                            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+                                {/* §21 — sentence case; o resto do modal ainda usa o
+                                    estilo antigo em caixa alta (dívida pré-existente). */}
+                                <p className="text-sm font-black text-gray-600 mb-2">Exclusivas do gestor</p>
+                                <p className="text-xs text-gray-400 leading-relaxed">
+                                    {TABS.filter(t => !PUBLIC_RENDERABLE_TAB_IDS.includes(t.id as TabId)).map(t => t.label).join(' · ')}
+                                    {' '}— não existem no portal do investidor, com ou sem esta configuração.
+                                    Comunicados chega ao investidor dentro de <strong className="font-bold text-gray-500">Documentos</strong>.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -723,13 +746,16 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 (badge + menu de conta + sidebar), então o bloco de título some
                 e o conteúdo começa pela faixa de KPIs, como no desenho de
                 referência (§24). No app interno ele continua igual. */}
-            <div className={`${isPublicExperience ? 'hidden' : 'flex'} flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-100`}>
+            <div className={`${isPublicExperience ? 'hidden' : 'flex'} flex-col md:flex-row md:items-end justify-between gap-6`}>
+                {/* §20 — h1 text-3xl + subtítulo mt-1.5. A etiqueta em caixa alta
+                    acima do título (e o text-4xl) eram anatomia própria desta tela. */}
                 <div>
-                    <div className="flex items-center gap-2 text-xs font-black text-blue-600 uppercase tracking-widest mb-3">
-                        <div className="w-5 h-1 bg-blue-600 rounded-full" />
-                        {isAdmin ? 'Modo de Edição (Gestor)' : 'Exclusivo para Investidores'}
-                    </div>
-                    <h1 className="text-4xl font-black text-gray-900 tracking-tight">{title}</h1>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        {isAdmin
+                            ? `Modo de edição — configure o que ${investorProfile?.name?.split(' ')[0] ?? 'o investidor'} vê no portal.`
+                            : 'Acompanhe seu patrimônio, aportes e documentos.'}
+                    </p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-end">
                     {/* Botão Prévia Mobile — somente admin */}
@@ -756,36 +782,52 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             <Settings2 className="w-4 h-4" />
                         </Button>
                     )}
-                    {/* No standalone a navegação é a sidebar (desktop) / barra inferior (mobile) */}
-                    <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} gap-2 overflow-x-auto pb-1 scrollbar-hide`}>
-                        {navTabs.map(tab => {
-                            const hidden = isAdmin && !enabledTabIds.includes(tab.id);
-                            const label = tabLabel(tab);
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as TabId)}
-                                    title={hidden ? 'Oculta para o investidor' : undefined}
-                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black transition-all duration-200 uppercase tracking-widest whitespace-nowrap ${
-                                        activeTab === tab.id
-                                            ? 'bg-blue-600 text-white shadow-md'
-                                            : hidden
-                                                ? 'bg-gray-50 text-gray-300 border border-dashed border-gray-200'
-                                                : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
-                                    }`}
-                                >
-                                    {tab.icon}
-                                    {label}
-                                    {hidden && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
-                                </button>
-                            );
-                        })}
-                    </div>
+                </div>
+            </div>
+
+            {/* §19.1 — toolbar de abas canônica: card branco + trilho cinza, aba
+                ativa branca com texto azul (não o azul sólido de botão primário),
+                h-7, sentence case e flex-wrap (nunca overflow-x-auto, que corta
+                aba sem avisar). No portal a navegação é a sidebar/barra inferior. */}
+            <div className={`${isStandalone || isPublicExperience ? 'hidden' : 'hidden md:flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {navTabs.map(tab => {
+                        const hidden = isAdmin && !enabledTabIds.includes(tab.id);
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id as TabId)}
+                                title={hidden ? 'Oculta para o investidor' : undefined}
+                                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                    activeTab === tab.id
+                                        ? 'bg-white text-blue-600 shadow-sm'
+                                        : hidden
+                                            ? 'text-gray-300 hover:text-gray-400'
+                                            : 'text-gray-700 hover:text-gray-900'
+                                }`}
+                            >
+                                {tab.icon}
+                                {tab.label}
+                                {hidden && <EyeOff className="w-3 h-3 ml-0.5 text-gray-300" />}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
             {/* Content */}
-            {dataLoading ? (
+            {semAbasHabilitadas ? (
+                <main className="min-h-[500px] flex items-center justify-center">
+                    <div className="bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-8 max-w-md text-center">
+                        <EyeOff className="w-9 h-9 text-gray-200 mx-auto mb-4" />
+                        <h3 className="text-[15px] font-semibold text-[#1F2430] mb-1.5">Portal em configuração</h3>
+                        <p className="text-[13px] text-[#8A8F9A] leading-relaxed">
+                            Nenhuma seção está liberada para você no momento. Fale com a incorporadora
+                            para liberar o acesso.
+                        </p>
+                    </div>
+                </main>
+            ) : dataLoading ? (
                 <main className="min-h-[500px] animate-in fade-in duration-300">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                         {[0, 1, 2, 3].map(i => (
@@ -1046,24 +1088,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Gestão de Ativos Premium • Opura Platinum</p>
             </div>
 
-            {/* Confirm Modal */}
-            {confirmModal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
-                        <p className="text-base font-bold text-gray-900 mb-6">{confirmModal.msg}</p>
-                        <div className="flex gap-3 justify-end">
-                            <Button variant="ghost" onClick={() => setConfirmModal(null)}>Cancelar</Button>
-                            <Button
-                                variant="danger"
-                                onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
-                            >
-                                Remover
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Input Modal */}
             {inputModal && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -1136,7 +1160,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                             {tab.icon}
                                         </span>
                                         <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
-                                            {tabLabel(tab).split(' ')[0]}
+                                            {tab.label.split(' ')[0]}
                                         </span>
                                         {isAdmin && !isVisible && <EyeOff className="w-2 h-2 absolute top-2 right-2 text-gray-200" />}
                                     </button>
@@ -1195,7 +1219,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                             }`}
                                         >
                                             <span className={isActive ? 'text-blue-500' : 'text-gray-400'}>{tab.icon}</span>
-                                            <span className="text-sm font-black uppercase tracking-tight">{tabLabel(tab)}</span>
+                                            <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
                                             {isAdmin && !isVisible && <EyeOff className="w-3.5 h-3.5 ml-auto text-gray-300" />}
                                         </button>
                                     );

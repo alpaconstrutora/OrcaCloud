@@ -42,8 +42,18 @@ const BASE_COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+// Calibradas em 2026-08-16 medindo no navegador contra o container real
+// (1130px em viewport 1440): conteúdo natural de cada coluna (rótulo do
+// cabeçalho + dado real, mesma técnica do `cols.autoFit()`) e o conteúdo real
+// da célula de Ações (2 ícones + gap + padding = 114px). Sem essa calibragem
+// o `<col />` espaçador do §6.1.1 NÃO absorve a sobra sozinho — a tabela
+// nasceu 120px mais estreita que o card, deixando uma faixa em branco à
+// direita ("faltou o padding do lado direito", reportado pelo usuário).
+// A soma bate exatamente com o container no modo padrão (sem coluna Org);
+// com Org (modo "todas as organizações") a tabela passa a rolar
+// horizontalmente — mesmo comportamento aceito em Contratos (§6, 11 colunas).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    org: 90, employee: 220, base_salary: 140, gross: 130, discounts: 130, net: 130, employer_cost: 150, actions: 110,
+    org: 90, employee: 250, base_salary: 155, gross: 145, discounts: 145, net: 140, employer_cost: 175, actions: 120,
 };
 
 const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({

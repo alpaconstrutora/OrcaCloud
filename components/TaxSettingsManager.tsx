@@ -42,14 +42,31 @@ function renderTaxCell(key: string, item: TaxSetting): React.ReactNode {
     switch (key) {
         case 'nome':
             return <span className="text-sm font-normal text-gray-700">{item.nome}</span>;
-        case 'aliquota':
+        case 'aliquota': {
+            // Ativo sem alíquota é um estado válido (linha criada por "Criar tributos
+            // padrão", ainda não preenchida) mas silenciosamente não gera nenhum
+            // tributo (generateForDeal filtra aliquota != null) — sinalizar aqui,
+            // não deixar parecer que está tudo configurado.
+            const incompleto = item.ativo && item.aliquota === null;
             return (
                 <div className="text-right">
-                    <span className="text-sm font-normal text-gray-700">
-                        {item.aliquota !== null ? `${item.aliquota.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%` : '—'}
-                    </span>
+                    {item.aliquota !== null ? (
+                        <span className="text-sm font-normal text-gray-700">
+                            {item.aliquota.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%
+                        </span>
+                    ) : incompleto ? (
+                        <span
+                            className="inline-flex items-center gap-1 text-sm font-medium text-amber-600"
+                            title="Ativo mas sem alíquota definida — não será aplicado aos tributos gerados até ser preenchido"
+                        >
+                            <AlertTriangle className="w-3.5 h-3.5" /> Sem alíquota
+                        </span>
+                    ) : (
+                        <span className="text-sm font-normal text-gray-400">—</span>
+                    )}
                 </div>
             );
+        }
         case 'base_calculo':
             return <span className="text-sm font-normal text-gray-600">{item.base_calculo || '—'}</span>;
         case 'regra_retencao':
@@ -177,6 +194,13 @@ const TaxSettingsManager: React.FC = () => {
         () => DEFAULT_TAX_MODULES.some(nome => !items.some(i => i.nome === nome)),
         [items]
     );
+    // Tributo ativo sem alíquota é criado assim por "Criar tributos padrão" (só o
+    // nome vem pronto) e não quebra nada, mas gera zero silenciosamente na tela de
+    // Tributos a Pagar — sinalizar aqui evita o usuário achar que já está tudo pronto.
+    const incompleteActive = useMemo(
+        () => items.filter(i => i.ativo && i.aliquota === null),
+        [items]
+    );
 
     const filteredItems = useMemo(() =>
         items
@@ -233,6 +257,18 @@ const TaxSettingsManager: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {incompleteActive.length > 0 && (
+                <div className="mt-4 flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-[10px] text-sm text-amber-700">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                        {incompleteActive.length === 1
+                            ? <><b>{incompleteActive[0].nome}</b> está ativo mas sem alíquota definida</>
+                            : <>{incompleteActive.length} tributos ativos estão sem alíquota definida ({incompleteActive.map(i => i.nome).join(', ')})</>}
+                        {' '}— não entram no cálculo de Tributos a Pagar até a alíquota ser preenchida.
+                    </span>
+                </div>
+            )}
 
             <div className="mt-6 border-t border-gray-100 pt-6 space-y-3">
                 {(isAdding || editingId) && (

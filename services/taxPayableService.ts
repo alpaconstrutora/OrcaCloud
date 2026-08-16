@@ -540,13 +540,29 @@ export const taxPayableService = {
         // já PAGOS/conciliados (dinheiro que saiu).
         await this.removeForDeal(deal.id, organizationId);
 
-        // Parcelas do negócio = recebíveis (CREDIT) `tx-{dealId}-*`, exceto cancelados.
+        // Parcelas do negócio — duas origens possíveis:
+        //  1) recebível direto do negócio (fluxo legado `tx-{dealId}-*`, via
+        //     dealReceivablesService/commercialFinanceService);
+        //  2) parcela de contrato vinculado ao negócio (Gestão de Contratos,
+        //     `contracts.deal_id`) — hoje é o caminho REAL de Locação (e de Venda
+        //     parcelada via contrato): reference_id `{contractId}-p{data}`, mesmo
+        //     padrão de match (`{contractId}%`) usado em contractService.ts. Sem
+        //     isso, `generateForDeal` nunca achava parcela de Locação e saía calado
+        //     sem gerar nenhum tributo, mesmo com centenas de parcelas reais em
+        //     Contas a Receber.
+        const { data: linkedContracts } = await supabase
+            .from('contracts')
+            .select('id')
+            .eq('deal_id', deal.id);
+        const contractIds = (linkedContracts || []).map((c: { id: string }) => c.id);
+
+        const refPatterns = [`tx-${deal.id}-%`, ...contractIds.map(id => `${id}%`)];
         const { data: parcels, error: pErr } = await supabase
             .from('internal_transactions')
             .select('reference_id, amount, due_date, transaction_date, status, business_status')
             .eq('organization_id', organizationId)
             .eq('direction', 'CREDIT')
-            .like('reference_id', `tx-${deal.id}-%`);
+            .or(refPatterns.map(p => `reference_id.like.${p}`).join(','));
         if (pErr) { console.error('[TAX-PAYABLE] Falha ao ler parcelas do negócio:', pErr); return; }
 
         const validParcels: DealParcel[] = (parcels || [])
@@ -571,7 +587,15 @@ export const taxPayableService = {
         const rows: Record<string, unknown>[] = [];
         const pushRow = (parcel: DealParcel, taxKey: string, taxName: string, amount: number) => {
             if (!(amount > 0)) return;
-            const instSuffix = parcel.reference_id.replace(`tx-${deal.id}-`, '');
+            // Deriva um sufixo curto do reference_id da parcela, qualquer que seja a
+            // origem: `tx-{dealId}-p1` → `p1`; `{contractId}-p2021-01-15` → `p2021-01-15`.
+            const legacyPrefix = `tx-${deal.id}-`;
+            const contractPrefix = contractIds.find(id => parcel.reference_id.startsWith(id));
+            const instSuffix = parcel.reference_id.startsWith(legacyPrefix)
+                ? parcel.reference_id.slice(legacyPrefix.length)
+                : contractPrefix
+                    ? parcel.reference_id.slice(contractPrefix.length).replace(/^-/, '')
+                    : parcel.reference_id;
             rows.push({
                 organization_id: organizationId,
                 source_system:   TAX_SOURCE_SYSTEM,

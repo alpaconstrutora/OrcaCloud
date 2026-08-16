@@ -6,6 +6,7 @@ import {
   cantosDaParede,
   eixoDaParede,
   poligonoPeloLado,
+  retanguloPorCantos,
   type AlinhamentoParede,
   type BlueprintModel,
   type Opening,
@@ -358,8 +359,15 @@ export default function BlueprintCanvas({
   const [movendoAbertura, setMovendoAbertura] = useState<
     { openingId: string; offsetMm: number } | null
   >(null);
-  /** Centro do polígono em curso. O raio e o giro saem do cursor. */
-  const [centroPoligono, setCentroPoligono] = useState<Point | null>(null);
+  /**
+   * Primeiro ponto da forma fechada em curso — polígono ou retângulo.
+   *
+   * O que ele SIGNIFICA muda com a ferramenta: no polígono é o CENTRO (o cursor
+   * dá a apótema e o giro), no retângulo é um CANTO (o cursor dá o oposto).
+   * Um estado só porque o resto do gesto é idêntico nos dois: prévia, `Escape`,
+   * e o mesmo lote de paredes mitradas no fim.
+   */
+  const [ancoraDaForma, setAncoraDaForma] = useState<Point | null>(null);
   /** Primeiro ponto da aferição, em milímetro do modelo. */
   const [calibP1, setCalibP1] = useState<Point | null>(null);
   /** Vértices da forma medida em curso. */
@@ -441,13 +449,16 @@ export default function BlueprintCanvas({
           // uma espessura dela, então nada além disso pode ganhar.
           if (d > limite + w.thicknessMm) continue;
 
-          const junta = !isFreeWallEnd(paredesDoNivel, extremo, w.id);
+          // A MESMA medida que o desenho usa. `extensaoDeCanto` já devolve 0 na
+          // ponta livre, então não há mais o que perguntar sobre junção aqui —
+          // e o canto oferecido ao clique é, por construção, o canto que está
+          // na tela.
           const cantos = cantosDaParede(
             w.a,
             w.b,
             w.thicknessMm,
-            end === 'a' && junta,
-            end === 'b' && junta,
+            extensaoDeCanto(paredesDoNivel, w, 'a'),
+            extensaoDeCanto(paredesDoNivel, w, 'b'),
           );
           for (const c of cantos) {
             const dc = Math.hypot(c.x - mundo.x, c.y - mundo.y);
@@ -512,16 +523,18 @@ export default function BlueprintCanvas({
    * uso. O porquê completo está em `poligonoPeloLado`.
    */
   const verticesPoligono = useMemo(() => {
-    if (!centroPoligono || !cursor) return [];
-    const dx = cursor.x - centroPoligono.x;
-    const dy = cursor.y - centroPoligono.y;
+    if (!ancoraDaForma || !cursor) return [];
+    if (tool === 'retangulo') return retanguloPorCantos(ancoraDaForma, cursor);
+
+    const dx = cursor.x - ancoraDaForma.x;
+    const dy = cursor.y - ancoraDaForma.y;
     return poligonoPeloLado(
-      centroPoligono,
+      ancoraDaForma,
       Math.hypot(dx, dy),
       ladosPoligono,
       Math.atan2(dy, dx),
     );
-  }, [centroPoligono, cursor, ladosPoligono]);
+  }, [ancoraDaForma, cursor, ladosPoligono, tool]);
 
   /**
    * Os eixos das N paredes do polígono, com os cantos MITRADOS.
@@ -1040,10 +1053,9 @@ export default function BlueprintCanvas({
       }
     }
 
-    // Prévia do polígono em curso — a faixa de cada lado, já no eixo mitrado,
-    // mais o raio pontilhado do centro ao vértice que segue o cursor. O raio é
-    // o que explica o gesto: sem ele, o polígono parece nascer do nada.
-    if (centroPoligono && verticesPoligono.length >= 3) {
+    // Prévia da forma fechada em curso — a faixa de cada lado, já no eixo
+    // mitrado, e a medida que interessa a cada ferramenta.
+    if (ancoraDaForma && verticesPoligono.length >= 3) {
       const eixos = eixosDoPoligono(verticesPoligono);
       const espessuraPx = Math.max(1.5, espessuraMm * vista.escala);
 
@@ -1058,33 +1070,60 @@ export default function BlueprintCanvas({
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       }
-
-      const c = paraTela(centroPoligono);
-      const v = paraTela(verticesPoligono[0]);
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(c.x, c.y);
-      ctx.lineTo(v.x, v.y);
-      ctx.stroke();
       ctx.setLineDash([]);
 
-      // O LADO, não o raio: é a medida que a planta cota e que se confere
-      // contra o projeto. O raio é meio de construção, não dimensão de obra.
-      const ladoMm = Math.round(
-        Math.hypot(
-          verticesPoligono[1].x - verticesPoligono[0].x,
-          verticesPoligono[1].y - verticesPoligono[0].y,
-        ),
-      );
-      rotuloDoTraco(
-        ctx,
-        `${ladosPoligono} lados · ${(ladoMm / 1000).toFixed(2).replace('.', ',')} m`,
-        paraTela(verticesPoligono[0]),
-        paraTela(verticesPoligono[1]),
-        espessuraPx,
-        COR_PREVIA,
-      );
+      const medida = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
+      const lado = (i: number, j: number) =>
+        Math.round(
+          Math.hypot(
+            verticesPoligono[j].x - verticesPoligono[i].x,
+            verticesPoligono[j].y - verticesPoligono[i].y,
+          ),
+        );
+
+      if (tool === 'retangulo') {
+        // AS DUAS MEDIDAS, uma em cada lado: é assim que se confere um cômodo
+        // contra a planta, e uma só não diria nada sobre a outra.
+        rotuloDoTraco(
+          ctx,
+          `${medida(lado(0, 1))} m`,
+          paraTela(verticesPoligono[0]),
+          paraTela(verticesPoligono[1]),
+          espessuraPx,
+          COR_PREVIA,
+        );
+        rotuloDoTraco(
+          ctx,
+          `${medida(lado(1, 2))} m`,
+          paraTela(verticesPoligono[1]),
+          paraTela(verticesPoligono[2]),
+          espessuraPx,
+          COR_PREVIA,
+        );
+      } else {
+        // O raio pontilhado explica o gesto do polígono: sem ele, a forma
+        // parece nascer do nada.
+        const c = paraTela(ancoraDaForma);
+        const v = paraTela(verticesPoligono[0]);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y);
+        ctx.lineTo(v.x, v.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // O LADO, não o raio: é a medida que a planta cota e que se confere
+        // contra o projeto. O raio é meio de construção, não dimensão de obra.
+        rotuloDoTraco(
+          ctx,
+          `${ladosPoligono} lados · ${medida(lado(0, 1))} m`,
+          paraTela(verticesPoligono[0]),
+          paraTela(verticesPoligono[1]),
+          espessuraPx,
+          COR_PREVIA,
+        );
+      }
     }
 
     // Prévia da parede em curso.
@@ -1353,7 +1392,7 @@ export default function BlueprintCanvas({
     }
 
     // Marcador de captura
-    if (cursor && (tool === 'parede' || tool === 'poligono')) {
+    if (cursor && (tool === 'parede' || tool === 'poligono' || tool === 'retangulo')) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
       ctx.lineWidth = 1.5;
@@ -1389,7 +1428,7 @@ export default function BlueprintCanvas({
     movendo,
     destinoPonta,
     movendoAbertura,
-    centroPoligono,
+    ancoraDaForma,
     verticesPoligono,
     eixosDoPoligono,
     ladosPoligono,
@@ -1502,12 +1541,16 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'poligono') {
-      // Mesma captura da parede: o vértice encaixa na grade e nos cantos já
-      // desenhados, para o polígono poder encostar no que existe. Com orto, o
-      // vértice trava no eixo do centro — é o que dá o polígono "de pé".
+    if (tool === 'poligono' || tool === 'retangulo') {
+      // Mesma captura da parede: o ponto encaixa na grade e nos cantos já
+      // desenhados, para a forma poder encostar no que existe.
       let alvo = capturar(paraMundo(px, py), alinhamento !== 'EIXO');
-      if (centroPoligono && ortoAtivo(e)) alvo = travarOrtogonal(centroPoligono, alvo);
+      // A trava ortogonal vale só para o POLÍGONO, onde ela alinha o giro. No
+      // retângulo ela colapsaria o gesto: prender o segundo canto no eixo do
+      // primeiro zera um dos lados, e não sobra retângulo nenhum.
+      if (tool === 'poligono' && ancoraDaForma && ortoAtivo(e)) {
+        alvo = travarOrtogonal(ancoraDaForma, alvo);
+      }
       setCursor(alvo);
       return;
     }
@@ -1586,18 +1629,18 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'poligono') {
-      if (!centroPoligono) {
-        setCentroPoligono(capturar(mundo, alinhamento !== 'EIXO'));
+    if (tool === 'poligono' || tool === 'retangulo') {
+      if (!ancoraDaForma) {
+        setAncoraDaForma(capturar(mundo, alinhamento !== 'EIXO'));
         return;
       }
-      // `verticesPoligono` já sai vazio em raio pequeno demais para o número de
-      // lados (o arredondamento ao mm colapsaria vértices). Nesse caso o clique
-      // não fecha nada e o gesto continua — melhor que gravar um polígono que o
-      // kernel recusaria em seguida.
+      // `verticesPoligono` sai vazio no gesto degenerado — raio pequeno demais
+      // para o número de lados, ou os dois cantos do retângulo na mesma linha.
+      // Nesse caso o clique não fecha nada e o gesto continua, o que é melhor
+      // que gravar uma forma que o kernel recusaria em seguida.
       if (verticesPoligono.length >= 3) {
         onAddPoligono?.(eixosDoPoligono(verticesPoligono));
-        setCentroPoligono(null);
+        setAncoraDaForma(null);
       }
       return;
     }
@@ -1775,7 +1818,7 @@ export default function BlueprintCanvas({
       setMovendoAbertura(null);
       setMovendo(null);
       setDestinoPonta(null);
-      setCentroPoligono(null);
+      setAncoraDaForma(null);
       setCalibP1(null);
       setMedindo([]);
       onSelect(null);
@@ -1811,8 +1854,12 @@ export default function BlueprintCanvas({
       />
 
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
-        {tool === 'poligono'
-          ? centroPoligono
+        {tool === 'retangulo'
+          ? ancoraDaForma
+            ? 'Arraste até o canto OPOSTO · clique fecha o ambiente · Esc cancela'
+            : 'Clique num CANTO do ambiente'
+          : tool === 'poligono'
+          ? ancoraDaForma
             ? `Arraste para dar o tamanho e o giro · clique fecha o polígono de ${ladosPoligono} lados · Esc cancela`
             : 'Clique no CENTRO do polígono'
           : tool === 'parede'

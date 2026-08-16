@@ -27,7 +27,10 @@ import {
 const T = 200;
 const H = 2800;
 
-const lados = Number(new URLSearchParams(location.search).get('lados') ?? 6);
+const busca = new URLSearchParams(location.search);
+const lados = Number(busca.get('lados') ?? 6);
+/** `?tool=retangulo` exercita o gesto de canto a canto. */
+const ferramenta = busca.get('tool') === 'retangulo' ? 'retangulo' : 'poligono';
 
 const inicial = applyCommand(emptyModel(), {
   type: 'AddLevel',
@@ -64,6 +67,7 @@ function App() {
     dump.textContent = JSON.stringify(
       {
         lados,
+        ferramenta,
         paredes: modelo.walls.length,
         ambientes: modelo.spaces.length,
         areaM2: modelo.spaces.map((s) => +(s.areaMm2 / 1_000_000).toFixed(2)),
@@ -77,7 +81,7 @@ function App() {
   return (
     <BlueprintCanvas
       model={modelo}
-      tool="poligono"
+      tool={ferramenta}
       levelId={levelId}
       selectedId={null}
       onSelect={() => {}}

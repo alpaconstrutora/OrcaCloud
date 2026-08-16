@@ -534,19 +534,56 @@ export function poligonoPeloLado(
 }
 
 /**
+ * Retângulo definido pelos dois cantos OPOSTOS, no sentido horário da tela.
+ *
+ * É o gesto de fazer um cômodo depressa: clica num canto, arrasta até o outro.
+ * O polígono regular não serve para isso — com 4 lados ele é sempre um QUADRADO
+ * e nasce do centro, e cômodo quase nunca é quadrado.
+ *
+ * Sai sempre alinhado aos eixos, por construção: os lados são paralelos a x e a
+ * y. Não há giro a escolher, e é justamente isso que se quer ao copiar planta
+ * ortogonal.
+ *
+ * A ordem é normalizada para o sentido horário da tela (área com sinal negativo,
+ * porque o Y do modelo aponta para cima) — o mesmo sentido que faz a parede
+ * nascer para dentro com o alinhamento "à direita". Assim tanto faz de qual
+ * canto se começa a arrastar: os quatro caminhos dão o mesmo contorno.
+ *
+ * `[]` quando os dois cantos partilham uma coordenada: não há retângulo, e uma
+ * parede de comprimento zero seria recusada pelo kernel logo em seguida.
+ */
+export function retanguloPorCantos(p: Point, q: Point): Point[] {
+  if (p.x === q.x || p.y === q.y) return [];
+
+  const x0 = Math.min(p.x, q.x);
+  const x1 = Math.max(p.x, q.x);
+  const y0 = Math.min(p.y, q.y);
+  const y1 = Math.max(p.y, q.y);
+
+  // Começa pelo canto superior esquerdo e desce pela direita: horário na tela.
+  return [point(x0, y1), point(x1, y1), point(x1, y0), point(x0, y0)];
+}
+
+/**
  * Os quatro cantos do corpo da parede, no sentido do anel.
  *
- * `extenderA`/`extenderB` empurram a ponta em meia espessura, como o desenho faz
+ * `avancoAMm`/`avancoBMm` empurram a ponta ao longo do eixo, como o desenho faz
  * na ponta que encontra outra parede — é lá que está o canto que se VÊ, e é nele
- * que o clique precisa grudar. Sem a extensão, o encaixe ofereceria um canto meia
- * espessura atrás daquele que está na tela.
+ * que o clique precisa grudar.
+ *
+ * ⚠️ VÊM EM MILÍMETRO, e quem chama deve passar exatamente `extensaoDeCanto`.
+ * Eram dois booleanos que aqui viravam meia espessura, e isso ficou ERRADO no
+ * instante em que o desenho passou a avançar pelo ÂNGULO do canto: num hexágono
+ * o traço avança 57,7 mm e o encaixe oferecia 100 mm, então o clique grudava
+ * 42 mm além do canto que estava na tela. Duas fontes para a mesma medida
+ * divergem — e esta divergiu no mesmo dia em que nasceu.
  */
 export function cantosDaParede(
   a: Point,
   b: Point,
   espessuraMm: number,
-  extenderA = false,
-  extenderB = false,
+  avancoAMm = 0,
+  avancoBMm = 0,
 ): Point[] {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -559,8 +596,8 @@ export function cantosDaParede(
   const ny = ux;
   const meia = espessuraMm / 2;
 
-  const pa = { x: a.x - ux * (extenderA ? meia : 0), y: a.y - uy * (extenderA ? meia : 0) };
-  const pb = { x: b.x + ux * (extenderB ? meia : 0), y: b.y + uy * (extenderB ? meia : 0) };
+  const pa = { x: a.x - ux * avancoAMm, y: a.y - uy * avancoAMm };
+  const pb = { x: b.x + ux * avancoBMm, y: b.y + uy * avancoBMm };
 
   return [
     point(roundToMm(pa.x + nx * meia), roundToMm(pa.y + ny * meia)),

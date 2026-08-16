@@ -41,6 +41,8 @@ export type BlueprintTool =
   | 'parede'
   /** Contorno fechado de N lados iguais, criado num gesto só. */
   | 'poligono'
+  /** Retângulo pelos dois cantos opostos — o gesto de fazer um cômodo. */
+  | 'retangulo'
   | 'abertura'
   | 'calibrar'
   /** Formas MEDIDAS — afirmadas à mão, não derivadas do arranjo planar. */

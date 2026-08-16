@@ -113,9 +113,18 @@ describe('BlueprintEditor · ações oferecidas', () => {
 
     expect(botao(/selecionar/i)).toBeInTheDocument();
     expect(botao(/^parede$/i)).toBeInTheDocument();
+    expect(botao(/^retângulo$/i)).toBeInTheDocument();
     expect(botao(/^polígono$/i)).toBeInTheDocument();
     expect(botao(/abertura/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/ambientes derivados/i)).toBeInTheDocument();
+  });
+
+  it('Retângulo NÃO traz o seletor de lados — ele sempre tem quatro', async () => {
+    // Pedido de 16/08/2026: usar a forma fechada para fazer cômodo depressa,
+    // começando por um CANTO. Retângulo não escolhe lados nem giro.
+    await montar();
+    await userEvent.setup().click(botao(/^retângulo$/i));
+    expect(screen.queryByLabelText(/^lados$/i)).not.toBeInTheDocument();
   });
 
   it('a ferramenta Polígono traz o seletor de lados, e só ela', async () => {

@@ -133,6 +133,67 @@ if (!(doze.areaM2[0] < tri.areaM2[0])) {
   falhas.push(`área não decresceu com os lados: 3 → ${tri.areaM2[0]}, 12 → ${doze.areaM2[0]}`);
 }
 
+// ── Retângulo: o gesto de fazer um cômodo (pedido de 16/08/2026) ────────────
+//
+// "o ponto inicial deve ser no canto ... A ideia é usar o poligono para fazer
+// paredes mais rapido". Clica um canto, arrasta até o oposto.
+{
+  const page = await browser.newPage({
+    viewport: { width: 900, height: 900 },
+    deviceScaleFactor: 2,
+  });
+  page.on('console', (m) => m.type() === 'error' && erros.push(`[ret] ${m.text()}`));
+  page.on('pageerror', (e) => erros.push(`[ret] ${String(e)}`));
+
+  await page.goto(`${urlBase}/docs/spikes/poligono/index.html?tool=retangulo`, {
+    waitUntil: 'networkidle',
+  });
+  await page.waitForTimeout(400);
+
+  const caixa = await page.locator('canvas').boundingBox();
+  const tela = (p) => ({
+    x: caixa.x + p.x * 0.05 + 60,
+    y: caixa.y - p.y * 0.05 + (caixa.height - 60),
+  });
+
+  // Cômodo de 6 × 4 m, clicando o canto inferior esquerdo e arrastando até o
+  // superior direito.
+  const canto = { x: 3000, y: 3000 };
+  const oposto = { x: 9000, y: 7000 };
+
+  await page.mouse.click(tela(canto).x, tela(canto).y);
+  await page.mouse.move(tela(oposto).x, tela(oposto).y, { steps: 10 });
+  await page.waitForTimeout(150);
+  await page.locator('#dump').evaluate((el) => (el.style.visibility = 'hidden'));
+  await page.screenshot({ path: path.join(aqui, 'saida-retangulo-previa.png') });
+  await page.locator('#dump').evaluate((el) => (el.style.visibility = 'visible'));
+
+  await page.mouse.click(tela(oposto).x, tela(oposto).y);
+  await page.waitForTimeout(200);
+
+  const e = JSON.parse(await page.locator('#dump').textContent());
+  if (e.paredes !== 4) falhas.push(`retângulo produziu ${e.paredes} paredes`);
+  if (e.ambientes !== 1) falhas.push(`retângulo: ${e.ambientes} ambientes, esperado 1`);
+
+  // OS DOIS CANTOS CLICADOS têm de ser cantos do cômodo. Com parede de 200 e
+  // face à direita, o eixo recua 100 mm para dentro em cada lado.
+  const xs = e.eixos.flatMap((w) => [w[0], w[2]]);
+  const ys = e.eixos.flatMap((w) => [w[1], w[3]]);
+  const caixaEixo = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  if (caixaEixo.join(',') !== '3100,3100,8900,6900') {
+    falhas.push(`retângulo saiu em ${caixaEixo.join(',')}, esperado 3100,3100,8900,6900`);
+  }
+  // Área de eixo: 5800 × 3800 = 22,04 m².
+  if (Math.abs(e.areaM2[0] - 22.04) > 0.01) {
+    falhas.push(`área do cômodo ${e.areaM2[0]} m², esperado 22,04`);
+  }
+
+  await page.locator('#dump').evaluate((el) => (el.style.visibility = 'hidden'));
+  await page.screenshot({ path: path.join(aqui, 'saida-retangulo.png') });
+  await page.close();
+  console.log(`retângulo 6 × 4 m → ${e.areaM2[0]} m² de eixo, ${e.paredes} paredes`);
+}
+
 await browser.close();
 
 console.log(`triângulo ${tri.areaM2[0]} m² · dodecágono ${doze.areaM2[0]} m²`);

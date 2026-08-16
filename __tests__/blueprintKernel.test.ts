@@ -35,6 +35,7 @@ import {
   parseCanonicalPayload,
   poligonoRegular,
   poligonoPeloLado,
+  retanguloPorCantos,
   pointInPolygon,
   intersectSegments,
   point,
@@ -1760,6 +1761,85 @@ describe('poligonoRegular', () => {
   });
 });
 
+describe('retanguloPorCantos', () => {
+  it('os dois cantos CLICADOS são cantos do retângulo', () => {
+    // É o pedido: "o ponto inicial deve ser no canto". Clica um canto, arrasta
+    // até o oposto — o gesto de fazer um cômodo depressa.
+    const v = retanguloPorCantos(point(1000, 2000), point(5000, 6000));
+
+    expect(v).toHaveLength(4);
+    expect(v).toContainEqual({ x: 1000, y: 2000 });
+    expect(v).toContainEqual({ x: 5000, y: 6000 });
+  });
+
+  it('sai sempre alinhado aos eixos — lado nenhum sai torto', () => {
+    const v = retanguloPorCantos(point(0, 0), point(4000, 3000));
+    for (let i = 0; i < 4; i++) {
+      const a = v[i];
+      const b = v[(i + 1) % 4];
+      // Cada lado é horizontal OU vertical, nunca oblíquo.
+      expect(a.x === b.x || a.y === b.y, `lado ${i} saiu torto`).toBe(true);
+    }
+  });
+
+  it('TANTO FAZ de qual canto se arrasta — os 4 caminhos dão o mesmo contorno', () => {
+    // O contorno é normalizado para o sentido horário da tela. Sem isso,
+    // arrastar da direita para a esquerda inverteria o sentido e a parede
+    // nasceria para FORA no alinhamento "à direita".
+    const alvo = retanguloPorCantos(point(0, 0), point(4000, 3000));
+    for (const [p, q] of [
+      [point(4000, 3000), point(0, 0)],
+      [point(0, 3000), point(4000, 0)],
+      [point(4000, 0), point(0, 3000)],
+    ] as const) {
+      expect(retanguloPorCantos(p, q)).toEqual(alvo);
+    }
+  });
+
+  it('sentido HORÁRIO na tela, como o polígono', () => {
+    const v = retanguloPorCantos(point(0, 0), point(4000, 3000));
+    const areaComSinal = v.reduce((soma, p, i) => {
+      const q = v[(i + 1) % v.length];
+      return soma + (p.x * q.y - q.x * p.y);
+    }, 0);
+    expect(areaComSinal).toBeLessThan(0);
+  });
+
+  it('cantos na mesma linha ou coluna não formam retângulo', () => {
+    expect(retanguloPorCantos(point(0, 0), point(4000, 0))).toEqual([]);
+    expect(retanguloPorCantos(point(0, 0), point(0, 3000))).toEqual([]);
+    expect(retanguloPorCantos(point(0, 0), point(0, 0))).toEqual([]);
+  });
+
+  it('vira um ambiente com a área do cômodo, cantos mitrados', () => {
+    // A prova que importa: o gesto produz cômodo, não quatro riscos.
+    const { model, levelId } = withLevel();
+    const v = retanguloPorCantos(point(0, 0), point(5000, 4000));
+    const n = v.length;
+
+    const comandos: Command[] = v.map((_, i) => {
+      const eixo = eixoDaParede({ a: v[i], b: v[(i + 1) % n] }, 200, 'DIREITA', {
+        antes: v[(i + n - 1) % n],
+        depois: v[(i + 2) % n],
+      });
+      return {
+        type: 'AddWall',
+        levelId,
+        a: eixo.a,
+        b: eixo.b,
+        thicknessMm: 200,
+        heightMm: H,
+      };
+    });
+
+    const pronto = applyBatch(model, comandos).model;
+    expect(pronto.walls).toHaveLength(4);
+    expect(pronto.spaces).toHaveLength(1);
+    // Traçado 5000 × 4000 pela face, parede de 200: eixo 4800 × 3800.
+    expect(pronto.spaces[0].areaMm2).toBe(4800 * 3800);
+  });
+});
+
 describe('poligonoPeloLado', () => {
   it('O QUADRADO SAI ALINHADO AOS EIXOS, não como losango', () => {
     // DEFEITO RELATADO EM USO (16/08/2026, com print): a ferramenta media pelo
@@ -1823,14 +1903,22 @@ describe('cantosDaParede', () => {
     ]);
   });
 
-  it('ESTENDE a ponta que encontra outra parede — é lá que está o canto visível', () => {
-    // O desenho estende a pincelada em meia espessura na junção. Oferecer o
-    // canto sem a extensão colocaria o ímã meia espessura atrás do canto que
-    // está na tela.
-    const cantos = cantosDaParede(point(0, 0), point(4000, 0), 200, false, true);
+  it('AVANÇA a ponta que encontra outra parede — é lá que está o canto visível', () => {
+    // O avanço vem em MILÍMETRO, e quem chama passa exatamente o que o desenho
+    // usa (`extensaoDeCanto`). Aqui, os 100 mm de um canto reto.
+    const cantos = cantosDaParede(point(0, 0), point(4000, 0), 200, 0, 100);
     expect(cantos).toContainEqual({ x: 4100, y: 100 });
     expect(cantos).toContainEqual({ x: 4100, y: -100 });
     expect(cantos).toContainEqual({ x: 0, y: 100 });
+  });
+
+  it('CANTO OBLÍQUO: o avanço vem de fora, e é o do desenho', () => {
+    // Foi aqui que encaixe e desenho divergiram por um dia: o desenho passou a
+    // avançar pelo ÂNGULO do canto (57,7 mm num hexágono) e o encaixe seguia
+    // oferecendo meia espessura (100 mm) — 42 mm além do canto que estava na
+    // tela. Passando a mesma medida, não há como divergir.
+    const cantos = cantosDaParede(point(0, 0), point(4000, 0), 200, 0, 57.7);
+    expect(cantos).toContainEqual({ x: 4058, y: 100 });
   });
 
   it('parede de comprimento zero não tem canto', () => {

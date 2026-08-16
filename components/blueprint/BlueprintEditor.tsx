@@ -15,6 +15,7 @@ import {
   Pencil,
   Grid3x3,
   Hexagon,
+  RectangleHorizontal,
   Ruler,
   Square,
   Spline,
@@ -712,6 +713,16 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           valor="parede"
           icone={Minus}
           rotulo="Parede"
+          onClick={editor.setTool}
+        />
+        {/* RETÂNGULO antes de POLÍGONO na barra: é o gesto de fazer um cômodo,
+            e cômodo é o que se desenha o tempo todo. O polígono regular resolve
+            o caso raro (planta sextavada, torre octogonal). */}
+        <Ferramenta
+          atual={editor.tool}
+          valor="retangulo"
+          icone={RectangleHorizontal}
+          rotulo="Retângulo"
           onClick={editor.setTool}
         />
         <Ferramenta

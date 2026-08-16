@@ -9,7 +9,7 @@
 export { KERNEL_VERSION, DEFAULT_TOLERANCE_MM, KernelError, metersToMm, mmToMeters, roundToMm } from './units';
 
 export type { Point, Segment, IntersectionResult, AlinhamentoParede } from './geom';
-export { point, intersectSegments, polygonArea, polygonPerimeter, isSimplePolygon, canonicalizeRing, areCollinear, pointInPolygon, interiorPoint, travarOrtogonal, eixoDaParede, cantosDaParede, pontaEsticada, poligonoRegular, poligonoPeloLado } from './geom';
+export { point, intersectSegments, polygonArea, polygonPerimeter, isSimplePolygon, canonicalizeRing, areCollinear, pointInPolygon, interiorPoint, travarOrtogonal, eixoDaParede, cantosDaParede, pontaEsticada, poligonoRegular, poligonoPeloLado, retanguloPorCantos } from './geom';
 
 export type { BlueprintModel, Level, Wall, Opening, Boundary, Space, SpaceLabel, ObjectId } from './model';
 export { emptyModel, cloneModel, wallLength, isFreeWallEnd, assertModelInvariants, nomeDoTipoDeAbertura, extensaoDeCanto } from './model';

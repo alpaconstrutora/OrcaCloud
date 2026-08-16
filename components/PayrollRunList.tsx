@@ -1,14 +1,14 @@
 import React, { useMemo } from 'react';
 import {
     Plus, Calculator, Calendar, History, RefreshCw,
-    AlertTriangle, ChevronRight, Wallet, CheckCircle2, Clock3, FileText,
+    AlertTriangle, ChevronRight, Wallet, CheckCircle2, Clock3, FileText, MoveHorizontal,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { PayrollRun } from '../services/payrollService';
 import { formatDate } from '../lib/payrollUIHelpers';
 import { formatMoney as fmtBRL } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useResizableColumns } from './ui/TableUtils';
 
 interface PayrollRunListProps {
     runs: PayrollRun[];
@@ -63,15 +63,19 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: 'Ações', sortable: false },
 ];
 
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    period: 220, organization: 200, value: 160, type: 180, status: 140, actions: 100,
+};
+
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX. 'actions' fica de fora: é célula fixa, não entra no arraste.
 const PAYROLL_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    period:       { label: 'Período',      className: 'px-6 py-2 border-r border-gray-100' },
-    organization: { label: 'Organização',  className: 'px-6 py-2 border-r border-gray-100' },
-    value:        { label: 'Valor total',  className: 'px-6 py-2 border-r border-gray-100 text-right' },
-    type:         { label: 'Tipo',         className: 'px-6 py-2 border-r border-gray-100' },
-    status:       { label: 'Status',       className: 'px-6 py-2 border-r border-gray-100' },
+    period:       { label: 'Período',      className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização',  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    value:        { label: 'Valor total',  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    type:         { label: 'Tipo',         className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    status:       { label: 'Status',       className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
@@ -131,8 +135,12 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
     onSelectRun, onDeleteRun, onDuplicateRun, onNewRun, onRefresh,
 }) => {
     const tableColumns = useTableColumns(COLUMNS, 'payrollRunListColumns');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'payrollRunListColWidths');
 
     const orgName = (id: string) => organizations.find(o => o.id === id)?.name ?? '—';
+
+    // Largura total = soma exata das colunas visíveis (nunca w-full — ver §6.1 do guia de UI).
+    const tableTotalWidth = tableColumns.orderedVisibleColumns.reduce((sum, key) => sum + cols.getWidth(key), 0);
 
     const filteredRuns = useMemo(() => {
         const term = search.trim().toLowerCase();
@@ -167,15 +175,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Ciclos de folha, cálculo de INSS, FGTS e IRRF por período.</p>
             </div>
 
-            {/* 2. KPI cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard label="Ciclos no Período" value={`${runs.length}`} icon={<FileText className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Valor Total" value={fmtBRL(totalValue)} icon={<Wallet className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Fechadas" value={`${closedCount}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
-                <KpiCard label="Em Rascunho" value={`${draftCount}`} icon={<Clock3 className="w-5 h-5" />} color="amber" />
-            </div>
-
-            {/* 3. Toolbar de abas — tipo de folha */}
+            {/* 2. Toolbar de abas — tipo de folha */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {['all', 'mensal', 'adiantamento', 'ferias', 'decimo_terceiro', 'rescisao'].map(t => (
@@ -190,41 +190,15 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                 </div>
             </div>
 
-            {/* 4. Toolbar de botões — escopo (organização/mês/ano/empresa) + ação primária */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
-                    <select
-                        value={monthFilter}
-                        onChange={e => onMonthFilter(e.target.value)}
-                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
-                    >
-                        <option value="all">Mês (todos)</option>
-                        {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, i) => (
-                            <option key={m} value={i}>{m}</option>
-                        ))}
-                    </select>
-                    <select
-                        value={yearFilter}
-                        onChange={e => onYearFilter(e.target.value)}
-                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
-                    >
-                        <option value="all">Ano (todos)</option>
-                        <option value="2025">2025</option>
-                        <option value="2026">2026</option>
-                        <option value="2027">2027</option>
-                    </select>
-                </div>
-
-                <button
-                    onClick={onNewRun}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    {!orgId || orgId === 'all' ? (<><Calculator className="w-[15px] h-[15px]" /> Gerar folhas em lote</>) : (<><Plus className="w-[15px] h-[15px]" /> Nova folha</>)}
-                </button>
+            {/* 3. KPI cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+                <KpiCard label="Ciclos no Período" value={`${runs.length}`} icon={<FileText className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Valor Total" value={fmtBRL(totalValue)} icon={<Wallet className="w-5 h-5" />} color="blue" />
+                <KpiCard label="Fechadas" value={`${closedCount}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                <KpiCard label="Em Rascunho" value={`${draftCount}`} icon={<Clock3 className="w-5 h-5" />} color="amber" />
             </div>
 
-            {/* 5. Tabela com toolbar de busca acoplada */}
+            {/* 4. Tabela com toolbar acoplada — busca, escopo (mês/ano), colunas/autofit e ação primária */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-100 bg-white space-y-3">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -238,6 +212,28 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                             />
                         </div>
+
+                        {/* Sem seletor de organização aqui: vem do seletor global do topo. */}
+                        <select
+                            value={monthFilter}
+                            onChange={e => onMonthFilter(e.target.value)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shrink-0"
+                        >
+                            <option value="all">Mês (todos)</option>
+                            {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map((m, i) => (
+                                <option key={m} value={i}>{m}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={yearFilter}
+                            onChange={e => onYearFilter(e.target.value)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer shrink-0"
+                        >
+                            <option value="all">Ano (todos)</option>
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                            <option value="2027">2027</option>
+                        </select>
 
                         <button
                             onClick={onRefresh}
@@ -258,7 +254,22 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito — nunca automático (§6.1.2 do guia de UI) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
+
+                        <button
+                            onClick={onNewRun}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        >
+                            {!orgId || orgId === 'all' ? (<><Calculator className="w-[15px] h-[15px]" /> Gerar folhas em lote</>) : (<><Plus className="w-[15px] h-[15px]" /> Nova folha</>)}
+                        </button>
                     </div>
                 </div>
 
@@ -275,7 +286,15 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
+                                {/* espaçador — absorve a folga ANTES de "Ações" (§6.1.1 do guia de UI) */}
+                                <col />
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
@@ -293,11 +312,18 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                                 onSort={tableColumns.handleColumnSort}
                                                 onMoveColumn={tableColumns.moveColumn}
                                                 className={def.className}
-                                            />
+                                            >
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
                                         );
                                     })}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                        <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500 relative overflow-hidden">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
                                     )}
                                 </tr>
                             </thead>
@@ -310,10 +336,12 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                                             className="hover:bg-indigo-50/50 transition-colors cursor-pointer group"
                                         >
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
-                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 overflow-hidden">
                                                     {renderPayrollCell(key, run, { orgName, runTotals })}
                                                 </td>
                                             ))}
+                                            {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
+                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>

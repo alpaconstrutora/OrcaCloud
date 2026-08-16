@@ -108,13 +108,32 @@ function botao(nome: RegExp) {
 }
 
 describe('BlueprintEditor · ações oferecidas', () => {
-  it('monta com as três ferramentas e o painel de ambientes', async () => {
+  it('monta com as ferramentas de desenho e o painel de ambientes', async () => {
     await montar();
 
     expect(botao(/selecionar/i)).toBeInTheDocument();
     expect(botao(/^parede$/i)).toBeInTheDocument();
+    expect(botao(/^polígono$/i)).toBeInTheDocument();
     expect(botao(/abertura/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/ambientes derivados/i)).toBeInTheDocument();
+  });
+
+  it('a ferramenta Polígono traz o seletor de lados, e só ela', async () => {
+    // O seletor de lados não faz sentido nas outras ferramentas: mostrá-lo
+    // sempre sugeriria que ele muda algo no traçado manual.
+    await montar();
+    const user = userEvent.setup();
+
+    expect(screen.queryByLabelText(/^lados$/i)).not.toBeInTheDocument();
+
+    await user.click(botao(/^polígono$/i));
+    const lados = screen.getByLabelText(/^lados$/i);
+    expect(lados).toBeInTheDocument();
+    // Cobre do triângulo ao dodecágono; 6 é o padrão porque retângulo já sai
+    // fácil no traçado à mão.
+    expect((lados as HTMLSelectElement).value).toBe('6');
+    expect(within(lados as HTMLSelectElement).getByRole('option', { name: '3' })).toBeInTheDocument();
+    expect(within(lados as HTMLSelectElement).getByRole('option', { name: '12' })).toBeInTheDocument();
   });
 
   it('a ferramenta Abertura troca os controles da barra', async () => {

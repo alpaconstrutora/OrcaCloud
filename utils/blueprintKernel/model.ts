@@ -227,6 +227,73 @@ export function isFreeWallEnd(walls: Wall[], p: Point, exceptId: ObjectId): bool
 }
 
 /**
+ * Teto do avanço, em múltiplos de meia espessura. Canto muito agudo pede avanço
+ * que tende ao infinito; sem teto vira farpa. Mesmo espírito da mitra do eixo.
+ */
+const AVANCO_MAX = 4;
+
+/**
+ * Quanto a pincelada da parede avança ALÉM do eixo, na ponta que encontra
+ * outra — em milímetros.
+ *
+ * ─── POR QUE NÃO É SEMPRE MEIA ESPESSURA ────────────────────────────────────
+ *
+ * Era. E meia espessura fecha o canto EXATAMENTE em 90°, que é o ângulo de
+ * quase toda planta — por isso passou despercebido. Em qualquer outro ângulo a
+ * conta erra: no canto obtuso (o hexágono tem 120°) a pincelada ultrapassa o
+ * canto verdadeiro e sobra uma farpa; no agudo, falta e abre um degrau.
+ *
+ * A conta certa sai da geometria do canto. Com as duas paredes formando ângulo
+ * θ no vértice, as faces externas se cruzam a `(t/2)/sen(θ/2)` dele; para a
+ * tampa da pincelada passar por esse cruzamento, ela tem de avançar
+ * `(t/2)/tg(θ/2)`. Em θ = 90° isso dá meia espessura — ou seja, toda planta
+ * ortogonal desenha exatamente como desenhava.
+ *
+ * ─── ONDE ELA NÃO SE APLICA ─────────────────────────────────────────────────
+ *
+ * Só há canto quando DUAS paredes se encontram na ponta. Junção em X (três ou
+ * mais) não tem um canto único para mitrar, e junção em T (a ponta morre no
+ * meio da outra) não tem vértice compartilhado. Nos dois casos fica meia
+ * espessura, que é o comportamento já verificado em uso.
+ *
+ * Vive no kernel, e não em cada renderizador, porque é GEOMETRIA. A regra
+ * estava COPIADA na tela e na exportação, com a mesma conta errada nas duas —
+ * e cópia de regra geométrica é o que já deixou o canto certo na tela e aberto
+ * no papel uma vez.
+ */
+export function extensaoDeCanto(walls: Wall[], wall: Wall, end: 'a' | 'b'): number {
+  const p = wall[end];
+  if (isFreeWallEnd(walls, p, wall.id)) return 0;
+
+  const meia = wall.thicknessMm / 2;
+
+  const vizinhas = walls.filter(
+    (o) =>
+      o.id !== wall.id &&
+      ((o.a.x === p.x && o.a.y === p.y) || (o.b.x === p.x && o.b.y === p.y)),
+  );
+  if (vizinhas.length !== 1) return meia;
+
+  /** Direção que sai do vértice ao longo do eixo. */
+  const versor = (w: Wall) => {
+    const longe = w.a.x === p.x && w.a.y === p.y ? w.b : w.a;
+    const dx = longe.x - p.x;
+    const dy = longe.y - p.y;
+    const comp = Math.hypot(dx, dy);
+    return comp === 0 ? null : { x: dx / comp, y: dy / comp };
+  };
+
+  const u1 = versor(wall);
+  const u2 = versor(vizinhas[0]);
+  if (!u1 || !u2) return meia;
+
+  const cos = Math.max(-1, Math.min(1, u1.x * u2.x + u1.y * u2.y));
+  const tg = Math.tan(Math.acos(cos) / 2);
+  if (!Number.isFinite(tg) || tg <= 1e-9) return meia * AVANCO_MAX;
+  return Math.min(meia / tg, meia * AVANCO_MAX);
+}
+
+/**
  * Invariantes do PRD §9.1 que o kernel se recusa a violar.
  * Roda a cada comando aplicado — barato, e transforma bug silencioso em erro.
  */

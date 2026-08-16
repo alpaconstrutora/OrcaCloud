@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type BlueprintModel,
   type Command,
+  type Wall,
   KernelError,
   ModelHistory,
   applyBatch,
@@ -28,9 +29,11 @@ import {
   emptyModel,
   pontaEsticada,
   interiorPoint,
+  extensaoDeCanto,
   modelFromCanonicalPayload,
   nomeDoTipoDeAbertura,
   parseCanonicalPayload,
+  poligonoRegular,
   pointInPolygon,
   intersectSegments,
   point,
@@ -1581,6 +1584,178 @@ describe('eixoDaParede', () => {
   it('traço degenerado devolve o traçado, sem estourar', () => {
     const t = { a: point(500, 500), b: point(500, 500) };
     expect(eixoDaParede(t, 200, 'DIREITA')).toEqual(t);
+  });
+});
+
+describe('extensaoDeCanto', () => {
+  /** Duas paredes de 200 mm partindo de (0,0), com o ângulo pedido entre elas. */
+  function canto(grausEntreEixos: number): { walls: Wall[]; alvo: Wall } {
+    const r = 4000;
+    const rad = (grausEntreEixos * Math.PI) / 180;
+    const a: Wall = {
+      id: 'wal_0001',
+      levelId: 'lvl_0001',
+      a: point(0, 0),
+      b: point(r, 0),
+      thicknessMm: 200,
+      heightMm: H,
+    };
+    const b: Wall = {
+      id: 'wal_0002',
+      levelId: 'lvl_0001',
+      a: point(0, 0),
+      b: point(Math.round(r * Math.cos(rad)), Math.round(r * Math.sin(rad))),
+      thicknessMm: 200,
+      heightMm: H,
+    };
+    return { walls: [a, b], alvo: a };
+  }
+
+  it('em 90° dá meia espessura — o valor que estava cravado no código', () => {
+    // Toda planta ortogonal desenha exatamente como desenhava. É o que torna a
+    // correção segura para o acervo: só muda o que estava errado.
+    const { walls, alvo } = canto(90);
+    expect(extensaoDeCanto(walls, alvo, 'a')).toBeCloseTo(100, 6);
+  });
+
+  it('CANTO OBTUSO avança MENOS — era aqui que sobrava farpa', () => {
+    // Hexágono: 120° entre os eixos. Meia espessura ultrapassaria o canto
+    // verdadeiro, e a silhueta de cada parede aparecia além dele.
+    const { walls, alvo } = canto(120);
+    const esperado = 100 / Math.tan((120 * Math.PI) / 180 / 2);
+    expect(extensaoDeCanto(walls, alvo, 'a')).toBeCloseTo(esperado, 0);
+    expect(extensaoDeCanto(walls, alvo, 'a')).toBeLessThan(100);
+  });
+
+  it('canto AGUDO avança mais — meia espessura deixaria degrau', () => {
+    const { walls, alvo } = canto(60);
+    expect(extensaoDeCanto(walls, alvo, 'a')).toBeGreaterThan(100);
+  });
+
+  it('canto agudo demais é limitado, para não virar farpa quilométrica', () => {
+    const { walls, alvo } = canto(1);
+    expect(extensaoDeCanto(walls, alvo, 'a')).toBeLessThanOrEqual(100 * 4);
+  });
+
+  it('quase colinear quase não avança — não há canto para fechar', () => {
+    const { walls, alvo } = canto(179);
+    expect(extensaoDeCanto(walls, alvo, 'a')).toBeLessThan(5);
+  });
+
+  it('ponta LIVRE não avança — a parede ficaria mais longa do que é', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [wall(levelId, 0, 0, 4000, 0)]).model;
+    expect(extensaoDeCanto(built.walls, built.walls[0], 'a')).toBe(0);
+    expect(extensaoDeCanto(built.walls, built.walls[0], 'b')).toBe(0);
+  });
+
+  it('junção em X mantém meia espessura — não há canto único para mitrar', () => {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, [
+      wall(levelId, 0, 0, 4000, 0),
+      wall(levelId, 0, 0, 0, 4000),
+      wall(levelId, 0, 0, -4000, 0),
+    ]).model;
+    expect(extensaoDeCanto(built.walls, built.walls[0], 'a')).toBe(T / 2);
+  });
+});
+
+describe('poligonoRegular', () => {
+  const raio = (c: Point, p: Point) => Math.hypot(p.x - c.x, p.y - c.y);
+  const lado = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
+
+  it('devolve um vértice por lado, todos no raio pedido', () => {
+    const centro = point(0, 0);
+    const v = poligonoRegular(centro, 5000, 6);
+
+    expect(v).toHaveLength(6);
+    for (const p of v) expect(raio(centro, p)).toBeCloseTo(5000, 0);
+  });
+
+  it('todos os lados saem iguais — é o que "regular" quer dizer', () => {
+    const v = poligonoRegular(point(1000, 2000), 4000, 8);
+    const lados = v.map((p, i) => lado(p, v[(i + 1) % v.length]));
+
+    for (const l of lados) expect(l).toBeCloseTo(lados[0], 0);
+  });
+
+  it('o ângulo posiciona o PRIMEIRO vértice — é o cursor que gira o polígono', () => {
+    const centro = point(0, 0);
+    // 0 rad = eixo +x.
+    expect(poligonoRegular(centro, 1000, 4, 0)[0]).toEqual({ x: 1000, y: 0 });
+    // 90° = +y do modelo, que é para CIMA na tela.
+    expect(poligonoRegular(centro, 1000, 4, Math.PI / 2)[0]).toEqual({ x: 0, y: 1000 });
+  });
+
+  it('SENTIDO HORÁRIO NA TELA — é o que faz a parede nascer para dentro', () => {
+    // O Y do modelo aponta para cima, então horário na tela é área com sinal
+    // NEGATIVO. Gerar ao contrário faria o polígono crescer para fora do que se
+    // apontou no alinhamento "à direita", sem nada explicando na tela.
+    //
+    // Laço do agrimensor à mão: o `signedArea` do kernel é interno, e alargar a
+    // superfície pública só para um teste seria pior que quatro linhas aqui.
+    const v = poligonoRegular(point(0, 0), 3000, 5);
+    const areaComSinal = v.reduce((soma, p, i) => {
+      const q = v[(i + 1) % v.length];
+      return soma + (p.x * q.y - q.x * p.y);
+    }, 0);
+
+    expect(areaComSinal).toBeLessThan(0);
+  });
+
+  it('entrada degenerada devolve vazio, sem levantar erro', () => {
+    // Roda a cada movimento do mouse na prévia: exceção aqui derrubaria a aba.
+    expect(poligonoRegular(point(0, 0), 0, 6)).toEqual([]);
+    expect(poligonoRegular(point(0, 0), -100, 6)).toEqual([]);
+    expect(poligonoRegular(point(0, 0), 1000, 2)).toEqual([]);
+    expect(poligonoRegular(point(0, 0), 1000, 6.5)).toEqual([]);
+  });
+
+  it('raio pequeno demais para o número de lados devolve vazio', () => {
+    // Com 12 lados num raio de 1 mm, os vértices a −30° e −60° caem os dois em
+    // (1, −1) depois do arredondamento ao milímetro, e o kernel recusaria a
+    // parede de comprimento zero. Melhor não oferecer o polígono.
+    expect(poligonoRegular(point(0, 0), 1, 12)).toEqual([]);
+
+    // O mesmo raio com 4 lados continua válido: o problema é a relação entre
+    // raio e número de lados, não o raio sozinho.
+    expect(poligonoRegular(point(0, 0), 1, 4)).toHaveLength(4);
+  });
+
+  it('O CONTORNO FECHA e deriva UM ambiente, com os cantos mitrados', () => {
+    // O caso que importa: o polígono não é só desenho, tem que produzir
+    // ambiente. Mesma montagem que o canvas faz — cada lado consulta os dois
+    // vizinhos do contorno.
+    const { model, levelId } = withLevel();
+    const v = poligonoRegular(point(0, 0), 6000, 6);
+    const n = v.length;
+
+    const comandos: Command[] = v.map((_, i) => {
+      const eixo = eixoDaParede({ a: v[i], b: v[(i + 1) % n] }, 200, 'DIREITA', {
+        antes: v[(i + n - 1) % n],
+        depois: v[(i + 2) % n],
+      });
+      return {
+        type: 'AddWall',
+        levelId,
+        a: eixo.a,
+        b: eixo.b,
+        thicknessMm: 200,
+        heightMm: H,
+      };
+    });
+
+    const pronto = applyBatch(model, comandos).model;
+
+    expect(pronto.walls).toHaveLength(6);
+    expect(pronto.spaces).toHaveLength(1);
+    // Cada canto é um vértice compartilhado: a ponta de um lado é o começo do
+    // seguinte. Sem a mitra, ficariam a meia espessura umas das outras.
+    for (let i = 0; i < n; i++) {
+      const atual = pronto.walls[i];
+      const proxima = pronto.walls[(i + 1) % n];
+      expect(atual.b, `canto ${i} não fechou`).toEqual(proxima.a);
+    }
   });
 });
 

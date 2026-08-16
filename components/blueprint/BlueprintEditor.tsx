@@ -14,6 +14,7 @@ import {
   Calculator,
   Pencil,
   Grid3x3,
+  Hexagon,
   Ruler,
   Square,
   Spline,
@@ -103,6 +104,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [ortogonal, setOrtogonal] = useState(true);
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
   const [mostrarMedidas, setMostrarMedidas] = useState(false);
+  /** Lados da ferramenta Polígono. 6 porque quem escolhe a ferramenta quer o
+   * que o traçado manual não dá de graça — retângulo já sai fácil à mão. */
+  const [ladosPoligono, setLadosPoligono] = useState(6);
   /**
    * Onde o clique cai: no eixo ou na face da parede.
    *
@@ -279,6 +283,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     const criados = editor.runBatch([...correcoes, nova]);
     if (criados.length === 0 && correcoes.length > 0) return adicionarParede(a, b);
     return criados.find((id) => id.startsWith('wal')) ?? null;
+  }
+
+  /**
+   * Grava o polígono inteiro: N paredes num ÚNICO passo de histórico.
+   *
+   * Um lote, e não N comandos: o polígono é um gesto só, e desfazê-lo tem que
+   * devolver a planta ao que era — não tirar um lado por vez, deixando um
+   * contorno aberto que ninguém desenhou. Os cantos já vêm mitrados do canvas.
+   */
+  function adicionarPoligono(eixos: { a: Point; b: Point }[]) {
+    if (!levelId || eixos.length < 3) return;
+    editor.runBatch(
+      eixos.map((e): Command => ({
+        type: 'AddWall',
+        levelId,
+        a: e.a,
+        b: e.b,
+        thicknessMm: espessura,
+        heightMm: ALTURA_PADRAO_MM,
+      })),
+    );
   }
 
   const paredeSel = editor.model.walls.find((w) => w.id === editor.selectedId) ?? null;
@@ -689,6 +714,13 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           rotulo="Parede"
           onClick={editor.setTool}
         />
+        <Ferramenta
+          atual={editor.tool}
+          valor="poligono"
+          icone={Hexagon}
+          rotulo="Polígono"
+          onClick={editor.setTool}
+        />
 
         <Ferramenta
           atual={editor.tool}
@@ -792,6 +824,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             <option value="EIXO">No eixo (meio da parede)</option>
           </select>
         </label>
+
+        {editor.tool === 'poligono' && (
+          <label className="flex items-center gap-2 text-xs text-slate-600">
+            Lados
+            <select
+              value={ladosPoligono}
+              onChange={(e) => setLadosPoligono(Number(e.target.value))}
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+              title="Clique no centro e arraste: o cursor é um VÉRTICE, então ele dá o tamanho e o giro ao mesmo tempo. Os cantos saem mitrados e o contorno já fecha, derivando o ambiente."
+            >
+              {[3, 4, 5, 6, 8, 10, 12].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         </>
         )}
 
@@ -1022,6 +1072,8 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onSelect={editor.setSelectedId}
               onAddWall={adicionarParede}
               alinhamento={alinhamento}
+              ladosPoligono={ladosPoligono}
+              onAddPoligono={adicionarPoligono}
               onInverterLado={() => setAlinhamento(inverterLado)}
               onAddOpening={adicionarAbertura}
               larguraAberturaMm={larguraAbertura}

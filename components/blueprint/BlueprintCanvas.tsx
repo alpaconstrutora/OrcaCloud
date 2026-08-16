@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   travarOrtogonal,
   isFreeWallEnd,
+  extensaoDeCanto,
   cantosDaParede,
   eixoDaParede,
+  poligonoRegular,
   type AlinhamentoParede,
   type BlueprintModel,
   type Opening,
@@ -210,6 +212,14 @@ interface Props {
   onAddWall: (a: Point, b: Point, ajustes?: AjustePonta[]) => string | null | void;
   /** Onde o clique cai: no eixo da parede ou na face (canto). */
   alinhamento?: AlinhamentoParede;
+  /** Quantos lados a ferramenta Polígono cria. */
+  ladosPoligono?: number;
+  /**
+   * Fecha o polígono: recebe os eixos JÁ resolvidos, um por lado, na ordem do
+   * contorno. Os cantos já vêm mitrados — quem chama só precisa gravar as N
+   * paredes num lote só, para o polígono ser um passo de desfazer, e não N.
+   */
+  onAddPoligono?: (eixos: { a: Point; b: Point }[]) => void;
   /**
    * Inverte o lado do traçado. Chamado pela BARRA DE ESPAÇO, como no Revit.
    *
@@ -279,6 +289,8 @@ export default function BlueprintCanvas({
   onSelect,
   onAddWall,
   alinhamento = 'EIXO',
+  ladosPoligono = 6,
+  onAddPoligono,
   onInverterLado,
   onAddOpening,
   onDelete,
@@ -346,6 +358,8 @@ export default function BlueprintCanvas({
   const [movendoAbertura, setMovendoAbertura] = useState<
     { openingId: string; offsetMm: number } | null
   >(null);
+  /** Centro do polígono em curso. O raio e o giro saem do cursor. */
+  const [centroPoligono, setCentroPoligono] = useState<Point | null>(null);
   /** Primeiro ponto da aferição, em milímetro do modelo. */
   const [calibP1, setCalibP1] = useState<Point | null>(null);
   /** Vértices da forma medida em curso. */
@@ -486,6 +500,47 @@ export default function BlueprintCanvas({
       return p;
     },
     [capturar, alinhamento, cadeia, vista.escala],
+  );
+
+  /**
+   * O polígono em curso, do centro até o cursor. `[]` enquanto não houver um.
+   *
+   * O cursor é um VÉRTICE: ele dá o raio e o giro de uma vez, então a esquina
+   * que se vê seguindo o mouse é a esquina que vai nascer. Prévia que mostra
+   * outra coisa é prévia em que ninguém confia — a lição do traçado pela face.
+   */
+  const verticesPoligono = useMemo(() => {
+    if (!centroPoligono || !cursor) return [];
+    const dx = cursor.x - centroPoligono.x;
+    const dy = cursor.y - centroPoligono.y;
+    return poligonoRegular(
+      centroPoligono,
+      Math.hypot(dx, dy),
+      ladosPoligono,
+      Math.atan2(dy, dx),
+    );
+  }, [centroPoligono, cursor, ladosPoligono]);
+
+  /**
+   * Os eixos das N paredes do polígono, com os cantos MITRADOS.
+   *
+   * É o mesmo caminho do fechamento manual: cada lado consulta os dois vizinhos
+   * do contorno, e por isso as pontas coincidem em vez de ficarem a meia
+   * espessura umas das outras. Um polígono cujos cantos não fecham não deriva
+   * ambiente nenhum — e o sintoma apareceria longe daqui, na lista vazia.
+   */
+  const eixosDoPoligono = useCallback(
+    (vertices: Point[]) =>
+      vertices.map((_, i) => {
+        const n = vertices.length;
+        return eixoDaParede(
+          { a: vertices[i], b: vertices[(i + 1) % n] },
+          espessuraMm,
+          alinhamento,
+          { antes: vertices[(i + n - 1) % n], depois: vertices[(i + 2) % n] },
+        );
+      }),
+    [espessuraMm, alinhamento],
   );
 
   /** O ponto fecha o contorno em curso? Exige triângulo — dois pontos não fecham. */
@@ -736,12 +791,12 @@ export default function BlueprintCanvas({
     ctx.lineJoin = 'round';
 
 
-    // A regra de "ponta livre" vive no KERNEL, não aqui.
+    // O AVANÇO DA PONTA vive no KERNEL, não aqui.
     //
-    // Ela tinha uma cópia neste arquivo e a exportação nasceu sem ela — o canto
-    // ficou certo na tela e aberto no papel. Regra de geometria duplicada é
-    // regra que diverge; a definição e o porquê estão em `isFreeWallEnd`.
-    const pontaLivre = (p: Point, id: string) => isFreeWallEnd(paredesDoNivel, p, id);
+    // Ele tinha uma cópia neste arquivo e outra na exportação, as duas com a
+    // mesma conta — meia espessura sempre — que só fecha o canto em 90°. Num
+    // hexágono a pincelada ultrapassava o canto e sobrava farpa em cada
+    // vértice. A conta certa e o porquê estão em `extensaoDeCanto`.
 
     // Geometria de desenho de cada parede.
     //
@@ -769,9 +824,10 @@ export default function BlueprintCanvas({
         uy,
         comp,
         cheia,
-        // Recuo NEGATIVO estende; positivo encurta.
-        extA: pontaLivre(w.a, w.id) ? 0 : meia,
-        extB: pontaLivre(w.b, w.id) ? 0 : meia,
+        // Em MILÍMETRO no kernel, em PIXEL aqui: a pincelada é desenhada em
+        // tela. Em 90° isto dá exatamente `meia`, como antes.
+        extA: extensaoDeCanto(paredesDoNivel, w, 'a') * vista.escala,
+        extB: extensaoDeCanto(paredesDoNivel, w, 'b') * vista.escala,
       };
     });
 
@@ -980,6 +1036,53 @@ export default function BlueprintCanvas({
           COR_COTA,
         );
       }
+    }
+
+    // Prévia do polígono em curso — a faixa de cada lado, já no eixo mitrado,
+    // mais o raio pontilhado do centro ao vértice que segue o cursor. O raio é
+    // o que explica o gesto: sem ele, o polígono parece nascer do nada.
+    if (centroPoligono && verticesPoligono.length >= 3) {
+      const eixos = eixosDoPoligono(verticesPoligono);
+      const espessuraPx = Math.max(1.5, espessuraMm * vista.escala);
+
+      ctx.strokeStyle = COR_PREVIA;
+      ctx.lineWidth = espessuraPx;
+      ctx.setLineDash([6, 4]);
+      for (const e of eixos) {
+        const a = paraTela(e.a);
+        const b = paraTela(e.b);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+
+      const c = paraTela(centroPoligono);
+      const v = paraTela(verticesPoligono[0]);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(v.x, v.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // O LADO, não o raio: é a medida que a planta cota e que se confere
+      // contra o projeto. O raio é meio de construção, não dimensão de obra.
+      const ladoMm = Math.round(
+        Math.hypot(
+          verticesPoligono[1].x - verticesPoligono[0].x,
+          verticesPoligono[1].y - verticesPoligono[0].y,
+        ),
+      );
+      rotuloDoTraco(
+        ctx,
+        `${ladosPoligono} lados · ${(ladoMm / 1000).toFixed(2).replace('.', ',')} m`,
+        paraTela(verticesPoligono[0]),
+        paraTela(verticesPoligono[1]),
+        espessuraPx,
+        COR_PREVIA,
+      );
     }
 
     // Prévia da parede em curso.
@@ -1248,7 +1351,7 @@ export default function BlueprintCanvas({
     }
 
     // Marcador de captura
-    if (cursor && tool === 'parede') {
+    if (cursor && (tool === 'parede' || tool === 'poligono')) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
       ctx.lineWidth = 1.5;
@@ -1284,6 +1387,10 @@ export default function BlueprintCanvas({
     movendo,
     destinoPonta,
     movendoAbertura,
+    centroPoligono,
+    verticesPoligono,
+    eixosDoPoligono,
+    ladosPoligono,
     passoEfetivo,
     paraTela,
     paredesDoNivel,
@@ -1393,6 +1500,16 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (tool === 'poligono') {
+      // Mesma captura da parede: o vértice encaixa na grade e nos cantos já
+      // desenhados, para o polígono poder encostar no que existe. Com orto, o
+      // vértice trava no eixo do centro — é o que dá o polígono "de pé".
+      let alvo = capturar(paraMundo(px, py), alinhamento !== 'EIXO');
+      if (centroPoligono && ortoAtivo(e)) alvo = travarOrtogonal(centroPoligono, alvo);
+      setCursor(alvo);
+      return;
+    }
+
     if (tool !== 'parede') {
       setCursor(null);
       return;
@@ -1464,6 +1581,22 @@ export default function BlueprintCanvas({
         modeloParaPixel(fundo.underlay, p.x, p.y),
       );
       setCalibP1(null);
+      return;
+    }
+
+    if (tool === 'poligono') {
+      if (!centroPoligono) {
+        setCentroPoligono(capturar(mundo, alinhamento !== 'EIXO'));
+        return;
+      }
+      // `verticesPoligono` já sai vazio em raio pequeno demais para o número de
+      // lados (o arredondamento ao mm colapsaria vértices). Nesse caso o clique
+      // não fecha nada e o gesto continua — melhor que gravar um polígono que o
+      // kernel recusaria em seguida.
+      if (verticesPoligono.length >= 3) {
+        onAddPoligono?.(eixosDoPoligono(verticesPoligono));
+        setCentroPoligono(null);
+      }
       return;
     }
 
@@ -1640,6 +1773,7 @@ export default function BlueprintCanvas({
       setMovendoAbertura(null);
       setMovendo(null);
       setDestinoPonta(null);
+      setCentroPoligono(null);
       setCalibP1(null);
       setMedindo([]);
       onSelect(null);
@@ -1675,13 +1809,17 @@ export default function BlueprintCanvas({
       />
 
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
-        {tool === 'parede'
-          ? inicio
-            ? cadeia.length >= 3
-              ? 'Clique para fechar o trecho · volte ao 1º ponto para fechar o contorno · Esc cancela'
-              : 'Clique para fechar o trecho · Esc cancela'
-            : 'Clique para iniciar a parede'
-          : 'Clique numa parede para selecionar · Delete remove'}
+        {tool === 'poligono'
+          ? centroPoligono
+            ? `Arraste para dar o tamanho e o giro · clique fecha o polígono de ${ladosPoligono} lados · Esc cancela`
+            : 'Clique no CENTRO do polígono'
+          : tool === 'parede'
+            ? inicio
+              ? cadeia.length >= 3
+                ? 'Clique para fechar o trecho · volte ao 1º ponto para fechar o contorno · Esc cancela'
+                : 'Clique para fechar o trecho · Esc cancela'
+              : 'Clique para iniciar a parede'
+            : 'Clique numa parede para selecionar · Delete remove'}
         <span className="ml-2 text-slate-400">
           · grade {rotuloPasso(passoEfetivo)}
           {tool === 'parede'

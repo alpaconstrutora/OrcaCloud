@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Harness — polígono regular</title>
+<style>
+  html, body, #raiz { margin: 0; height: 100%; }
+  /* Sem Tailwind aqui: `h-full w-full` do container do canvas não vale nada, e
+     a vista é enquadrada na PRIMEIRA medida — container sem tamanho na hora
+     certa deixa o desenho fora da tela e o passeio clica no vazio. */
+  #raiz > div { position: absolute; inset: 0; }
+  canvas { display: block; }
+  /* `pointer-events: none`: o mostrador cobre um canto do canvas e engoliria o
+     clique do passeio, sem erro nenhum no console. Já custou uma rodada. */
+  #dump { position: fixed; right: 0; bottom: 0; max-width: 34vw; max-height: 34vh;
+          overflow: hidden; font: 10px/1.3 monospace; background: rgba(255,255,255,.9);
+          pointer-events: none; margin: 0; }
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<pre id="dump"></pre>
+<script type="module" src="./main.tsx"></script>
+</body>
+</html>

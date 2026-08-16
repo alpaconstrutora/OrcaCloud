@@ -448,6 +448,55 @@ export function eixoDaParede(
 }
 
 /**
+ * Vértices de um polígono REGULAR, na ordem do contorno.
+ *
+ * `raioMm` é do centro ao VÉRTICE (polígono inscrito na circunferência), e
+ * `anguloRad` é onde fica o primeiro vértice. Os dois saem direto do gesto: o
+ * cursor é um vértice, então o que se vê arrastando é a esquina que vai nascer.
+ *
+ * ─── O SENTIDO NÃO É ARBITRÁRIO ─────────────────────────────────────────────
+ *
+ * Os vértices saem com o ângulo DIMINUINDO, que é o sentido horário na tela
+ * (o Y do modelo aponta para cima). É o mesmo sentido que o traçado manual pede
+ * para a parede nascer para dentro com o alinhamento "à direita" — gerar no
+ * sentido contrário faria o polígono crescer para FORA do que se apontou, sem
+ * nada na tela explicando por quê.
+ *
+ * Devolve `[]` em entrada degenerada, em vez de levantar erro: isto roda a cada
+ * movimento do mouse na prévia, e exceção dentro de handler de ponteiro derruba
+ * a aba (a mesma razão do limite em `capturar`).
+ */
+export function poligonoRegular(
+  centro: Point,
+  raioMm: number,
+  lados: number,
+  anguloRad = 0,
+): Point[] {
+  if (!Number.isFinite(raioMm) || raioMm <= 0) return [];
+  if (!Number.isInteger(lados) || lados < 3) return [];
+
+  const passo = (2 * Math.PI) / lados;
+  const vertices: Point[] = [];
+  for (let i = 0; i < lados; i++) {
+    const ang = anguloRad - i * passo;
+    vertices.push(
+      point(
+        roundToMm(centro.x + raioMm * Math.cos(ang)),
+        roundToMm(centro.y + raioMm * Math.sin(ang)),
+      ),
+    );
+  }
+
+  // Raio pequeno demais para o número de lados: o arredondamento ao milímetro
+  // colapsa vértices vizinhos, e o kernel recusaria a parede de comprimento
+  // zero. Melhor não oferecer o polígono do que oferecer um que não entra.
+  for (let i = 0; i < vertices.length; i++) {
+    if (pointsEqual(vertices[i], vertices[(i + 1) % vertices.length])) return [];
+  }
+  return vertices;
+}
+
+/**
  * Os quatro cantos do corpo da parede, no sentido do anel.
  *
  * `extenderA`/`extenderB` empurram a ponta em meia espessura, como o desenho faz

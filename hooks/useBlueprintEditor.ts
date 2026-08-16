@@ -39,6 +39,8 @@ const AUTOSAVE_MS = 1500;
 export type BlueprintTool =
   | 'selecionar'
   | 'parede'
+  /** Contorno fechado de N lados iguais, criado num gesto só. */
+  | 'poligono'
   | 'abertura'
   | 'calibrar'
   /** Formas MEDIDAS — afirmadas à mão, não derivadas do arranjo planar. */

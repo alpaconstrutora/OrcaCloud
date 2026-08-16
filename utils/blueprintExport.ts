@@ -25,7 +25,7 @@
  */
 
 import type { BlueprintModel, Point, Wall } from './blueprintKernel';
-import { isFreeWallEnd, wallLength } from './blueprintKernel';
+import { extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import {
   AVISO_COTA_DE_EIXO,
   cadeiasDeCotas,
@@ -304,18 +304,18 @@ export function desenharPlanta(
 
   // ── Paredes, vazadas ──────────────────────────────────────────────────────
   //
-  // O DETALHE QUE FAZ O CANTO FUNCIONAR: estender a pincelada em meia espessura
-  // nas pontas que encontram outra parede.
+  // O DETALHE QUE FAZ O CANTO FUNCIONAR: estender a pincelada além do eixo na
+  // ponta que encontra outra parede.
   //
   // Com corte reto terminando no eixo, o traço de cada parede cobre uma faixa
-  // centrada no próprio eixo — e no canto externo sobra um quadrado vazio de
-  // meia espessura por meia espessura, que nenhuma das duas cobre. É o degrau
-  // que apareceu na primeira exportação. Estendendo, as duas pinceladas cobrem
-  // esse quadrado exatamente e o canto sai VIVO, não arredondado.
+  // centrada no próprio eixo — e no canto externo sobra um vazio que nenhuma
+  // das duas cobre. É o degrau que apareceu na primeira exportação.
   //
-  // Na ponta LIVRE não se estende: a parede ficaria meia espessura mais longa
-  // do que é. A regra de "livre" mora no kernel — ter duas cópias foi o que
-  // deixou a tela certa e o papel errado.
+  // QUANTO estender depende do ÂNGULO do canto, e a conta vive no kernel
+  // (`extensaoDeCanto`). Aqui havia uma cópia dela — meia espessura sempre —
+  // igual à que estava no canvas: certa em 90°, errada em qualquer outro
+  // ângulo. Regra de geometria copiada é regra que diverge, e esta divergia
+  // dos dois lados ao mesmo tempo.
   const tracos = model.walls.map((w) => {
     const ax = px(w.a.x);
     const ay = py(w.a.y);
@@ -325,9 +325,10 @@ export function desenharPlanta(
     const ux = comp > 0 ? (bx - ax) / comp : 0;
     const uy = comp > 0 ? (by - ay) / comp : 0;
     const cheia = w.thicknessMm / opcoes.denominador;
-    const meia = cheia / 2;
-    const extA = isFreeWallEnd(model.walls, w.a, w.id) ? 0 : meia;
-    const extB = isFreeWallEnd(model.walls, w.b, w.id) ? 0 : meia;
+    // Em MILÍMETRO DE MODELO no kernel, em milímetro de PAPEL aqui — mesma
+    // divisão pelo denominador da escala que a espessura já sofre.
+    const extA = extensaoDeCanto(model.walls, w, 'a') / opcoes.denominador;
+    const extB = extensaoDeCanto(model.walls, w, 'b') / opcoes.denominador;
 
     return { cheia, ax, ay, bx, by, ux, uy, comp, extA, extB };
   });

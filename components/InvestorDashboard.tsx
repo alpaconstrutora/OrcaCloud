@@ -31,6 +31,10 @@ import PortalOverview from './investor/portal/PortalOverview';
 import PortalHoldings from './investor/portal/PortalHoldings';
 import PortalOpportunities from './investor/portal/PortalOpportunities';
 import PortalDocuments from './investor/portal/PortalDocuments';
+import PortalFinance from './investor/portal/PortalFinance';
+import PortalFiscal from './investor/portal/PortalFiscal';
+import PortalAnnouncements from './investor/portal/PortalAnnouncements';
+import PortalSpes, { PortalSpe } from './investor/portal/PortalSpes';
 
 interface InvestorDashboardProps {
     activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
@@ -66,12 +70,10 @@ const TABS = [
     { id: 'relatorios', label: 'Relatórios', icon: <RefreshCw className="w-4 h-4" /> },
 ] as const;
 
-const PUBLIC_RENDERABLE_TAB_IDS: TabId[] = [
-    'dashboard',
-    'holdings',
-    'opportunities',
-    'reports',
-];
+// Todas as abas do módulo existem no portal do investidor. O que muda entre a
+// visão do gestor e a do investidor é o CONTEÚDO (leitura x administração), não
+// a lista de abas — quem decide o que o investidor vê é `investorPortalTabs`.
+const PUBLIC_RENDERABLE_TAB_IDS: TabId[] = TABS.map(t => t.id as TabId);
 
 const TAB_TITLES: Record<TabId, string> = {
     dashboard: 'Meu Patrimônio',
@@ -113,6 +115,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [showIgpm, setShowIgpm] = React.useState(false);
     const [inputModal, setInputModal] = React.useState<{ label: string; onConfirm: (val: string) => void } | null>(null);
     const [inputValue, setInputValue] = React.useState('');
+    const [portalSpes, setPortalSpes] = React.useState<PortalSpe[]>([]);
 
     const isAdmin = !isPreview && (
         profile?.role === UserProfile.ADMIN
@@ -230,6 +233,12 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         if (isAdmin) return realProjects.filter(p => isObra(p));
         return [];
     }, [realProjects, investorProfile, isAdmin, investorParticipations]);
+
+    // Nome do empreendimento por id — as contribuições e SPEs só trazem project_id.
+    const projectNames = React.useMemo(
+        () => new Map(activeProjects.filter(p => p.id).map(p => [p.id as string, p.name])),
+        [activeProjects],
+    );
 
     const stats = React.useMemo(() => {
         let totalEquity = 0;
@@ -388,11 +397,12 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         setDataError(null);
         (async () => {
             try {
-                const [summary, rpts, opps, anns] = await Promise.all([
+                const [summary, rpts, opps, anns, spes] = await Promise.all([
                     investorPortalTokenService.getSummaryByToken(portalToken),
                     investorPortalTokenService.getReportsByToken(portalToken),
                     investorPortalTokenService.getOpportunitiesByToken(portalToken),
                     investorPortalTokenService.getAnnouncementsByToken(portalToken),
+                    investorPortalTokenService.getSpesByToken(portalToken),
                 ]);
                 const parts = summary.participations as import('../services/investorContributionsService').InvestorParticipation[];
                 const contribs = summary.contributions as import('../services/investorContributionsService').InvestorContribution[];
@@ -427,6 +437,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 setReports(rpts);
                 setOpportunities(opps);
                 setPortalAnnouncements(anns);
+                setPortalSpes(spes);
             } catch (err) {
                 console.error('Erro ao carregar portal do investidor:', err);
                 if (!cancelled) setDataError('Não foi possível carregar os dados do portal. Tente novamente em alguns instantes.');
@@ -694,13 +705,10 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 <X className="w-5 h-5" />
                             </Button>
                         </div>
-                        {/* Só as abas que o portal sabe renderizar entram como
-                            interruptor. As demais existiam aqui e não faziam nada
-                            no acesso por token — o gestor desligava e nada mudava
-                            para o investidor. Agora aparecem como informação, não
-                            como controle. */}
+                        {/* Todas as 10 abas são configuráveis: o portal renderiza
+                            todas, em versão de leitura. */}
                         <div className="p-8 space-y-3">
-                            {TABS.filter(t => PUBLIC_RENDERABLE_TAB_IDS.includes(t.id as TabId)).map(tab => {
+                            {TABS.map(tab => {
                                 const isVisible = enabledTabIds.includes(tab.id);
                                 return (
                                     <button
@@ -730,11 +738,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
                                 {/* §21 — sentence case; o resto do modal ainda usa o
                                     estilo antigo em caixa alta (dívida pré-existente). */}
-                                <p className="text-sm font-black text-gray-600 mb-2">Exclusivas do gestor</p>
+                                <p className="text-sm font-black text-gray-600 mb-2">O investidor vê em modo leitura</p>
                                 <p className="text-xs text-gray-400 leading-relaxed">
-                                    {TABS.filter(t => !PUBLIC_RENDERABLE_TAB_IDS.includes(t.id as TabId)).map(t => t.label).join(' · ')}
-                                    {' '}— não existem no portal do investidor, com ou sem esta configuração.
-                                    Comunicados chega ao investidor dentro de <strong className="font-bold text-gray-500">Documentos</strong>.
+                                    As mesmas abas do app, sem as ações de gestão: em <strong className="font-bold text-gray-500">SPE</strong> ele
+                                    vê só a participação dele (nunca os outros sócios) e em <strong className="font-bold text-gray-500">Relatórios</strong> ele
+                                    lê os relatórios publicados, sem o gatilho de emissão.
                                 </p>
                             </div>
                         </div>
@@ -882,7 +890,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         />
                     )
                 )}
-                {activeTab === 'simulator' && <InvestmentSimulator />}
+                {activeTab === 'simulator' && (
+                    isPublicExperience
+                        ? <div className="bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5"><InvestmentSimulator /></div>
+                        : <InvestmentSimulator />
+                )}
                 {activeTab === 'holdings' && (
                     isPublicExperience ? (
                         <PortalHoldings
@@ -903,23 +915,31 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     )
                 )}
                 {activeTab === 'financeiro' && (
-                    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <section>
-                            <div className="flex items-center gap-3 mb-8">
-                                <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
-                                <h3 className="text-xl font-black text-gray-900 tracking-tight">Fluxo de Caixa e Aportes</h3>
-                            </div>
-                            <PaymentsPanel organizationId={orgId} investorId={investorProfile?.id} />
-                        </section>
-                    </div>
+                    isPublicExperience ? (
+                        <PortalFinance contributions={investorContributions} projectNames={projectNames} />
+                    ) : (
+                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <section>
+                                <div className="flex items-center gap-3 mb-8">
+                                    <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
+                                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Fluxo de Caixa e Aportes</h3>
+                                </div>
+                                <PaymentsPanel organizationId={orgId} investorId={investorProfile?.id} />
+                            </section>
+                        </div>
+                    )
                 )}
                 {activeTab === 'fiscal' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <TaxReport
-                            investorContributions={investorContributions}
-                            activeProjects={activeProjects}
-                        />
-                    </div>
+                    isPublicExperience ? (
+                        <PortalFiscal contributions={investorContributions} projectNames={projectNames} />
+                    ) : (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                            <TaxReport
+                                investorContributions={investorContributions}
+                                activeProjects={activeProjects}
+                            />
+                        </div>
+                    )
                 )}
                 {activeTab === 'opportunities' && (
                     isPublicExperience ? (
@@ -948,14 +968,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     )
                 )}
                 {activeTab === 'reports' && isPublicExperience && (
-                    <PortalDocuments
-                        reports={reports}
-                        announcements={portalAnnouncements}
-                        portalToken={portalToken}
-                        onAcknowledged={(id) => setPortalAnnouncements(prev =>
-                            prev.map(a => a.id === id ? { ...a, acknowledged: true } : a)
-                        )}
-                    />
+                    <PortalDocuments reports={reports} />
                 )}
                 {activeTab === 'reports' && !isPublicExperience && (
                     <div className="space-y-6">
@@ -1020,48 +1033,14 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     </div>
                 )}
                 {activeTab === 'comunicados' && (
-                    portalToken ? (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {portalAnnouncements.length === 0 ? (
-                                <div className="text-center py-20 bg-white rounded-[2.5rem] border border-gray-100">
-                                    <Bell className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                                    <p className="font-bold text-gray-500">Nenhum comunicado publicado.</p>
-                                </div>
-                            ) : portalAnnouncements.map((ann: any) => (
-                                <div key={ann.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 space-y-3">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div>
-                                            <span className="text-xs font-bold text-blue-500 uppercase tracking-widest">{ann.type}</span>
-                                            <h3 className="text-lg font-black text-gray-900 mt-0.5">{ann.title}</h3>
-                                            <p className="text-sm text-gray-500 mt-2 leading-relaxed">{ann.body}</p>
-                                        </div>
-                                        {ann.acknowledged
-                                            ? <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-1" />
-                                            : ann.requires_acknowledgment && (
-                                                <Button
-                                                    onClick={() => {
-                                                        investorPortalTokenService.acknowledgeByToken(portalToken, ann.id)
-                                                            .then(() => setPortalAnnouncements(prev =>
-                                                                prev.map(a => a.id === ann.id ? { ...a, acknowledged: true } : a)
-                                                            ))
-                                                            .catch(e => console.error(e));
-                                                    }}
-                                                    className="flex-shrink-0"
-                                                >
-                                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                                    Confirmar
-                                                </Button>
-                                            )
-                                        }
-                                    </div>
-                                    {ann.published_at && (
-                                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
-                                            {new Date(ann.published_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                                        </p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+                    isPublicExperience ? (
+                        <PortalAnnouncements
+                            announcements={portalAnnouncements}
+                            portalToken={portalToken}
+                            onAcknowledged={(id) => setPortalAnnouncements(prev =>
+                                prev.map(a => a.id === id ? { ...a, acknowledged: true } : a)
+                            )}
+                        />
                     ) : (
                         <CommunicationCenter
                             organizationId={orgId ?? ''}
@@ -1070,16 +1049,34 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         />
                     )
                 )}
-                {activeTab === 'spe' && !portalToken && (
-                    <SpeManager
-                        organizationId={orgId ?? ''}
-                        isAdmin={isAdmin}
-                    />
+                {activeTab === 'spe' && (
+                    isPublicExperience ? (
+                        // Somente leitura e só a participação DESTE investidor —
+                        // o SpeManager do gestor lista todos os sócios da org.
+                        <PortalSpes spes={portalSpes} />
+                    ) : (
+                        <SpeManager
+                            organizationId={orgId ?? ''}
+                            isAdmin={isAdmin}
+                        />
+                    )
                 )}
-                {activeTab === 'relatorios' && isAdmin && !portalToken && (
-                    <MonthlyReportTrigger
-                        organizationId={orgId ?? ''}
-                    />
+                {activeTab === 'relatorios' && (
+                    isPublicExperience ? (
+                        // Para o investidor, "Relatórios" é a leitura dos relatórios
+                        // mensais publicados (investor_reports, category='relatorio');
+                        // o gatilho de geração é do gestor.
+                        <PortalDocuments
+                            reports={reports}
+                            onlyCategory="relatorio"
+                            title="Relatórios mensais"
+                            subtitle="Evolução física, financeira e previsto × realizado"
+                            emptyTitle="Nenhum relatório publicado"
+                            emptySubtitle="Os relatórios mensais aparecem aqui assim que forem emitidos."
+                        />
+                    ) : (
+                        isAdmin ? <MonthlyReportTrigger organizationId={orgId ?? ''} /> : null
+                    )
                 )}
             </main>
             )}

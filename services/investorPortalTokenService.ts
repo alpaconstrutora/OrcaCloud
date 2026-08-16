@@ -100,6 +100,24 @@ export const investorPortalTokenService = {
         return (data as any)?.opportunities ?? [];
     },
 
+    /**
+     * SPEs em que o investidor do token é sócio, com a participação DELE.
+     * Devolve [] (em vez de estourar) quando a RPC ainda não foi aplicada no
+     * banco — a aba mostra estado vazio em vez de derrubar o portal.
+     */
+    async getSpesByToken(token: string): Promise<any[]> {
+        const { data, error } = await supabase.rpc('fn_investor_portal_get_spes', { p_token: token });
+        if (error) {
+            // PGRST202 = função inexistente no schema exposto
+            if (error.code === 'PGRST202' || /not find the function/i.test(error.message ?? '')) {
+                console.warn('fn_investor_portal_get_spes ausente — aba SPE ficará vazia até a migration ser aplicada.');
+                return [];
+            }
+            throw error;
+        }
+        return (data as any)?.spes ?? [];
+    },
+
     async getMilestonesByToken(token: string): Promise<any[]> {
         const { data, error } = await supabase.rpc('fn_investor_portal_get_milestones', { p_token: token });
         if (error) throw error;

@@ -126,6 +126,39 @@ trilho, ativa branca, `h-7`, `flex-wrap`), §14 (modal de confirmação local �
 **Verificado no navegador:** 3 configurações (nunca configurado → 4 abas; só duas
 → 2 abas; tudo desligado → 0 abas + aviso) e a visão do gestor após as correções.
 
+### 10. Todas as abas no portal (2026-08-16)
+
+Pedido: *"o portal do investidor (visao do investidor) deve oferecer todas as abas
+que o portal do investido visao do app tem, nao apenas 4"*.
+
+`PUBLIC_RENDERABLE_TAB_IDS` deixa de ser uma lista curta e passa a ser
+`TABS.map(...)`: **as 10 abas existem no portal**. O que muda entre gestor e
+investidor é o CONTEÚDO (leitura × administração), não a lista de abas — quem
+decide o que o investidor vê é `investorPortalTabs`.
+
+| Aba | Visão do investidor | Backend novo |
+|---|---|---|
+| Simulador | `InvestmentSimulator` (não faz consulta) dentro do cartão do portal | não |
+| Financeiro | `PortalFinance` — KPIs, próximo compromisso e extrato de movimentações | não |
+| Fiscal | `PortalFiscal` — informativo de rendimentos por empreendimento | não |
+| Comunicados | `PortalAnnouncements` — aba própria, com confirmação de leitura | não |
+| Relatórios | `PortalDocuments onlyCategory="relatorio"` — leitura, sem o gatilho de emissão | não |
+| SPE | `PortalSpes` — só a participação do próprio investidor | **sim** |
+
+⚠️ **SPE exige migration.** `SpeManager` (gestor) lista todas as SPEs da org **e
+todos os sócios**, com nome e e-mail — não podia ser reaproveitado. Foi criada
+`fn_investor_portal_get_spes` (`20270816000001`), que devolve só as SPEs em que o
+investidor do token é sócio, só a participação dele, e a contagem de sócios sem
+identificar ninguém. **Ainda NÃO aplicada no banco** — enquanto não for,
+`getSpesByToken` detecta a função ausente (PGRST202), devolve `[]` e a aba mostra
+estado vazio em vez de derrubar o portal.
+
+Defeito achado no harness e corrigido: comunicado com `published_at` em data pura
+aparecia um dia antes (`new Date('YYYY-MM-DD')` é UTC) — passou a usar `parseDate`.
+
+**Verificado no navegador:** Financeiro, Fiscal, SPE, Relatórios e Comunicados por
+print, sem scroll horizontal e com 0 erro de página.
+
 ### 8. Verificação
 **Pronto quando:** `npx tsc --noEmit` limpo; harness Playwright em 1440px e 390px
 com print das 4 abas; `check-ui-standard.sh` rodado e cada acusação apontada para

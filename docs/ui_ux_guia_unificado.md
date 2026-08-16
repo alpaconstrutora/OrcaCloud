@@ -1918,10 +1918,11 @@ Semântica: `<nav aria-label="Trilha de navegação">`.
 
 ## 24. PORTAL DO INVESTIDOR — vocabulário próprio (exceção autorizada)
 
-**Escopo — e só ele:** as 4 abas que o **investidor** vê no acesso por link
-público (`isPublicExperience` em `InvestorDashboard.tsx`): Resumo, Carteira,
-Oportunidades, Documentos, mais a casca standalone (§20.2.1). Arquivos:
-`components/investor/portal/*` e os trechos de `InvestorDashboard.tsx`
+**Escopo — e só ele:** as abas que o **investidor** vê no acesso por link
+público (`isPublicExperience` em `InvestorDashboard.tsx`) — desde 2026-08-16 são
+as 10 do módulo (Resumo, Simulador, Carteira, Financeiro, Fiscal, Oportunidades,
+Documentos, Comunicados, SPE, Relatórios) —, mais a casca standalone (§20.2.1).
+Arquivos: `components/investor/portal/*` e os trechos de `InvestorDashboard.tsx`
 recortados por `isPublicExperience`.
 
 **Fora do escopo:** todo o resto do app, inclusive a visão do gestor sobre o

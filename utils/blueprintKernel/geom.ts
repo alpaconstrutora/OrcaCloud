@@ -497,6 +497,43 @@ export function poligonoRegular(
 }
 
 /**
+ * Polígono regular medido pelo LADO: o meio de um lado fica a `apotemaMm` do
+ * centro, na direção `anguloRad`.
+ *
+ * ─── POR QUE É ESTA, E NÃO A MEDIDA PELO VÉRTICE ────────────────────────────
+ *
+ * Medindo pelo vértice, arrastar na horizontal põe as ESQUINAS nos eixos: um
+ * quadrado sai como losango, girado 45° em relação à planta. Foi o que apareceu
+ * em uso, no primeiro polígono de 4 lados desenhado sobre uma planta ortogonal.
+ *
+ * Medindo pelo lado, o lado sob o cursor fica perpendicular ao arraste — e com
+ * a trava ortogonal ligada todo polígono de lados pares nasce alinhado aos
+ * eixos da planta. De quebra, a distância arrastada passa a ser a metade da
+ * medida do quadrado (arrastar 2 m dá 4 × 4 m), que é o que se pensa ao
+ * desenhar um cômodo.
+ *
+ * A conversão é a de sempre: o vértice fica a `apotema / cos(π/n)` do centro, e
+ * os dois que ladeiam o lado sob o cursor ficam a meio passo dele.
+ */
+export function poligonoPeloLado(
+  centro: Point,
+  apotemaMm: number,
+  lados: number,
+  anguloRad = 0,
+): Point[] {
+  if (!Number.isFinite(apotemaMm) || apotemaMm <= 0) return [];
+  if (!Number.isInteger(lados) || lados < 3) return [];
+
+  const meioPasso = Math.PI / lados;
+  return poligonoRegular(
+    centro,
+    apotemaMm / Math.cos(meioPasso),
+    lados,
+    anguloRad + meioPasso,
+  );
+}
+
+/**
  * Os quatro cantos do corpo da parede, no sentido do anel.
  *
  * `extenderA`/`extenderB` empurram a ponta em meia espessura, como o desenho faz

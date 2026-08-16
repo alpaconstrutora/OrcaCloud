@@ -832,7 +832,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               value={ladosPoligono}
               onChange={(e) => setLadosPoligono(Number(e.target.value))}
               className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-              title="Clique no centro e arraste: o cursor é um VÉRTICE, então ele dá o tamanho e o giro ao mesmo tempo. Os cantos saem mitrados e o contorno já fecha, derivando o ambiente."
+              title="Clique no centro e arraste até o MEIO DE UM LADO: o lado nasce perpendicular ao arraste, então com o orto ligado o polígono sai alinhado à planta. Os cantos saem mitrados e o contorno já fecha, derivando o ambiente."
             >
               {[3, 4, 5, 6, 8, 10, 12].map((n) => (
                 <option key={n} value={n}>

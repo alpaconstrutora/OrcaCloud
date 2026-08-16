@@ -13,12 +13,20 @@ Leitura: hoje a parede é traçada como polilinha à mão (que fecha contorno qu
 se volta ao primeiro ponto). O pedido é uma ferramenta que cria o **polígono
 regular** de N lados de uma vez.
 
+### Pedido seguinte, 16/08/2026, com print
+
+> veja print, o poligono de 4 lados é formado desalinhado (girado) em relacao a
+> planta
+
+Confirmou o risco que eu tinha registrado ao entregar ("para 4 lados isso dá um
+losango"). Corrigido: ver **A medida mudou de vértice para lado**, abaixo.
+
 ## O que entrou
 
 Ferramenta **Polígono** na barra, com seletor de **Lados** (3, 4, 5, 6, 8, 10,
 12 — padrão 6). Gesto de dois cliques: o primeiro marca o **centro**, o segundo
-fecha. O cursor é um **vértice**, então ele dá o tamanho e o giro ao mesmo
-tempo — a esquina que se vê seguindo o mouse é a que vai nascer.
+fecha. O cursor fica no **meio de um lado**, então o lado nasce perpendicular ao
+arraste e, com a trava ortogonal ligada, o polígono sai alinhado à planta.
 
 | Arquivo | Mudança | Como sei que terminou |
 |---|---|---|
@@ -44,6 +52,28 @@ Saem no sentido **horário na tela** (ângulo decrescente, porque o Y do modelo
 aponta para cima). É o mesmo sentido que o traçado manual pede para a parede
 nascer **para dentro** com o alinhamento "à direita". Gerar ao contrário faria o
 polígono crescer para fora do que se apontou, sem nada explicando na tela.
+
+## A medida mudou de vértice para lado (correção do mesmo dia)
+
+A primeira entrega media pelo **vértice**: o cursor era uma esquina. Arrastando
+na horizontal, as esquinas caíam nos eixos e o **quadrado nascia como losango**,
+girado 45° sobre uma planta ortogonal. Eu havia registrado isso como risco
+aceito na entrega; em uso, com print, ficou claro que não era aceitável.
+
+Agora mede pelo **lado** (`poligonoPeloLado`): o meio de um lado fica sob o
+cursor, perpendicular ao arraste. Consequências:
+
+- com a trava ortogonal, **todo polígono de lados pares nasce alinhado** aos
+  eixos da planta;
+- a distância arrastada vira a **apótema**: arrastar 2 m dá um cômodo de
+  4 × 4 m, que é o que se pensa ao desenhar. Pelo vértice, os mesmos 2 m davam
+  2,83 m de lado — imprevisível enquanto se desenha;
+- a área agora **decresce** com o número de lados para o mesmo arraste (todos
+  circunscrevem o mesmo círculo), o inverso de antes. A inversão dessa
+  conferência no passeio é o que prova que a medida mudou de fato.
+
+`poligonoRegular` (por vértice) continua no kernel como primitiva geral —
+`poligonoPeloLado` delega a ela.
 
 ## Um defeito que a ferramenta revelou — e que já existia
 
@@ -88,11 +118,16 @@ comportamento já verificado em uso.
 - **Kernel, canto** (7 casos): 90° dá meia espessura (o valor cravado de antes);
   obtuso avança menos; agudo avança mais; agudo demais é limitado; quase
   colinear quase não avança; ponta livre não avança; junção em X mantém meia.
+- **Kernel, medida pelo lado** (5 casos): **o quadrado sai alinhado aos eixos**,
+  com os quatro cantos exatos (é o caso do print); a distância arrastada é a
+  apótema (2 m → lado de 4 m); todo polígono de lados pares fica alinhado ao
+  arrastar num eixo; mantém o sentido horário; entrada degenerada devolve vazio.
 - **Chrome real** (`docs/spikes/poligono/passeio.mjs`), com ponteiro de verdade
   para 3, 4, 5, 6, 8 e 12 lados: N paredes, **1 ambiente derivado** em todos, e
-  cantos compartilhados vértice a vértice. A área cresce com o número de lados
-  para o mesmo raio (triângulo 18,76 m² → dodecágono 45,54 m², com o círculo de
-  4 m em 50,27) — confere que o raio está sendo respeitado.
+  cantos compartilhados vértice a vértice. A área **decresce** com o número de
+  lados para a mesma apótema (triângulo 79,03 m² → dodecágono 48,91 m², com o
+  círculo de 4 m em 50,27) — confere que a apótema está sendo respeitada.
+  `saida-4-lados.png` mostra o quadrado alinhado à grade.
 - **O canto, ampliado** antes e depois da correção: a farpa de 120° sumiu e o
   canto fecha vivo.
 - Os passeios de **parede** e **porta** foram rodados de novo: passam sem
@@ -104,7 +139,9 @@ comportamento já verificado em uso.
   REGULAR; retângulo já sai fácil no traçado manual, agora com canto mitrado.
 - Editar o polígono como objeto depois de criado — ele vira N paredes
   independentes, e cada uma se edita como qualquer parede.
-- Polígono inscrito × circunscrito (o cursor é sempre um vértice).
+- Escolher entre medir pelo lado e pelo vértice. A medida é sempre pelo LADO,
+  porque é a que alinha o polígono à planta; oferecer as duas seria um controle
+  a mais para um caso que ninguém pediu.
 - Corrigir o avanço de canto em junção **T** e **X** com a fórmula do ângulo:
   ficou em meia espessura, o comportamento já verificado. Só faria diferença em
   T/X oblíquos, que ninguém relatou.

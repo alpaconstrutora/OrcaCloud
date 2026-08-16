@@ -98,7 +98,9 @@ async function desenhar(lados, { print } = {}) {
 
 // ── Cada número de lados produz N paredes e UM ambiente ─────────────────────
 for (const lados of [3, 4, 5, 6, 8, 12]) {
-  const e = await desenhar(lados, { print: lados === 6 || lados === 3 });
+  // 4 lados tem print obrigatório: é o caso do defeito relatado (o quadrado
+  // saindo como losango). 3 e 6 mostram ímpar e par no mesmo olhar.
+  const e = await desenhar(lados, { print: lados === 3 || lados === 4 || lados === 6 });
 
   if (e.paredes !== lados) {
     falhas.push(`${lados} lados produziram ${e.paredes} paredes`);
@@ -118,14 +120,17 @@ for (const lados of [3, 4, 5, 6, 8, 12]) {
   }
 }
 
-// ── A área cresce com o número de lados, para o mesmo raio ──────────────────
-// Polígono inscrito no mesmo círculo: quanto mais lados, mais perto da área do
-// círculo. É uma conferência barata de que o raio está sendo respeitado, e não
-// só "algum polígono" saindo.
+// ── A área DECRESCE com o número de lados, para a mesma apótema ─────────────
+//
+// O arraste fixa a APÓTEMA (a distância até o meio do lado), então todos os
+// polígonos circunscrevem o mesmo círculo: quanto mais lados, mais perto dele
+// por fora — ou seja, MENOR área. Era o contrário quando o arraste fixava o
+// raio até o vértice, e a inversão desta conferência é o que prova que a
+// medida mudou de fato, não só o desenho.
 const tri = await desenhar(3);
 const doze = await desenhar(12);
-if (!(doze.areaM2[0] > tri.areaM2[0])) {
-  falhas.push(`área não cresceu com os lados: 3 → ${tri.areaM2[0]}, 12 → ${doze.areaM2[0]}`);
+if (!(doze.areaM2[0] < tri.areaM2[0])) {
+  falhas.push(`área não decresceu com os lados: 3 → ${tri.areaM2[0]}, 12 → ${doze.areaM2[0]}`);
 }
 
 await browser.close();

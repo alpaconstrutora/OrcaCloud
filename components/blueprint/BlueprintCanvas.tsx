@@ -5,7 +5,7 @@ import {
   extensaoDeCanto,
   cantosDaParede,
   eixoDaParede,
-  poligonoRegular,
+  poligonoPeloLado,
   type AlinhamentoParede,
   type BlueprintModel,
   type Opening,
@@ -505,15 +505,17 @@ export default function BlueprintCanvas({
   /**
    * O polígono em curso, do centro até o cursor. `[]` enquanto não houver um.
    *
-   * O cursor é um VÉRTICE: ele dá o raio e o giro de uma vez, então a esquina
-   * que se vê seguindo o mouse é a esquina que vai nascer. Prévia que mostra
-   * outra coisa é prévia em que ninguém confia — a lição do traçado pela face.
+   * O cursor fica no MEIO DE UM LADO, não num vértice: o lado sob ele nasce
+   * perpendicular ao arraste, e com a trava ortogonal todo polígono de lados
+   * pares sai alinhado aos eixos da planta. Medindo pelo vértice — como era —
+   * um quadrado saía como losango, girado 45°, que foi o defeito relatado em
+   * uso. O porquê completo está em `poligonoPeloLado`.
    */
   const verticesPoligono = useMemo(() => {
     if (!centroPoligono || !cursor) return [];
     const dx = cursor.x - centroPoligono.x;
     const dy = cursor.y - centroPoligono.y;
-    return poligonoRegular(
+    return poligonoPeloLado(
       centroPoligono,
       Math.hypot(dx, dy),
       ladosPoligono,

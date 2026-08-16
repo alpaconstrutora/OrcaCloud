@@ -34,6 +34,7 @@ import {
   nomeDoTipoDeAbertura,
   parseCanonicalPayload,
   poligonoRegular,
+  poligonoPeloLado,
   pointInPolygon,
   intersectSegments,
   point,
@@ -1756,6 +1757,59 @@ describe('poligonoRegular', () => {
       const proxima = pronto.walls[(i + 1) % n];
       expect(atual.b, `canto ${i} não fechou`).toEqual(proxima.a);
     }
+  });
+});
+
+describe('poligonoPeloLado', () => {
+  it('O QUADRADO SAI ALINHADO AOS EIXOS, não como losango', () => {
+    // DEFEITO RELATADO EM USO (16/08/2026, com print): a ferramenta media pelo
+    // VÉRTICE, então arrastar na horizontal punha as esquinas nos eixos e o
+    // quadrado nascia girado 45° em relação à planta ortogonal.
+    //
+    // Medindo pelo lado, arrastar na horizontal deixa dois lados verticais e
+    // dois horizontais — que é o que a planta pede.
+    const v = poligonoPeloLado(point(0, 0), 2000, 4, 0);
+
+    expect(v).toHaveLength(4);
+    // Os quatro cantos de um quadrado 4000 × 4000 centrado na origem.
+    expect([...v].sort((a, b) => a.x - b.x || a.y - b.y)).toEqual([
+      { x: -2000, y: -2000 },
+      { x: -2000, y: 2000 },
+      { x: 2000, y: -2000 },
+      { x: 2000, y: 2000 },
+    ]);
+  });
+
+  it('a distância arrastada é a APÓTEMA — metade da medida do quadrado', () => {
+    // Arrastar 2 m dá um cômodo de 4 × 4 m. Medindo pelo vértice, os mesmos
+    // 2 m dariam 2,83 m de lado, que ninguém consegue prever enquanto desenha.
+    const v = poligonoPeloLado(point(0, 0), 2000, 4, 0);
+    const lado = Math.hypot(v[1].x - v[0].x, v[1].y - v[0].y);
+    expect(lado).toBeCloseTo(4000, 0);
+  });
+
+  it('todo polígono de lados PARES fica alinhado ao arrastar num eixo', () => {
+    // É a consequência que importa em planta: com a trava ortogonal ligada, o
+    // arraste cai sempre num eixo, e aí todo par nasce alinhado.
+    for (const lados of [4, 6, 8, 10, 12]) {
+      const v = poligonoPeloLado(point(0, 0), 3000, lados, 0);
+      // O lado sob o cursor é vertical: seus dois vértices têm o mesmo x.
+      expect(v[0].x, `${lados} lados`).toBe(v[1].x);
+    }
+  });
+
+  it('mantém o sentido horário na tela, como o polígono por vértice', () => {
+    const v = poligonoPeloLado(point(0, 0), 3000, 6, 0);
+    const areaComSinal = v.reduce((soma, p, i) => {
+      const q = v[(i + 1) % v.length];
+      return soma + (p.x * q.y - q.x * p.y);
+    }, 0);
+    expect(areaComSinal).toBeLessThan(0);
+  });
+
+  it('entrada degenerada devolve vazio, sem levantar erro', () => {
+    expect(poligonoPeloLado(point(0, 0), 0, 6)).toEqual([]);
+    expect(poligonoPeloLado(point(0, 0), 3000, 2)).toEqual([]);
   });
 });
 

@@ -14,7 +14,10 @@ import { isSystemProject } from '../utils/systemProjects';
  *   - Áreas NBR:     `area_projects.empreendimento_id`
  *   - Planta IA:     `empreendimentos.planta_ai_study_id`
  *   - Viabilidade:   `empreendimentos.imovib_study_id`
- *   - Contratos/Fin: NÃO se ligam ao empreendimento — chegam pela obra (`project_id`)
+ *   - Contrato:      por DUAS vias — a obra (`contracts.project_id`) e, desde
+ *                    20270905000028, o vínculo direto `contracts.empreendimento_id`,
+ *                    que é o único caminho para contrato SEM obra (despesa administrativa)
+ *   - Financeiro:    NÃO se liga ao empreendimento — chega pela obra (`project_id`)
  *
  * ⚠️ Nenhuma das colunas de obra/estudo tem FOREIGN KEY (DDL deadlocka neste módulo —
  * ver 20270719000000). O id apontado pode não existir mais: quando isso acontece o
@@ -156,7 +159,7 @@ export const empreendimentoLinksService = {
         const [children, areaProject, contratos, financeiro] = await Promise.all([
             this.loadBudgetsAndPlans(validObras),
             this.loadAreaProject(emp.id, orgId),
-            this.loadContracts(obraIds, validObras),
+            this.loadContracts(obraIds, validObras, emp.id),
             this.loadFinance(obraIds, validObras),
         ]);
 
@@ -288,25 +291,38 @@ export const empreendimentoLinksService = {
     },
 
     /**
-     * Contratos das obras do empreendimento. Uma query com `.in()` — o
+     * Contratos do empreendimento, por DUAS vias que podem se sobrepor:
+     *   - pela obra   — `contracts.project_id` ∈ obras do empreendimento (via histórica);
+     *   - direta      — `contracts.empreendimento_id` (contrato sem obra também entra).
+     *
+     * As duas viram uma lista só, deduplicada por id. Query com `.in()` porque o
      * `contractService.listContracts` só aceita um `projectId` por chamada.
      * Sem filtro de organização: a RLS de `contracts` já recorta.
      */
-    async loadContracts(obraIds: string[], obras: EmpreendimentoLink[]): Promise<EmpreendimentoLink[]> {
-        if (!obraIds.length) return [];
+    async loadContracts(obraIds: string[], obras: EmpreendimentoLink[], empreendimentoId?: string): Promise<EmpreendimentoLink[]> {
+        const cols = 'id, number, title, status, domain, direction, current_value, original_value, project_id, empreendimento_id';
         try {
-            const { data } = await supabase
-                .from('contracts')
-                .select('id, number, title, status, domain, direction, current_value, original_value, project_id')
-                .in('project_id', obraIds)
-                .order('created_at', { ascending: false });
+            const [porObra, direto] = await Promise.all([
+                obraIds.length
+                    ? supabase.from('contracts').select(cols).in('project_id', obraIds).order('created_at', { ascending: false })
+                    : Promise.resolve({ data: [] as any[] }),
+                empreendimentoId
+                    ? supabase.from('contracts').select(cols).eq('empreendimento_id', empreendimentoId).order('created_at', { ascending: false })
+                    : Promise.resolve({ data: [] as any[] }),
+            ]);
+
             const obraName = new Map(obras.map(o => [o.id, o.label]));
-            return ((data || []) as any[]).map(c => ({
+            const byId = new Map<string, any>();
+            for (const c of [...((porObra.data || []) as any[]), ...((direto.data || []) as any[])]) {
+                if (!byId.has(c.id)) byId.set(c.id, c);
+            }
+
+            return [...byId.values()].map(c => ({
                 kind: 'CONTRATO' as const,
                 id: c.id,
                 label: c.title || c.number || 'Contrato',
-                sublabel: [c.number, obraName.get(c.project_id)].filter(Boolean).join(' · '),
-                parentObraId: c.project_id,
+                sublabel: [c.number, obraName.get(c.project_id) ?? (c.project_id ? undefined : 'Sem obra')].filter(Boolean).join(' · '),
+                parentObraId: c.project_id ?? null,
                 meta: {
                     status: c.status,
                     domain: c.domain,

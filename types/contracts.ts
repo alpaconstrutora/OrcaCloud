@@ -76,6 +76,10 @@ export interface Contract {
     responsible_email?: string;
     signed_contract_url?: string;
     empresa_id?: string;
+    // Empreendimento do contrato. Vínculo DIRETO e independente de project_id —
+    // contrato sem obra (despesa administrativa) também pode ter empreendimento.
+    // Coluna sem FK, como as demais deste módulo (ver empreendimentoLinksService).
+    empreendimento_id?: string | null;
     cost_center_id?: string;
     // Plano de Contas (tabela `plano_de_contas`) — dimensão distinta de
     // cost_center_id (cost_centers_v2) e de category_id (financial_categories,

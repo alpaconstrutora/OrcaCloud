@@ -13,6 +13,7 @@ import { projectService } from '../services/projectService';
 import { storageService } from '../services/storageService';
 import { laborService } from '../services/laborService';
 import { contractTypeService } from '../services/contractTypeService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
 import ContractGuaranteeModal from './ContractGuaranteeModal';
@@ -129,6 +130,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [employees, setEmployees] = React.useState<{ id: string; name: string; role?: string }[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
     const [contractTypes, setContractTypes] = React.useState<ContractTypeRecord[]>([]);
+    const [empreendimentos, setEmpreendimentos] = React.useState<{ id: string; name: string }[]>([]);
     const [paymentAccounts, setPaymentAccounts] = React.useState<PaymentAccount[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [scopePickerOpen, setScopePickerOpen] = React.useState(false);
@@ -286,7 +288,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const loadDependencies = async () => {
         setIsSubmitting(true);
         try {
-            const [s, cl, cc, pc, ca, p, emps, pa, ct] = await Promise.all([
+            const [s, cl, cc, pc, ca, p, emps, pa, ct, empr] = await Promise.all([
                 supplierService.listSuppliers(organizationId),
                 crmClientService.listClients(organizationId),
                 financialRegistryService.listCostCenters(organizationId),
@@ -295,7 +297,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 projectService.listProjects(undefined, organizationId, true),
                 laborService.listEmployees(organizationId).catch(() => [] as { id: string; name: string; role?: string }[]),
                 financialRegistryService.listPaymentAccounts(organizationId).catch(() => [] as PaymentAccount[]),
-                contractTypeService.listTypes(organizationId).catch(() => [] as ContractTypeRecord[])
+                contractTypeService.listTypes(organizationId).catch(() => [] as ContractTypeRecord[]),
+                empreendimentoService.list(organizationId).catch(() => [] as { id: string; name: string }[])
             ]);
             setSuppliers(s);
             setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document })));
@@ -306,6 +309,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             setEmployees((emps as any[]).filter(e => e.status !== 'DEMITIDO').map(e => ({ id: e.id, name: e.name, role: e.role })));
             setPaymentAccounts(pa);
             setContractTypes(ct);
+            setEmpreendimentos((empr as { id: string; name: string }[]).map(e => ({ id: e.id, name: e.name })));
         } catch (error) {
             console.error("Erro ao carregar dependências do contrato:", error);
         } finally {
@@ -1406,6 +1410,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         valueField="id"
                                         placeholder="Nenhum centro vinculado"
                                         hoverCls="hover:bg-blue-50"
+                                        // Painel lateral em vez do dropdown pequeno — mesmo padrão de
+                                        // Comercial > Locações > Gerenciar Negociação > Forma de Pagamento.
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Centro de Custo"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -1417,6 +1425,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         valueField="id"
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Conta Financeira"
                                     />
                                 </div>
                                 {/* Dimensão distinta de Centro de Custo (cost_centers_v2) e de Conta
@@ -1431,7 +1441,27 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         valueField="id"
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Plano de Contas"
                                     />
+                                </div>
+                                {/* Vínculo DIRETO, independente da obra: contrato sem obra
+                                    (despesa administrativa) também pode ter empreendimento. */}
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Empreendimento (Opcional)</label>
+                                    <div className="relative group">
+                                        <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <select
+                                            value={formData.empreendimento_id || ''}
+                                            onChange={(e) => setFormData({ ...formData, empreendimento_id: e.target.value || null })}
+                                            className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                        >
+                                            <option value="">Nenhum empreendimento vinculado</option>
+                                            {empreendimentos.map(e => (
+                                                <option key={e.id} value={e.id}>{e.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada (Opcional)</label>
@@ -1485,26 +1515,6 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Identificação da Obra</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">CNO / Matrícula CEI</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ex: 12.345.67890/12"
-                                        value={formData.cno || ''}
-                                        onChange={(e) => setFormData({ ...formData, cno: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Matrícula / Registro da Obra</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Registro alternativo (opcional)"
-                                        value={formData.obra_registration || ''}
-                                        onChange={(e) => setFormData({ ...formData, obra_registration: e.target.value })}
-                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
-                                    />
-                                </div>
                                 <div className="space-y-2">
                                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Gestor da Obra</label>
                                     <input

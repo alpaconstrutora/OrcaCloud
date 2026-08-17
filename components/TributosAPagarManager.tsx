@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check,
     Loader2, Plus, RefreshCw, Search, X, Filter,
-    DollarSign, AlertTriangle, Landmark, MoveHorizontal,
+    DollarSign, AlertTriangle, Landmark, MoveHorizontal, Undo2,
 } from 'lucide-react';
 import { taxPayableService } from '../services/taxPayableService';
 import { taxSettingsService } from '../services/taxSettingsService';
@@ -497,6 +497,25 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         }
     }
 
+    /**
+     * Estorna a baixa: o tributo volta a Previsto. Confirma antes (§14) — é
+     * reversão financeira.
+     *
+     * Até 15/08/2026 não havia caminho de volta: o `<select>` de status só é
+     * renderizado quando `!isPago`. Mesmo buraco existia em Contas a Pagar e em
+     * Contas a Receber.
+     */
+    async function estornar(r: TaxPayable) {
+        const ok = await confirm({
+            title: 'Estornar a baixa deste tributo?',
+            message: 'O tributo volta para Previsto e a data de pagamento é apagada.',
+            variant: 'warning',
+            confirmLabel: 'Estornar',
+        });
+        if (!ok) return;
+        await handleChangeStatus(r.id, 'PREVISTO');
+    }
+
     async function handleChangeStatus(id: string, newStatus: string) {
         setChangingStatus(id);
         try {
@@ -933,6 +952,15 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                                         >
                                                             <Check className="w-3.5 h-3.5" /> Pagar
                                                         </button>
+                                                    )}
+                                                    {isPago && (
+                                                        <ActionIconButton
+                                                            kind="settings"
+                                                            title="Estornar baixa"
+                                                            icon={<Undo2 className="w-4 h-4" />}
+                                                            disabled={changingStatus === r.id}
+                                                            onClick={() => estornar(r)}
+                                                        />
                                                     )}
                                                     {!isPago && (
                                                         <select

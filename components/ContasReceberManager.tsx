@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
-    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal,
+    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle, MoveHorizontal, Undo2,
 } from 'lucide-react';
 import { receivableService } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
@@ -858,6 +858,25 @@ export default function ContasReceberManager({ organizationId, organizations }: 
         }
     }
 
+    /**
+     * Estorna a baixa: o título volta a Previsto. Confirma antes (§14) — é
+     * reversão financeira.
+     *
+     * Até 15/08/2026 não havia caminho de volta: o `<select>` de status é
+     * renderizado só quando `!isRecebido`, então quitar era mão única. Mesmo
+     * buraco existia em Contas a Pagar e em Tributos a Pagar.
+     */
+    async function estornar(r: Receivable) {
+        const ok = await confirm({
+            title: 'Estornar a baixa deste título?',
+            message: 'O título volta para Previsto e a data de recebimento é apagada.',
+            variant: 'warning',
+            confirmLabel: 'Estornar',
+        });
+        if (!ok) return;
+        await handleChangeStatus(r.id, 'PREVISTO');
+    }
+
     async function handleChangeStatus(id: string, newStatus: string) {
         setChangingStatus(id);
         try {
@@ -1314,6 +1333,15 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                                                                 <FileText className="w-3.5 h-3.5" /> Emitir
                                                             </button>
                                                         )
+                                                    )}
+                                                    {isRecebido && (
+                                                        <ActionIconButton
+                                                            kind="settings"
+                                                            title="Estornar baixa"
+                                                            icon={<Undo2 className="w-4 h-4" />}
+                                                            disabled={changingStatus === r.id}
+                                                            onClick={() => estornar(r)}
+                                                        />
                                                     )}
                                                     {!isRecebido && (
                                                         <select

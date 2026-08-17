@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, X,
+    AlertCircle, Building2, Check, ChevronDown, FileText, Loader2, MoveHorizontal, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty } from '../services/payableService';
@@ -464,18 +464,52 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         setSalvando(row.id);
         try {
             await payableService.updateStatus(row.id, novo);
+            /* §22 — o estado local tem que refletir o que o service GRAVOU, não
+               o que a ação se chama. `updateStatus` também zera `status` e
+               `payment_date` ao voltar para um estado aberto; sem espelhar isso
+               aqui a linha continuaria com `status='CONCILIATED'` em memória e a
+               tela mostraria "Quitado" até o próximo reload. */
+            const aberto = novo !== 'PAGO' && novo !== 'CANCELADO'
+                && novo !== 'PARCIAL' && novo !== 'RENEGOCIADO';
             onRowChanged({
                 ...row,
                 business_status: novo,
                 effective_status: novo,
-                status: novo === 'PAGO' ? 'CONCILIATED' : row.status,
+                status: novo === 'PAGO' ? 'CONCILIATED'
+                    : novo === 'CANCELADO' ? 'CANCELLED'
+                    : aberto ? 'PENDING' : row.status,
+                ...(aberto ? { payment_date: null } : {}),
             });
-            notify(novo === 'PAGO' ? 'Parcela marcada como paga.' : 'Status atualizado.');
+            notify(novo === 'PAGO' ? 'Parcela marcada como paga.'
+                : aberto ? 'Baixa estornada.'
+                : 'Status atualizado.');
         } catch (e: unknown) {
             notify('Erro: ' + ((e as Error).message ?? 'Falha ao atualizar status'), 'error');
         } finally {
             setSalvando(null);
         }
+    }
+
+    /**
+     * Estorna a baixa: título volta a Previsto. Confirma antes (§14) porque é
+     * reversão financeira e tem efeito colateral fora desta tela — para título
+     * vindo de boleto, a trigger `trg_sync_boleto_baixa` devolve o boleto a
+     * "Aprovado" e a nota fiscal a "Aprovada".
+     *
+     * Até 15/08/2026 não existia caminho para isso: a linha paga mostrava só o
+     * rótulo "Quitado". Dava para marcar como pago e não para desmarcar.
+     */
+    async function estornar(row: Payable) {
+        const deBoleto = row.source_system === 'BOLETO';
+        const ok = await confirm({
+            title: 'Estornar a baixa deste título?',
+            message: 'O título volta para Previsto e a data de pagamento é apagada.'
+                + (deBoleto ? ' Como veio de um boleto, o boleto volta para "Aprovado" e a nota fiscal para "Aprovada".' : ''),
+            variant: 'warning',
+            confirmLabel: 'Estornar',
+        });
+        if (!ok) return;
+        await marcarStatus(row, 'PREVISTO');
     }
 
     async function excluir(row: Payable) {
@@ -711,9 +745,19 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                         </button>
                                                     )}
                                                     {row.effective_status === 'PAGO' && (
-                                                        <span className="flex items-center gap-1 text-sm font-normal text-green-700">
-                                                            <Check className="w-4 h-4" /> Quitado
-                                                        </span>
+                                                        <>
+                                                            <span className="flex items-center gap-1 text-sm font-normal text-green-700">
+                                                                <Check className="w-4 h-4" /> Quitado
+                                                            </span>
+                                                            {/* O caminho de volta. Sem ele, "Pago" era mão única. */}
+                                                            <ActionIconButton
+                                                                kind="settings"
+                                                                title="Estornar baixa"
+                                                                icon={<Undo2 className="w-4 h-4" />}
+                                                                disabled={salvando === row.id}
+                                                                onClick={() => estornar(row)}
+                                                            />
+                                                        </>
                                                     )}
                                                     {/* Apropriar a imóvel — a mesma Sheet do lote, com um
                                                         lançamento só. Cancelada não tem o que apropriar. */}

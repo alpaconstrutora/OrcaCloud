@@ -22,15 +22,43 @@ import ApropriarImovelSheet from './financeiro/ApropriarImovelSheet';
 export const ORIGEM_PT: Record<string, string> = {
     PURCHASE_ORDER: 'Pedido de compra',
     CONTRACT_PARCELADO: 'Contrato',
+    CONTRACT_AVISTA: 'Contrato à vista',
+    CONTRACT_RECURRING: 'Contrato recorrente',
     CONTRACT_MEASUREMENT: 'Medição',
+    BOLETO: 'Boleto',
+    NFE: 'NF-e',
+    LABOR: 'Folha',
+    PROLABORE: 'Pró-labore',
+    DIVIDENDOS: 'Dividendos',
     PROJECT: 'Obra',
     MANUAL: 'Manual',
 };
-export const origemLabel = (sourceSystem: string) => ORIGEM_PT[sourceSystem] ?? sourceSystem;
+
+/**
+ * Rótulo com degradação legível: origem que ainda não está no mapa vira
+ * "Contract Avista" em vez de `CONTRACT_AVISTA`. Até 15/08/2026 o fallback era
+ * o código cru, e o mapa tinha 5 das 12 origens que o sistema grava — Boleto,
+ * NF-e, Folha, Pró-labore e Dividendos apareciam em caixa alta.
+ */
+export const origemLabel = (sourceSystem: string) => {
+    if (ORIGEM_PT[sourceSystem]) return ORIGEM_PT[sourceSystem];
+    if (!sourceSystem) return '—';
+    return sourceSystem
+        .toLowerCase()
+        .split('_')
+        .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(' ');
+};
 
 export const STATUS_PT: Record<string, string> = {
     PREVISTO: 'Previsto',
+    /* AGUARDANDO_APROVACAO e BLOQUEADO vêm da alçada
+       (financialApprovalService). Passaram a aparecer de verdade em Contas a
+       Pagar quando o boleto deixou de se autoaprovar (15/08/2026) — antes o
+       vocabulário existia no banco mas nenhuma parcela chegava aqui com ele. */
+    AGUARDANDO_APROVACAO: 'Aguardando aprovação',
     APROVADO: 'Aprovado',
+    BLOQUEADO: 'Bloqueado',
     VENCIDO: 'Vencido',
     PAGO: 'Pago',
     PARCIAL: 'Parcial',
@@ -41,6 +69,8 @@ export const STATUS_PT: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
     PAGO: 'text-green-700',
     APROVADO: 'text-blue-700',
+    AGUARDANDO_APROVACAO: 'text-orange-700',
+    BLOQUEADO: 'text-red-700',
     PREVISTO: 'text-yellow-700',
     VENCIDO: 'text-red-600',
     PARCIAL: 'text-amber-700',
@@ -97,12 +127,16 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     centro_custo: 180, plano_contas: 180, imovel: 190, actions: 200,
 };
 
-const STATUS_FILTROS = ['all', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
+const STATUS_FILTROS = ['all', 'AGUARDANDO_APROVACAO', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
 type StatusFiltro = typeof STATUS_FILTROS[number];
 
-// Origens possíveis de uma parcela — mesmo vocabulário de `ORIGEM_PT` acima.
-const ORIGEM_FILTROS = ['all', ...Object.keys(ORIGEM_PT)] as const;
-type OrigemFiltro = typeof ORIGEM_FILTROS[number];
+/* O filtro de Origem é DERIVADO das linhas carregadas (ver `origensPresentes`
+   no componente), não de uma lista fixa. Até 15/08/2026 era
+   `Object.keys(ORIGEM_PT)`, e como o mapa tinha 5 das 12 origens que o sistema
+   grava, Boleto/NF-e/Folha/Pró-labore/Dividendos não eram filtráveis — e
+   ninguém percebia, porque a lista parecia completa. Derivar dos dados faz
+   origem nova aparecer sozinha. */
+type OrigemFiltro = string;
 
 const hoje = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
@@ -295,6 +329,16 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         credor_display: credorDisplay(r),
     })), [rows, costCenterNameById, planoContasNameById, imovelLabel, credorDisplay]);
 
+    /* Origens realmente presentes nos dados, ordenadas pelo rótulo. Se o filtro
+       persistido apontar para uma origem que sumiu do recorte atual, ele é
+       mantido na lista para o <select> não cair calado numa opção inexistente
+       (o usuário veria "all" no controle e a tabela filtrada). */
+    const origensPresentes = useMemo(() => {
+        const presentes = new Set(rows.map(r => r.source_system).filter(Boolean) as string[]);
+        if (origemFiltro !== 'all') presentes.add(origemFiltro);
+        return [...presentes].sort((a, b) => origemLabel(a).localeCompare(origemLabel(b), 'pt-BR'));
+    }, [rows, origemFiltro]);
+
     const tableColumns = useTableColumns(PARCELAS_COLUMNS, 'contasPagarParcelasColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasPagarParcelasColWidths');
     // Largura = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
@@ -476,23 +520,31 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     {/* Filtro rápido de status em controle segmentado (§5.2) */}
                     <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                         {STATUS_FILTROS.map(s => {
-                            const activeColor = s === 'VENCIDO' ? 'text-red-600' : s === 'PAGO' ? 'text-emerald-600' : s === 'PREVISTO' ? 'text-amber-600' : 'text-gray-900';
+                            const activeColor = s === 'VENCIDO' ? 'text-red-600'
+                                : s === 'PAGO' ? 'text-emerald-600'
+                                : s === 'PREVISTO' ? 'text-amber-600'
+                                : s === 'AGUARDANDO_APROVACAO' ? 'text-orange-600'
+                                : 'text-gray-900';
                             return (
                                 <button
                                     key={s}
                                     onClick={() => setStatusFiltro(s)}
                                     className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFiltro === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-700 hover:text-gray-900'}`}
                                 >
-                                    {s === 'all' ? 'Todos' : STATUS_PT[s]}
+                                    {/* "Aguardando aprovação" por extenso estoura o trilho
+                                        segmentado; a coluna Status da tabela mostra o rótulo
+                                        completo (STATUS_PT). */}
+                                    {s === 'all' ? 'Todos' : s === 'AGUARDANDO_APROVACAO' ? 'Aguardando' : STATUS_PT[s]}
                                 </button>
                             );
                         })}
                     </div>
 
                     {/* Origem — filtro de FONTE do título (Pedido de compra, Contrato,
-                        Medição, Manual), não escopo (§5.3): não muda "quais títulos devo?",
-                        só recorta de onde vieram. Dropdown, não segmentado — 5 opções
-                        não cabem como pílulas sem quebrar linha. */}
+                        Boleto, Folha, NF-e…), não escopo (§5.3): não muda "quais títulos
+                        devo?", só recorta de onde vieram. Dropdown, não segmentado — as
+                        opções não cabem como pílulas sem quebrar linha, e a lista é
+                        derivada dos dados, então o tamanho varia por organização. */}
                     <div className="relative flex items-center shrink-0">
                         <Tag className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                         <select
@@ -501,7 +553,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                             className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
                         >
                             <option value="all">Todas as origens</option>
-                            {ORIGEM_FILTROS.filter(o => o !== 'all').map(o => (
+                            {origensPresentes.map(o => (
                                 <option key={o} value={o}>{origemLabel(o)}</option>
                             ))}
                         </select>

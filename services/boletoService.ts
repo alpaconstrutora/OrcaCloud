@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco } from '../utils/febrabanRules';
+import { financialApprovalService } from './financialApprovalService';
 import type {
     Boleto,
     BoletoStatus,
@@ -469,13 +470,19 @@ export const boletoService = {
 
         if (!txExistente) {
             const hoje = new Date().toISOString().slice(0, 10);
-            await supabase.from('internal_transactions').insert({
+            /* O título NÃO nasce aprovado. Até 15/08/2026 este insert gravava
+               `approval_status: 'APROVADO'`, então todo boleto se autodeclarava
+               aprovado na alçada e nunca entrava em
+               `financialApprovalService.listPendingQueue` (que filtra
+               `approval_status='PENDENTE'`). Decisão do usuário em 15/08/2026:
+               título vindo de boleto DEVE passar pela alçada — aprovar o boleto
+               é o portão que CRIA o título, não o que libera o pagamento. */
+            const { data: txNova } = await supabase.from('internal_transactions').insert({
                 organization_id:  organizationId,
                 source_system:    'BOLETO',
                 reference_id:     boletoId,
                 direction:        'DEBIT',
                 status:           'PENDING',
-                approval_status:  'APROVADO',
                 amount:           boletoRow.valor,
                 transaction_date: hoje,
                 due_date:         boletoRow.vencimento ?? null,
@@ -485,7 +492,22 @@ export const boletoService = {
                 supplier_id:      boletoRow.supplier_id ?? null,
                 project_id:       boletoRow.project_id ?? null,
                 cost_center_id:   boletoRow.cost_center_id ?? null,
-            });
+            }).select('id').single();
+
+            /* Submete à alçada: resolve os níveis pela faixa de valor
+               (`fn_resolve_approval_levels`) e grava
+               `approval_status='PENDENTE'` + `business_status='AGUARDANDO_APROVACAO'`.
+               Sem faixa configurada, `approvalService.submit` assume 1 nível.
+               Não derruba a aprovação do boleto se falhar: o título já existe e
+               pode ser submetido depois pela tela de Aprovações — perder o
+               boleto aprovado seria pior que um título fora da fila. */
+            if (txNova?.id) {
+                try {
+                    await financialApprovalService.submitForApproval(txNova.id, organizationId);
+                } catch (err) {
+                    console.error('[boletoService] submeter titulo a alcada:', err);
+                }
+            }
         }
 
         const { data, error } = await supabase

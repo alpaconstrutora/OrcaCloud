@@ -138,10 +138,14 @@ export const approvalService = {
      *    prendia na fila justamente a maioria dos lançamentos (os boletos reais
      *    iam de R$ 108 a R$ 2.050). Esses passam `'liberar'`.
      *
-     *  • Processo (`process_step`): a etapa pode ser aprovação NÃO monetária,
-     *    submetida com `amount = 0`. Aí "fora de faixa" não quer dizer "barato",
-     *    quer dizer "não é sobre dinheiro" — e continua precisando de gente.
-     *    Esse mantém o default `'exigir1'`.
+     *  • Processo (`process_step`): decide **por etapa**, em
+     *    `processService.submitStepApproval`. Etapa com valor (`amount > 0`) lê
+     *    "fora de faixa" como abaixo do piso e passa `'liberar'`, igual às
+     *    demais. Etapa NÃO monetária chega com `amount = 0`, e aí "fora de
+     *    faixa" não quer dizer "barato" — quer dizer que a pergunta sobre valor
+     *    não se aplica. Essa mantém `'exigir1'`: alguém modelou o processo
+     *    dizendo que ali precisa de aprovação, e liberar sozinho faria o portão
+     *    se autoaprovar.
      *
      * O default é `'exigir1'` de propósito: preserva o comportamento histórico
      * para qualquer chamador que não tenha sido revisado.

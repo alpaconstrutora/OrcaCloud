@@ -458,7 +458,26 @@ export const processService = {
     // ── Etapas de aprovação — delega 100% para approvalService ─
 
     async submitStepApproval(stepId: string, instanceId: string, organizationId: string, amount: number): Promise<void> {
-        await approvalService.submit('process_step', stepId, {}, { organizationId, amount });
+        /* `semFaixa` depende de a etapa TER valor, e por isso é decidido aqui e
+           não no `approvalService` (ver a explicação longa lá).
+           A etapa chega com `step.amount ?? 0` (ProcessosModule:228), e o zero
+           tem dois significados diferentes:
+
+             amount > 0  etapa monetária. "Fora de faixa" quer dizer ABAIXO DO
+                         PISO da alçada — mesma leitura de título/contrato/
+                         pedido, então dispensa aprovação.
+             amount = 0  etapa NÃO monetária ("Aprovação do jurídico",
+                         "Validação do RH"). "Fora de faixa" não quer dizer
+                         barato: quer dizer que a pergunta sobre valor não se
+                         aplica. E alguém modelou o processo dizendo que ali
+                         PRECISA de aprovação — liberar sozinho faria o portão
+                         se autoaprovar e a instância ficar AGUARDANDO_APROVACAO
+                         sem nunca ter esperado ninguém. */
+        await approvalService.submit('process_step', stepId, {}, {
+            organizationId,
+            amount,
+            semFaixa: amount > 0 ? 'liberar' : 'exigir1',
+        });
         await supabase.from('process_instances').update({ status: 'AGUARDANDO_APROVACAO' as ProcessInstanceStatus }).eq('id', instanceId);
         await logAction(instanceId, undefined, 'APPROVAL_SUBMITTED', { metadata: { step_id: stepId, amount } });
     },

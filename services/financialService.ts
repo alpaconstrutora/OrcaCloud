@@ -79,7 +79,13 @@ export const financialService = {
                 party_name: sync?.partyName || newTx.supplier || null,
                 supplier_id: sync?.supplierId ?? null,
                 status: newTx.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
-                business_status: newTx.status === 'PAID' ? 'PAGO' : 'PREVISTO'
+                business_status: newTx.status === 'PAID' ? 'PAGO' : 'PREVISTO',
+                /* Nasce conciliado => nasce com a data da baixa. A trigger
+                   `trg_payment_date_na_baixa` (20270909000002) é BEFORE UPDATE e
+                   não pega INSERT. `txDate` é a data digitada no formulário, que
+                   para lançamento marcado como pago é a data do pagamento
+                   (confirmado com o usuário em 15/08/2026). */
+                payment_date: newTx.status === 'PAID' ? txDate : null
             });
             if (error) throw error;
         } catch (e) {

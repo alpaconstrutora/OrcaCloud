@@ -102,7 +102,18 @@ export const financialSyncService = {
                     // Ponte ÒPURA: custo de obra carrega o fornecedor (FK) capturado no form.
                     supplier_id: tx.type === 'EXPENSE' ? (tx.supplierId || null) : null,
                     category: tx.category || 'Despesa de Obra',
-                    status: tx.status === 'PAID' ? 'CONCILIATED' : 'PENDING'
+                    status: tx.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
+                    /* Lançamento marcado como PAGO tem que trazer a data da baixa.
+                       Sem isto, 277 títulos ficaram CONCILIATED com `payment_date`
+                       nulo (levantamento de 15/08/2026) e sumiam de qualquer
+                       relatório por data de pagamento.
+                       `tx.date` é a data que a pessoa digita no formulário da obra
+                       — confirmado com o usuário em 15/08/2026 que, para despesa
+                       lançada como paga, ela É a data do pagamento.
+                       A trigger `trg_payment_date_na_baixa` (20270909000002) não
+                       cobre este caso: ela é BEFORE UPDATE, e aqui a linha nasce
+                       já conciliada num upsert. */
+                    payment_date: tx.status === 'PAID' ? tx.date : null,
                 });
             });
         }

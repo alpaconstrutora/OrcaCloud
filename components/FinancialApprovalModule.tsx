@@ -228,7 +228,10 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                             <div className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-0.5">
-                                        <span className="text-xs font-black text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                        {/* §8 — texto simples colorido, sem pílula/fundo/uppercase.
+                                            Era `rounded-full uppercase font-black bg-gray-50`. O mesmo
+                                            rótulo já aparece como texto puro na linha 130 desta tela. */}
+                                        <span className="text-sm font-normal text-gray-500 flex-shrink-0">
                                             {ENTITY_TAG[item.entity]}
                                         </span>
                                         <p className="text-sm font-bold text-gray-900 truncate">{item.title}</p>
@@ -390,9 +393,23 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                 <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
             ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
+                    {/* A mensagem antiga dizia "crie a primeira para ATIVAR o fluxo
+                        de aprovação" — e passou a mentir em 15/08/2026, quando o
+                        boleto deixou de se autoaprovar. Sem faixa,
+                        `fn_resolve_approval_levels` não devolve linha e
+                        `approvalService.submit` cai no default de 1 nível: o fluxo
+                        está ativo, e os títulos ficam parados esperando alguém.
+                        Estado vazio aqui é um AVISO, não um convite. */}
                     {items.length === 0 && (
-                        <div className="p-8 text-center text-sm text-gray-400">
-                            Nenhuma faixa configurada. Crie a primeira para ativar o fluxo de aprovação.
+                        <div className="p-8 text-center">
+                            <p className="text-sm font-medium text-amber-700">
+                                Nenhuma faixa configurada — os títulos estão exigindo 1 nível de aprovação.
+                            </p>
+                            <p className="text-sm text-gray-400 mt-1.5">
+                                Sem faixa, o sistema assume 1 nível para qualquer valor. Todo título enviado
+                                para aprovação fica parado na fila até alguém aprovar. Crie as faixas para
+                                definir a partir de que valor cada nível é exigido.
+                            </p>
                         </div>
                     )}
                     {items.map(item => (

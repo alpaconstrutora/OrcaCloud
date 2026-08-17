@@ -299,8 +299,16 @@ export const taxPayableService = {
             business_status: newStatus,
             updated_at: new Date().toISOString(),
         };
-        if (newStatus === 'PAGO') updates.status = 'CONCILIATED';
-        if (newStatus === 'CANCELADO') updates.status = 'CANCELLED';
+        if (newStatus === 'PAGO')           updates.status = 'CONCILIATED';
+        else if (newStatus === 'CANCELADO') updates.status = 'CANCELLED';
+        else {
+            /* Só resta 'PREVISTO' — estado aberto. Espelho de
+               `payableService.updateStatus`: desfazer a baixa também em `status`
+               e `payment_date`, senão a view (que desde 20270909000000 lê os
+               dois) mantém o tributo como Pago depois de desmarcado. */
+            updates.status = 'PENDING';
+            updates.payment_date = null;
+        }
 
         const { error } = await supabase
             .from('internal_transactions')

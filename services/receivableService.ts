@@ -55,8 +55,16 @@ export const receivableService = {
             updated_at: new Date().toISOString(),
         };
         // Sincroniza status de conciliação quando confirmado
-        if (newStatus === 'RECEBIDO') updates.status = 'CONCILIATED';
-        if (newStatus === 'CANCELADO') updates.status = 'CANCELLED';
+        if (newStatus === 'RECEBIDO')       updates.status = 'CONCILIATED';
+        else if (newStatus === 'CANCELADO') updates.status = 'CANCELLED';
+        else if (newStatus !== 'PARCIAL' && newStatus !== 'RENEGOCIADO') {
+            /* Espelho de `payableService.updateStatus`: voltar para estado aberto
+               (Previsto/Emitido/Enviado) tem que desfazer a baixa em `status` e
+               `payment_date`, senão a view — que desde 20270909000000 lê os dois
+               campos — mantém o título como Recebido. */
+            updates.status = 'PENDING';
+            updates.payment_date = null;
+        }
 
         const { error } = await supabase
             .from('internal_transactions')

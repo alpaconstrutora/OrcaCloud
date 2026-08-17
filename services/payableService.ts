@@ -63,8 +63,21 @@ export const payableService = {
             business_status: newStatus,
             updated_at: new Date().toISOString(),
         };
-        if (newStatus === 'PAGO')      updates.status = 'CONCILIATED';
-        if (newStatus === 'CANCELADO') updates.status = 'CANCELLED';
+        if (newStatus === 'PAGO')           updates.status = 'CONCILIATED';
+        else if (newStatus === 'CANCELADO') updates.status = 'CANCELLED';
+        else if (newStatus !== 'PARCIAL' && newStatus !== 'RENEGOCIADO') {
+            /* Volta para um estado ABERTO (Previsto/Aprovado) precisa desfazer a
+               baixa também em `status` e `payment_date` — senão sobra o estado
+               contraditório `status='CONCILIATED'` + `business_status='PREVISTO'`.
+               Isso passou despercebido enquanto `effective_status` derivava só de
+               `business_status`; desde 20270909000000 a view também lê `status`,
+               e o título ficava preso em Pago mesmo depois de desmarcado.
+               `PARCIAL`/`RENEGOCIADO` ficam de fora de propósito: a view os
+               respeita explicitamente e eles guardam um pagamento parcial real.
+               Espelha o que `handleUndoMatch` (BankReconciliation) já fazia certo. */
+            updates.status = 'PENDING';
+            updates.payment_date = null;
+        }
 
         const { error } = await supabase
             .from('internal_transactions')

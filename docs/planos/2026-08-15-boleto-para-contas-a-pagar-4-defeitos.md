@@ -225,6 +225,39 @@ como atrasadas. É a medida do estrago que o defeito A causava.
    como vencendo nos próximos meses. O item 3 provou que o sistema recebe documentos
    de 9 anos atrás, então a faixa não é hipotética.
 
+### REGRESSÃO introduzida pelo defeito A, encontrada em 2026-08-15
+
+O usuário desfez uma conciliação e isso expôs um efeito colateral da correção da view.
+
+`payableService.updateStatus` (e os espelhos em `receivableService` e
+`taxPayableService`) só sabiam empurrar o status para frente:
+
+```ts
+if (newStatus === 'PAGO')      updates.status = 'CONCILIATED';
+if (newStatus === 'CANCELADO') updates.status = 'CANCELLED';
+// voltar para PREVISTO não mexia em `status` — ficava CONCILIATED
+```
+
+Enquanto `effective_status` derivava só de `business_status`, isso era inofensivo:
+desmarcar "Pago" gravava `PREVISTO` e a tela obedecia. **Depois de
+`20270909000000`, a view lê os dois campos** — e o estado contraditório
+`status='CONCILIATED'` + `business_status='PREVISTO'` volta a ser lido como **PAGO**.
+Ou seja: dava para marcar como pago, mas não para desmarcar.
+
+Corrigido nos três serviços: voltar para estado aberto agora zera `status` para
+`PENDING` e `payment_date` para `NULL`. `PARCIAL`/`RENEGOCIADO` ficam de fora — a
+view os respeita explicitamente e eles guardam um pagamento parcial real.
+
+**A tela de Conciliação já fazia certo**: `handleUndoMatch`
+(`components/BankReconciliation.tsx:2064`) sempre devolveu `status='PENDING'`,
+`payment_date=NULL` e reverteu boleto+invoice. Foi o modelo da correção — e é por
+isso que o caminho que o usuário usou não quebrou.
+
+Junto, `20270909000003` torna a trigger do boleto **reversível**: a de
+`20270909000001` só tratava a ida, então desmarcar "Pago" pelo Contas a Pagar
+deixava o boleto preso em 'pago'. Agora a função decide a direção, e na volta só
+desfaz o que ela mesma fez (não encosta em 'cancelado'/'rascunho'/'revisao').
+
 ### O que NÃO foi verificado
 
 Nada foi aberto no navegador. Os itens 3 e 4 do plano (alçada e origens) têm o

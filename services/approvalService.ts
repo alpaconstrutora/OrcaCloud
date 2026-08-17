@@ -126,12 +126,31 @@ export const approvalService = {
      * entidades cujo escopo/valor não estão em colunas simples (ex.: purchase_orders,
      * escopada por empresa_id e com valor derivado de items[].total).
      * Retorna a linha atualizada.
+     *
+     * ── `semFaixa`: o que fazer quando NENHUMA faixa cobre o valor ───────────
+     *
+     * `fn_resolve_approval_levels` não devolve linha quando o valor está fora de
+     * todas as faixas. Isso significa coisas OPOSTAS conforme a entidade:
+     *
+     *  • Dinheiro (título, contrato, pedido): a ausência de faixa É a regra —
+     *    "abaixo do piso da alçada não precisa de aprovação". A config real
+     *    desta base começa em R$ 5.000, e tratar isso como "exige 1 nível"
+     *    prendia na fila justamente a maioria dos lançamentos (os boletos reais
+     *    iam de R$ 108 a R$ 2.050). Esses passam `'liberar'`.
+     *
+     *  • Processo (`process_step`): a etapa pode ser aprovação NÃO monetária,
+     *    submetida com `amount = 0`. Aí "fora de faixa" não quer dizer "barato",
+     *    quer dizer "não é sobre dinheiro" — e continua precisando de gente.
+     *    Esse mantém o default `'exigir1'`.
+     *
+     * O default é `'exigir1'` de propósito: preserva o comportamento histórico
+     * para qualquer chamador que não tenha sido revisado.
      */
     async submit(
         entity: ApprovalEntity,
         id: string,
         extra: Record<string, unknown> = {},
-        opts: { organizationId?: string; amount?: number } = {},
+        opts: { organizationId?: string; amount?: number; semFaixa?: 'liberar' | 'exigir1' } = {},
     ): Promise<any> {
         const meta = ENTITY_META[entity];
 
@@ -155,6 +174,25 @@ export const approvalService = {
         const amount = opts.amount ?? (Number((row as any)[meta.valueField]) || 0);
 
         const cfg = await this.resolveRequiredLevels(organizationId, amount);
+
+        // Fora de todas as faixas + chamador que trata isso como "abaixo da
+        // alçada": libera sem passar pela fila. `extra` NÃO é aplicado — ele
+        // carrega o estado de espera (ex.: business_status='AGUARDANDO_APROVACAO'),
+        // que seria mentira num item que nunca entrou na fila.
+        if (!cfg && opts.semFaixa === 'liberar') {
+            const { data, error } = await supabase
+                .from(meta.table)
+                .update({ approval_status: 'APROVADO' as ApprovalStatus })
+                .eq('id', id)
+                .select()
+                .single();
+            if (error) {
+                console.error('[approvalService] submit (liberar sem faixa):', error);
+                throw new Error(`Erro ao liberar item fora da alçada: ${error.message}`);
+            }
+            return data;
+        }
+
         const levels = cfg?.required_levels ?? 1;
 
         const { data, error } = await supabase

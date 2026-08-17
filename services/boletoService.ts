@@ -500,37 +500,19 @@ export const boletoService = {
                 cost_center_id:   boletoRow.cost_center_id ?? null,
             }).select('id').single();
 
-            /* Alçada: só entra na fila quem CAI numa faixa configurada.
-               `approvalService.submit` faz `cfg?.required_levels ?? 1`, ou seja,
-               trata "nenhuma faixa cobre este valor" como "exige 1 aprovação" —
-               o inverso da política. A configuração real desta base começa em
-               R$ 5.000, o que significa "abaixo disso não precisa de aprovação";
-               com o default, todo boleto pequeno (a esmagadora maioria: os
-               encontrados em 15/08/2026 iam de R$ 108 a R$ 2.050) ficaria preso
-               na fila para sempre.
-               Por isso resolvemos a faixa ANTES: sem faixa, o título nasce
-               liberado (`approval_status='APROVADO'`) e `business_status` fica
-               nulo, aparecendo como "Previsto" — um título aberto normal.
-               Não mexo no default do `approvalService` porque ele serve também
-               contrato/pedido/processo, e mudá-lo às cegas é risco maior que o
-               problema.
-               Nada aqui derruba a aprovação do boleto: o título já existe e pode
-               ser submetido depois pela tela de Aprovações — perder o boleto
-               aprovado seria pior que um título fora da fila. */
+            /* Alçada: só entra na fila quem CAI numa faixa configurada — quem
+               fica abaixo do piso nasce liberado. A regra vive em
+               `approvalService.submit` (`semFaixa: 'liberar'`, ligado em
+               `financialApprovalService.submitForApproval`), não aqui: ela vale
+               igual para título, contrato e pedido de compra.
+               Não derruba a aprovação do boleto se falhar: o título já existe e
+               pode ser submetido depois pela tela de Aprovações — perder o
+               boleto aprovado seria pior que um título fora da fila. */
             if (txNova?.id) {
                 try {
-                    const faixa = await financialApprovalService.resolveRequiredLevels(
-                        organizationId, Number(boletoRow.valor) || 0,
-                    );
-                    if (faixa) {
-                        await financialApprovalService.submitForApproval(txNova.id, organizationId);
-                    } else {
-                        await supabase.from('internal_transactions')
-                            .update({ approval_status: 'APROVADO' })
-                            .eq('id', txNova.id);
-                    }
+                    await financialApprovalService.submitForApproval(txNova.id, organizationId);
                 } catch (err) {
-                    console.error('[boletoService] resolver/submeter titulo a alcada:', err);
+                    console.error('[boletoService] submeter titulo a alcada:', err);
                 }
             }
         }

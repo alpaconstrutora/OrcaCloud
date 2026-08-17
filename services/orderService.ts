@@ -617,7 +617,9 @@ export const orderService = {
         if (error) throw error;
         const total = ((po?.items as PurchaseOrderItem[]) || [])
             .reduce((s, i) => s + (i.total || 0), 0);
-        await approvalService.submit('purchase_order', orderId, {}, { organizationId, amount: total });
+        // `semFaixa: 'liberar'` — pedido abaixo do piso da alçada não entra na
+        // fila. Ver a explicação em `approvalService.submit`.
+        await approvalService.submit('purchase_order', orderId, {}, { organizationId, amount: total, semFaixa: 'liberar' });
     },
 
     async approveOrder(orderId: string, level: 1 | 2, approvedBy: string, notes?: string): Promise<void> {

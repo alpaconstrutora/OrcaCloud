@@ -2689,7 +2689,9 @@ export const contractService = {
     // (antes ficava no default 1), unificando a política com o financeiro.
 
     submitForApproval: async (contractId: string): Promise<Contract> => {
-        return await approvalService.submit('contract', contractId) as Contract;
+        // `semFaixa: 'liberar'` — contrato abaixo do piso da alçada não entra na
+        // fila. Ver a explicação em `approvalService.submit`.
+        return await approvalService.submit('contract', contractId, {}, { semFaixa: 'liberar' }) as Contract;
     },
 
     approveContract: async (

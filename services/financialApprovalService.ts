@@ -89,10 +89,12 @@ export const financialApprovalService = {
     // preservadas para não quebrar os chamadores (Regra de Ouro 12).
 
     async submitForApproval(transactionId: string, _organizationId?: string): Promise<void> {
+        // `semFaixa: 'liberar'` — título abaixo do piso da alçada não entra na
+        // fila. Ver a explicação em `approvalService.submit`.
         await approvalService.submit('transaction', transactionId, {
             business_status: 'AGUARDANDO_APROVACAO',
             updated_at:      new Date().toISOString(),
-        });
+        }, { semFaixa: 'liberar' });
     },
 
     async approve(

@@ -111,6 +111,44 @@ const stripComments = (sql: string): string =>
 
 interface Violation { file: string; view: string; missing: string[] }
 
+/** `REVOKE ... ON <view> ... FROM anon` — nominal, não `FROM PUBLIC`. */
+const revokeAnonRe = (view: string) => new RegExp(
+    `REVOKE[\\s\\S]{0,80}?ON\\s+(?:TABLE\\s+)?(?:public\\.)?"?${view}"?[\\s\\S]{0,80}?FROM[^;]*\\banon\\b`,
+    'i',
+);
+
+/**
+ * Views que TÊM o `REVOKE ... FROM anon` em algum arquivo do repositório.
+ *
+ * Serve para distinguir `CREATE OR REPLACE VIEW` de `CREATE VIEW`:
+ *
+ *   • `CREATE VIEW` cria objeto novo — o `ALTER DEFAULT PRIVILEGES` do Supabase
+ *     concede a `anon` na hora, então o REVOKE é obrigatório NO MESMO ARQUIVO.
+ *   • `CREATE OR REPLACE VIEW` sobre view existente **preserva os grants**. Se
+ *     a criação original já revogou `anon`, o replace não reabre nada, e exigir
+ *     o REVOKE de novo é ruído.
+ *
+ * A distinção não afrouxa a trava: um `CREATE OR REPLACE` de view que NUNCA foi
+ * protegida em lugar nenhum continua reprovando, porque aí ele age como
+ * `CREATE` e não há REVOKE em arquivo algum.
+ *
+ * `security_invoker` segue exigido nos dois casos — ao contrário dos grants,
+ * as reloptions não sobrevivem a um replace sem cláusula `WITH`.
+ */
+const viewsProtegidasEmAlgumArquivo = (() => {
+    const protegidas = new Map<string, Set<string>>();
+    for (const file of sqlFiles(MIGRATIONS_DIR)) {
+        const sql = stripComments(readFileSync(file, 'utf8'));
+        const rel = path.relative(path.join(__dirname, '..'), file).replace(/\\/g, '/');
+        for (const m of sql.matchAll(/REVOKE[\s\S]{0,80}?ON\s+(?:TABLE\s+)?(?:public\.)?"?([a-z0-9_]+)"?[\s\S]{0,80}?FROM[^;]*\banon\b/gi)) {
+            const view = m[1].toLowerCase();
+            if (!protegidas.has(view)) protegidas.set(view, new Set());
+            protegidas.get(view)!.add(rel);
+        }
+    }
+    return protegidas;
+})();
+
 const scan = (): Violation[] => {
     const out: Violation[] = [];
 
@@ -127,6 +165,7 @@ const scan = (): Violation[] => {
             const view = m[1].toLowerCase();
             if (ALLOWLIST.has(view)) continue;
 
+            const isOrReplace = /OR\s+REPLACE/i.test(m[0]);
             const missing: string[] = [];
 
             // security_invoker: na própria criação ou num ALTER no mesmo arquivo.
@@ -135,12 +174,12 @@ const scan = (): Violation[] => {
                 new RegExp(`ALTER\\s+VIEW\\s+(?:public\\.)?"?${view}"?[\\s\\S]{0,200}?security_invoker\\s*=\\s*on`, 'i').test(sql);
             if (!temInvoker) missing.push('security_invoker = on');
 
-            // REVOKE nominal de anon nesta view.
-            const temRevokeAnon = new RegExp(
-                `REVOKE[\\s\\S]{0,80}?ON\\s+(?:TABLE\\s+)?(?:public\\.)?"?${view}"?[\\s\\S]{0,80}?FROM[^;]*\\banon\\b`,
-                'i',
-            ).test(sql);
-            if (!temRevokeAnon) missing.push('REVOKE ... FROM anon');
+            // REVOKE nominal de anon nesta view, neste arquivo — ou, para um
+            // `CREATE OR REPLACE` (que preserva grants), em qualquer arquivo.
+            const temRevokeAnon = revokeAnonRe(view).test(sql);
+            const protegidaEmOutro = isOrReplace
+                && [...(viewsProtegidasEmAlgumArquivo.get(view) ?? [])].some(f => f !== rel);
+            if (!temRevokeAnon && !protegidaEmOutro) missing.push('REVOKE ... FROM anon');
 
             if (missing.length > 0) out.push({ file: rel, view, missing });
         }

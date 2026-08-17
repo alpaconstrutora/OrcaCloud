@@ -97,6 +97,8 @@ export interface Boleto {
 
     project_id?: string;
     cost_center_id?: string;
+    /** Plano de Contas (`plano_de_contas`) — dimensão distinta de cost_center_id. */
+    plano_de_contas_id?: string;
     supplier_id?: string;
     chart_of_accounts_id?: string;
     invoice_id?: string;

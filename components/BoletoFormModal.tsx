@@ -5,6 +5,7 @@ import {
     ThumbsUp, Ban, Trash2, UserPlus,
 } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
 import { boletoService } from '../services/boletoService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
@@ -47,7 +48,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [linhaManual, setLinhaManual] = useState('');
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
-    const [charts] = useState<{ id: string; name: string }[]>([]); // aposentado — chart_of_accounts_id não é mais populado
+    const [planoContas, setPlanoContas] = useState<CostCenter[]>([]);
     const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
     const [documentoBlobUrl, setDocumentoBlobUrl] = useState<string | null>(null);
 
@@ -58,7 +59,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     // Form fields
     const [supplierId, setSupplierId] = useState<string>(initial?.supplier_id ?? '');
     const [costCenterId, setCostCenterId] = useState<string>(initial?.cost_center_id ?? '');
-    const [chartId] = useState<string>(''); // aposentado — não popula chart_of_accounts_id em novos boletos
+    const [planoDeContasId, setPlanoDeContasId] = useState<string>(initial?.plano_de_contas_id ?? '');
     const [selectedProjectId, setSelectedProjectId] = useState<string>(initial?.project_id ?? projectId ?? '');
     const [observacoes, setObservacoes] = useState<string>(initial?.observacoes ?? '');
     const [valor, setValor] = useState<string>(initial?.valor != null ? String(initial.valor) : '');
@@ -83,10 +84,12 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         Promise.all([
             supplierService.listSuppliers(organizationId),
             financialRegistryService.listCostCenters(organizationId),
+            financialRegistryService.listPlanoContas(organizationId),
             projectService.listProjects().catch(() => []),
-        ]).then(([sup, cc, projs]) => {
+        ]).then(([sup, cc, pc, projs]) => {
             setSuppliers(sup || []);
             setCostCenters(cc || []);
+            setPlanoContas(pc || []);
             type ProjectRow = { id: string; name: string; settings?: { classification?: string } };
             setProjects(((projs || []) as ProjectRow[])
                 .filter((p) =>
@@ -204,6 +207,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             const updated = await boletoService.associar(result.boleto.id, organizationId, {
                 supplier_id:          supplierId || undefined,
                 cost_center_id:       costCenterId || undefined,
+                plano_de_contas_id:   planoDeContasId || undefined,
                 project_id:           selectedProjectId || projectId || undefined,
                 observacoes:          observacoes || undefined,
                 valor:                valor ? Number(valor) : undefined,
@@ -270,6 +274,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             const updated = await boletoService.associar(boleto.id, organizationId, {
                 supplier_id: supplierId || undefined,
                 cost_center_id: costCenterId || undefined,
+                plano_de_contas_id: planoDeContasId || undefined,
                 project_id: selectedProjectId || projectId || boleto.project_id,
                 observacoes: observacoes || undefined,
                 valor: valor ? Number(valor) : undefined,
@@ -417,10 +422,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                             )}
                         </h2>
                         {boleto && (
-                            <p className="text-xs text-gray-500 mt-1 font-medium uppercase tracking-wider">
-                                Status: <span className="text-gray-900">{boleto.status}</span>
-                                {' · '}
-                                Confiança: {boleto.confidence_score ?? 0}%
+                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                                <span>Status:</span>
+                                <span className={`text-sm font-normal ${STATUS_TEXT_COLORS[boleto.status]}`}>
+                                    {STATUS_LABELS[boleto.status]}
+                                </span>
+                                <span className="text-gray-300">·</span>
+                                <span>Confiança: {boleto.confidence_score ?? 0}%</span>
                             </p>
                         )}
                         </div>
@@ -560,11 +568,29 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                 </FormField>
 
                                 <FormField label="Centro de Custo">
-                                    <select value={costCenterId} onChange={e => setCostCenterId(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-                                        <option value="">—</option>
-                                        {costCenters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                    </select>
+                                    <HierarchicalSelect
+                                        items={costCenters}
+                                        value={costCenterId}
+                                        onChange={setCostCenterId}
+                                        valueField="id"
+                                        placeholder="—"
+                                        hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Centro de Custo"
+                                    />
+                                </FormField>
+
+                                <FormField label="Plano de Contas">
+                                    <HierarchicalSelect
+                                        items={planoContas}
+                                        value={planoDeContasId}
+                                        onChange={setPlanoDeContasId}
+                                        valueField="id"
+                                        placeholder="—"
+                                        hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Plano de Contas"
+                                    />
                                 </FormField>
 
                                 <FormField label="Observações">
@@ -922,6 +948,21 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         valueField="id"
                                         placeholder="—"
                                         hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Centro de Custo"
+                                    />
+                                </FormField>
+
+                                <FormField label="Plano de Contas">
+                                    <HierarchicalSelect
+                                        items={planoContas}
+                                        value={planoDeContasId}
+                                        onChange={setPlanoDeContasId}
+                                        valueField="id"
+                                        placeholder="—"
+                                        hoverCls="hover:bg-blue-50"
+                                        panelVariant="drawer"
+                                        drawerTitle="Selecionar Plano de Contas"
                                     />
                                 </FormField>
 

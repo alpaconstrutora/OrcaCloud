@@ -12,6 +12,7 @@ import { projectService } from '../services/projectService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import type { Boleto, BoletoStatus, BoletoFilters, BoletoStats, Organization, CostCenter } from '../types';
+import { STATUS_LABELS, STATUS_TEXT_COLORS } from '../utils/boletoStatus';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
@@ -33,25 +34,6 @@ interface BoletoManagerProps {
        quando esta tela era aba dele. Agora ela é sempre rota própria
        (AppRouter 'boletos-pagar') e não tem barra de abas de pai nenhum. */
 }
-
-const STATUS_LABELS: Record<BoletoStatus, string> = {
-    rascunho: 'Rascunho',
-    revisao: 'Em revisão',
-    aprovado: 'Aprovado',
-    programado: 'Programado',
-    pago: 'Pago',
-    cancelado: 'Cancelado',
-};
-
-// Padrão guia seção 8 — texto simples, sem pílula
-const STATUS_TEXT_COLORS: Record<BoletoStatus, string> = {
-    rascunho:   'text-gray-700',
-    revisao:    'text-amber-700',
-    aprovado:   'text-blue-700',
-    programado: 'text-indigo-700',
-    pago:       'text-emerald-700',
-    cancelado:  'text-red-700',
-};
 
 const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'numero', label: 'Código', sortable: true },

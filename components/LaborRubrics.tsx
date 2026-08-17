@@ -280,17 +280,9 @@ const LaborRubrics: React.FC = () => {
     return (
         <div className="space-y-6">
             {/* 1. Título */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Rubricas</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Configuração do motor de cálculo da folha (proventos, descontos e incidências).</p>
-                </div>
-                <button
-                    onClick={() => handleOpenModal(null)}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                >
-                    <Plus className="w-[15px] h-[15px]" /> Nova rubrica
-                </button>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Rubricas</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Configuração do motor de cálculo da folha (proventos, descontos e incidências).</p>
             </div>
 
             {/* KPIs */}
@@ -359,6 +351,14 @@ const LaborRubrics: React.FC = () => {
                                 <MoveHorizontal className="w-4 h-4" />
                             </button>
                         </div>
+
+                        {/* Ação primária — único azul sólido da tela (guia §17) */}
+                        <button
+                            onClick={() => handleOpenModal(null)}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 md:ml-auto"
+                        >
+                            <Plus className="w-[15px] h-[15px]" /> Nova rubrica
+                        </button>
                     </div>
                 </div>
 

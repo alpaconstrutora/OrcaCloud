@@ -540,16 +540,35 @@ export const boletoService = {
     async marcarPago(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
         const boleto = await this.transitar(boletoId, organizationId, 'pago', userEmail);
         const hoje = new Date().toISOString().slice(0, 10);
-        await Promise.all([
+        const [, txResult] = await Promise.all([
             boleto.invoice_id
                 ? supabase.from('invoices').update({ status: 'paid' }).eq('id', boleto.invoice_id)
-                : Promise.resolve(),
+                : Promise.resolve(null),
+            /* SEM `.eq('organization_id', ...)`: `reference_id` é o uuid do boleto,
+               único por si só, e a RLS de internal_transactions já recorta as orgs
+               do usuário. O filtro era redundante — e quando `organizationId`
+               chegava vazio (caso "Todas as organizações") o UPDATE casava ZERO
+               linhas **sem erro**: o boleto virava 'pago' e o título ficava aberto.
+               Em 15/08/2026 havia 14 boletos nesse estado, todos com `status_pago`
+               por usuário na auditoria e nenhum estorno. Mesma classe de armadilha
+               do `reference_id` composto. */
             supabase.from('internal_transactions')
-                .update({ status: 'CONCILIATED', payment_date: hoje })
-                .eq('organization_id', organizationId)
+                .update({ status: 'CONCILIATED', business_status: 'PAGO', payment_date: hoje })
                 .eq('source_system', 'BOLETO')
-                .eq('reference_id', boletoId),
+                .eq('reference_id', boletoId)
+                .select('id'),
         ]);
+
+        /* Não silencia mais o casamento vazio. Não derruba a operação — o boleto
+           já está pago e reverter seria pior —, mas o desencontro precisa
+           aparecer em vez de virar divergência descoberta meses depois. */
+        if (!txResult?.error && (txResult?.data?.length ?? 0) === 0) {
+            console.error(
+                `[boletoService] Boleto ${boletoId} marcado como pago, mas nenhum ` +
+                'lançamento (internal_transactions) correspondente foi encontrado. ' +
+                'O título segue em aberto no Contas a Pagar.',
+            );
+        }
         return boleto;
     },
 

@@ -369,7 +369,7 @@ export const useProjectOperations = ({
       } else {
         await contractService.createContract({
           ...data,
-          project_id: data.project_id || projectId || '',
+          project_id: data.project_id || projectId || null,
           organization_id: data.organization_id || activeOrganizationId || undefined
         } as Contract);
       }

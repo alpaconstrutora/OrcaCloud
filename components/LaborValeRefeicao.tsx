@@ -2,12 +2,12 @@ import React, { useState, useMemo } from 'react';
 import {
     UtensilsCrossed, Plus, Check, Settings,
     CalendarDays, Calculator, Loader2, AlertCircle,
-    CheckCheck, X, Edit2, Save, FileText, Search, Wallet, Users, TrendingDown, TrendingUp,
+    CheckCheck, X, Save, FileText, Search, Wallet, Users, TrendingDown, TrendingUp, MoveHorizontal,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import LaborScopeBar from './LaborScopeBar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vrService, VrRegra, VrFeriado, VrCalculo } from '../services/vrService';
@@ -201,6 +201,65 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
 
 // ─── Aba Regras ───────────────────────────────────────────────────────────────
 
+const REGRAS_COLUMNS: ColumnConfig[] = [
+    { key: 'nome', label: 'Nome da regra', sortable: true },
+    { key: 'tipo', label: 'Tipo', sortable: true },
+    { key: 'obra', label: 'Obra', sortable: true },
+    { key: 'valor_diario', label: 'Valor/dia', sortable: true },
+    { key: 'desconto_folha_pct', label: 'Desconto folha', sortable: true },
+    // Combinam múltiplos toggles (sábado/domingo/feriado, faltas/férias/afastamento)
+    // numa única célula — sem valor único comparável para ordenar (§6.3).
+    { key: 'dias_especiais', label: 'Dias especiais', sortable: false },
+    { key: 'descontos', label: 'Desconta em', sortable: false },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const REGRAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    nome: { label: 'Nome da regra', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    tipo: { label: 'Tipo', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    obra: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    valor_diario: { label: 'Valor/dia', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    desconto_folha_pct: { label: 'Desconto folha', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    dias_especiais: { label: 'Dias especiais', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden', sortable: false },
+    descontos: { label: 'Desconta em', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden', sortable: false },
+    status: { label: 'Status', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+const DEFAULT_REGRAS_COL_WIDTHS: Record<string, number> = {
+    nome: 220, tipo: 110, obra: 160, valor_diario: 100, desconto_folha_pct: 120,
+    dias_especiais: 200, descontos: 220, status: 90, actions: 70,
+};
+
+// Conteúdo de cada <td> por coluna — função pura para o <tbody> mapear
+// `tableColumns.orderedVisibleColumns` (ordem arrastável).
+function renderRegraCell(key: string, r: VrRegra, projects: { id: string; name: string }[]): React.ReactNode {
+    switch (key) {
+        case 'nome':
+            return <span className="text-sm font-normal text-gray-900">{r.nome}</span>;
+        case 'tipo':
+            return <span className="text-sm font-normal text-gray-700">{r.tipo === 'refeicao' ? 'Refeição' : r.tipo === 'alimentacao' ? 'Alimentação' : 'Ambos'}</span>;
+        case 'obra':
+            return <span className="text-sm font-normal text-gray-600">{r.project_id ? (projects.find(p => p.id === r.project_id)?.name ?? '—') : 'Todas as obras'}</span>;
+        case 'valor_diario':
+            return <span className="text-sm font-medium text-gray-800 whitespace-nowrap">R$ {r.valor_diario.toFixed(2)}</span>;
+        case 'desconto_folha_pct':
+            return <span className="text-sm font-normal text-gray-600">{r.desconto_folha_pct > 0 ? `${r.desconto_folha_pct}%` : '—'}</span>;
+        case 'dias_especiais': {
+            const itens = [r.gera_sabado && 'Sábado', r.gera_domingo && 'Domingo', r.gera_feriado && 'Feriado'].filter(Boolean);
+            return <span className="text-sm font-normal text-gray-600">{itens.length ? itens.join(', ') : '—'}</span>;
+        }
+        case 'descontos': {
+            const itens = [r.desconta_falta && 'Faltas', r.desconta_ferias && 'Férias', r.desconta_afastamento && 'Afastamentos'].filter(Boolean);
+            return <span className="text-sm font-normal text-gray-600">{itens.length ? itens.join(', ') : 'Nenhum'}</span>;
+        }
+        case 'status':
+            return <span className={`text-sm font-normal ${r.ativo ? 'text-emerald-700' : 'text-gray-500'}`}>{r.ativo ? 'Ativa' : 'Inativa'}</span>;
+        default:
+            return null;
+    }
+}
+
 const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string }[] }> = ({ orgId, projects }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
@@ -210,6 +269,9 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
         queryFn: () => vrService.listRegras(orgId),
     });
     const [modal, setModal] = useState<Partial<VrRegra> | null | false>(false);
+    const [search, setSearch] = usePersistedState('vrRegras:search', '');
+    const tableColumns = useTableColumns(REGRAS_COLUMNS, 'vrRegrasColumns');
+    const cols = useResizableColumns(DEFAULT_REGRAS_COL_WIDTHS, 'vrRegrasColWidths');
 
     const del = useMutation({
         mutationFn: (id: string) => vrService.deleteRegra(id),
@@ -227,6 +289,34 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
         if (ok) del.mutate(r.id);
     };
 
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        const base = !term ? regras : regras.filter(r => r.nome.toLowerCase().includes(term));
+        if (!tableColumns.sortColumn) return base;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...base].sort((a, b) => {
+            switch (tableColumns.sortColumn) {
+                case 'nome': return dir * a.nome.localeCompare(b.nome);
+                case 'tipo': return dir * a.tipo.localeCompare(b.tipo);
+                case 'obra': {
+                    const oa = a.project_id ? (projects.find(p => p.id === a.project_id)?.name ?? '') : '';
+                    const ob = b.project_id ? (projects.find(p => p.id === b.project_id)?.name ?? '') : '';
+                    return dir * oa.localeCompare(ob);
+                }
+                case 'valor_diario': return dir * (a.valor_diario - b.valor_diario);
+                case 'desconto_folha_pct': return dir * (a.desconto_folha_pct - b.desconto_folha_pct);
+                case 'status': return dir * (Number(a.ativo) - Number(b.ativo));
+                default: return 0;
+            }
+        });
+    }, [regras, search, projects, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout:fixed.
+    const tableTotalWidth = REGRAS_COLUMNS
+        .filter(c => c.key !== 'actions')
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
+        + cols.getWidth('actions');
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -242,53 +332,120 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
                 </button>
             </div>
 
-            {isLoading ? (
-                <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
-                    <p className="mt-2 text-gray-500">Carregando...</p>
-                </div>
-            ) : regras.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
-                    <UtensilsCrossed className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma regra cadastrada</h3>
-                    <p className="text-sm text-gray-500">Crie uma regra para começar a calcular o vale refeição.</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {regras.map(r => (
-                        <div key={r.id} className="bg-white border border-slate-100 rounded-[10px] p-5 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-start justify-between mb-3">
-                                <div>
-                                    <h4 className="text-sm font-black text-slate-900">{r.nome}</h4>
-                                    <span className="text-xs font-medium text-orange-600">{r.tipo === 'refeicao' ? 'Refeição' : r.tipo === 'alimentacao' ? 'Alimentação' : 'Ambos'}</span>
-                                </div>
-                                <div className={`w-2.5 h-2.5 rounded-full mt-1 ${r.ativo ? 'bg-emerald-500' : 'bg-slate-300'}`} title={r.ativo ? 'Ativa' : 'Inativa'} />
-                            </div>
-
-                            <div className="text-3xl font-black text-slate-900 mb-1">
-                                R$ {r.valor_diario.toFixed(2).replace('.', ',')}
-                                <span className="text-xs font-medium text-slate-400 ml-1">/ dia</span>
-                            </div>
-                            {r.desconto_folha_pct > 0 && (
-                                <p className="text-xs text-slate-500 mb-3">{r.desconto_folha_pct}% desconto em folha</p>
-                            )}
-
-                            <div className="flex flex-wrap gap-1 mb-4">
-                                {r.gera_sabado && <span className="text-xs bg-blue-50 text-blue-600 font-medium px-2 py-0.5 rounded-full">Sábado</span>}
-                                {r.gera_feriado && <span className="text-xs bg-purple-50 text-purple-600 font-medium px-2 py-0.5 rounded-full">Feriado</span>}
-                                {!r.desconta_falta && <span className="text-xs bg-amber-50 text-amber-600 font-medium px-2 py-0.5 rounded-full">Falta OK</span>}
-                            </div>
-
-                            <div className="flex gap-2">
-                                <button onClick={() => setModal(r)} className="flex-1 h-9 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-[6px] transition-colors flex items-center justify-center gap-1.5">
-                                    <Edit2 className="w-3.5 h-3.5" /> Editar
-                                </button>
-                                <ActionIconButton kind="delete" onClick={() => handleDelete(r)} />
-                            </div>
+            {/* Toolbar acoplada à tabela (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar regra..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                            />
                         </div>
-                    ))}
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={REGRAS_COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            )}
+
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="text-center py-12">
+                        <UtensilsCrossed className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">{regras.length === 0 ? 'Nenhuma regra cadastrada' : 'Nenhuma regra encontrada'}</h3>
+                        <p className="text-sm text-gray-500">{regras.length === 0 ? 'Crie uma regra para começar a calcular o vale refeição.' : 'Tente ajustar a busca.'}</p>
+                    </div>
+                ) : (
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.orderedVisibleColumns
+                                    .filter(key => key !== 'actions')
+                                    .map(key => (
+                                        <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                    ))}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio */}
+                                <col />
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                )}
+                            </colgroup>
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.orderedVisibleColumns
+                                        .filter(key => key !== 'actions')
+                                        .map(key => {
+                                            const def = REGRAS_COLUMN_HEADERS[key];
+                                            if (!def) return null;
+                                            return (
+                                                <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    onMoveColumn={tableColumns.moveColumn}
+                                                    className={def.className}>
+                                                    <cols.ResizeHandle colKey={key} />
+                                                </SortableHeader>
+                                            );
+                                        })}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-3 py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-500">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {filtered.map(r => (
+                                    <tr
+                                        key={r.id}
+                                        onClick={() => setModal(r)}
+                                        className="hover:bg-orange-50/40 transition-colors cursor-pointer"
+                                    >
+                                        {tableColumns.orderedVisibleColumns
+                                            .filter(key => key !== 'actions')
+                                            .map(key => (
+                                                <td key={key} className={`px-3 py-2.5 border-r border-gray-100 ${key === 'valor_diario' || key === 'desconto_folha_pct' ? 'text-right' : ''}`}>
+                                                    {renderRegraCell(key, r, projects)}
+                                                </td>
+                                            ))}
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-3 py-2.5 text-right" onClick={e => e.stopPropagation()}>
+                                                <ActionIconButton kind="delete" onClick={() => handleDelete(r)} />
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
 
             {modal !== false && (
                 <RegraModal
@@ -306,6 +463,50 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
 
 // ─── Aba Calendário (Feriados) ─────────────────────────────────────────────────
 
+// Texto simples colorido — sem pílula/fundo/uppercase (guia §8).
+const ESCOPO_CFG: Record<VrFeriado['escopo'], { label: string; color: string }> = {
+    nacional:  { label: 'Nacional',  color: 'text-blue-700' },
+    estadual:  { label: 'Estadual',  color: 'text-purple-700' },
+    municipal: { label: 'Municipal', color: 'text-teal-700' },
+    obra:      { label: 'Obra',      color: 'text-orange-700' },
+};
+
+const FERIADOS_COLUMNS: ColumnConfig[] = [
+    { key: 'data', label: 'Data', sortable: true },
+    { key: 'descricao', label: 'Descrição', sortable: true },
+    { key: 'escopo', label: 'Escopo', sortable: true },
+    { key: 'obra', label: 'Obra', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const FERIADOS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    data: { label: 'Data', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    descricao: { label: 'Descrição', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    escopo: { label: 'Escopo', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    obra: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+const DEFAULT_FERIADOS_COL_WIDTHS: Record<string, number> = {
+    data: 150, descricao: 260, escopo: 120, obra: 160, actions: 70,
+};
+
+// Conteúdo de cada <td> por coluna — função pura para o <tbody> mapear
+// `tableColumns.orderedVisibleColumns` (ordem arrastável).
+function renderFeriadoCell(key: string, f: VrFeriado, projects: { id: string; name: string }[]): React.ReactNode {
+    switch (key) {
+        case 'data':
+            return <span className="text-sm font-normal text-gray-700 whitespace-nowrap capitalize">{new Date(f.data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</span>;
+        case 'descricao':
+            return <span className="text-sm font-normal text-gray-900">{f.descricao}</span>;
+        case 'escopo':
+            return <span className={`text-sm font-normal ${ESCOPO_CFG[f.escopo].color}`}>{ESCOPO_CFG[f.escopo].label}</span>;
+        case 'obra':
+            return <span className="text-sm font-normal text-gray-600">{f.project_id ? (projects.find(p => p.id === f.project_id)?.name ?? '—') : 'Todas'}</span>;
+        default:
+            return null;
+    }
+}
+
 const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name: string }[]; projects: { id: string; name: string }[] }> = ({ orgId, organizations, projects }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
@@ -320,6 +521,9 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
 
     const [form, setForm] = useState({ data: '', descricao: '', escopo: 'municipal' as VrFeriado['escopo'], project_id: '' });
     const [saving, setSaving] = useState(false);
+    const [search, setSearch] = usePersistedState('vrFeriados:search', '');
+    const tableColumns = useTableColumns(FERIADOS_COLUMNS, 'vrFeriadosColumns');
+    const cols = useResizableColumns(DEFAULT_FERIADOS_COL_WIDTHS, 'vrFeriadosColWidths');
 
     const del = useMutation({
         mutationFn: (id: string) => vrService.deleteFeriado(id),
@@ -365,13 +569,31 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
         }
     };
 
-    // Texto simples colorido — sem pílula/fundo/uppercase (guia §8).
-    const escopoCfg = {
-        nacional:  { label: 'Nacional',  color: 'text-blue-700' },
-        estadual:  { label: 'Estadual',  color: 'text-purple-700' },
-        municipal: { label: 'Municipal', color: 'text-teal-700' },
-        obra:      { label: 'Obra',      color: 'text-orange-700' },
-    };
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        const base = !term ? feriados : feriados.filter(f => f.descricao.toLowerCase().includes(term));
+        if (!tableColumns.sortColumn) return base;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...base].sort((a, b) => {
+            switch (tableColumns.sortColumn) {
+                case 'data': return dir * a.data.localeCompare(b.data);
+                case 'descricao': return dir * a.descricao.localeCompare(b.descricao);
+                case 'escopo': return dir * ESCOPO_CFG[a.escopo].label.localeCompare(ESCOPO_CFG[b.escopo].label);
+                case 'obra': {
+                    const oa = a.project_id ? (projects.find(p => p.id === a.project_id)?.name ?? '') : '';
+                    const ob = b.project_id ? (projects.find(p => p.id === b.project_id)?.name ?? '') : '';
+                    return dir * oa.localeCompare(ob);
+                }
+                default: return 0;
+            }
+        });
+    }, [feriados, search, projects, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // Largura = SOMA exata das colunas visíveis (§6.1) — nunca w-full com table-layout:fixed.
+    const tableTotalWidth = FERIADOS_COLUMNS
+        .filter(c => c.key !== 'actions')
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
+        + cols.getWidth('actions');
 
     return (
         <div className="space-y-5">
@@ -424,47 +646,118 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
                 </div>
             </div>
 
-            {/* Lista agrupada por mês */}
-            {isLoading ? (
-                <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+            {/* Toolbar acoplada à tabela (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar feriado..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={FERIADOS_COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
-            ) : feriados.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
-                    <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum feriado cadastrado para {ano}</h3>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {MESES.map((mes, mi) => {
-                        const doMes = feriados.filter(f => new Date(f.data + 'T12:00:00').getMonth() === mi);
-                        if (doMes.length === 0) return null;
-                        return (
-                            <div key={mi} className="bg-white border border-slate-100 rounded-[10px] overflow-hidden">
-                                <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
-                                    <span className="text-xs font-semibold text-slate-600">{mes}/{ano}</span>
-                                </div>
-                                {doMes.map(f => {
-                                    const ec = escopoCfg[f.escopo];
-                                    return (
-                                        <div key={f.id} className="flex items-center px-4 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                                            <div className="w-10 text-center">
-                                                <span className="text-lg font-black text-slate-900">{new Date(f.data + 'T12:00:00').getDate()}</span>
-                                            </div>
-                                            <div className="flex-1 ml-4">
-                                                <p className="text-sm font-normal text-slate-800">{f.descricao}</p>
-                                                {f.project_id && <p className="text-xs text-slate-400">{projects.find(p => p.id === f.project_id)?.name}</p>}
-                                            </div>
-                                            <span className={`text-sm font-normal ${ec.color}`}>{ec.label}</span>
-                                            <ActionIconButton kind="delete" className="ml-3" onClick={() => handleDelete(f)} />
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="text-center py-12">
+                        <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">{feriados.length === 0 ? `Nenhum feriado cadastrado para ${ano}` : 'Nenhum feriado encontrado'}</h3>
+                        <p className="text-sm text-gray-500">{feriados.length === 0 ? '' : 'Tente ajustar a busca.'}</p>
+                    </div>
+                ) : (
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.orderedVisibleColumns
+                                    .filter(key => key !== 'actions')
+                                    .map(key => (
+                                        <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                    ))}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio */}
+                                <col />
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                )}
+                            </colgroup>
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.orderedVisibleColumns
+                                        .filter(key => key !== 'actions')
+                                        .map(key => {
+                                            const def = FERIADOS_COLUMN_HEADERS[key];
+                                            if (!def) return null;
+                                            return (
+                                                <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    onMoveColumn={tableColumns.moveColumn}
+                                                    className={def.className}>
+                                                    <cols.ResizeHandle colKey={key} />
+                                                </SortableHeader>
+                                            );
+                                        })}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-3 py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-500">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {filtered.map(f => (
+                                    <tr key={f.id} className="hover:bg-orange-50/40 transition-colors">
+                                        {tableColumns.orderedVisibleColumns
+                                            .filter(key => key !== 'actions')
+                                            .map(key => (
+                                                <td key={key} className="px-3 py-2.5 border-r border-gray-100">
+                                                    {renderFeriadoCell(key, f, projects)}
+                                                </td>
+                                            ))}
+                                        {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                        <td aria-hidden="true"></td>
+                                        {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-3 py-2.5 text-right">
+                                                <ActionIconButton kind="delete" onClick={() => handleDelete(f)} />
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
             <Toast />
         </div>
     );
@@ -492,18 +785,23 @@ const CALCULO_COLUMNS: ColumnConfig[] = [
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX. 'actions' não entra (renderizada fixa fora do drag).
 const CALCULO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    employee: { label: 'Colaborador', className: 'px-3 py-2 border-r border-gray-100' },
-    project: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100' },
-    dias_uteis: { label: 'Dias úteis', className: 'px-3 py-2 border-r border-gray-100 text-center' },
-    faltas: { label: 'Faltas', className: 'px-3 py-2 border-r border-gray-100 text-center' },
-    ferias: { label: 'Férias', className: 'px-3 py-2 border-r border-gray-100 text-center' },
-    afastamento: { label: 'Afastam.', className: 'px-3 py-2 border-r border-gray-100 text-center' },
-    elegiveis: { label: 'Elegíveis', className: 'px-3 py-2 border-r border-gray-100 text-center' },
-    valor_dia: { label: 'Valor/dia', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    bruto: { label: 'Bruto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    desconto: { label: 'Desconto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    liquido: { label: 'Líquido', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    status: { label: 'Status', className: 'px-3 py-2 border-r border-gray-100' },
+    employee: { label: 'Colaborador', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    project: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    dias_uteis: { label: 'Dias úteis', className: 'px-3 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    faltas: { label: 'Faltas', className: 'px-3 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    ferias: { label: 'Férias', className: 'px-3 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    afastamento: { label: 'Afastam.', className: 'px-3 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    elegiveis: { label: 'Elegíveis', className: 'px-3 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    valor_dia: { label: 'Valor/dia', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    bruto: { label: 'Bruto', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    desconto: { label: 'Desconto', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    liquido: { label: 'Líquido', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    status: { label: 'Status', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+};
+
+const DEFAULT_CALCULO_COL_WIDTHS: Record<string, number> = {
+    employee: 170, project: 140, dias_uteis: 90, faltas: 80, ferias: 80, afastamento: 90,
+    elegiveis: 90, valor_dia: 100, bruto: 100, desconto: 100, liquido: 100, status: 90, actions: 200,
 };
 
 interface CalculoCellCtx {
@@ -573,6 +871,7 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     const [editDias, setEditDias] = useState(0);
     const [gerandoAll, setGerandoAll] = useState(false);
     const tableColumns = useTableColumns(CALCULO_COLUMNS, 'vrCalculoColumns');
+    const cols = useResizableColumns(DEFAULT_CALCULO_COL_WIDTHS, 'vrCalculoColWidths');
 
     const { data: regras = [] } = useQuery({ queryKey: ['vr_regras', orgId], queryFn: () => vrService.listRegras(orgId) });
     const { data: feriados = [] } = useQuery({ queryKey: ['vr_feriados', orgId, ano], queryFn: () => vrService.listFeriados(orgId, ano) });
@@ -696,6 +995,12 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     const totalBruto = calculos.reduce((s, c) => s + c.valor_bruto, 0);
     const mediaDias = calculos.length ? (calculos.reduce((s, c) => s + c.dias_elegiveis, 0) / calculos.length) : 0;
 
+    // Largura = SOMA exata das colunas visíveis + checkbox fixo de 40px (§6.1).
+    const tableTotalWidth = 40
+        + CALCULO_COLUMNS.filter(c => c.key !== 'actions')
+            .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
+        + cols.getWidth('actions');
+
     return (
         <div className="space-y-5">
             {/* Navegação de mês + geração */}
@@ -756,6 +1061,14 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -773,7 +1086,21 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {/* checkbox — largura fixa, fora do redimensionamento */}
+                                <col style={{ width: '40px' }} />
+                                {tableColumns.orderedVisibleColumns
+                                    .filter(key => key !== 'actions')
+                                    .map(key => (
+                                        <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                    ))}
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio */}
+                                <col />
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                )}
+                            </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -789,11 +1116,18 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                     onSort={tableColumns.handleColumnSort}
                                                     onMoveColumn={tableColumns.moveColumn}
-                                                    className={def.className} />
+                                                    className={def.className}>
+                                                    <cols.ResizeHandle colKey={key} />
+                                                </SortableHeader>
                                             );
                                         })}
+                                    {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-3 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                        <th className="px-3 py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-500">
+                                            Ações
+                                            <cols.ResizeHandle colKey="actions" />
+                                        </th>
                                     )}
                                 </tr>
                             </thead>
@@ -814,6 +1148,8 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                                                         {renderCalculoCell(key, c, { isEdit, editDias, setEditDias })}
                                                     </td>
                                                 ))}
+                                            {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
+                                            <td aria-hidden="true"></td>
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-3 py-2.5 text-right">
                                                     {c.status === 'rascunho' && !isEdit && (
@@ -883,14 +1219,18 @@ const APROVADOS_COLUMNS: ColumnConfig[] = [
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
 // uma sequência fixa de JSX.
 const APROVADOS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-    employee: { label: 'Colaborador', className: 'px-4 py-2 border-r border-gray-100' },
-    project: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100' },
-    elegiveis: { label: 'Elegíveis', className: 'px-3 py-2 border-r border-gray-100 text-center' },
-    valor_dia: { label: 'Valor/dia', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    bruto: { label: 'Bruto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    desconto: { label: 'Desconto', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    liquido: { label: 'Líquido', className: 'px-3 py-2 border-r border-gray-100 text-right' },
-    status: { label: 'Status', className: 'px-4 py-2' },
+    employee: { label: 'Colaborador', className: 'px-4 py-2 border-r border-gray-100 overflow-hidden' },
+    project: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    elegiveis: { label: 'Elegíveis', className: 'px-3 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    valor_dia: { label: 'Valor/dia', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    bruto: { label: 'Bruto', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    desconto: { label: 'Desconto', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    liquido: { label: 'Líquido', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    status: { label: 'Status', className: 'px-4 py-2 overflow-hidden' },
+};
+
+const DEFAULT_APROVADOS_COL_WIDTHS: Record<string, number> = {
+    employee: 180, project: 150, elegiveis: 90, valor_dia: 100, bruto: 100, desconto: 100, liquido: 100, status: 100,
 };
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
@@ -929,6 +1269,7 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
     const mesIso = primeiroDiaMes(ano, mes);
     const [search, setSearch] = usePersistedState('vrAprovados:search', '');
     const tableColumns = useTableColumns(APROVADOS_COLUMNS, 'vrAprovadosColumns');
+    const cols = useResizableColumns(DEFAULT_APROVADOS_COL_WIDTHS, 'vrAprovadosColWidths');
 
     const { data: calculos = [], isLoading } = useQuery({
         queryKey: ['vr_calculos', orgId, mesIso],
@@ -982,6 +1323,10 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
     const totalLiquido = aprovados.reduce((s, c) => s + c.valor_liquido, 0);
     const totalBruto = aprovados.reduce((s, c) => s + c.valor_bruto, 0);
     const totalDesconto = aprovados.reduce((s, c) => s + c.desconto_folha, 0);
+
+    // Largura = SOMA exata das colunas visíveis (§6.1) — esta tabela não tem coluna de ações.
+    const tableTotalWidth = APROVADOS_COLUMNS
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0);
 
     return (
         <div className="space-y-5">
@@ -1040,6 +1385,14 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1057,7 +1410,12 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
                     </div>
                 ) : (
                     <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
+                        <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
+                            </colgroup>
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.map(key => {
@@ -1068,7 +1426,9 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
                                                 sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
                                                 onMoveColumn={tableColumns.moveColumn}
-                                                className={def.className} />
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
                                         );
                                     })}
                                 </tr>
@@ -1106,87 +1466,174 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
 
 // ─── Aba Histórico ────────────────────────────────────────────────────────────
 
+const HISTORICO_COLUMNS: ColumnConfig[] = [
+    { key: 'mes', label: 'Mês', sortable: true },
+    { key: 'employee', label: 'Colaborador', sortable: true },
+    { key: 'project', label: 'Obra', sortable: true },
+    { key: 'elegiveis', label: 'Dias elegíveis', sortable: true },
+    { key: 'liquido', label: 'Líquido', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+];
+
+const HISTORICO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
+    mes: { label: 'Mês', className: 'px-4 py-2 border-r border-gray-100 overflow-hidden' },
+    employee: { label: 'Colaborador', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    project: { label: 'Obra', className: 'px-3 py-2 border-r border-gray-100 overflow-hidden' },
+    elegiveis: { label: 'Dias elegíveis', className: 'px-3 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    liquido: { label: 'Líquido', className: 'px-3 py-2 border-r border-gray-100 text-right overflow-hidden' },
+    status: { label: 'Status', className: 'px-4 py-2 overflow-hidden' },
+};
+
+const DEFAULT_HISTORICO_COL_WIDTHS: Record<string, number> = {
+    mes: 130, employee: 180, project: 150, elegiveis: 120, liquido: 100, status: 100,
+};
+
+// Conteúdo de cada <td> por coluna — função pura para o <tbody> mapear
+// `tableColumns.orderedVisibleColumns` (ordem arrastável).
+function renderHistoricoCell(key: string, c: VrCalculo): React.ReactNode {
+    switch (key) {
+        case 'mes': {
+            const label = mesLabel(c.mes_referencia);
+            return <span className="text-sm font-normal text-gray-900 whitespace-nowrap">{label.charAt(0).toUpperCase() + label.slice(1)}</span>;
+        }
+        case 'employee':
+            return <span className="text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</span>;
+        case 'project':
+            return <span className="text-sm font-normal text-gray-500 whitespace-nowrap">{c.project_name || '—'}</span>;
+        case 'elegiveis':
+            return <span className="text-sm font-normal text-emerald-700">{c.dias_elegiveis}</span>;
+        case 'liquido':
+            return <span className="text-sm font-medium text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</span>;
+        case 'status':
+            return <span className={`text-sm font-normal ${STATUS_CFG[c.status].color}`}>{STATUS_CFG[c.status].label}</span>;
+        default:
+            return null;
+    }
+}
+
 const AbaHistorico: React.FC<{ orgId: string }> = ({ orgId }) => {
     const [search, setSearch] = usePersistedState('vrHistorico:search', '');
+    const tableColumns = useTableColumns(HISTORICO_COLUMNS, 'vrHistoricoColumns');
+    const cols = useResizableColumns(DEFAULT_HISTORICO_COL_WIDTHS, 'vrHistoricoColWidths');
     const { data: calculos = [], isLoading } = useQuery({
         queryKey: ['vr_calculos_hist', orgId],
         queryFn: () => vrService.listCalculos(orgId),
     });
 
-    const filtrados = useMemo(() => {
+    const filtered = useMemo(() => {
         const term = search.trim().toLowerCase();
-        return !term ? calculos : calculos.filter(c => (c.employee_name || '').toLowerCase().includes(term));
-    }, [calculos, search]);
-
-    const porMes = useMemo(() => {
-        const map: Record<string, VrCalculo[]> = {};
-        filtrados.forEach(c => {
-            if (!map[c.mes_referencia]) map[c.mes_referencia] = [];
-            map[c.mes_referencia].push(c);
+        const base = !term ? calculos : calculos.filter(c => (c.employee_name || '').toLowerCase().includes(term) || (c.project_name || '').toLowerCase().includes(term));
+        const dir = tableColumns.sortColumn ? (tableColumns.sortDirection === 'asc' ? 1 : -1) : 1;
+        return [...base].sort((a, b) => {
+            switch (tableColumns.sortColumn) {
+                case 'mes': return dir * a.mes_referencia.localeCompare(b.mes_referencia);
+                case 'employee': return dir * (a.employee_name || '').localeCompare(b.employee_name || '');
+                case 'project': return dir * (a.project_name || '').localeCompare(b.project_name || '');
+                case 'elegiveis': return dir * (a.dias_elegiveis - b.dias_elegiveis);
+                case 'liquido': return dir * (a.valor_liquido - b.valor_liquido);
+                case 'status': return dir * a.status.localeCompare(b.status);
+                // Sem coluna selecionada: mês mais recente primeiro, colaborador A-Z como desempate (§6.4).
+                default: return b.mes_referencia.localeCompare(a.mes_referencia) || (a.employee_name || '').localeCompare(b.employee_name || '');
+            }
         });
-        return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-    }, [filtrados]);
+    }, [calculos, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // Largura = SOMA exata das colunas visíveis (§6.1) — esta tabela não tem coluna de ações.
+    const tableTotalWidth = HISTORICO_COLUMNS
+        .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0);
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
-                    <h3 className="text-sm font-black text-slate-900">Histórico de cálculos</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Todos os cálculos mensais registrados</p>
-                </div>
-                <div className="relative w-full md:w-72">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Buscar colaborador..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
-                    />
-                </div>
+            <div>
+                <h3 className="text-sm font-black text-slate-900">Histórico de cálculos</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Todos os cálculos mensais registrados</p>
             </div>
 
-            {isLoading ? (
-                <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
-                    <p className="mt-2 text-gray-500">Carregando...</p>
-                </div>
-            ) : porMes.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
-                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum histórico encontrado</h3>
-                </div>
-            ) : (
-                porMes.map(([mesIso, items]) => {
-                    const total = items.reduce((s, c) => s + c.valor_liquido, 0);
-                    const aprovados = items.filter(c => c.status === 'aprovado' || c.status === 'pago').length;
-                    return (
-                        <div key={mesIso} className="bg-white border border-slate-100 rounded-[10px] shadow-sm overflow-hidden">
-                            <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                                <span className="text-sm font-black text-slate-900 capitalize">{mesLabel(mesIso)}</span>
-                                <div className="flex items-center gap-4 text-xs">
-                                    <span className="text-slate-500">{items.length} colaboradores</span>
-                                    <span className="text-emerald-600 font-medium">{aprovados} aprovados</span>
-                                    <span className="font-semibold text-slate-900">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                </div>
-                            </div>
-                            <div className="divide-y divide-slate-50">
-                                {items.map(c => {
-                                    const st = STATUS_CFG[c.status];
-                                    return (
-                                        <div key={c.id} className="flex items-center px-5 py-2.5 text-sm hover:bg-slate-50/50 transition-colors">
-                                            <span className="flex-1 font-normal text-slate-800">{c.employee_name}</span>
-                                            <span className="text-slate-400 text-xs mr-4">{c.dias_elegiveis} dias elegíveis</span>
-                                            <span className="font-medium text-emerald-700 mr-4">R$ {c.valor_liquido.toFixed(2)}</span>
-                                            <span className={`text-sm font-normal ${st.color}`}>{st.label}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+            {/* Toolbar acoplada à tabela (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar colaborador ou obra..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                            />
                         </div>
-                    );
-                })
-            )}
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={HISTORICO_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                            {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
+                            <button
+                                onClick={() => cols.autoFit()}
+                                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                title="Ajustar largura das colunas ao conteúdo"
+                            >
+                                <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="text-center py-12">
+                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum histórico encontrado</h3>
+                    </div>
+                ) : (
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table ref={cols.tableRef} className="text-sm text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                            <colgroup>
+                                {tableColumns.orderedVisibleColumns.map(key => (
+                                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                                ))}
+                            </colgroup>
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                        const def = HISTORICO_COLUMN_HEADERS[key];
+                                        if (!def) return null;
+                                        return (
+                                            <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
+                                                sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                onSort={tableColumns.handleColumnSort}
+                                                onMoveColumn={tableColumns.moveColumn}
+                                                className={def.className}>
+                                                <cols.ResizeHandle colKey={key} />
+                                            </SortableHeader>
+                                        );
+                                    })}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {filtered.map(c => (
+                                    <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
+                                        {tableColumns.orderedVisibleColumns.map(key => (
+                                            <td key={key} className={`px-3 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'mes' || key === 'status' ? 'px-4' : ''} ${key === 'elegiveis' ? 'text-center' : ''} ${key === 'liquido' ? 'text-right' : ''}`}>
+                                                {renderHistoricoCell(key, c)}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

@@ -246,6 +246,8 @@ export function buildExtractionFromLinhaDigitavel(
         },
         raw: { linhaDigitavel: ldigits, parsed },
         erros: parsed.erros,
+        // Ressalvas sem invalidar o documento — hoje, fator de vencimento ambíguo.
+        avisos: parsed.avisos,
     };
 
     return result;

@@ -3,6 +3,7 @@ import {
     mod10,
     mod11,
     fatorVencimentoToDate,
+    resolverFatorVencimento,
     parseLinhaDigitavel,
     codigoBarrasToLinhaDigitavel,
     linhaDigitavelToCodigoBarras47,
@@ -66,6 +67,57 @@ describe('fatorVencimentoToDate', () => {
         // Com referência em 2026, a função deve preferir a candidata nova.
         const ref = new Date('2026-05-15');
         expect(fatorVencimentoToDate(1000, ref)).toBe('2025-02-22');
+    });
+});
+
+// ─── resolverFatorVencimento — ambiguidade de ciclo ─────────────────────────
+//
+// O fator saturou em 9999 (21/02/2025) e recomeçou em 1000 (22/02/2025). As
+// duas candidatas são disjuntas, e só o fator não decide entre elas. Antes de
+// 15/08/2026 a escolha era silenciosa — um boleto real de 2001 virava "vence
+// nos próximos meses" sem ninguém saber.
+
+describe('resolverFatorVencimento', () => {
+    const ref = new Date('2026-08-15');
+
+    it('marca ambíguo quando as duas candidatas são plausíveis', () => {
+        // fator 1566: antigo = 2002-01-20 (24 anos atrás, plausível para
+        // documento antigo importado); novo = 2026-09-11 (mês que vem).
+        const r = resolverFatorVencimento(1566, { referenceDate: ref });
+        expect(r.ambiguo).toBe(true);
+        expect(r.vencimento).toBe('2026-09-11');   // proximidade, comportamento herdado
+        expect(r.ciclo).toBe('novo');
+        expect(r.alternativa).toBe('2002-01-20');  // a candidata descartada fica visível
+    });
+
+    it('não marca ambíguo quando a alternativa é absurda', () => {
+        // fator 7141: antigo = 2017-04-26; novo cairia em 2041 — fora da janela.
+        // É o caso dos 3 boletos de 2017 investigados em 15/08/2026.
+        const r = resolverFatorVencimento(7141, { referenceDate: ref });
+        expect(r.ambiguo).toBe(false);
+        expect(r.ciclo).toBe('antigo');
+        expect(r.vencimento).toBe('2017-04-26');
+        expect(r.alternativa).toBeUndefined();
+    });
+
+    it('dataDocumento decide o ciclo sem palpite', () => {
+        // Mesmo fator ambíguo do primeiro caso: com a data do documento em 2001,
+        // o ciclo antigo é o único possível — e some a ambiguidade.
+        const r = resolverFatorVencimento(1566, { referenceDate: ref, dataDocumento: '2001-11-20' });
+        expect(r.ambiguo).toBe(false);
+        expect(r.ciclo).toBe('antigo');
+        expect(r.vencimento).toBe('2002-01-20');
+    });
+
+    it('dataDocumento no ciclo novo escolhe a base nova', () => {
+        const r = resolverFatorVencimento(1566, { referenceDate: ref, dataDocumento: '2026-08-01' });
+        expect(r.ambiguo).toBe(false);
+        expect(r.ciclo).toBe('novo');
+        expect(r.vencimento).toBe('2026-09-11');
+    });
+
+    it('fator zero não resolve nada', () => {
+        expect(resolverFatorVencimento(0)).toEqual({ ambiguo: false });
     });
 });
 

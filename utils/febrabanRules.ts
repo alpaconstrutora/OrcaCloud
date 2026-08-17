@@ -21,6 +21,27 @@ export interface LinhaDigitavelParsed {
     valor?: number;
     vencimento?: string; // ISO yyyy-mm-dd
     erros: string[];
+    /**
+     * Ressalvas que NÃO invalidam o documento — hoje, só a ambiguidade de ciclo
+     * do fator de vencimento.
+     *
+     * Canal separado de propósito: `boletoService` deriva
+     * `checksum_valido = erros.length === 0`, então um aviso empurrado para
+     * `erros` marcaria como inválido um boleto cujos DVs conferem. Esse campo
+     * foi justamente a evidência que descartou o falso alarme dos boletos de
+     * 2017 (15/08/2026) — não pode passar a mentir.
+     */
+    avisos: string[];
+}
+
+/** Resultado detalhado da conversão do fator de vencimento. */
+export interface FatorVencimentoResolvido {
+    vencimento?: string;          // ISO yyyy-mm-dd
+    ciclo?: 'antigo' | 'novo';
+    /** As duas candidatas eram plausíveis — a escolhida é um palpite. */
+    ambiguo: boolean;
+    /** A candidata descartada, quando ambíguo. */
+    alternativa?: string;
 }
 
 // Remove tudo que não for dígito
@@ -75,50 +96,105 @@ export function mod11Arrecadacao(input: string): number {
 //   6, 7 → módulo 10
 //   8, 9 → módulo 11
 
+const MS_DIA = 24 * 60 * 60 * 1000;
+const BASE_FATOR_ANTIGA = Date.UTC(1997, 9, 7);  // 1997-10-07, fator 1000 do ciclo antigo
+const BASE_FATOR_NOVA   = Date.UTC(2025, 1, 22); // 2025-02-22, fator 1000 do ciclo novo
+
+/** Primeiro dia do ciclo novo — o antigo saturou no dia anterior (fator 9999). */
+const INICIO_CICLO_NOVO = '2025-02-22';
+
+/** Janela de plausibilidade para um vencimento de boleto, em torno da referência. */
+const ANOS_PASSADO_PLAUSIVEL = 25;
+const ANOS_FUTURO_PLAUSIVEL  = 5;
+
+function toISO(ms: number): string {
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Converte o fator de vencimento (4 dígitos) em data, dizendo QUAL ciclo usou e
+ * se a escolha foi um palpite.
+ *
+ * O fator saturou em 9999 no dia 21/02/2025; a partir de 22/02/2025 ele
+ * recomeçou em 1000 com base nova. As duas candidatas são, por construção,
+ * disjuntas: o ciclo antigo nunca passa de 2025-02-21 e o novo nunca fica antes
+ * de 2025-02-22. Não há como decidir entre elas olhando só o fator.
+ *
+ * Como decidimos, em ordem:
+ *
+ * 1. **`dataDocumento` conhecida** — decide de verdade, sem palpite: documento
+ *    emitido a partir de 22/02/2025 só pode ser do ciclo novo. É o único
+ *    caminho determinístico, e por isso é o primeiro.
+ * 2. **Senão, proximidade da referência** (comportamento histórico, preservado),
+ *    mas agora com `ambiguo=true` quando as DUAS candidatas caem na janela
+ *    plausível.
+ *
+ * Por que o aviso importa: com referência em 2026 e fator na faixa ~1000–1666, a
+ * candidata antiga cai em 2000–2002 (24 anos atrás) e a nova em 2025–2026 (meses).
+ * A proximidade escolhe a nova SEMPRE — um boleto real de 2001 seria lido como
+ * vencendo agora, calado. Em 15/08/2026 o sistema recebeu boletos de 2017, então
+ * a faixa não é hipotética.
+ *
+ * ⚠️ `referenceDate` default `new Date()` torna o resultado dependente de QUANDO
+ * se processa. Para reprocessar um boleto já importado, passe uma âncora estável
+ * (a data de importação), senão a mesma linha digitável pode render outra data.
+ */
+export function resolverFatorVencimento(
+    fator: number,
+    opts: { referenceDate?: Date; dataDocumento?: string | null } = {},
+): FatorVencimentoResolvido {
+    if (!fator || fator <= 0) return { ambiguo: false };
+
+    const referenceDate = opts.referenceDate ?? new Date();
+    const candAntiga = toISO(BASE_FATOR_ANTIGA + fator * MS_DIA);
+    const candNova = fator >= 1000
+        ? toISO(BASE_FATOR_NOVA + (fator - 1000) * MS_DIA)
+        : undefined;
+
+    if (!candNova) {
+        return { vencimento: candAntiga, ciclo: 'antigo', ambiguo: false };
+    }
+
+    // 1. Data do documento decide sem palpite.
+    if (opts.dataDocumento) {
+        const novo = opts.dataDocumento >= INICIO_CICLO_NOVO;
+        return {
+            vencimento: novo ? candNova : candAntiga,
+            ciclo: novo ? 'novo' : 'antigo',
+            ambiguo: false,
+        };
+    }
+
+    // 2. Proximidade da referência (comportamento histórico).
+    const ref = referenceDate.getTime();
+    const usaNova = Math.abs(Date.parse(candNova) - ref) < Math.abs(Date.parse(candAntiga) - ref);
+
+    const minPlausivel = ref - ANOS_PASSADO_PLAUSIVEL * 365.25 * MS_DIA;
+    const maxPlausivel = ref + ANOS_FUTURO_PLAUSIVEL * 365.25 * MS_DIA;
+    const plausivel = (iso: string) => {
+        const t = Date.parse(iso);
+        return t >= minPlausivel && t <= maxPlausivel;
+    };
+    const ambiguo = plausivel(candAntiga) && plausivel(candNova);
+
+    return {
+        vencimento: usaNova ? candNova : candAntiga,
+        ciclo: usaNova ? 'novo' : 'antigo',
+        ambiguo,
+        alternativa: ambiguo ? (usaNova ? candAntiga : candNova) : undefined,
+    };
+}
+
 /**
  * Converte fator de vencimento (4 dígitos) em data ISO.
  *
- * Regras:
- *   - 1000..9999 com base 1997-10-07 (regra antiga, válida até 21/02/2025).
- *   - Após 21/02/2025, novos fatores foram redefinidos para começar em 1000
- *     com base 22/02/2025 (manual FEBRABAN — release 2024).
- *
- * Implementação prática: tentamos a regra "nova" primeiro se o fator estiver
- * dentro do range pós-reset e a data resultante não for absurdamente distante.
- * Para boletos emitidos antes de 22/02/2025 com fator > 0, a regra antiga é usada.
- *
- * Para o MVP, usamos a interpretação simples e amplamente compatível:
- *   - fator 1000..1666: pode ser pré-reset (próximo de jul/2000) ou pós-reset
- *     (próximo de nov/2027). Preferimos pós-reset se a data atual for ≥ 2025.
- *   - demais fatores: regra antiga (base 1997-10-07).
+ * Mantida com a assinatura e o resultado de sempre — quem só quer a data
+ * continua chamando esta. Para saber se a escolha foi um palpite (e qual era a
+ * outra candidata), use `resolverFatorVencimento`.
  */
 export function fatorVencimentoToDate(fator: number, referenceDate = new Date()): string | undefined {
-    if (!fator || fator <= 0) return undefined;
-
-    const BASE_ANTIGA = new Date(Date.UTC(1997, 9, 7)); // 1997-10-07
-    const BASE_NOVA = new Date(Date.UTC(2025, 1, 22));  // 2025-02-22, fator 1000
-    const MS_DAY = 24 * 60 * 60 * 1000;
-
-    // Candidata 1 — regra antiga
-    const candAntiga = new Date(BASE_ANTIGA.getTime() + fator * MS_DAY);
-
-    // Candidata 2 — regra nova (fator começa em 1000)
-    let candNova: Date | undefined;
-    if (fator >= 1000) {
-        candNova = new Date(BASE_NOVA.getTime() + (fator - 1000) * MS_DAY);
-    }
-
-    // Se a candidata antiga for futuro razoável (até 5 anos à frente) ou passado recente
-    // (até 5 anos atrás), usa ela. Caso contrário, usa a nova.
-    const ref = referenceDate.getTime();
-    const diffAntiga = Math.abs(candAntiga.getTime() - ref);
-    const diffNova = candNova ? Math.abs(candNova.getTime() - ref) : Infinity;
-
-    const escolhida = diffNova < diffAntiga ? candNova! : candAntiga;
-    const yyyy = escolhida.getUTCFullYear();
-    const mm = String(escolhida.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(escolhida.getUTCDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+    return resolverFatorVencimento(fator, { referenceDate }).vencimento;
 }
 
 /**
@@ -205,9 +281,16 @@ export function linhaDigitavelToCodigoBarras48(ld48: string): string {
 /**
  * Valida e parseia uma linha digitável (47 ou 48 dígitos) ou código de barras (44).
  */
-export function parseLinhaDigitavel(input: string, referenceDate = new Date()): LinhaDigitavelParsed {
+export function parseLinhaDigitavel(
+    input: string,
+    referenceDate = new Date(),
+    /** Data do documento, quando conhecida: desempata o ciclo do fator de
+     *  vencimento sem palpite (ver `resolverFatorVencimento`). */
+    dataDocumento?: string | null,
+): LinhaDigitavelParsed {
     const digits = onlyDigits(input);
     const erros: string[] = [];
+    const avisos: string[] = [];
 
     let codBarras = '';
     let tipo: 'bancario' | 'arrecadacao' = 'bancario';
@@ -223,18 +306,18 @@ export function parseLinhaDigitavel(input: string, referenceDate = new Date()): 
         tipo = 'arrecadacao';
     } else {
         erros.push(`Tamanho inválido: ${digits.length} dígitos (esperado 44, 47 ou 48)`);
-        return { valida: false, tipo: 'bancario', codigoBarras: '', erros };
+        return { valida: false, tipo: 'bancario', codigoBarras: '', erros, avisos };
     }
 
     if (codBarras.length !== 44) {
         erros.push('Falha ao normalizar código de barras');
-        return { valida: false, tipo, codigoBarras: codBarras, erros };
+        return { valida: false, tipo, codigoBarras: codBarras, erros, avisos };
     }
 
     let valida = true;
 
     if (tipo === 'bancario') {
-        return parseBoletoBancario(codBarras, digits, referenceDate, erros);
+        return parseBoletoBancario(codBarras, digits, referenceDate, erros, avisos, dataDocumento);
     }
 
     // Arrecadação: validar DVs por segmento na linha digitável (se foi passada de 48)
@@ -268,6 +351,7 @@ export function parseLinhaDigitavel(input: string, referenceDate = new Date()): 
         codigoBarras: codBarras,
         valor: valor > 0 ? valor : undefined,
         erros,
+        avisos,
     };
 }
 
@@ -276,6 +360,8 @@ function parseBoletoBancario(
     linhaOriginal: string,
     referenceDate: Date,
     erros: string[],
+    avisos: string[],
+    dataDocumento?: string | null,
 ): LinhaDigitavelParsed {
     let valida = true;
 
@@ -294,7 +380,17 @@ function parseBoletoBancario(
 
     // Fator vencimento (posições 6-9)
     const fator = Number(codBarras.slice(5, 9));
-    const vencimento = fatorVencimentoToDate(fator, referenceDate);
+    const fatorResolvido = resolverFatorVencimento(fator, { referenceDate, dataDocumento });
+    const vencimento = fatorResolvido.vencimento;
+    if (fatorResolvido.ambiguo && fatorResolvido.alternativa) {
+        /* Vai para `avisos`, NUNCA para `erros`: os DVs conferem, e
+           `boletoService` deriva `checksum_valido` de `erros.length === 0`. */
+        avisos.push(
+            `Vencimento ambíguo: o fator ${fator} pode ser ${vencimento} (ciclo ` +
+            `${fatorResolvido.ciclo}) ou ${fatorResolvido.alternativa}. ` +
+            `Confira a data no documento.`,
+        );
+    }
 
     // Valor (posições 10-19): 10 dígitos com 2 decimais
     const valorRaw = codBarras.slice(9, 19);
@@ -325,6 +421,7 @@ function parseBoletoBancario(
         valor,
         vencimento,
         erros,
+        avisos,
     };
 }
 

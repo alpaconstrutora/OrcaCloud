@@ -157,8 +157,14 @@ function extractionToColumns(ext: BoletoExtractionResult) {
         engine_versao: ext.engine_versao,
         extracao_raw: ext.raw,
         extracao_em: new Date().toISOString(),
+        /* `checksum_valido` olha SÓ `erros`. Aviso (ex.: fator de vencimento
+           ambíguo) não pode marcar como inválido um boleto cujos DVs conferem —
+           foi justamente esse campo que descartou o falso alarme dos boletos de
+           2017 em 15/08/2026. */
         checksum_valido: ext.erros.length === 0,
-        erros_validacao: ext.erros.length ? ext.erros : null,
+        erros_validacao: [...ext.erros, ...(ext.avisos ?? [])].length
+            ? [...ext.erros, ...(ext.avisos ?? [])]
+            : null,
     };
 }
 

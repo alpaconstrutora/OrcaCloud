@@ -40,6 +40,13 @@ export interface BoletoExtractionResult {
     };
     raw: Record<string, any>;
     erros: string[];
+    /**
+     * Ressalvas que NÃO invalidam o documento (ex.: fator de vencimento
+     * ambíguo). Separado de `erros` porque `boletoService` deriva
+     * `checksum_valido = erros.length === 0` — ver `LinhaDigitavelParsed.avisos`
+     * em `utils/febrabanRules.ts`.
+     */
+    avisos?: string[];
 }
 
 export interface Boleto {

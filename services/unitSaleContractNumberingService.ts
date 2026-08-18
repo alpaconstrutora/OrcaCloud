@@ -2,16 +2,16 @@ import { supabase } from '../lib/supabase';
 import { generateDocumentNumber, MissingCodeError } from './documentNumbering';
 
 /**
- * Numeração de Contratos de Venda de Unidades — invólucro fino sobre o motor
+ * Numeração de Contratos de Venda de Unidades — adaptador sobre o motor
  * genérico de `services/documentNumbering/` (Configurações do Sistema ›
- * Nomenclatura). Ver orderNumberingService.ts / rentalContractNumberingService.ts
- * para o raciocínio completo. Contador independente do de locação, mesmo
- * quando a unidade é a mesma.
+ * Nomenclatura). Contador independente do de locação, mesmo quando a unidade
+ * é a mesma.
+ *
+ * Mantido de propósito na limpeza F5 (2026-08-18): resolve a ORGANIZAÇÃO a
+ * partir do imóvel. Ver orderNumberingService.ts para o raciocínio completo.
  */
 
 export { MissingCodeError };
-/** @deprecated use MissingCodeError */
-export { MissingCodeError as MissingUnitError };
 
 export interface UnitSaleNumberingExtra {
     /** Necessário só se a máscara configurada usar {Cliente}. */

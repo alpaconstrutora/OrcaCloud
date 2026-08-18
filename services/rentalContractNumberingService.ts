@@ -2,17 +2,17 @@ import { supabase } from '../lib/supabase';
 import { generateDocumentNumber, MissingCodeError } from './documentNumbering';
 
 /**
- * Numeração de Contratos de Locação — invólucro fino sobre o motor genérico
- * de `services/documentNumbering/` (Configurações do Sistema › Nomenclatura).
- * Ver orderNumberingService.ts para o raciocínio completo.
+ * Numeração de Contratos de Locação — adaptador sobre o motor genérico de
+ * `services/documentNumbering/` (Configurações do Sistema › Nomenclatura).
+ *
+ * Mantido de propósito na limpeza F5 (2026-08-18): resolve a ORGANIZAÇÃO a
+ * partir do imóvel. Ver orderNumberingService.ts para o raciocínio completo.
  *
  * A unidade e o empreendimento chegam via `propertyId` (imóvel do Comercial)
  * — locação não tem obra (`contracts.project_id` fica nulo).
  */
 
 export { MissingCodeError };
-/** @deprecated use MissingCodeError */
-export { MissingCodeError as MissingUnitError };
 
 export interface RentalNumberingExtra {
     /** Necessário só se a máscara configurada usar {Cliente}. */

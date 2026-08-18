@@ -2,9 +2,12 @@ import { supabase } from '../lib/supabase';
 import { generateDocumentNumber, MissingCodeError } from './documentNumbering';
 
 /**
- * Numeração de Cotações de Suprimentos — invólucro fino sobre o motor
- * genérico de `services/documentNumbering/` (Configurações do Sistema ›
- * Nomenclatura). Ver orderNumberingService.ts para o raciocínio completo.
+ * Numeração de Cotações de Suprimentos — adaptador sobre o motor genérico de
+ * `services/documentNumbering/` (Configurações do Sistema › Nomenclatura).
+ *
+ * Mantido de propósito na limpeza F5 (2026-08-18): resolve a ORGANIZAÇÃO a
+ * partir da obra, que o motor genérico não tem como adivinhar. Ver
+ * orderNumberingService.ts para o raciocínio completo.
  */
 
 export { MissingCodeError };

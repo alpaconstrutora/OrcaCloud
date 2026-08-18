@@ -1,41 +1,23 @@
 const LS_KEY = 'opura_app_settings';
 
+/**
+ * Configurações locais do app (localStorage, por navegador).
+ *
+ * ⚠️ As 5 máscaras de numeração (pedido/cotação/contrato/locação/venda de
+ * unidade) MORAVAM aqui e saíram em 2026-08-18. Elas agora vivem no banco, por
+ * organização, em `document_numbering_settings` — configuradas em Configurações
+ * do Sistema › Nomenclatura e aplicadas por `services/documentNumbering/`.
+ * Não recriar campo de numeração aqui: config por navegador significa dois
+ * usuários da mesma empresa gerando padrões diferentes, que foi exatamente o
+ * problema que motivou a mudança.
+ */
 export interface AppSettings {
-    // Order numbering
-    orderPrefix: string;
+    /**
+     * Sufixo colado no número ao DUPLICAR um pedido (`orderService.duplicateOrder`).
+     * Não é máscara: o número novo sai do motor de Nomenclatura e este sufixo é
+     * pós-fixado, para o duplicado não colidir com o original.
+     */
     orderDuplicateSuffix: string;
-    /** Máscara do número do pedido. Tokens: {prefixo} {empreendimento} {obra} {seq}. */
-    orderNumberPattern: string;
-    /** Casas do sequencial por obra (zeros à esquerda). */
-    orderSeqPadding: number;
-
-    // Contract numbering (Suprimentos) — cópia do padrão de Numeração de Pedidos.
-    contractPrefix: string;
-    /** Máscara do número do contrato. Tokens: {prefixo} {empreendimento} {obra} {seq}. */
-    contractNumberPattern: string;
-    /** Casas do sequencial por obra (zeros à esquerda). */
-    contractSeqPadding: number;
-
-    // Quotation numbering (Suprimentos) — cópia do padrão de Numeração de Pedidos.
-    quotationPrefix: string;
-    /** Máscara do número da cotação. Tokens: {prefixo} {empreendimento} {obra} {seq}. */
-    quotationNumberPattern: string;
-    /** Casas do sequencial por obra (zeros à esquerda). */
-    quotationSeqPadding: number;
-
-    // Contratos de LOCAÇÃO — sequencial por UNIDADE (não por obra: contrato de
-    // locação não tem obra, chega no empreendimento pela unidade via
-    // vw_unit_property_map). Tokens: {prefixo} {empreendimento} {unidade} {seq}.
-    rentalContractPrefix: string;
-    rentalContractNumberPattern: string;
-    /** Casas do sequencial por unidade (zeros à esquerda). */
-    rentalContractSeqPadding: number;
-
-    // Contratos de VENDA DE UNIDADES — idem locação, sequência independente.
-    unitSaleContractPrefix: string;
-    unitSaleContractNumberPattern: string;
-    /** Casas do sequencial por unidade (zeros à esquerda). */
-    unitSaleContractSeqPadding: number;
 
     // Exibição de fornecedores: razão social ou apelido curto
     supplierNameDisplay: 'razao' | 'apelido';
@@ -50,26 +32,7 @@ export interface AppSettings {
 }
 
 export const APP_SETTINGS_DEFAULTS: AppSettings = {
-    orderPrefix: 'PC',
     orderDuplicateSuffix: '-DUP',
-    orderNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
-    orderSeqPadding: 4,
-
-    contractPrefix: 'CT',
-    contractNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
-    contractSeqPadding: 4,
-
-    quotationPrefix: 'QT',
-    quotationNumberPattern: '{prefixo}-{empreendimento}-{obra}-{seq}',
-    quotationSeqPadding: 4,
-
-    rentalContractPrefix: 'CL',
-    rentalContractNumberPattern: '{prefixo}-{empreendimento}-{unidade}-{seq}',
-    rentalContractSeqPadding: 4,
-
-    unitSaleContractPrefix: 'CV',
-    unitSaleContractNumberPattern: '{prefixo}-{empreendimento}-{unidade}-{seq}',
-    unitSaleContractSeqPadding: 4,
 
     supplierNameDisplay: 'razao',
 
@@ -83,15 +46,11 @@ export const APP_SETTINGS_DEFAULTS: AppSettings = {
     emailStatusChangeBody:    `O status do pedido foi alterado para "{status}".`,
 };
 
-// Variable reference for UI hints
+// Variable reference for UI hints.
+// As chaves de numeração saíram junto com as máscaras (ver comentário de
+// AppSettings) — as variáveis da Nomenclatura agora são declaradas por tipo de
+// documento em `services/documentNumbering/catalog.ts`.
 export const TEMPLATE_VARS = {
-    orderNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
-    contractNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
-    quotationNumber: ['{prefixo}', '{empreendimento}', '{obra}', '{seq}'],
-    // {unidade}, não {obra}: contrato de locação/venda não tem obra — chega no
-    // empreendimento pela unidade (vw_unit_property_map).
-    rentalContractNumber: ['{prefixo}', '{empreendimento}', '{unidade}', '{seq}'],
-    unitSaleContractNumber: ['{prefixo}', '{empreendimento}', '{unidade}', '{seq}'],
     whatsappOrderSent: ['{fornecedor}', '{pedido}', '{obra}', '{itens}', '{total}', '{entrega}'],
     whatsappStatusChange: ['{fornecedor}', '{pedido}', '{status}'],
     email: ['{pedido}', '{status}'],

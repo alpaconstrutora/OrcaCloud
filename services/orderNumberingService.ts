@@ -2,11 +2,18 @@ import { supabase } from '../lib/supabase';
 import { generateDocumentNumber, MissingCodeError } from './documentNumbering';
 
 /**
- * Numeração de Pedido de Compra — agora um invólucro fino sobre o motor
- * genérico de `services/documentNumbering/` (Configurações do Sistema ›
- * Nomenclatura). A máscara deixou de ser fixa (`{prefixo}-{empreendimento}-{obra}-{seq}`)
- * e passou a ser configurável por slots, por organização, persistida no banco
+ * Numeração de Pedido de Compra — adaptador sobre o motor genérico de
+ * `services/documentNumbering/` (Configurações do Sistema › Nomenclatura).
+ *
+ * A máscara deixou de ser fixa (`{prefixo}-{empreendimento}-{obra}-{seq}`) e
+ * passou a ser configurável por slots, por organização, persistida no banco
  * (`document_numbering_settings`) — não mais em `localStorage`.
+ *
+ * Este arquivo NÃO é resíduo da migração: a limpeza (F5, 2026-08-18) o manteve
+ * de propósito. Ele faz o que o motor genérico não tem como adivinhar —
+ * descobrir a ORGANIZAÇÃO a partir da obra — e dá nome de domínio à operação.
+ * Dissolvê-lo nos chamadores duplicaria essa resolução em `orderService` e
+ * `FiscalDocuments`.
  *
  * Ver docs/planos/2026-08-17-nomenclatura-slots-configuravel.md.
  */

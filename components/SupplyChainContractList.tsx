@@ -89,6 +89,7 @@ function renderContractCell(
         supplierMap: Record<string, string>;
         clientMap: Record<string, string>;
         empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }>;
+        empreendimentoById: Record<string, { id: string; name: string }>;
         costCenterMap: Record<string, string>;
         planoContasMap: Record<string, string>;
     },
@@ -100,8 +101,14 @@ function renderContractCell(
             return <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{contract.title}</span>;
         case 'project':
             return <span className="text-sm font-normal text-gray-700">{contract.project_id ? (ctx.projectMap[contract.project_id] ?? '—') : '—'}</span>;
-        case 'empreendimento':
-            return <EmpreendimentoCell value={contract.project_id ? ctx.empreendimentoByProject[contract.project_id] : undefined} />;
+        case 'empreendimento': {
+            // Vínculo DIRETO (contract.empreendimento_id) tem prioridade — existe
+            // justamente para contrato sem obra. Só cai para o derivado pela obra
+            // quando não há vínculo direto (contratos antigos, criados antes dele existir).
+            const direto = contract.empreendimento_id ? ctx.empreendimentoById[contract.empreendimento_id] : undefined;
+            const porObra = contract.project_id ? ctx.empreendimentoByProject[contract.project_id] : undefined;
+            return <EmpreendimentoCell value={direto ?? porObra} />;
+        }
         case 'supplier':
             return (
                 <span className="text-sm font-normal text-gray-700">
@@ -171,9 +178,12 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     const nameMode = React.useMemo(() => appSettingsService.get().supplierNameDisplay, []);
     const [clientMap, setClientMap] = React.useState<Record<string, string>>({});
     const [projectMap, setProjectMap] = React.useState<Record<string, string>>({});
-    // Obra → empreendimento. Contrato não tem FK para empreendimento: o vínculo
-    // chega pela obra (empreendimentos.project_id ou empreendimento_towers.project_id).
+    // Obra → empreendimento (empreendimentos.project_id / empreendimento_towers.project_id)
+    // — usado quando o contrato não tem vínculo direto. Desde 20270905000028,
+    // contracts.empreendimento_id também existe (contrato sem obra também pode ter
+    // empreendimento); esse mapa por id vem de empreendimentoById logo abaixo.
     const [empreendimentoByProject, setEmpreendimentoByProject] = React.useState<Record<string, { id: string; name: string; towerName?: string }>>({});
+    const [empreendimentoById, setEmpreendimentoById] = React.useState<Record<string, { id: string; name: string }>>({});
     const [costCenterMap, setCostCenterMap] = React.useState<Record<string, string>>({});
     const [planoContasMap, setPlanoContasMap] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
@@ -206,7 +216,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         try {
             setLoading(true);
             const targetProjectId = localShowAll ? undefined : (projectId || undefined);
-            const [data, suppliers, clients, projects, empMap, costCenters, planoContas] = await Promise.all([
+            const [data, suppliers, clients, projects, empMap, empreendimentos, costCenters, planoContas] = await Promise.all([
                 contractService.listContracts(targetProjectId, organizationId, undefined, direction, domain),
                 supplierService.listSuppliers(organizationId).catch(() => []),
                 clientService.listClients(organizationId).catch(() => []),
@@ -214,6 +224,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 // Sem organização ("Todas") o mapa não é bloqueado — o service não filtra
                 // e a RLS recorta (CLAUDE.md regra #5).
                 empreendimentoService.mapObrasToEmpreendimentos(organizationId).catch(() => ({})),
+                empreendimentoService.list(organizationId).catch(() => []),
                 financialRegistryService.listCostCenters(organizationId).catch(() => []),
                 financialRegistryService.listPlanoContas(organizationId).catch(() => []),
             ]);
@@ -222,6 +233,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             setClientMap(Object.fromEntries(clients.map((c: { id: string; name: string }) => [c.id, c.name])));
             setProjectMap(Object.fromEntries(projects.map((p: { id: string; name: string }) => [p.id, p.name])));
             setEmpreendimentoByProject(empMap);
+            setEmpreendimentoById(Object.fromEntries(empreendimentos.map(e => [e.id, { id: e.id, name: e.name }])));
             setCostCenterMap(Object.fromEntries(costCenters.map(c => [c.id, c.name])));
             setPlanoContasMap(Object.fromEntries(planoContas.map(c => [c.id, c.name])));
         } catch (error) {
@@ -293,7 +305,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 if (field === 'number')   cmp = (a.number || '').localeCompare(b.number || '', undefined, { numeric: true });
                 if (field === 'title')    cmp = (a.title || '').localeCompare(b.title || '');
                 if (field === 'project')  cmp = (projectMap[a.project_id || ''] || '').localeCompare(projectMap[b.project_id || ''] || '');
-                if (field === 'empreendimento') cmp = (empreendimentoByProject[a.project_id || '']?.name || '').localeCompare(empreendimentoByProject[b.project_id || '']?.name || '');
+                if (field === 'empreendimento') {
+                    const nomeA = empreendimentoById[a.empreendimento_id || '']?.name || empreendimentoByProject[a.project_id || '']?.name || '';
+                    const nomeB = empreendimentoById[b.empreendimento_id || '']?.name || empreendimentoByProject[b.project_id || '']?.name || '';
+                    cmp = nomeA.localeCompare(nomeB);
+                }
                 if (field === 'supplier') cmp = (supplierMap[a.supplier_id || ''] || '').localeCompare(supplierMap[b.supplier_id || ''] || '');
                 if (field === 'date')     cmp = new Date(a.start_date || '').getTime() - new Date(b.start_date || '').getTime();
                 if (field === 'status')   cmp = (a.status || '').localeCompare(b.status || '');
@@ -302,7 +318,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 if (field === 'planoContas') cmp = (planoContasMap[a.plano_de_contas_id || ''] || '').localeCompare(planoContasMap[b.plano_de_contas_id || ''] || '');
                 return dir === 'asc' ? cmp : -cmp;
             });
-    }, [contracts, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, statusFilter, supplierMap, projectMap, empreendimentoByProject, costCenterMap, planoContasMap]);
+    }, [contracts, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, statusFilter, supplierMap, projectMap, empreendimentoByProject, empreendimentoById, costCenterMap, planoContasMap]);
 
     // Dashboard data
     const stats = {
@@ -510,14 +526,16 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
                                     </span>
                                 </div>
-                                {contract.project_id && empreendimentoByProject[contract.project_id] && (
-                                    <div className="flex items-center gap-3 text-gray-500">
-                                        <Landmark className="w-4 h-4 text-gray-400" />
-                                        <span className="text-xs font-medium truncate">
-                                            {empreendimentoByProject[contract.project_id].name}
-                                        </span>
-                                    </div>
-                                )}
+                                {(() => {
+                                    const emp = (contract.empreendimento_id && empreendimentoById[contract.empreendimento_id])
+                                        || (contract.project_id ? empreendimentoByProject[contract.project_id] : undefined);
+                                    return emp && (
+                                        <div className="flex items-center gap-3 text-gray-500">
+                                            <Landmark className="w-4 h-4 text-gray-400" />
+                                            <span className="text-xs font-medium truncate">{emp.name}</span>
+                                        </div>
+                                    );
+                                })()}
                                 <div className="flex items-center gap-3 text-gray-500">
                                     <Calendar className="w-4 h-4 text-gray-400" />
                                     <span className="text-xs font-medium">Vigência: {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}</span>
@@ -591,7 +609,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                     >
                                         {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {renderContractCell(key, contract, { direction, projectMap, supplierMap, clientMap, empreendimentoByProject, costCenterMap, planoContasMap })}
+                                                {renderContractCell(key, contract, { direction, projectMap, supplierMap, clientMap, empreendimentoByProject, empreendimentoById, costCenterMap, planoContasMap })}
                                             </td>
                                         ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

@@ -137,7 +137,7 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
 // linhas ou estourar o container no modo Unidades. A chave de storage continua
 // única — o que o usuário arrastar vale nos dois modos, como antes.
 const BUILDING_MODE_COL_WIDTHS: Record<string, number> = {
-    name: 210, empreendimento: 184, address: 330, price: 145, occupancy: 120, status: 115, actions: 210,
+    name: 210, empreendimento: 184, address: 330, occupancy: 120, status: 115, actions: 210,
 };
 // Soma 1141 num container de 1130: os 11px que sobram são comidos pelo padding
 // direito da última célula (24px), então nenhum ícone de ação some. Não dá para
@@ -152,7 +152,7 @@ const UNIT_MODE_COL_WIDTHS: Record<string, number> = {
 // edifício) — usado para somar a largura total (§6.1) e montar o colgroup.
 // rental_analysis/rental_value só existem no modo Unidades (dentro de um
 // edifício) — building-mode não tem "valor de aluguel" próprio da unidade.
-const buildingModeColumnKeys = ['name', 'empreendimento', 'address', 'price', 'occupancy', 'status'] as const;
+const buildingModeColumnKeys = ['name', 'empreendimento', 'address', 'occupancy', 'status'] as const;
 const unitModeColumnKeys = ['name', 'empreendimento', 'block', 'floor', 'private_area', 'rental_analysis', 'rental_value', 'price', 'status'] as const;
 
 // Colunas da aba Contratos (§5.2/§6.1).
@@ -269,16 +269,15 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
 
 // Header por coluna da tabela de Unidades — dois mapas porque a mesma tabela
 // troca de colunas conforme o modo (edifícios × unidades de um edifício, ver
-// `selectedBuildingId`); 'price'/'name'/'status' existem nos dois modos mas
-// 'price' muda de rótulo ("Patrimônio" × "Valor base") e formatação
-// (renderUnitsCell decide pelo `selectedBuildingId` do ctx).
+// `selectedBuildingId`); 'name'/'status' existem nos dois modos. 'price'
+// ("Valor base") só existe no modo Unidades — a coluna "Patrimônio" do modo
+// Edifícios foi removida a pedido do usuário (2026-08-18).
 interface UnitsHeaderDef { label: string; sortable?: boolean; className: string }
 
 const UNITS_BUILDING_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     name:      { label: 'Unidade',               sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento: { label: 'Empreendimento',   sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     address:   { label: 'Endereço / referência',  sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    price:     { label: 'Patrimônio',             sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     occupancy: { label: 'Ocupação',               sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     status:    { label: 'Status',                 sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
 };
@@ -2263,6 +2262,29 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 );
                                             })}
                                         </tbody>
+                                        {/* Total de "Valor base" (§6.7-adjacente) — só existe no modo
+                                            Unidades (Valor base só existe aí, ver UNITS_UNIT_COLUMN_HEADERS).
+                                            Percorre as MESMAS colunas visíveis/ordenadas da linha de dado
+                                            para a soma cair sempre embaixo de 'price', não importa a ordem
+                                            que o usuário arrastou. */}
+                                        {selectedBuildingId && filteredProperties.length > 0 && unitsTableColumns.visibleColumns.includes('price') && (
+                                            <tfoot>
+                                                <tr className="border-t border-gray-100 bg-gray-50/80">
+                                                    {unitsTableColumns.orderedVisibleColumns.filter(key => (unitsModeColumnKeys as readonly string[]).includes(key)).map((key, idx) => (
+                                                        <td
+                                                            key={key}
+                                                            className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'price' ? 'text-sm font-medium text-gray-800 text-right whitespace-nowrap' : 'text-xs font-semibold text-gray-500 uppercase tracking-wider'}`}
+                                                        >
+                                                            {key === 'price'
+                                                                ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(filteredProperties.reduce((sum, p) => sum + rentalValueOf(p), 0))
+                                                                : (idx === 0 ? 'Total' : '')}
+                                                        </td>
+                                                    ))}
+                                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                                    <td className="px-6 py-2.5"></td>
+                                                </tr>
+                                            </tfoot>
+                                        )}
                                     </table>
                                 </div>
                             )}

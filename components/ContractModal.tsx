@@ -146,37 +146,52 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [isCheckingNumber, setIsCheckingNumber] = React.useState(false);
     const numberInputRef = React.useRef<string>(formData.number ?? '');
 
+    // Reset do formulário só no MOMENTO EM QUE O MODAL ABRE (isOpen: false → true),
+    // nunca de novo enquanto ele já está aberto. Antes dependia de [isOpen,
+    // organizationIdProp]: se o contexto global de organização resolvesse de forma
+    // assíncrona (ou o usuário trocasse a organização no topo) DEPOIS do modal já
+    // aberto, organizationIdProp mudava de valor e o efeito reexecutava, apagando
+    // tudo que o usuário já tinha preenchido — incluindo, na prática, o clique que
+    // o usuário estava dando num campo naquele instante.
     React.useEffect(() => {
-        if (isOpen) {
-            loadDependencies();
-            if (!initialData?.id) {
-                setNumberError(null);
-                setPickedOrgId('');
-                numberInputRef.current = '';
-                setFormData({
-                    number: '',
-                    title: '',
-                    description: '',
-                    contract_type: 'Empreitada Global',
-                    nature: 'Fornecimento',
-                    start_date: new Date().toISOString().split('T')[0],
-                    end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-                    status: 'Rascunho',
-                    original_value: 0,
-                    retention_rate: 0,
-                    reajuste_index: 'INCC',
-                    payment_method: 'Boleto Bancário',
-                    payment_installments: 1,
-                    project_id: seedProjectId,
-                    is_recurring: false,
-                    billing_cycle: 'Mensal',
-                    due_day: 10,
-                    ...initialData,
-                });
-                setInstallmentSchedule([]);
-            }
-        }
-    }, [isOpen, organizationIdProp]);
+        if (!isOpen || initialData?.id) return;
+        setNumberError(null);
+        setPickedOrgId('');
+        numberInputRef.current = '';
+        setFormData({
+            number: '',
+            title: '',
+            description: '',
+            contract_type: 'Empreitada Global',
+            nature: 'Fornecimento',
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+            status: 'Rascunho',
+            original_value: 0,
+            retention_rate: 0,
+            reajuste_index: 'INCC',
+            payment_method: 'Boleto Bancário',
+            payment_installments: 1,
+            project_id: seedProjectId,
+            is_recurring: false,
+            billing_cycle: 'Mensal',
+            due_day: 10,
+            ...initialData,
+        });
+        setInstallmentSchedule([]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
+
+    // Carrega as listas (Centro de Custo, Plano de Contas, Fornecedores, etc.) toda
+    // vez que a organização EFETIVA muda — inclui pickedOrgId (organização escolhida
+    // no seletor interno do modal quando o topo está em "Todas as Organizações").
+    // Antes disparava só com organizationIdProp: ao escolher a organização aqui
+    // dentro, essas listas nunca recarregavam e ficavam vazias (RF quando o topo
+    // está em "Todas" — ver REGRA OBRIGATÓRIA #5 do CLAUDE.md).
+    React.useEffect(() => {
+        if (isOpen) loadDependencies();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, organizationId]);
 
     // Initialize installment schedule when switching to Parcelado
     const prevTermType = React.useRef(formData.payment_term_type);

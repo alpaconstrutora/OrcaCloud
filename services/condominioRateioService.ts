@@ -8,6 +8,7 @@
 // balancete já leem.
 
 import { supabase } from '../lib/supabase';
+import { generateDocumentNumber } from './documentNumbering';
 
 export type CriterioRateio = 'FRACAO_IDEAL' | 'IGUAL' | 'AREA_PRIVATIVA' | 'GRUPO' | 'FIXO';
 export type TipoRateio = 'ORDINARIO' | 'EXTRAORDINARIO';
@@ -72,13 +73,15 @@ export interface Rateio {
     total_despesas: number;
     total_rateado: number;
     observacoes?: string | null;
+    /** Número do rateio, atribuído no fechamento — Configurações do Sistema › Nomenclatura (CONDO_RATEIO). */
+    number?: string | null;
     fechado_em?: string | null;
     created_at: string;
     updated_at: string;
 }
 
 const RATEIO_COLS =
-    'id, empreendimento_id, organization_id, cost_center_id, competencia, tipo, criterio, status, total_despesas, total_rateado, observacoes, fechado_em, created_at, updated_at';
+    'id, empreendimento_id, organization_id, cost_center_id, competencia, tipo, criterio, status, total_despesas, total_rateado, observacoes, number, fechado_em, created_at, updated_at';
 
 /** Centavos, para não somar float. */
 const paraCentavos = (v: number) => Math.round(v * 100);
@@ -457,9 +460,28 @@ export const condominioRateioService = {
     },
 
     async fechar(id: string): Promise<Rateio> {
+        // Número atribuído SÓ no fechamento (RASCUNHO recalcula à vontade, sem
+        // consumir sequencial) — Configurações do Sistema › Nomenclatura
+        // (CONDO_RATEIO). Busca o que falta para gerar o número no mesmo
+        // round-trip de fechamento, sem exigir um segundo carregamento.
+        const { data: atual, error: fetchError } = await supabase
+            .from('condominio_rateios')
+            .select('organization_id, empreendimento_id, cost_center_id, number')
+            .eq('id', id)
+            .single();
+        if (fetchError) throw new Error(`Falha ao fechar o rateio: ${fetchError.message}`);
+
+        let number = (atual as { number?: string | null }).number ?? undefined;
+        if (!number) {
+            number = await generateDocumentNumber('CONDO_RATEIO', atual.organization_id, {
+                empreendimentoId: atual.empreendimento_id,
+                costCenterId: atual.cost_center_id ?? undefined,
+            });
+        }
+
         const { data, error } = await supabase
             .from('condominio_rateios')
-            .update({ status: 'FECHADO', fechado_em: new Date().toISOString() })
+            .update({ status: 'FECHADO', fechado_em: new Date().toISOString(), number })
             .eq('id', id)
             .select(RATEIO_COLS)
             .single();

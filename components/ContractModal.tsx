@@ -21,7 +21,7 @@ import { Upload, ExternalLink, KeyRound } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
-import { generateContractNumber, MissingCodeError } from '../services/contractNumberingService';
+import { generateDocumentNumber, MissingCodeError, DocType } from '../services/documentNumbering';
 
 interface ContractModalProps {
     isOpen: boolean;
@@ -224,12 +224,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // Auto-fetch next sequential number for new contracts — sequence separada por direction
     const contractDirection = direction ?? (initialData?.direction as string | undefined);
 
-    // Numeração de Contratos (Suprimentos) — Configurações do Sistema › Nomenclatura.
-    // Cópia do mecanismo de Numeração de Pedidos: ativa para domain='SUPRIMENTOS' quando
-    // há obra vinculada (a máscara usa o código da obra). Sem obra — despesa administrativa,
-    // que não tem por que ter obra — cai no formato manual legado (3 dígitos), igual
-    // Serviços e Vendas.
-    const useNewNumbering = domain === 'SUPRIMENTOS' && !!formData.project_id;
+    // Numeração de Contratos — Configurações do Sistema › Nomenclatura.
+    // Suprimentos: só quando há obra vinculada (a máscara default usa
+    // {empreendimento}+{obra} resolvidos a partir dela). Sem obra — despesa
+    // administrativa, que não tem por que ter obra — cai no formato manual
+    // legado (3 dígitos): a máscara default de SUPPLY_CONTRACT exige OBRA, e
+    // sem `project_id` não há como resolver.
+    // Serviços: sempre no motor novo — o default de SERVICE_CONTRACT não usa
+    // nenhuma variável (reproduz o "001" legado), então funciona com ou sem
+    // obra, mas agora com contador atômico (sem corrida).
+    // Vendas (domain='VENDAS', entrada manual em SalesModule.tsx) continua no
+    // legado — fora do escopo mapeado em Configurações › Nomenclatura por ora.
+    const useNewNumbering = domain === 'SUPRIMENTOS' ? !!formData.project_id : domain === 'SERVICOS';
+    const numberingDocType: DocType = domain === 'SERVICOS' ? 'SERVICE_CONTRACT' : 'SUPPLY_CONTRACT';
 
     React.useEffect(() => {
         if (!isOpen || initialData?.id || !organizationId) return;
@@ -406,14 +413,18 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         try {
             const payload = { ...formData, organization_id: organizationId };
 
-            // Reserva o sequencial da obra só agora — trocar de obra antes do
-            // submit não deve queimar números.
+            // Reserva o sequencial só agora — trocar de obra antes do submit
+            // não deve queimar números.
             if (useNewNumbering && isNewContract) {
                 try {
-                    payload.number = await generateContractNumber(payload.project_id as string);
+                    payload.number = await generateDocumentNumber(numberingDocType, organizationId, {
+                        projectId: (payload.project_id as string) || undefined,
+                        clientId: (payload.client_id as string) || undefined,
+                        costCenterId: (payload.cost_center_id as string) || undefined,
+                    });
                 } catch (numErr: unknown) {
                     const numMsg = numErr instanceof MissingCodeError
-                        ? numErr.message.replace('o número do pedido', 'o número do contrato').replace('antes de criar o pedido', 'antes de criar o contrato')
+                        ? numErr.message
                         : (numErr instanceof Error ? numErr.message : String(numErr));
                     setNumberError(numMsg);
                     setIsSubmitting(false);
@@ -606,7 +617,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             required={!useNewNumbering}
                                             readOnly={useNewNumbering}
                                             maxLength={useNewNumbering ? undefined : 3}
-                                            placeholder={useNewNumbering ? 'Gerado ao salvar (por obra)' : (isFetchingNumber ? 'Carregando...' : '001')}
+                                            placeholder={useNewNumbering ? 'Gerado ao salvar' : (isFetchingNumber ? 'Carregando...' : '001')}
                                             value={useNewNumbering ? (initialData?.number ?? '') : (formData.number ?? '')}
                                             onChange={(e) => {
                                                 if (useNewNumbering) return;

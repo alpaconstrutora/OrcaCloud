@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Property, PropertyDeal, PropertyStatus, DealUnit } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
 import { taxPayableService } from './taxPayableService';
+import { generateDocumentNumber } from './documentNumbering';
 
 /**
  * Traduz a violação de FK (23503) ao excluir um imóvel para uma frase acionável.
@@ -591,29 +592,29 @@ export const commercialService = {
                 await this.assertUnitsAvailable(units.map(u => u.property_id));
             }
 
-            // Código sequencial de 3 dígitos (001, 002, ...) por organização, apenas
-            // para negociações de Venda de Ativos (type='SALE'). Atribuído na criação
-            // e persistido em commercial_deals.code — estável, nunca reaproveitado.
-            // O try/catch protege o insert caso a migration da coluna ainda não tenha
-            // sido aplicada (o PostgREST rejeitaria `code` como coluna desconhecida).
-            if (dbPayload.type === 'SALE' && !dbPayload.code) {
+            // Código da negociação — Configurações do Sistema › Nomenclatura
+            // (SALE_DEAL / RENTAL_DEAL). Antes era MAX+1 no navegador, só para
+            // Venda de Ativos e sem UNIQUE (ver
+            // 20270912000003_numbering_source_codes.sql); agora usa o contador
+            // atômico do motor genérico e passa a valer também para Locação.
+            // O try/catch protege contra migration ainda não aplicada
+            // (coluna/tabela ausente) ou variável configurada sem valor
+            // disponível neste contexto — sem código não trava a negociação,
+            // só fica sem código (mesma tolerância do comportamento anterior).
+            if ((dbPayload.type === 'SALE' || dbPayload.type === 'RENTAL') && !dbPayload.code && dbPayload.organization_id) {
                 try {
-                    let codeQuery = supabase
-                        .from('commercial_deals')
-                        .select('code')
-                        .eq('type', 'SALE');
-                    if (dbPayload.organization_id) {
-                        codeQuery = codeQuery.eq('organization_id', dbPayload.organization_id);
-                    }
-                    const { data: codeRows, error: codeErr } = await codeQuery;
-                    if (codeErr) throw codeErr;
-                    const maxCode = (codeRows || []).reduce((max, row) => {
-                        const n = parseInt((row as { code?: string }).code || '', 10);
-                        return Number.isNaN(n) ? max : Math.max(max, n);
-                    }, 0);
-                    dbPayload.code = String(maxCode + 1).padStart(3, '0');
+                    dbPayload.code = await generateDocumentNumber(
+                        dbPayload.type === 'SALE' ? 'SALE_DEAL' : 'RENTAL_DEAL',
+                        dbPayload.organization_id,
+                        {
+                            propertyId: dbPayload.property_id || undefined,
+                            unitPurpose: dbPayload.type === 'SALE' ? 'SALE' : 'RENTAL',
+                            clientId: dbPayload.client_id || undefined,
+                            costCenterId: (dbPayload as { cost_center_id?: string }).cost_center_id || undefined,
+                        },
+                    );
                 } catch (e) {
-                    console.warn('[COMMERCIAL SERVICE] Não foi possível gerar código sequencial (coluna code ausente?):', e);
+                    console.warn('[COMMERCIAL SERVICE] Não foi possível gerar código da negociação:', e);
                     delete dbPayload.code;
                 }
             }

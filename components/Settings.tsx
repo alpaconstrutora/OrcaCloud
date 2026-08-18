@@ -1,14 +1,11 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, FileSignature, ClipboardList, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark, KeyRound, Building2 } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
-import { formatOrderNumber } from '../services/orderNumberingService';
-import { formatContractNumber } from '../services/contractNumberingService';
-import { formatQuotationNumber } from '../services/quotationNumberingService';
-import { formatRentalContractNumber } from '../services/rentalContractNumberingService';
-import { formatUnitSaleContractNumber } from '../services/unitSaleContractNumberingService';
+import NumberingSettingsCard from './settings/NumberingSettingsCard';
+import { DocType } from '../services/documentNumbering';
 import { useConfirm } from './ui/confirm';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
@@ -24,7 +21,9 @@ import CofinsRatesSettings from './CofinsRatesSettings';
 
 type SettingsLeafId =
     | 'num-pedidos' | 'num-contratos' | 'num-cotacoes'
+    | 'num-contratos-servicos' | 'num-propostas-servicos' | 'num-contratos-crm-servicos'
     | 'num-locacao' | 'num-venda-unidades'
+    | 'num-negociacao-locacao' | 'num-negociacao-venda' | 'num-rateio-condominio'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-financeiro' | 'cat-pagamentos'
     | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis' | 'tributos-cofins'
@@ -39,13 +38,37 @@ interface SettingsNavNode {
     leafId?: SettingsLeafId;
 }
 
+/** Liga cada folha do menu de Nomenclatura ao doc_type do motor genérico (services/documentNumbering). */
+const NOMENCLATURA_DOC_TYPE: Partial<Record<SettingsLeafId, DocType>> = {
+    'num-pedidos': 'PURCHASE_ORDER',
+    'num-cotacoes': 'QUOTATION',
+    'num-contratos': 'SUPPLY_CONTRACT',
+    'num-contratos-servicos': 'SERVICE_CONTRACT',
+    'num-propostas-servicos': 'SERVICE_PROPOSAL',
+    'num-contratos-crm-servicos': 'SERVICE_CRM_CONTRACT',
+    'num-venda-unidades': 'UNIT_SALE_CONTRACT',
+    'num-locacao': 'RENTAL_CONTRACT',
+    'num-negociacao-venda': 'SALE_DEAL',
+    'num-negociacao-locacao': 'RENTAL_DEAL',
+    'num-rateio-condominio': 'CONDO_RATEIO',
+};
+
 const SETTINGS_NAV: SettingsNavNode[] = [
     { id: 'nomenclatura', label: 'Nomenclatura', icon: Hash, children: [
+        // Suprimentos
         { id: 'num-pedidos', label: 'Pedidos de Compra' },
-        { id: 'num-cotacoes', label: 'Cotações' },
+        { id: 'num-cotacoes', label: 'Cotações de Suprimentos' },
         { id: 'num-contratos', label: 'Contratos de Suprimentos' },
-        { id: 'num-locacao', label: 'Contratos de Locação' },
+        // Comercial
+        { id: 'num-negociacao-venda', label: 'Negociações de Venda de Unidades' },
         { id: 'num-venda-unidades', label: 'Contratos de Venda de Unidades' },
+        { id: 'num-negociacao-locacao', label: 'Negociações de Locação' },
+        { id: 'num-locacao', label: 'Contratos de Locação' },
+        { id: 'num-contratos-servicos', label: 'Contratos de Serviços' },
+        { id: 'num-propostas-servicos', label: 'Propostas de Serviços (CRM)' },
+        { id: 'num-contratos-crm-servicos', label: 'Contratos de Serviços (CRM, ao ganhar)' },
+        // Condomínios
+        { id: 'num-rateio-condominio', label: 'Rateios de Condomínio' },
     ]},
     { id: 'categorias', label: 'Categorias Gerais', icon: Layers, children: [
         { id: 'cat-clientes', label: 'Clientes' },
@@ -100,43 +123,20 @@ const Settings: React.FC = () => {
     const [appSettings, setAppSettings] = React.useState<AppSettings>(() => appSettingsService.get());
     const [appSettingsSaved, setAppSettingsSaved] = React.useState(false);
 
-    // Exemplo com códigos fictícios, só para o usuário ver o efeito da máscara.
-    const previewOrderNumber = React.useMemo(
-        () => formatOrderNumber({ empreendimentoCode: 'RES01', obraCode: 'TR1' }, 1, appSettings),
-        [appSettings.orderPrefix, appSettings.orderNumberPattern, appSettings.orderSeqPadding],
-    );
-
     const handleAppSettingsSave = () => {
         appSettingsService.save(appSettings);
         setAppSettingsSaved(true);
         setTimeout(() => setAppSettingsSaved(false), 3000);
     };
 
-    const handleAppSettingsReset = async (section: 'numbering' | 'contractNumbering' | 'quotationNumbering' | 'rentalContractNumbering' | 'unitSaleContractNumbering' | 'whatsapp' | 'email') => {
+    // As máscaras de numeração (5 seções antigas) saíram daqui — moraram em
+    // AppSettings/localStorage e agora vivem em document_numbering_settings
+    // (banco, por organização), com reset próprio dentro de
+    // NumberingSettingsCard. Restam só WhatsApp e E-mail.
+    const handleAppSettingsReset = async (section: 'whatsapp' | 'email') => {
         if (!await confirm({ title: 'Restaurar padrões desta seção?', variant: 'warning', confirmLabel: 'Restaurar' })) return;
         const patch: Partial<AppSettings> =
-            section === 'numbering' ? {
-                orderPrefix: APP_SETTINGS_DEFAULTS.orderPrefix,
-                orderDuplicateSuffix: APP_SETTINGS_DEFAULTS.orderDuplicateSuffix,
-                orderNumberPattern: APP_SETTINGS_DEFAULTS.orderNumberPattern,
-                orderSeqPadding: APP_SETTINGS_DEFAULTS.orderSeqPadding,
-            } : section === 'contractNumbering' ? {
-                contractPrefix: APP_SETTINGS_DEFAULTS.contractPrefix,
-                contractNumberPattern: APP_SETTINGS_DEFAULTS.contractNumberPattern,
-                contractSeqPadding: APP_SETTINGS_DEFAULTS.contractSeqPadding,
-            } : section === 'quotationNumbering' ? {
-                quotationPrefix: APP_SETTINGS_DEFAULTS.quotationPrefix,
-                quotationNumberPattern: APP_SETTINGS_DEFAULTS.quotationNumberPattern,
-                quotationSeqPadding: APP_SETTINGS_DEFAULTS.quotationSeqPadding,
-            } : section === 'rentalContractNumbering' ? {
-                rentalContractPrefix: APP_SETTINGS_DEFAULTS.rentalContractPrefix,
-                rentalContractNumberPattern: APP_SETTINGS_DEFAULTS.rentalContractNumberPattern,
-                rentalContractSeqPadding: APP_SETTINGS_DEFAULTS.rentalContractSeqPadding,
-            } : section === 'unitSaleContractNumbering' ? {
-                unitSaleContractPrefix: APP_SETTINGS_DEFAULTS.unitSaleContractPrefix,
-                unitSaleContractNumberPattern: APP_SETTINGS_DEFAULTS.unitSaleContractNumberPattern,
-                unitSaleContractSeqPadding: APP_SETTINGS_DEFAULTS.unitSaleContractSeqPadding,
-            } : section === 'whatsapp' ? {
+            section === 'whatsapp' ? {
                 whatsappOrderSentTemplate: APP_SETTINGS_DEFAULTS.whatsappOrderSentTemplate,
                 whatsappStatusChangeTemplate: APP_SETTINGS_DEFAULTS.whatsappStatusChangeTemplate,
             } : {
@@ -146,30 +146,6 @@ const Settings: React.FC = () => {
         setAppSettings(prev => ({ ...prev, ...patch }));
         appSettingsService.save({ ...appSettings, ...patch });
     };
-
-    // Exemplo com códigos fictícios, só para o usuário ver o efeito da máscara.
-    const previewContractNumber = React.useMemo(
-        () => formatContractNumber({ empreendimentoCode: 'RES01', obraCode: 'TR1' }, 1, appSettings),
-        [appSettings.contractPrefix, appSettings.contractNumberPattern, appSettings.contractSeqPadding],
-    );
-
-    const previewQuotationNumber = React.useMemo(
-        () => formatQuotationNumber({ empreendimentoCode: 'RES01', obraCode: 'TR1' }, 1, appSettings),
-        [appSettings.quotationPrefix, appSettings.quotationNumberPattern, appSettings.quotationSeqPadding],
-    );
-
-    // Exemplo com código de empreendimento e unidade fictícios, só para o
-    // usuário ver o efeito da máscara — a numeração real busca os dois via
-    // vw_unit_property_map a partir da unidade da negociação.
-    const previewRentalContractNumber = React.useMemo(
-        () => formatRentalContractNumber({ empreendimentoCode: 'RES01', unitName: '101' }, 1, appSettings),
-        [appSettings.rentalContractPrefix, appSettings.rentalContractNumberPattern, appSettings.rentalContractSeqPadding],
-    );
-
-    const previewUnitSaleContractNumber = React.useMemo(
-        () => formatUnitSaleContractNumber({ empreendimentoCode: 'RES01', unitName: '101' }, 1, appSettings),
-        [appSettings.unitSaleContractPrefix, appSettings.unitSaleContractNumberPattern, appSettings.unitSaleContractSeqPadding],
-    );
 
     const runMigration = async () => {
         if (!await confirm({
@@ -251,7 +227,7 @@ const Settings: React.FC = () => {
                                             key={leaf.id}
                                             onClick={() => setActiveLeaf(leaf.id)}
                                             className={`px-3 h-8 rounded-[6px] text-sm font-medium text-left transition-all ${
-                                                activeLeaf === leaf.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                                                activeLeaf === leaf.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                                             }`}
                                         >{leaf.label}</button>
                                     ))}
@@ -313,404 +289,8 @@ const Settings: React.FC = () => {
             </div>
             )}
 
-            {activeLeaf === 'num-pedidos' && (
-                <div className="space-y-6">
-                    {/* Numeração de Pedidos */}
-                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-50 rounded-[10px]">
-                            <Hash className="w-6 h-6 text-indigo-600" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-800">Numeração de Pedidos</h2>
-                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática dos números de pedido. O sequencial é por obra e reinicia a cada obra.</p>
-                        </div>
-                    </div>
-                    <button onClick={() => handleAppSettingsReset('numbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
-                        <RotateCcw className="w-3.5 h-3.5" /> Padrões
-                    </button>
-                </div>
-                <div className="mt-4 mb-3 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
-                    {TEMPLATE_VARS.orderNumber.map(v => (
-                        <span key={v} className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-[6px] border border-indigo-100">{v}</span>
-                    ))}
-                </div>
-                <div className="border-t border-gray-100 pt-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Máscara do Número</label>
-                        <input
-                            type="text"
-                            value={appSettings.orderNumberPattern}
-                            onChange={e => setAppSettings(s => ({ ...s, orderNumberPattern: e.target.value }))}
-                            placeholder="{prefixo}-{empreendimento}-{obra}-{seq}"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                        />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
-                            <input
-                                type="text"
-                                value={appSettings.orderPrefix}
-                                onChange={e => setAppSettings(s => ({ ...s, orderPrefix: e.target.value }))}
-                                placeholder="PC"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Dígitos do Sequencial</label>
-                            <input
-                                type="number"
-                                min={1}
-                                max={9}
-                                value={appSettings.orderSeqPadding}
-                                onChange={e => setAppSettings(s => ({ ...s, orderSeqPadding: Number(e.target.value) || 1 }))}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Sufixo de Duplicata</label>
-                            <input
-                                type="text"
-                                value={appSettings.orderDuplicateSuffix}
-                                onChange={e => setAppSettings(s => ({ ...s, orderDuplicateSuffix: e.target.value }))}
-                                placeholder="-DUP"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-200 rounded-[6px] px-4 py-3">
-                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Pré-visualização</span>
-                        <span className="font-mono text-sm text-gray-700">{previewOrderNumber}</span>
-                        <span className="font-mono text-sm text-gray-400 ml-3">{previewOrderNumber}{appSettings.orderDuplicateSuffix} <span className="font-sans text-xs">(duplicata)</span></span>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                        O sequencial é controlado pelo banco e é único por obra. Pedidos de obra ou empreendimento
-                        <strong> sem código cadastrado são bloqueados</strong> — cadastre o código em Empreendimentos › Dados Gerais e em Obra › Editar.
-                    </p>
-                </div>
-                <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
-                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <Hash className="w-[15px] h-[15px]" />}
-                        {appSettingsSaved ? 'Salvo!' : 'Salvar'}
-                    </button>
-                </div>
-            </div>
-                </div>
-            )}
-
-            {activeLeaf === 'num-contratos' && (
-                <div className="space-y-6">
-                    {/* Numeração de Contratos (Suprimentos) */}
-                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-50 rounded-[10px]">
-                            <FileSignature className="w-6 h-6 text-indigo-600" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-800">Numeração de Contratos</h2>
-                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de Suprimentos. O sequencial é por obra e reinicia a cada obra.</p>
-                        </div>
-                    </div>
-                    <button onClick={() => handleAppSettingsReset('contractNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
-                        <RotateCcw className="w-3.5 h-3.5" /> Padrões
-                    </button>
-                </div>
-                <div className="mt-4 mb-3 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
-                    {TEMPLATE_VARS.contractNumber.map(v => (
-                        <span key={v} className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-[6px] border border-indigo-100">{v}</span>
-                    ))}
-                </div>
-                <div className="border-t border-gray-100 pt-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Máscara do Número</label>
-                        <input
-                            type="text"
-                            value={appSettings.contractNumberPattern}
-                            onChange={e => setAppSettings(s => ({ ...s, contractNumberPattern: e.target.value }))}
-                            placeholder="{prefixo}-{empreendimento}-{obra}-{seq}"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
-                            <input
-                                type="text"
-                                value={appSettings.contractPrefix}
-                                onChange={e => setAppSettings(s => ({ ...s, contractPrefix: e.target.value }))}
-                                placeholder="CT"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Dígitos do Sequencial</label>
-                            <input
-                                type="number"
-                                min={1}
-                                max={9}
-                                value={appSettings.contractSeqPadding}
-                                onChange={e => setAppSettings(s => ({ ...s, contractSeqPadding: Number(e.target.value) || 1 }))}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-200 rounded-[6px] px-4 py-3">
-                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Pré-visualização</span>
-                        <span className="font-mono text-sm text-gray-700">{previewContractNumber}</span>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                        O sequencial é controlado pelo banco e é único por obra. Contratos de obra ou empreendimento
-                        <strong> sem código cadastrado são bloqueados</strong> — cadastre o código em Empreendimentos › Dados Gerais e em Obra › Editar.
-                    </p>
-                </div>
-                <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
-                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <FileSignature className="w-[15px] h-[15px]" />}
-                        {appSettingsSaved ? 'Salvo!' : 'Salvar'}
-                    </button>
-                </div>
-            </div>
-                </div>
-            )}
-
-            {activeLeaf === 'num-cotacoes' && (
-                <div className="space-y-6">
-                    {/* Numeração de Cotações (Suprimentos) */}
-                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-50 rounded-[10px]">
-                            <ClipboardList className="w-6 h-6 text-indigo-600" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-800">Numeração de Cotações</h2>
-                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número das cotações de Suprimentos. O sequencial é por obra e reinicia a cada obra.</p>
-                        </div>
-                    </div>
-                    <button onClick={() => handleAppSettingsReset('quotationNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
-                        <RotateCcw className="w-3.5 h-3.5" /> Padrões
-                    </button>
-                </div>
-                <div className="mt-4 mb-3 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
-                    {TEMPLATE_VARS.quotationNumber.map(v => (
-                        <span key={v} className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-[6px] border border-indigo-100">{v}</span>
-                    ))}
-                </div>
-                <div className="border-t border-gray-100 pt-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Máscara do Número</label>
-                        <input
-                            type="text"
-                            value={appSettings.quotationNumberPattern}
-                            onChange={e => setAppSettings(s => ({ ...s, quotationNumberPattern: e.target.value }))}
-                            placeholder="{prefixo}-{empreendimento}-{obra}-{seq}"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
-                            <input
-                                type="text"
-                                value={appSettings.quotationPrefix}
-                                onChange={e => setAppSettings(s => ({ ...s, quotationPrefix: e.target.value }))}
-                                placeholder="QT"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Dígitos do Sequencial</label>
-                            <input
-                                type="number"
-                                min={1}
-                                max={9}
-                                value={appSettings.quotationSeqPadding}
-                                onChange={e => setAppSettings(s => ({ ...s, quotationSeqPadding: Number(e.target.value) || 1 }))}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-200 rounded-[6px] px-4 py-3">
-                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Pré-visualização</span>
-                        <span className="font-mono text-sm text-gray-700">{previewQuotationNumber}</span>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                        O sequencial é controlado pelo banco e é único por obra. Cotações de obra ou empreendimento
-                        <strong> sem código cadastrado são bloqueadas</strong> — cadastre o código em Empreendimentos › Dados Gerais e em Obra › Editar.
-                    </p>
-                </div>
-                <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
-                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <ClipboardList className="w-[15px] h-[15px]" />}
-                        {appSettingsSaved ? 'Salvo!' : 'Salvar'}
-                    </button>
-                </div>
-            </div>
-                </div>
-            )}
-
-            {activeLeaf === 'num-locacao' && (
-                <div className="space-y-6">
-                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-50 rounded-[10px]">
-                            <KeyRound className="w-6 h-6 text-indigo-600" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-800">Numeração de Contratos de Locação</h2>
-                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de locação. O sequencial é por unidade e reinicia a cada unidade.</p>
-                        </div>
-                    </div>
-                    <button onClick={() => handleAppSettingsReset('rentalContractNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
-                        <RotateCcw className="w-3.5 h-3.5" /> Padrões
-                    </button>
-                </div>
-                <div className="mt-4 mb-3 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
-                    {TEMPLATE_VARS.rentalContractNumber.map(v => (
-                        <span key={v} className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-[6px] border border-indigo-100">{v}</span>
-                    ))}
-                </div>
-                <div className="border-t border-gray-100 pt-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Máscara do Número</label>
-                        <input
-                            type="text"
-                            value={appSettings.rentalContractNumberPattern}
-                            onChange={e => setAppSettings(s => ({ ...s, rentalContractNumberPattern: e.target.value }))}
-                            placeholder="{prefixo}-{empreendimento}-{unidade}-{seq}"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
-                            <input
-                                type="text"
-                                value={appSettings.rentalContractPrefix}
-                                onChange={e => setAppSettings(s => ({ ...s, rentalContractPrefix: e.target.value }))}
-                                placeholder="CL"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Dígitos do Sequencial</label>
-                            <input
-                                type="number"
-                                min={1}
-                                max={9}
-                                value={appSettings.rentalContractSeqPadding}
-                                onChange={e => setAppSettings(s => ({ ...s, rentalContractSeqPadding: Number(e.target.value) || 1 }))}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-200 rounded-[6px] px-4 py-3">
-                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Pré-visualização</span>
-                        <span className="font-mono text-sm text-gray-700">{previewRentalContractNumber}</span>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                        O sequencial é controlado pelo banco e é único por unidade — a mesma unidade só repete o número em
-                        um novo contrato dela mesma (novo inquilino, renovação avulsa). Contrato de locação
-                        <strong> não tem obra vinculada</strong>, por isso {'{empreendimento}'} e {'{unidade}'} vêm da
-                        unidade de Empreendimento associada ao imóvel da negociação, não de {'{obra}'}.
-                        Alterar a máscara <strong>não renumera</strong> os contratos já emitidos.
-                    </p>
-                </div>
-                <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
-                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <KeyRound className="w-[15px] h-[15px]" />}
-                        {appSettingsSaved ? 'Salvo!' : 'Salvar'}
-                    </button>
-                </div>
-            </div>
-                </div>
-            )}
-
-            {activeLeaf === 'num-venda-unidades' && (
-                <div className="space-y-6">
-                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4">
-                        <div className="p-3 bg-indigo-50 rounded-[10px]">
-                            <Building2 className="w-6 h-6 text-indigo-600" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-800">Numeração de Contratos de Venda de Unidades</h2>
-                            <p className="text-sm text-gray-500 mt-1">Máscara usada na geração automática do número dos contratos de venda de unidades. O sequencial é por unidade e é independente do de locação.</p>
-                        </div>
-                    </div>
-                    <button onClick={() => handleAppSettingsReset('unitSaleContractNumbering')} className="flex items-center gap-1.5 text-button text-gray-700 hover:text-gray-900 transition-colors shrink-0">
-                        <RotateCcw className="w-3.5 h-3.5" /> Padrões
-                    </button>
-                </div>
-                <div className="mt-4 mb-3 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
-                    {TEMPLATE_VARS.unitSaleContractNumber.map(v => (
-                        <span key={v} className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-[6px] border border-indigo-100">{v}</span>
-                    ))}
-                </div>
-                <div className="border-t border-gray-100 pt-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Máscara do Número</label>
-                        <input
-                            type="text"
-                            value={appSettings.unitSaleContractNumberPattern}
-                            onChange={e => setAppSettings(s => ({ ...s, unitSaleContractNumberPattern: e.target.value }))}
-                            placeholder="{prefixo}-{empreendimento}-{unidade}-{seq}"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
-                            <input
-                                type="text"
-                                value={appSettings.unitSaleContractPrefix}
-                                onChange={e => setAppSettings(s => ({ ...s, unitSaleContractPrefix: e.target.value }))}
-                                placeholder="CV"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Dígitos do Sequencial</label>
-                            <input
-                                type="number"
-                                min={1}
-                                max={9}
-                                value={appSettings.unitSaleContractSeqPadding}
-                                onChange={e => setAppSettings(s => ({ ...s, unitSaleContractSeqPadding: Number(e.target.value) || 1 }))}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-200 rounded-[6px] px-4 py-3">
-                        <span className="block text-xs font-semibold text-slate-500 mb-1.5">Pré-visualização</span>
-                        <span className="font-mono text-sm text-gray-700">{previewUnitSaleContractNumber}</span>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                        O sequencial é controlado pelo banco e é único por unidade — sequência independente da de locação,
-                        mesmo quando é a mesma unidade. Contrato de venda de unidade
-                        <strong> não tem obra vinculada</strong>, por isso {'{empreendimento}'} e {'{unidade}'} vêm da
-                        unidade de Empreendimento associada ao imóvel da negociação, não de {'{obra}'}.
-                        Alterar a máscara <strong>não renumera</strong> os contratos já emitidos.
-                    </p>
-                </div>
-                <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
-                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <Building2 className="w-[15px] h-[15px]" />}
-                        {appSettingsSaved ? 'Salvo!' : 'Salvar'}
-                    </button>
-                </div>
-            </div>
-                </div>
+            {NOMENCLATURA_DOC_TYPE[activeLeaf] && (
+                <NumberingSettingsCard docType={NOMENCLATURA_DOC_TYPE[activeLeaf]!} />
             )}
 
             {activeLeaf === 'email' && (

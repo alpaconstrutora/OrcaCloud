@@ -72,6 +72,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [pickedOrgId, setPickedOrgId] = React.useState<string>('');
     const organizationId = organizationIdProp || pickedOrgId || initialData?.organization_id || undefined;
     const needsOrgPicker = !organizationIdProp && !initialData?.id;
+    const activeOrgName = storeOrganizations.find(o => o.id === organizationId)?.name;
     const [formData, setFormData] = React.useState<Partial<Contract>>({
         number: '',
         title: '',
@@ -1477,6 +1478,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             ))}
                                         </select>
                                     </div>
+                                    {/* O contrato pertence a UMA organização (REGRA #5 do CLAUDE.md), então
+                                        a lista só traz empreendimentos dela — sem isso o usuário via "só 3
+                                        empreendimentos" e achava que era bug, quando os outros pertencem a
+                                        outra organização do grupo e o campo não dizia qual estava filtrando. */}
+                                    {organizationId && activeOrgName && (
+                                        <p className="text-xs text-gray-400 ml-1">
+                                            Mostrando empreendimentos de: <span className="font-semibold text-gray-500">{activeOrgName}</span>
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada (Opcional)</label>

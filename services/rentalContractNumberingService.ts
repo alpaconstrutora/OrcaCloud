@@ -14,7 +14,14 @@ export { MissingCodeError };
 /** @deprecated use MissingCodeError */
 export { MissingCodeError as MissingUnitError };
 
-export async function generateRentalContractNumber(propertyId: string): Promise<string> {
+export interface RentalNumberingExtra {
+    /** Necessário só se a máscara configurada usar {Cliente}. */
+    clientId?: string | null;
+    /** Necessário só se a máscara configurada usar {Centro de custo}. */
+    costCenterId?: string | null;
+}
+
+export async function generateRentalContractNumber(propertyId: string, extra: RentalNumberingExtra = {}): Promise<string> {
     if (!propertyId) throw new MissingCodeError('Negociação sem unidade — selecione o imóvel antes de gerar o contrato.');
 
     const { data: property, error } = await supabase
@@ -26,6 +33,9 @@ export async function generateRentalContractNumber(propertyId: string): Promise<
     if (!property?.organization_id) throw new MissingCodeError('O imóvel selecionado não está vinculado a uma organização.');
 
     return generateDocumentNumber('RENTAL_CONTRACT', property.organization_id, {
-        propertyId, unitPurpose: 'RENTAL',
+        propertyId,
+        unitPurpose: 'RENTAL',
+        clientId: extra.clientId ?? undefined,
+        costCenterId: extra.costCenterId ?? undefined,
     });
 }

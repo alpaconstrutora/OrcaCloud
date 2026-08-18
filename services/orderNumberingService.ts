@@ -8,18 +8,26 @@ import { generateDocumentNumber, MissingCodeError } from './documentNumbering';
  * e passou a ser configurável por slots, por organização, persistida no banco
  * (`document_numbering_settings`) — não mais em `localStorage`.
  *
- * A assinatura pública (`generateOrderNumber(projectId)`) foi mantida para não
- * mexer nos chamadores (`orderService.ts`) na mesma leva. Ver
- * docs/planos/2026-08-17-nomenclatura-slots-configuravel.md.
+ * Ver docs/planos/2026-08-17-nomenclatura-slots-configuravel.md.
  */
 
 export { MissingCodeError };
 
+export interface OrderNumberingExtra {
+    /** Necessário só se a máscara configurada usar {Fornecedor}. */
+    supplierId?: string | null;
+    /** Necessário só se a máscara configurada usar {Centro de custo}. */
+    costCenterId?: string | null;
+}
+
 /**
  * Reserva o próximo sequencial (conforme a máscara configurada) e devolve o
- * número completo do pedido.
+ * número completo do pedido. `extra` só precisa ser preenchido se a
+ * organização tiver colocado a variável correspondente na máscara —
+ * omitir bloqueia a criação com `MissingCodeError` SE a máscara pedir essa
+ * variável (ver resolveVariables em services/documentNumbering/resolvers.ts).
  */
-export async function generateOrderNumber(projectId: string): Promise<string> {
+export async function generateOrderNumber(projectId: string, extra: OrderNumberingExtra = {}): Promise<string> {
     if (!projectId) throw new MissingCodeError('Selecione a obra antes de salvar o pedido.');
 
     const { data: project, error } = await supabase
@@ -30,5 +38,9 @@ export async function generateOrderNumber(projectId: string): Promise<string> {
     if (error) throw error;
     if (!project?.organization_id) throw new MissingCodeError('A obra selecionada não está vinculada a uma organização.');
 
-    return generateDocumentNumber('PURCHASE_ORDER', project.organization_id, { projectId });
+    return generateDocumentNumber('PURCHASE_ORDER', project.organization_id, {
+        projectId,
+        supplierId: extra.supplierId ?? undefined,
+        costCenterId: extra.costCenterId ?? undefined,
+    });
 }

@@ -38,7 +38,10 @@ export const orderService = {
         // Nomenclatura PC-{empreendimento}-{obra}-{seq} (Configurações › Nomenclatura).
         // Lança MissingCodeError — com mensagem pronta para a tela — quando a obra
         // ou o empreendimento está sem código; o pedido NÃO é criado nesse caso.
-        const number = await generateOrderNumber(order.projectId);
+        const number = await generateOrderNumber(order.projectId, {
+            supplierId: order.supplierId,
+            costCenterId: order.costCenterId,
+        });
 
         const { data, error } = await supabase
             .from('purchase_orders')
@@ -583,7 +586,10 @@ export const orderService = {
         // Duplicata consome um sequencial novo da mesma obra e carrega o sufixo,
         // para não haver dois pedidos com o mesmo número.
         const { orderDuplicateSuffix } = appSettingsService.get();
-        const newNumber = `${await generateOrderNumber(original.project_id)}${orderDuplicateSuffix}`;
+        const newNumber = `${await generateOrderNumber(original.project_id, {
+            supplierId: original.supplier_id,
+            costCenterId: original.cost_center_id,
+        })}${orderDuplicateSuffix}`;
 
         // 3. Insert as new order
         const { data: NewOrder, error: insertError } = await supabase

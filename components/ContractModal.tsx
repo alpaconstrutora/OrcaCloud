@@ -420,6 +420,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                     payload.number = await generateDocumentNumber(numberingDocType, organizationId, {
                         projectId: (payload.project_id as string) || undefined,
                         clientId: (payload.client_id as string) || undefined,
+                        supplierId: (payload.supplier_id as string) || undefined,
                         costCenterId: (payload.cost_center_id as string) || undefined,
                     });
                 } catch (numErr: unknown) {

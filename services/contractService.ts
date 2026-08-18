@@ -278,8 +278,8 @@ export async function removeContractTransactionsFrom(
  * `propertyId` é `commercial_properties.id` da unidade principal da
  * negociação — mesmo campo que `resolveDealUnitsInfo` já resolve.
  */
-export async function nextRentalNumber(propertyId: string): Promise<string> {
-    return generateRentalContractNumber(propertyId);
+export async function nextRentalNumber(propertyId: string, extra?: { clientId?: string | null; costCenterId?: string | null }): Promise<string> {
+    return generateRentalContractNumber(propertyId, extra);
 }
 
 /**
@@ -1257,6 +1257,8 @@ export const contractService = {
         billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
         reajuste_index?: string;
         installment_value?: number;
+        // Só usado se a máscara de Nomenclatura tiver {Centro de custo}.
+        cost_center_id?: string | null;
     }, domain: 'VENDAS' | 'LOCACAO' = 'VENDAS'): Promise<Contract> => {
         if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
         if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
@@ -1325,9 +1327,10 @@ export const contractService = {
             // vw_unit_property_map, não há obra em locação/venda de unidade.
             const propertyId = primaryPropertyId || deal.property_id;
             if (!propertyId) throw new Error('Negociação sem unidade — selecione o imóvel antes de gerar o contrato.');
+            const numberingExtra = { clientId: deal.client_id, costCenterId: deal.cost_center_id };
             number = isRental
-                ? await nextRentalNumber(propertyId)
-                : await generateUnitSaleContractNumber(propertyId);
+                ? await nextRentalNumber(propertyId, numberingExtra)
+                : await generateUnitSaleContractNumber(propertyId, numberingExtra);
         }
 
         // Idempotência secundária: contrato com este número já existe?

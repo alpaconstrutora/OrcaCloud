@@ -25,7 +25,10 @@ export const DOC_TYPE_CATALOG: Record<DocType, DocTypeCatalogEntry> = {
     QUOTATION: {
         label: 'Cotações',
         group: 'Suprimentos',
-        supportedVariables: ['EMPREENDIMENTO', 'OBRA', 'FORNECEDOR', 'CENTRO_CUSTO', 'ORGANIZACAO'],
+        // Sem FORNECEDOR/CENTRO_CUSTO: uma cotação vai para VÁRIOS fornecedores
+        // (quotation_requests.invited_supplier_ids é array) e não tem coluna de
+        // centro de custo — não há um único valor para resolver essas variáveis.
+        supportedVariables: ['EMPREENDIMENTO', 'OBRA', 'ORGANIZACAO'],
         default: { slots: ['PREFIX', 'EMPREENDIMENTO', 'OBRA'], prefix: 'QT', separator: '-', seqPadding: 4 },
     },
     SUPPLY_CONTRACT: {

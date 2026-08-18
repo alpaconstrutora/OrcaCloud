@@ -334,7 +334,7 @@ function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): Rea
                 </div>
             );
         case 'empreendimento':
-            return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} />;
+            return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} showTower={false} />;
         case 'address':
             return property.address;
         case 'price':
@@ -456,7 +456,7 @@ function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.R
             );
         }
         case 'empreendimento':
-            return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} />;
+            return <EmpreendimentoCell value={deal.property_id ? ctx.empreendimentoByProperty[deal.property_id] : undefined} showTower={false} />;
         case '_clientName': {
             const client = ctx.clients.find(c => c.id === deal.client_id);
             return client?.name || 'Não vinculado';

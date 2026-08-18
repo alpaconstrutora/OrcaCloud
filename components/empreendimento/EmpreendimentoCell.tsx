@@ -17,12 +17,12 @@ export interface EmpreendimentoCellValue {
   towerName?: string;
 }
 
-export const EmpreendimentoCell: React.FC<{ value?: EmpreendimentoCellValue | null }> = ({ value }) => {
+export const EmpreendimentoCell: React.FC<{ value?: EmpreendimentoCellValue | null; showTower?: boolean }> = ({ value, showTower = true }) => {
   if (!value) return <span className="text-sm font-normal text-gray-400 italic">—</span>;
   return (
     <div className="min-w-0">
       <p className="text-sm font-normal text-gray-700 truncate">{value.name}</p>
-      {value.towerName && (
+      {showTower && value.towerName && (
         <p className="text-sm font-normal text-gray-400 truncate">{value.towerName}</p>
       )}
     </div>

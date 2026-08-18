@@ -287,8 +287,9 @@ Só depois de F4 verificada no navegador:
 - [x] F1 — Banco: 6 migrations escritas (`20270912000001`-`000006`) — **as 5 primeiras aplicadas pelo usuário em 2026-08-18** e confirmadas via API (anon recebe "permission denied", não "does not exist"; usuário de leitura confirmou dados). `000006` (reversão do bloqueio) escrita depois, ainda não confirmada como aplicada — conferir antes de considerar F1 fechada.
 - [x] F2 — Motor em `services/documentNumbering/` (types/catalog/format/resolvers/settingsService/index) — `tsc --noEmit` limpo, 12 testes unitários (`__tests__/documentNumberFormat.test.ts`) cobrindo o exemplo literal do pedido original
 - [x] F3 — `components/settings/NumberingSettingsCard.tsx` substitui os 5 blocos antigos; `Settings.tsx` ganhou 11 folhas (era 5); `check-ui-standard.sh` sem apontamento novo; **verificado em produção** (print do usuário: máscara configurada e salva corretamente para Contratos de Suprimentos)
-- [x] F4 — 8 consumidores ligados. **Testado em produção pelo usuário — 3 bugs reais encontrados e corrigidos** (ver "Correções pós-deploy" abaixo). Ainda não reconfirmado após a última rodada de correções.
-- [ ] F5 — Limpeza (AppSettings, tabelas/RPCs antigas, wrappers) — aguardando confirmação final antes de remover o mecanismo antigo
+- [x] F4 — 8 consumidores ligados. **Testado em produção pelo usuário — 3 bugs reais encontrados e corrigidos** (ver "Correções pós-deploy" abaixo). ✅ **CONFIRMADO FUNCIONANDO** em 2026-08-18: contrato `CT-011-004-0001` criado pelo usuário no formato novo.
+- [x] F6 (fora do plano original) — **Botão "Regerar número"** com trava após emissão, pedido em 2026-08-18. Migration `20270913000000`, `services/contractNumberRegenService.ts`, botão no campo Número do `ContractModal`. ✅ verificado contra o banco: contrato `Ativo` bloqueia com motivo, `Rascunho` libera.
+- [ ] F5 — Limpeza (AppSettings, tabelas/RPCs antigas, wrappers) — **agora desbloqueada**: o mecanismo novo está confirmado em produção. Único item pendente do plano.
 
 ### Correções pós-deploy (2026-08-18)
 

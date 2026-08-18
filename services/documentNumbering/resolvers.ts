@@ -13,9 +13,14 @@ const clean = (v?: string | null) => (v ?? '').trim();
  * Correção em relação ao original: lê `projects.code` (coluna) com fallback
  * para `settings->>'code'` (JSONB) — o serviço antigo lia só o JSONB, enquanto
  * a UI de Obras (`ProjectList.tsx`) já lê a coluna com esse mesmo fallback.
+ *
+ * `necessario` diz quais dos dois códigos a máscara REALMENTE usa — uma
+ * máscara com {Empreendimento} mas sem {Obra} não pode ser bloqueada por
+ * falta de código na obra, já que esse valor nem entra no número final.
  */
 async function resolveEmpreendimentoEObraPorProjeto(
     projectId: string,
+    necessario: { empreendimento: boolean; obra: boolean },
 ): Promise<{ empreendimento: string; obra: string }> {
     const { data: project, error: projectError } = await supabase
         .from('projects')
@@ -54,12 +59,14 @@ async function resolveEmpreendimentoEObraPorProjeto(
     }
 
     const faltando: string[] = [];
-    if (!emp) {
-        faltando.push(`a obra "${projectName}" não está vinculada a nenhum empreendimento`);
-    } else if (!clean(emp.code)) {
-        faltando.push(`o empreendimento "${emp.name}" está sem código`);
+    if (necessario.empreendimento) {
+        if (!emp) {
+            faltando.push(`a obra "${projectName}" não está vinculada a nenhum empreendimento`);
+        } else if (!clean(emp.code)) {
+            faltando.push(`o empreendimento "${emp.name}" está sem código`);
+        }
     }
-    if (!obraCode) faltando.push(`a obra "${projectName}" está sem código`);
+    if (necessario.obra && !obraCode) faltando.push(`a obra "${projectName}" está sem código`);
 
     if (faltando.length > 0) {
         throw new MissingCodeError(
@@ -68,7 +75,7 @@ async function resolveEmpreendimentoEObraPorProjeto(
         );
     }
 
-    return { empreendimento: clean(emp!.code), obra: obraCode };
+    return { empreendimento: clean(emp?.code), obra: obraCode };
 }
 
 async function resolveEmpreendimentoDireto(empreendimentoId: string): Promise<string> {
@@ -154,9 +161,14 @@ export async function resolveVariables(
     const need = new Set(tokens);
     if (need.size === 0) return values;
 
-    // EMPREENDIMENTO + OBRA compartilham uma resolução só quando vêm da obra.
+    // EMPREENDIMENTO + OBRA compartilham uma resolução só quando vêm da obra —
+    // mas só EXIGE código do que a máscara realmente usa (uma máscara sem
+    // {Obra} não pode travar por falta de código NA obra).
     if ((need.has('EMPREENDIMENTO') || need.has('OBRA')) && ctx.projectId) {
-        const { empreendimento, obra } = await resolveEmpreendimentoEObraPorProjeto(ctx.projectId);
+        const { empreendimento, obra } = await resolveEmpreendimentoEObraPorProjeto(ctx.projectId, {
+            empreendimento: need.has('EMPREENDIMENTO'),
+            obra: need.has('OBRA'),
+        });
         if (need.has('EMPREENDIMENTO')) values.EMPREENDIMENTO = empreendimento;
         if (need.has('OBRA')) values.OBRA = obra;
     } else if (need.has('OBRA') && !ctx.projectId) {
@@ -179,7 +191,11 @@ export async function resolveVariables(
         if (ctx.empreendimentoId) {
             values.EMPREENDIMENTO = await resolveEmpreendimentoDireto(ctx.empreendimentoId);
         } else {
-            throw new MissingCodeError('Não é possível gerar o número do documento: empreendimento não informado.');
+            throw new MissingCodeError(
+                'Não é possível gerar o número do documento: a máscara usa {Empreendimento}, mas este documento não está ' +
+                'vinculado a uma obra nem a um empreendimento. Selecione uma obra, ou ajuste a máscara em Configurações do ' +
+                'Sistema › Nomenclatura para não usar essa variável neste tipo de documento.',
+            );
         }
     }
 

@@ -225,17 +225,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const contractDirection = direction ?? (initialData?.direction as string | undefined);
 
     // Numeração de Contratos — Configurações do Sistema › Nomenclatura.
-    // Suprimentos: só quando há obra vinculada (a máscara default usa
-    // {empreendimento}+{obra} resolvidos a partir dela). Sem obra — despesa
-    // administrativa, que não tem por que ter obra — cai no formato manual
-    // legado (3 dígitos): a máscara default de SUPPLY_CONTRACT exige OBRA, e
-    // sem `project_id` não há como resolver.
-    // Serviços: sempre no motor novo — o default de SERVICE_CONTRACT não usa
-    // nenhuma variável (reproduz o "001" legado), então funciona com ou sem
-    // obra, mas agora com contador atômico (sem corrida).
+    // Suprimentos e Serviços SEMPRE passam pelo motor novo, independente de
+    // ter obra selecionada — a máscara é configurável por organização, então
+    // só ELA sabe se {Obra}/{Empreendimento} são exigidos. Gatear aqui em
+    // `!!formData.project_id` (como era antes) fazia um contrato SEM obra cair
+    // no formato legado de 3 dígitos calado, mesmo quando a máscara configurada
+    // nem usava {Obra} — bug real, reportado em 2026-08-18 (contratos "013"/"014"
+    // saíram só com o sequencial apesar da máscara ter Empreendimento+Centro de
+    // Custo+Fornecedor). Se a máscara realmente precisar de Obra/Empreendimento
+    // e o contrato não tiver um, `generateDocumentNumber` bloqueia com
+    // `MissingCodeError` explicando o que falta — não silencia mais.
     // Vendas (domain='VENDAS', entrada manual em SalesModule.tsx) continua no
     // legado — fora do escopo mapeado em Configurações › Nomenclatura por ora.
-    const useNewNumbering = domain === 'SUPRIMENTOS' ? !!formData.project_id : domain === 'SERVICOS';
+    const useNewNumbering = domain === 'SUPRIMENTOS' || domain === 'SERVICOS';
     const numberingDocType: DocType = domain === 'SERVICOS' ? 'SERVICE_CONTRACT' : 'SUPPLY_CONTRACT';
 
     React.useEffect(() => {

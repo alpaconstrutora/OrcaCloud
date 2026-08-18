@@ -53,15 +53,22 @@ funcionalidade nasce quebrada:
 | 2026-08-17 | O prefixo é fixo no início ou posicionável? | Slot posicionável, como as variáveis |
 | 2026-08-17 | Escopo do `{seq}`? | Reinicia pela combinação de todas as variáveis escolhidas |
 | 2026-08-17 | Variável escolhida mas sem valor/código? | Bloqueia a criação com mensagem clara |
+| 2026-08-18 | **Revisão da linha acima**, após o bloqueio travar contratos reais em produção (Suprimentos › Contratos, obra sem vínculo de empreendimento) — "nada tem que ser exigido!" | **Nunca bloqueia.** O que não resolver simplesmente some do número (slot tratado como vazio); ver `resolvers.ts` e migration `20270912000006` |
 | 2026-08-17 | O que numerar em Condomínios? | O rateio (`condominio_rateios`, ganha coluna `number`) |
 | 2026-08-17 | Migrar os geradores legados (MAX+1)? | Sim, para contador atômico, sem renumerar o que já existe |
 | 2026-08-17 | Vendas/Locações: numerar negociação, contrato, ou os dois? | Os dois, com máscaras separadas |
 | 2026-08-17 | Serviços: só a aba Contratos, ou também o CRM (PROP-/CTR-)? | Tudo: contrato, proposta e CTR- |
 
-**Consequência da decisão de bloqueio:** como faltar valor bloqueia, a UI só pode
-oferecer as variáveis que o tipo de documento consegue resolver. Oferecer "Fornecedor"
-num rateio de condomínio seria uma armadilha — o usuário configuraria e travaria o
-módulo inteiro. Cada tipo declara suas variáveis no catálogo (item F2).
+**Consequência da decisão de 2026-08-18 (nunca bloquear):** `resolveVariables` (front)
+e `fn_generate_document_number` (SQL, migration `20270912000006`) não lançam mais erro
+quando falta um identificador ou um código cadastrado — a variável correspondente
+simplesmente não entra no número. `MissingCodeError` continua existindo só para
+pré-requisitos estruturais que já eram exigidos antes da Nomenclatura (ex.: um Pedido de
+Compra sempre precisou de obra para existir; isso não mudou). O catálogo (`supportedVariables`
+por doc_type, item F2) continua restringindo o que a UI oferece por slot — não para evitar
+bloqueio (que não existe mais), mas para não oferecer uma variável que aquele tipo de
+documento **nunca** consegue resolver (ex.: Fornecedor numa Locação), o que geraria um
+slot permanentemente vazio e confundiria quem configura a máscara.
 
 ## Os 11 tipos de documento
 
@@ -277,11 +284,17 @@ Só depois de F4 verificada no navegador:
 
 ## Estado
 
-- [x] F1 — Banco: 5 migrations escritas (`20270912000001`-`000005`) — **NÃO aplicadas** (aplicação manual no SQL Editor do Supabase, convenção do repo). Antes de aplicar `000003`, rodar a checagem de `empreendimentos.code` duplicado que ela mesma inclui.
-- [x] F2 — Motor em `services/documentNumbering/` (types/catalog/format/resolvers/settingsService/index) — `tsc --noEmit` limpo, 12 testes unitários novos (`__tests__/documentNumberFormat.test.ts`) cobrindo o exemplo literal do pedido original
-- [x] F3 — `components/settings/NumberingSettingsCard.tsx` substitui os 5 blocos antigos; `Settings.tsx` ganhou 11 folhas (era 5); `check-ui-standard.sh` sem apontamento novo; corrigido de passagem um desvio pré-existente do §19.2 (folha inativa da árvore lateral) na mesma região tocada
-- [x] F4 — 8 consumidores ligados: `orderService`(via wrapper)/`quotationService`(via wrapper)/`ContractModal.tsx`(Suprimentos+Serviços)/`contractService.createFromDeal`(CV/CL, via wrapper)/`commercialService.saveDeal`(SALE_DEAL+RENTAL_DEAL)/`servicesCommercialService`+trigger SQL(proposta)/trigger SQL(CTR- ao ganhar)/`condominioRateioService.fechar`(rateio). Backfill dos contadores em `000005`. **NÃO verificado no navegador** — depende das migrations aplicadas
-- [ ] F5 — Limpeza (AppSettings, tabelas/RPCs antigas, wrappers) — aguardando verificação em produção antes de remover o mecanismo antigo
+- [x] F1 — Banco: 6 migrations escritas (`20270912000001`-`000006`) — **as 5 primeiras aplicadas pelo usuário em 2026-08-18** e confirmadas via API (anon recebe "permission denied", não "does not exist"; usuário de leitura confirmou dados). `000006` (reversão do bloqueio) escrita depois, ainda não confirmada como aplicada — conferir antes de considerar F1 fechada.
+- [x] F2 — Motor em `services/documentNumbering/` (types/catalog/format/resolvers/settingsService/index) — `tsc --noEmit` limpo, 12 testes unitários (`__tests__/documentNumberFormat.test.ts`) cobrindo o exemplo literal do pedido original
+- [x] F3 — `components/settings/NumberingSettingsCard.tsx` substitui os 5 blocos antigos; `Settings.tsx` ganhou 11 folhas (era 5); `check-ui-standard.sh` sem apontamento novo; **verificado em produção** (print do usuário: máscara configurada e salva corretamente para Contratos de Suprimentos)
+- [x] F4 — 8 consumidores ligados. **Testado em produção pelo usuário — 3 bugs reais encontrados e corrigidos** (ver "Correções pós-deploy" abaixo). Ainda não reconfirmado após a última rodada de correções.
+- [ ] F5 — Limpeza (AppSettings, tabelas/RPCs antigas, wrappers) — aguardando confirmação final antes de remover o mecanismo antigo
+
+### Correções pós-deploy (2026-08-18)
+
+1. **Fornecedor/Cliente/Centro de Custo nunca chegavam ao motor** — os invólucros que preservaram assinatura antiga (`generateOrderNumber(projectId)` etc.) e o `ContractModal.tsx` só passavam `projectId`/`clientId`/`costCenterId` (e nem isso em todos) — qualquer máscara usando `{Fornecedor}` travava. Corrigido: os invólucros ganharam parâmetro `extra` opcional; `ContractModal`/`DealModal` passam `supplier_id`/`cost_center_id`. `QUOTATION` perdeu `FORNECEDOR`/`CENTRO_CUSTO` do catálogo — cotação vai para vários fornecedores (`invited_supplier_ids` é array) e não tem coluna de centro de custo.
+2. **Contrato de Suprimentos sem obra caía no legado calado** — `useNewNumbering` em `ContractModal.tsx` exigia `!!formData.project_id`; sem obra, ignorava a máscara configurada e gerava só o sequencial de 3 dígitos, sem erro. Confirmado no banco (contratos "013"/"014" com `project_id: null`). Corrigido: Suprimentos e Serviços sempre usam o motor novo; quem decide se precisa de obra é a máscara, não um gate fixo.
+3. **Decisão de bloqueio revertida** — a primeira versão lançava `MissingCodeError` quando uma variável configurada não tinha valor (ex.: obra sem empreendimento vinculado). O usuário pediu reversão explícita ("nada tem que ser exigido!") depois de ver isso travar um contrato real. `resolveVariables` (front) e `fn_generate_document_number` (SQL, migration `000006`) agora NUNCA bloqueiam — o que não resolve simplesmente some do número.
 
 ### Desvios do plano original (decisões tomadas durante a implementação)
 

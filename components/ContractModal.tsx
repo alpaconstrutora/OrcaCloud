@@ -232,9 +232,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // no formato legado de 3 dígitos calado, mesmo quando a máscara configurada
     // nem usava {Obra} — bug real, reportado em 2026-08-18 (contratos "013"/"014"
     // saíram só com o sequencial apesar da máscara ter Empreendimento+Centro de
-    // Custo+Fornecedor). Se a máscara realmente precisar de Obra/Empreendimento
-    // e o contrato não tiver um, `generateDocumentNumber` bloqueia com
-    // `MissingCodeError` explicando o que falta — não silencia mais.
+    // Custo+Fornecedor). Se a máscara usar {Obra}/{Empreendimento} e o
+    // contrato não tiver obra vinculada, esse pedaço simplesmente some do
+    // número — a geração NUNCA bloqueia (decisão revista em 2026-08-18).
     // Vendas (domain='VENDAS', entrada manual em SalesModule.tsx) continua no
     // legado — fora do escopo mapeado em Configurações › Nomenclatura por ora.
     const useNewNumbering = domain === 'SUPRIMENTOS' || domain === 'SERVICOS';

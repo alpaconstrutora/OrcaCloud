@@ -6,9 +6,10 @@ export interface DocTypeCatalogEntry {
     group: 'Suprimentos' | 'Comercial' | 'Condomínios';
     /**
      * Variáveis que este documento consegue resolver. A UI só oferece estas
-     * nos seletores de slot — oferecer uma variável não resolvível seria a
-     * armadilha que a decisão de bloqueio (2026-08-17) quis evitar: o
-     * usuário configuraria e travaria a criação do documento inteiro.
+     * nos seletores de slot — oferecer uma variável que este doc_type nunca
+     * tem como resolver (ex.: {Fornecedor} numa Locação) não trava mais nada
+     * (a resolução nunca bloqueia — ver resolvers.ts), mas geraria um slot
+     * permanentemente vazio no número, o que só confundiria quem configura.
      */
     supportedVariables: VariableToken[];
     /** Preserva o comportamento atual até a organização reconfigurar. */

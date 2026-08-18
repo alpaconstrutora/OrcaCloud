@@ -289,7 +289,11 @@ Só depois de F4 verificada no navegador:
 - [x] F3 — `components/settings/NumberingSettingsCard.tsx` substitui os 5 blocos antigos; `Settings.tsx` ganhou 11 folhas (era 5); `check-ui-standard.sh` sem apontamento novo; **verificado em produção** (print do usuário: máscara configurada e salva corretamente para Contratos de Suprimentos)
 - [x] F4 — 8 consumidores ligados. **Testado em produção pelo usuário — 3 bugs reais encontrados e corrigidos** (ver "Correções pós-deploy" abaixo). ✅ **CONFIRMADO FUNCIONANDO** em 2026-08-18: contrato `CT-011-004-0001` criado pelo usuário no formato novo.
 - [x] F6 (fora do plano original) — **Botão "Regerar número"** com trava após emissão, pedido em 2026-08-18. Migration `20270913000000`, `services/contractNumberRegenService.ts`, botão no campo Número do `ContractModal`. ✅ verificado contra o banco: contrato `Ativo` bloqueia com motivo, `Rascunho` libera.
-- [ ] F5 — Limpeza (AppSettings, tabelas/RPCs antigas, wrappers) — **agora desbloqueada**: o mecanismo novo está confirmado em produção. Único item pendente do plano.
+- [x] F5 — Limpeza (2026-08-18). Removidos: 15 campos de máscara de `AppSettings` + 5 chaves de `TEMPLATE_VARS`, aliases `@deprecated MissingUnitError`. Migration `20270913000001` dropa as 5 RPCs `fn_next_*_seq` e as 5 tabelas de contador antigas (**rodar bloco a bloco** — FK para `projects`/`empreendimento_units`, mesmo risco de deadlock da `20270913000000`).
+  **Dois desvios conscientes do que o plano previa:**
+  1. Os 4 adaptadores `*NumberingService.ts` **NÃO** foram dissolvidos. O plano escreveu "dissolver nos chamadores" quando eram cópias de ~100 linhas com máscara duplicada; hoje são ~30 linhas que resolvem a ORGANIZAÇÃO a partir da obra/imóvel — coisa que o motor genérico não tem como adivinhar. Dissolvê-los duplicaria essa resolução em 4 chamadores.
+  2. As sequences `services_proposal_seq`/`services_contract_seq` ficam. Corpo de função plpgsql é texto e não gera dependência formal: o Postgres deixaria dropar mesmo se alguma função ainda chamasse `nextval`, e a quebra só apareceria em runtime. Sequence parada não custa nada.
+  Mantido `orderDuplicateSuffix` (não é máscara — é o sufixo pós-fixado ao duplicar pedido, ainda em uso).
 
 ### Correções pós-deploy (2026-08-18)
 

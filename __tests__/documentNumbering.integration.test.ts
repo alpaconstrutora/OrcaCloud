@@ -82,6 +82,37 @@ describe.runIf(LIGADO && EMAIL && SENHA)('Nomenclatura · integração real', ()
     expect(numero, 'número não pode ser só dígitos — a máscara tem prefixo e variáveis').not.toMatch(/^\d+$/);
   });
 
+  /**
+   * Trava do "Regerar número" (migration 20270913000000). Não testa a UI —
+   * testa a regra, que mora no banco justamente para não depender da tela.
+   */
+  it('fn_contract_number_lock_reason responde para contratos reais', async () => {
+    const { data: contratos } = await supabase
+      .from('contracts')
+      .select('id, number, status, signature_status')
+      .eq('domain', 'SUPRIMENTOS')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    expect((contratos ?? []).length, 'precisa de contrato para testar').toBeGreaterThan(0);
+
+    for (const c of contratos ?? []) {
+      const { data: motivo, error } = await supabase.rpc('fn_contract_number_lock_reason', {
+        p_contract_id: c.id,
+      });
+
+      // PGRST202 = função ausente: migration 20270913000000 ainda não aplicada.
+      // Avisa e para, em vez de acusar falha de comportamento que não existe.
+      if (error?.code === 'PGRST202') {
+        console.warn('[trava] PULADO — migration 20270913000000_contract_number_history.sql não aplicada no banco.');
+        return;
+      }
+
+      expect(error, `RPC falhou para ${c.number}: ${error?.message}`).toBeNull();
+      console.log(`[trava] ${c.number} (status=${c.status}, assinatura=${c.signature_status ?? '-'}) -> ${motivo ?? 'PODE REGERAR'}`);
+    }
+  });
+
   it('gera número de Pedido de Compra numa obra real', async () => {
     const { data: proj } = await supabase
       .from('projects')

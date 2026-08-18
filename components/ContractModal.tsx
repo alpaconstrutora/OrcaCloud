@@ -17,11 +17,13 @@ import { empreendimentoService } from '../services/empreendimentoService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
 import ContractGuaranteeModal from './ContractGuaranteeModal';
-import { Upload, ExternalLink, KeyRound } from 'lucide-react';
+import { Upload, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { generateDocumentNumber, MissingCodeError, DocType } from '../services/documentNumbering';
+import { getNumberLockReason, regenerateContractNumber } from '../services/contractNumberRegenService';
+import { useConfirm } from './ui/confirm';
 
 interface ContractModalProps {
     isOpen: boolean;
@@ -56,6 +58,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
     const { organizations: storeOrganizations, projects: storeObras } = useStore();
+    const confirm = useConfirm();
 
     // A prop `projectId` é o projeto do seletor GLOBAL do topo, que pode ser
     // orçamento, planejamento ou diário — não só obra. Contrato só aceita OBRA
@@ -239,6 +242,56 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // legado — fora do escopo mapeado em Configurações › Nomenclatura por ora.
     const useNewNumbering = domain === 'SUPRIMENTOS' || domain === 'SERVICOS';
     const numberingDocType: DocType = domain === 'SERVICOS' ? 'SERVICE_CONTRACT' : 'SUPPLY_CONTRACT';
+
+    // ── "Regerar número" (contrato JÁ existente) ────────────────────────────
+    // O número nasce na criação e não muda ao salvar uma edição (é a identidade
+    // do documento — está no papel assinado e nas referências do financeiro).
+    // Mas trocar centro de custo/empreendimento faz o número deixar de refletir
+    // a máscara, então existe esta ação MANUAL. Trava depois que o número saiu
+    // para fora — regra completa em fn_contract_number_lock_reason (banco).
+    const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
+    const [isRegenerating, setIsRegenerating] = React.useState(false);
+    const podeRegerar = useNewNumbering && !!initialData?.id && numberLockReason === null;
+
+    React.useEffect(() => {
+        if (!isOpen || !initialData?.id || !useNewNumbering) { setNumberLockReason(null); return; }
+        let cancelled = false;
+        getNumberLockReason(initialData.id)
+            .then(r => { if (!cancelled) setNumberLockReason(r); })
+            // Falha ao consultar a trava não pode liberar o botão: na dúvida, bloqueia.
+            .catch(() => { if (!cancelled) setNumberLockReason('Não foi possível verificar se o número pode ser alterado.'); });
+        return () => { cancelled = true; };
+    }, [isOpen, initialData?.id, useNewNumbering]);
+
+    const handleRegenerateNumber = async () => {
+        if (!initialData?.id || !organizationId) return;
+        if (!await confirm({
+            title: 'Regerar o número deste contrato?',
+            message: `O número atual (${initialData.number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico.\n\nA troca é gravada na hora — não depende de "Salvar", e cancelar a edição depois não a desfaz.`,
+            variant: 'warning',
+            confirmLabel: 'Regerar',
+        })) return;
+
+        setIsRegenerating(true);
+        setNumberError(null);
+        try {
+            const novo = await regenerateContractNumber(initialData.id, numberingDocType, organizationId, {
+                projectId: (formData.project_id as string) || undefined,
+                clientId: (formData.client_id as string) || undefined,
+                supplierId: (formData.supplier_id as string) || undefined,
+                costCenterId: (formData.cost_center_id as string) || undefined,
+            });
+            numberInputRef.current = novo;
+            setFormData(prev => ({ ...prev, number: novo }));
+            onToast?.(`Número regerado: ${novo}`, 'success');
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            setNumberError(msg);
+            onToast?.(msg, 'error');
+        } finally {
+            setIsRegenerating(false);
+        }
+    };
 
     React.useEffect(() => {
         if (!isOpen || initialData?.id || !organizationId) return;
@@ -621,7 +674,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             readOnly={useNewNumbering}
                                             maxLength={useNewNumbering ? undefined : 3}
                                             placeholder={useNewNumbering ? 'Gerado ao salvar' : (isFetchingNumber ? 'Carregando...' : '001')}
-                                            value={useNewNumbering ? (initialData?.number ?? '') : (formData.number ?? '')}
+                                            // `formData.number` primeiro: em contrato novo ele é '' (cai no
+                                            // placeholder "Gerado ao salvar"), e ao REGERAR ele carrega o
+                                            // número recém-gravado — ler só `initialData` deixaria a tela
+                                            // mostrando o número antigo depois de regerar.
+                                            value={useNewNumbering ? (formData.number || initialData?.number || '') : (formData.number ?? '')}
                                             onChange={(e) => {
                                                 if (useNewNumbering) return;
                                                 numberInputRef.current = e.target.value;
@@ -636,7 +693,25 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                                             </div>
                                         )}
+                                        {/* Regerar número — só em contrato JÁ existente, e só enquanto
+                                            ele não saiu para fora (emitido/enviado p/ assinatura/assinado). */}
+                                        {useNewNumbering && initialData?.id && !isCheckingNumber && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                <ActionIconButton
+                                                    kind="edit"
+                                                    icon={isRegenerating
+                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                        : <RefreshCw className="w-4 h-4" />}
+                                                    title={numberLockReason ?? 'Regerar número pela máscara atual'}
+                                                    disabled={!podeRegerar || isRegenerating}
+                                                    onClick={handleRegenerateNumber}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
+                                    {useNewNumbering && initialData?.id && numberLockReason && (
+                                        <p className="text-xs text-gray-400 ml-1">{numberLockReason}</p>
+                                    )}
                                     {numberError && (
                                         <p className="text-xs text-red-500 ml-1 flex items-center gap-1">
                                             <AlertCircle className="w-3 h-3" /> {numberError}

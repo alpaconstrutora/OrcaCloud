@@ -17,6 +17,17 @@ export function payableParty(p: Payable): string {
     return p.party_name || p.entity_name || '—';
 }
 
+/**
+ * Tamanho do bloco de paginação. O PostgREST do Supabase corta toda resposta em
+ * `db-max-rows` (1000 por padrão) — uma query sem `.range()` devolve no máximo
+ * 1000 linhas SEM erro e SEM aviso. Com `due_date` ascendente e nulos por
+ * último, isso cortava exatamente os títulos MAIS RECENTES (o mês corrente
+ * nunca chegava a aparecer) assim que a organização passava de ~1000 títulos —
+ * é por isso que Fechamento por Centro de Custo aparecia vazio em 2026-08 com
+ * 1848 títulos na base. Mesmo padrão de `boletoService.ts`.
+ */
+const PAGE_SIZE = 1000;
+
 export const payableService = {
 
     /**
@@ -25,21 +36,32 @@ export const payableService = {
      * o usuário pode ver (REGRA #5 do CLAUDE.md — leitura nunca bloqueia).
      */
     async list(organizationId?: string | null, filters?: PayableFilters): Promise<Payable[]> {
-        let q = supabase
-            .from('vw_payables')
-            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
-            .order('due_date', { ascending: true, nullsFirst: false });
+        function buildQuery(from: number) {
+            let q = supabase
+                .from('vw_payables')
+                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,cost_center_id,plano_de_contas_id,created_at,updated_at')
+                .order('due_date', { ascending: true, nullsFirst: false })
+                .order('id', { ascending: true })
+                .range(from, from + PAGE_SIZE - 1);
 
-        if (organizationId)      q = q.eq('organization_id', organizationId);
-        if (filters?.dueFrom)    q = q.gte('due_date', filters.dueFrom);
-        if (filters?.dueTo)      q = q.lte('due_date', filters.dueTo);
-        if (filters?.projectId)  q = q.eq('project_id', filters.projectId);
-        if (filters?.sourceSystem) q = q.eq('source_system', filters.sourceSystem);
+            if (organizationId)      q = q.eq('organization_id', organizationId);
+            if (filters?.dueFrom)    q = q.gte('due_date', filters.dueFrom);
+            if (filters?.dueTo)      q = q.lte('due_date', filters.dueTo);
+            if (filters?.projectId)  q = q.eq('project_id', filters.projectId);
+            if (filters?.sourceSystem) q = q.eq('source_system', filters.sourceSystem);
+            return q;
+        }
 
-        const { data, error } = await q;
-        if (error) throw error;
+        const todas: Payable[] = [];
+        for (let pagina = 0; ; pagina++) {
+            const { data, error } = await buildQuery(pagina * PAGE_SIZE);
+            if (error) throw error;
+            const bloco = (data || []) as Payable[];
+            todas.push(...bloco);
+            if (bloco.length < PAGE_SIZE) break;
+        }
 
-        let rows = (data || []) as Payable[];
+        let rows = todas;
 
         if (filters?.status && filters.status !== 'all') {
             rows = rows.filter(r => r.effective_status === filters.status);

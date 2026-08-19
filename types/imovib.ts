@@ -133,6 +133,43 @@ export interface RentalPricingConfig {
         };
 }
 
+// ── Regras de ajuste percentual (aba "Inteligência" de Gestão de Unidades) ──
+// Cada regra é uma linha da tabela: característica + condição + percentual.
+// O percentual NÃO sobrescreve o aluguel por fora — entra como 6º fator
+// multiplicativo no score de rentalPricingService, SOMANDO-se aos percentuais
+// das outras regras que casarem com a mesma unidade (5% + 3% => fator 1,08).
+// Migration: aplicar_20270905000030_rental_pricing_rules.sql
+export type RentalPricingRuleOperator =
+    | 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'between'
+    | 'contains' | 'not_contains' | 'is_set' | 'is_not_set';
+
+export interface RentalPricingRule {
+    id: string;
+    organization_id: string;
+    /** Ref. lógica a commercial_properties(id) — o edifício aberto. Sem FK no banco. */
+    building_property_id: string;
+    /** Campo físico da unidade (`private_area`, `floor`, …) ou `carac:<uuid>` do catálogo. */
+    attribute_key: string;
+    /** Rótulo congelado no cadastro — mantém a regra legível se a característica sumir. */
+    attribute_label: string;
+    operator: RentalPricingRuleOperator;
+    value_num?: number | null;
+    /** Só usado por `between`. */
+    value_num2?: number | null;
+    value_text?: string | null;
+    /** Negativo = desconto. */
+    adjust_pct: number;
+    active: boolean;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export type RentalPricingRuleInsert =
+    Omit<RentalPricingRule, 'id' | 'created_at' | 'updated_at'>;
+export type RentalPricingRuleUpdate =
+    Partial<Omit<RentalPricingRuleInsert, 'organization_id' | 'building_property_id'>>;
+
 export interface GridCellConfig {
     x: number;
     y: number;

@@ -47,7 +47,7 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
                     <BrainCircuit className="w-8 h-8" />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-black uppercase tracking-tight">Inteligência de Aluguéis</h2>
+                    <h2 className="text-2xl font-black uppercase tracking-tight">Inteligência Hedônica</h2>
                     <p className="text-blue-100 font-bold text-xs uppercase tracking-widest opacity-80">Empreendimento: {buildingName}</p>
                 </div>
             </div>

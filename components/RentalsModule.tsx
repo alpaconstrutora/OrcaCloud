@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3, Clock, Calendar, Check } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase, BrainCircuit, MoveHorizontal, BarChart3, Clock, Calendar, Check, Sliders } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -33,7 +33,9 @@ import { RentalsDashboard } from './RentalsDashboard';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import { PriceTableManager } from './PriceTableManager';
 import RentalPricingIntelligencePanel from './RentalPricingIntelligencePanel';
+import RentalIntelligenceTab from './RentalIntelligenceTab';
 import { rentalPricingService } from '../services/rentalPricingService';
+import { rentalPricingRuleService, computeAdjustmentPct } from '../services/rentalPricingRuleService';
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
@@ -64,7 +66,7 @@ interface RentalsModuleProps {
     organizationId?: string;
 }
 
-type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables' | 'pricing-intelligence';
+type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables' | 'pricing-intelligence' | 'intelligence';
 
 // Valor de locação canônico da unidade: rental_price (gravado pela Inteligência
 // de Aluguéis e pela Tabela de aluguéis); fallback para price ("Aluguel base"
@@ -1516,7 +1518,19 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         try {
             setLoading(true);
             const units = properties.filter(p => p.parent_id === selectedBuildingId);
-            const updated = rentalPricingService.calculateRents(units, config);
+            // Regras da aba "Inteligência" (rental_pricing_rules) entram como 6º
+            // fator no score hedônico — somadas por unidade, nunca sobrescrevem o
+            // aluguel por fora. Best-effort: se a resolução de atributos falhar
+            // (ex: ponte com empreendimento indisponível), segue sem ajuste.
+            let adjustPctByPropertyId: Record<string, number> = {};
+            try {
+                const rules = await rentalPricingRuleService.list(selectedBuildingId);
+                const attrs = await rentalPricingRuleService.resolveUnitAttributes(units, effectiveOrganizationId);
+                adjustPctByPropertyId = computeAdjustmentPct(attrs, rules);
+            } catch (ruleErr) {
+                console.warn('[RentalsModule] regras de ajuste indisponíveis, seguindo sem elas:', ruleErr);
+            }
+            const updated = rentalPricingService.calculateRents(units, config, adjustPctByPropertyId);
             if (updated.length === 0) {
                 notify('Nenhuma unidade elegível para precificação neste edifício.', 'error');
                 return;
@@ -1533,10 +1547,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             // Volta para "Unidades" — não há mais diálogo pra fechar, mas o
             // usuário quer ver o resultado (aluguéis atualizados) na lista.
             setActiveTab('inventory');
+            const rulesNote = Object.keys(adjustPctByPropertyId).length > 0
+                ? ` (${Object.keys(adjustPctByPropertyId).length} com ajuste da aba Inteligência)`
+                : '';
             notify(
                 sync.hadActiveTable
-                    ? `${updated.length} unidades precificadas — tabela de aluguéis ativa também atualizada.`
-                    : `${updated.length} unidades precificadas com sucesso usando Inteligência Hedônica!`,
+                    ? `${updated.length} unidades precificadas${rulesNote} — tabela de aluguéis ativa também atualizada.`
+                    : `${updated.length} unidades precificadas${rulesNote} com sucesso usando Inteligência Hedônica!`,
             );
             loadData();
         } catch (err: any) {
@@ -2158,7 +2175,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'pricing-intelligence' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             <BrainCircuit className="w-3.5 h-3.5" />
-                            Inteligência de Aluguéis
+                            Inteligência Hedônica
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('intelligence')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'intelligence' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        >
+                            <Sliders className="w-3.5 h-3.5" />
+                            Inteligência
                         </button>
                     </div>
                 </div>
@@ -2865,6 +2889,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     buildingName={currentBuilding.name}
                     onApply={handleApplyRentalPricing}
                     loading={loading}
+                />
+            )}
+
+            {activeTab === 'intelligence' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
+                <RentalIntelligenceTab
+                    properties={properties}
+                    buildingPropertyId={selectedBuildingId}
+                    organizationId={effectiveOrganizationId}
                 />
             )}
 

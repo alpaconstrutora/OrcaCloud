@@ -86,17 +86,30 @@ const dealContractTotal = (deal: PropertyDeal): number => {
     return parcelas > 0 ? mensal * parcelas : mensal;
 };
 
-// Soma da área privativa das unidades do contrato — mesmo padrão de
-// propertyIds usado por getDealBaseValue, para a coluna "Valor/m²".
-const dealPrivateArea = (deal: PropertyDeal, properties: Property[]): number => {
-    const propertyIds = deal.units && deal.units.length > 0
+/** Unidades do contrato: a lista explícita quando existe, senão o imóvel solto. */
+const dealPropertyIds = (deal: PropertyDeal): string[] =>
+    deal.units && deal.units.length > 0
         ? deal.units.map(u => u.property_id)
         : (deal.property_id ? [deal.property_id] : []);
-    return propertyIds.reduce((sum, id) => {
+
+// Soma da área privativa das unidades do contrato — mesmo padrão de
+// propertyIds usado por dealBaseValue, para a coluna "Valor/m²".
+const dealPrivateArea = (deal: PropertyDeal, properties: Property[]): number =>
+    dealPropertyIds(deal).reduce((sum, id) => {
         const property = properties.find(p => p.id === id);
         return sum + (property?.private_area ? Number(property.private_area) : 0);
     }, 0);
-};
+
+// Soma do valor gerado pela Inteligência de Aluguéis (rentalValueOf) de cada
+// unidade do contrato — a coluna "Valor de Referência" da aba Contratos, e o
+// baseline contra o qual a parcela contratada (getDealInstallmentValue) é
+// comparada. Mora no módulo (e não só no componente) porque a coluna
+// "Referência Total" da visão mestre soma exatamente isto.
+const dealBaseValue = (deal: PropertyDeal, properties: Property[]): number =>
+    dealPropertyIds(deal).reduce((sum, id) => {
+        const property = properties.find(p => p.id === id);
+        return sum + (property ? rentalValueOf(property) : 0);
+    }, 0);
 
 // Colunas da tabela de Unidades (§2/§5.2) — a mesma tabela troca de contexto
 // (edifícios × unidades de um edifício, ver `selectedBuildingId`), então esta
@@ -106,6 +119,9 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Unidade', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'address', label: 'Endereço', sortable: true },
+    // Totais de contrato do edifício (só visão mestre) — ver rentalTotalsByProperty.
+    { key: 'rental_base_total', label: 'Referência Total', sortable: true },
+    { key: 'rental_value_total', label: 'Aluguel Total', sortable: true },
     { key: 'occupancy', label: 'Ocupação', sortable: false },
     { key: 'block', label: 'Bloco', sortable: true },
     { key: 'floor', label: 'Pavimento', sortable: true },
@@ -136,8 +152,16 @@ const PROPERTY_COLUMNS: ColumnConfig[] = [
 // Um valor só obrigava a escolher entre quebrar o nome do edifício em duas
 // linhas ou estourar o container no modo Unidades. A chave de storage continua
 // única — o que o usuário arrastar vale nos dois modos, como antes.
+// `address` desceu de 330 para 250 quando "Referência Total"/"Aluguel Total"
+// entraram: com 8 colunas, 330 empurrava a tabela para bem além do container e
+// endereço é o campo que melhor tolera truncar (já tem overflow-hidden, e o
+// endereço completo continua no cadastro do imóvel). Mesmo assim a soma passa
+// dos 1130px do container — o scroll horizontal interno é o comportamento
+// correto aqui (mesma decisão da aba Contratos), e quem quiser a tela inteira
+// esconde coluna pela engrenagem (§3) ou usa o autofit (§6.1.2).
 const BUILDING_MODE_COL_WIDTHS: Record<string, number> = {
-    name: 210, empreendimento: 184, address: 330, occupancy: 120, status: 115, actions: 210,
+    name: 210, empreendimento: 184, address: 250, rental_base_total: 165, rental_value_total: 150,
+    occupancy: 120, status: 115, actions: 210,
 };
 // Soma 1141 num container de 1130: os 11px que sobram são comidos pelo padding
 // direito da última célula (24px), então nenhum ícone de ação some. Não dá para
@@ -152,7 +176,10 @@ const UNIT_MODE_COL_WIDTHS: Record<string, number> = {
 // edifício) — usado para somar a largura total (§6.1) e montar o colgroup.
 // rental_analysis/rental_value só existem no modo Unidades (dentro de um
 // edifício) — building-mode não tem "valor de aluguel" próprio da unidade.
-const buildingModeColumnKeys = ['name', 'empreendimento', 'address', 'occupancy', 'status'] as const;
+// rental_base_total/rental_value_total são o inverso: só existem no modo
+// Edifícios — dentro de um edifício a própria aba Contratos já mostra contrato
+// a contrato, e a unidade não tem "total" nenhum para somar.
+const buildingModeColumnKeys = ['name', 'empreendimento', 'address', 'rental_base_total', 'rental_value_total', 'occupancy', 'status'] as const;
 const unitModeColumnKeys = ['name', 'empreendimento', 'block', 'floor', 'private_area', 'rental_analysis', 'rental_value', 'price', 'status'] as const;
 
 // Colunas da aba Contratos (§5.2/§6.1).
@@ -278,6 +305,8 @@ const UNITS_BUILDING_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
     name:      { label: 'Unidade',               sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento: { label: 'Empreendimento',   sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     address:   { label: 'Endereço / referência',  sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    rental_base_total:  { label: 'Referência Total', sortable: true, className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
+    rental_value_total: { label: 'Aluguel Total',    sortable: true, className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
     occupancy: { label: 'Ocupação',               sortable: false, className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     status:    { label: 'Status',                 sortable: true,  className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
 };
@@ -301,6 +330,8 @@ const UNITS_TD_CLASS: Record<string, string> = {
     name: '',
     empreendimento: '',
     address: 'text-sm font-normal text-gray-600',
+    rental_base_total: 'text-sm font-medium text-gray-800 text-right',
+    rental_value_total: 'text-sm font-medium text-gray-800 text-right',
     price: 'text-sm font-medium text-gray-800 text-right',
     occupancy: 'text-center',
     block: 'text-sm font-normal text-gray-600 text-center',
@@ -318,6 +349,8 @@ interface UnitsRowCtx {
     getUnitStatusDisplay: (property: Property) => { label: string; color: string };
     /** Imóvel → empreendimento (unidade via rental_property_id; edifício via commercial_rental_building_id). */
     empreendimentoByProperty: Record<string, { id: string; name: string; towerName?: string }>;
+    /** Totais dos contratos do edifício — colunas "Referência Total"/"Aluguel Total". */
+    rentalTotalsByProperty: Record<string, { base: number; rent: number }>;
 }
 
 function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): React.ReactNode {
@@ -337,6 +370,17 @@ function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): Rea
             return <EmpreendimentoCell value={ctx.empreendimentoByProperty[property.id]} showTower={false} />;
         case 'address':
             return property.address;
+        // Somatório dos contratos do edifício, espelhando 1:1 as colunas
+        // "Valor de Referência" e "Valor aluguel" da aba Contratos dele.
+        // Edifício sem contrato nenhum mostra `—`: zero afirmaria "os contratos
+        // somam nada", quando o caso é não haver contrato para somar.
+        case 'rental_base_total':
+        case 'rental_value_total': {
+            const totais = ctx.rentalTotalsByProperty[String(property.id).toLowerCase()];
+            if (!totais) return <span className="text-sm text-gray-400">—</span>;
+            const valor = key === 'rental_base_total' ? totais.base : totais.rent;
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+        }
         case 'price':
             return ctx.selectedBuildingId
                 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(rentalValueOf(property))
@@ -1028,6 +1072,49 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         }
     };
 
+    /**
+     * Totais de contrato por imóvel da visão mestre — colunas "Referência
+     * Total" e "Aluguel Total" de Gestão de Locações.
+     *
+     * Cada linha da visão mestre é um EDIFÍCIO (ou um imóvel avulso), e o
+     * número é a soma da coluna equivalente da aba Contratos daquele edifício:
+     * `base` = "Valor de Referência" (dealBaseValue), `rent` = "Valor aluguel"
+     * (getDealInstallmentValue). O escopo de contratos é o MESMO que
+     * `sortedDeals` aplica ao entrar no edifício — contrato de qualquer unidade
+     * filha, ou do próprio edifício alugado inteiro — para que somar a coluna
+     * lá dentro dê exatamente o que a visão mestre mostra aqui.
+     *
+     * Contrato multi-unidade entra pelo valor cheio, uma vez por edifício
+     * (Set de raízes): é assim que ele aparece na aba Contratos, uma linha só
+     * com o valor do contrato inteiro. Contrato cancelado também entra, pelo
+     * mesmo motivo — a aba Contratos lista todos, sem filtro de status.
+     */
+    const rentalTotalsByProperty = useMemo(() => {
+        // Unidade → edifício-pai; imóvel sem pai é a própria raiz.
+        const parentOf = new Map<string, string>();
+        properties.forEach(p => {
+            if (p.parent_id) parentOf.set(String(p.id).toLowerCase(), String(p.parent_id).toLowerCase());
+        });
+
+        const totals: Record<string, { base: number; rent: number }> = {};
+        deals.forEach(deal => {
+            const raizes = new Set<string>();
+            dealPropertyIds(deal).forEach(id => {
+                if (!id) return;
+                const key = String(id).toLowerCase();
+                raizes.add(parentOf.get(key) ?? key);
+            });
+            if (raizes.size === 0) return;
+            const base = dealBaseValue(deal, properties);
+            const rent = getDealInstallmentValue(deal);
+            raizes.forEach(raiz => {
+                const atual = totals[raiz] ?? { base: 0, rent: 0 };
+                totals[raiz] = { base: atual.base + base, rent: atual.rent + rent };
+            });
+        });
+        return totals;
+    }, [properties, deals]);
+
     const filteredProperties = useMemo(() => {
         let result = properties.filter(p => {
             const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1047,15 +1134,20 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         });
 
         if (sortConfig) {
+            // Colunas derivadas (não são campo do imóvel): o lookup genérico por
+            // `a[key]` devolveria undefined para todas as linhas, e a tabela não
+            // ordenaria nada ao clicar no cabeçalho.
+            const derivado = (p: any): string | number | null => {
+                switch (sortConfig.key) {
+                    case 'empreendimento': return empreendimentoByProperty[p.id]?.name ?? '';
+                    case 'rental_base_total': return rentalTotalsByProperty[String(p.id).toLowerCase()]?.base ?? null;
+                    case 'rental_value_total': return rentalTotalsByProperty[String(p.id).toLowerCase()]?.rent ?? null;
+                    default: return p[sortConfig.key];
+                }
+            };
             result.sort((a: any, b: any) => {
-                // "empreendimento" é derivado (não é campo do imóvel), então o lookup
-                // genérico por `a[key]` devolveria undefined para todas as linhas.
-                let aValue = sortConfig.key === 'empreendimento'
-                    ? (empreendimentoByProperty[a.id]?.name ?? '')
-                    : a[sortConfig.key];
-                let bValue = sortConfig.key === 'empreendimento'
-                    ? (empreendimentoByProperty[b.id]?.name ?? '')
-                    : b[sortConfig.key];
+                let aValue: any = derivado(a);
+                let bValue: any = derivado(b);
 
                 if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
                 if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
@@ -1067,7 +1159,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         }
 
         return result;
-    }, [properties, searchTerm, selectedBuildingId, sortConfig, empreendimentoByProperty]);
+    }, [properties, searchTerm, selectedBuildingId, sortConfig, empreendimentoByProperty, rentalTotalsByProperty]);
 
     // Contratos ordenáveis (§6.3) — Imóvel/Cliente não são campos diretos do
     // negócio, então resolvemos o nome uma vez antes de comparar.
@@ -1396,18 +1488,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         });
     }, [analysis.rows, analysisSearch, analysisTableColumns.sortColumn, analysisTableColumns.sortDirection]);
 
-    // Soma do valor gerado pela Inteligência de Aluguéis (rentalValueOf) de
-    // cada unidade do contrato — baseline para comparar com a parcela
-    // efetivamente contratada (getDealInstallmentValue).
-    const getDealBaseValue = (deal: PropertyDeal): number => {
-        const propertyIds = deal.units && deal.units.length > 0
-            ? deal.units.map(u => u.property_id)
-            : (deal.property_id ? [deal.property_id] : []);
-        return propertyIds.reduce((sum, id) => {
-            const property = properties.find(p => p.id === id);
-            return sum + (property ? rentalValueOf(property) : 0);
-        }, 0);
-    };
+    // A regra mora em `dealBaseValue` (nível do módulo) porque a coluna
+    // "Referência Total" da visão mestre soma exatamente este mesmo número.
+    const getDealBaseValue = (deal: PropertyDeal): number => dealBaseValue(deal, properties);
 
     const handleBulkUpdate = async (updates: Partial<Property>) => {
         if (selectedProperties.length === 0) return;
@@ -2217,7 +2300,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
                                             {filteredProperties.map((property) => {
-                                                const unitsRowCtx: UnitsRowCtx = { selectedBuildingId, properties, getContractedRentalValue, getUnitStatusDisplay, empreendimentoByProperty };
+                                                const unitsRowCtx: UnitsRowCtx = { selectedBuildingId, properties, getContractedRentalValue, getUnitStatusDisplay, empreendimentoByProperty, rentalTotalsByProperty };
                                                 return (
                                                     <tr
                                                     key={property.id}
@@ -2273,7 +2356,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     {unitsTableColumns.orderedVisibleColumns.filter(key => (unitsModeColumnKeys as readonly string[]).includes(key)).map((key, idx) => (
                                                         <td
                                                             key={key}
-                                                            className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'price' ? 'text-sm font-medium text-gray-800 text-right whitespace-nowrap' : 'text-xs font-semibold text-gray-500 uppercase tracking-wider'}`}
+                                                            className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${key === 'price' ? 'text-sm font-medium text-gray-800 text-right whitespace-nowrap' : 'text-sm font-normal text-gray-500'}`}
                                                         >
                                                             {key === 'price'
                                                                 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(filteredProperties.reduce((sum, p) => sum + rentalValueOf(p), 0))

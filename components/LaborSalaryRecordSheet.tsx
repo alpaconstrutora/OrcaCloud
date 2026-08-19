@@ -17,10 +17,13 @@ export const SALARY_CHANGE_LABELS: Record<SalaryChangeType, string> = {
     OUTRO: 'Outro',
 };
 
-/** Motivos oferecidos no formulário. ADMISSAO e AJUSTE ficam de fora: são
- *  gerados pelo trigger do banco, não se lançam à mão. */
+/** Motivos oferecidos no formulário. AJUSTE fica de fora: é gerado pelo
+ *  trigger do banco quando o salário muda pela aba Geral, não se lança à mão.
+ *  ADMISSAO precisa ficar selecionável: é gerada automaticamente só na
+ *  criação do colaborador (INSERT) — se o registro for excluído aqui depois,
+ *  nenhum trigger recria, e sem esta opção não haveria como reinserir. */
 const SELECTABLE_TYPES: SalaryChangeType[] = [
-    'MERITO', 'PROMOCAO', 'DISSIDIO', 'ENQUADRAMENTO', 'REDUCAO', 'OUTRO',
+    'ADMISSAO', 'MERITO', 'PROMOCAO', 'DISSIDIO', 'ENQUADRAMENTO', 'REDUCAO', 'OUTRO',
 ];
 
 const CONTRACT_TYPES = ['CLT', 'PJ', 'DIARISTA', 'TEMPORARIO', 'ESTAGIARIO', 'AUTONOMO'];

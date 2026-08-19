@@ -1,19 +1,21 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History } from 'lucide-react';
-import { Empreendimento, EmpreendimentoStatus } from '../../types';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks } from 'lucide-react';
+import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
 import TowerEditor from './TowerEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
 import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
 import CuradoriaTab from './CuradoriaTab';
+import CaracteristicasAdicionaisTab from './CaracteristicasAdicionaisTab';
 import { empreendimentoProposalService } from '../../services/empreendimentoProposalService';
 import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
 import VinculacoesTab from './VinculacoesTab';
 import HistoricoTab from './HistoricoTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
+import { empreendimentoUnitCharacteristicService } from '../../services/empreendimentoUnitCharacteristicService';
 import { areaEngineService } from '../../services/areaEngineService';
 import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
 import { organizationService } from '../../services/organizationService';
@@ -63,7 +65,7 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'text-slate-500',
 };
 
-type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
+type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'caracteristicas' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
   const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (CLAUDE.md regras #2/#3)
@@ -142,6 +144,16 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       .then(({ data }) => setPlantaStudyName((data as any)?.name));
   }, [e.planta_ai_study_id]);
 
+  // Aba "Características Adicionais" (só existe quando há ao menos 1 característica
+  // do catálogo aplicável ao tipo deste empreendimento — ver services/empreendimentoUnitCharacteristicService.ts).
+  const [caracteristicas, setCaracteristicas] = React.useState<EmpreendimentoUnitCharacteristic[]>([]);
+  React.useEffect(() => {
+    if (!effectiveOrgId) { setCaracteristicas([]); return; }
+    empreendimentoUnitCharacteristicService.listCharacteristics(effectiveOrgId, { tipo: e.tipo })
+      .then(setCaracteristicas)
+      .catch(() => setCaracteristicas([]));
+  }, [effectiveOrgId, e.tipo]);
+
   const obraVinculada = e.project_id ? projects.find(p => p.id === e.project_id) : undefined;
 
   const tipoLabel = e.tipo ? (tipoNameMap[e.tipo] || FALLBACK_TIPO_LABELS[e.tipo] || e.tipo) : undefined;
@@ -186,6 +198,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight },
     { id: 'curadoria', label: 'Curadoria', icon: Inbox, badge: pendingCuradoria },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
+    // Só existe quando o catálogo (Configurações do Sistema → Características de
+    // Unidade) tem ao menos 1 característica aplicável ao tipo deste empreendimento.
+    ...(caracteristicas.length > 0 ? [{ id: 'caracteristicas' as Tab, label: 'Características Adicionais', icon: ListChecks }] : []),
     { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
     { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
     { id: 'locacoes', label: 'Espelho de Locações', icon: KeyRound },
@@ -375,6 +390,14 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         </div>
       )}
 
+      {tab === 'caracteristicas' && (
+        <CaracteristicasAdicionaisTab
+          empreendimento={e}
+          organizationId={effectiveOrgId ?? organizationId}
+          caracteristicas={caracteristicas}
+          onManageCaracteristicas={onChangeView ? () => onChangeView('settings') : undefined}
+        />
+      )}
       {tab === 'regulatorio' && (
         <MapaRegulatorioEditor empreendimentoId={e.id} organizationId={e.organization_id} />
       )}

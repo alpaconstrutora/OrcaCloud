@@ -257,6 +257,59 @@ export interface UnitOccupancyRow extends UnitOccupancy {
     _fracao_ideal?: number | null;
 }
 
+// ── Características Adicionais da unidade (aba condicional por tipo) ───────
+// Catálogo configurável — a 3ª/4ª/10ª característica entra pela tela, sem
+// migration. `applies_to_tipos` guarda slugs de `empreendimento_types.slug`;
+// vazio = aplica a qualquer tipo de empreendimento.
+export type UnitCharacteristicInputType = 'SELECT' | 'MULTI_SELECT' | 'TEXT' | 'NUMBER' | 'BOOLEAN';
+
+export interface UnitCharacteristicOption {
+    value: string;
+    label: string;
+    color?: string;
+}
+
+export interface EmpreendimentoUnitCharacteristic {
+    id: string;
+    organization_id: string;
+    name: string;
+    slug: string;
+    input_type: UnitCharacteristicInputType;
+    /** Só usado por SELECT/MULTI_SELECT; TEXT/NUMBER/BOOLEAN ignoram. */
+    options: UnitCharacteristicOption[];
+    /** Slugs de `empreendimento_types.slug`. Vazio = aplica a QUALQUER tipo. */
+    applies_to_tipos: string[];
+    active: boolean;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export type EmpreendimentoUnitCharacteristicInsert =
+    Omit<EmpreendimentoUnitCharacteristic, 'id' | 'created_at' | 'updated_at' | 'slug'> & { slug?: string };
+export type EmpreendimentoUnitCharacteristicUpdate =
+    Partial<Pick<EmpreendimentoUnitCharacteristic, 'name' | 'input_type' | 'options' | 'applies_to_tipos' | 'active' | 'sort_order'>>;
+
+/** Valor de UMA característica em UMA unidade. Sempre array — SELECT/TEXT/NUMBER usam 1 elemento. */
+export interface EmpreendimentoUnitCharacteristicValue {
+    id: string;
+    unit_id: string;
+    characteristic_id: string;
+    /** Herdado da unidade pelo trigger `trg_empr_unit_char_values_org`; nunca vem do seletor do topo. */
+    organization_id: string;
+    values: string[];
+    created_at: string;
+    updated_at: string;
+}
+
+/** Unidade "achatada" com torre + valores de característica, para a tabela única da aba. */
+export interface UnitCharacteristicsRow extends EmpreendimentoUnit {
+    _tower_name: string;
+    _tower_id: string;
+    /** characteristic_id → values */
+    _caracteristicas: Record<string, string[]>;
+}
+
 export interface EmpreendimentoCommonArea {
     id: string;
     empreendimento_id: string;

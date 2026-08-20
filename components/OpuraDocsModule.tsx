@@ -42,9 +42,10 @@ import {
   Check,
   AlertCircle,
   Lock,
-  UploadCloud
+  UploadCloud,
+  MoveHorizontal
 } from 'lucide-react';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { DocumentsTable } from './documents/DocumentsTable';
 import { DocumentQrLabelModal } from './documents/DocumentQrLabelModal';
 import { BatchUploadSheet } from './documents/BatchUploadSheet';
@@ -82,15 +83,25 @@ import { isObra } from '../utils/projectClassification';
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'extensao', label: 'Extensão', sortable: true },
   { key: 'descricao', label: 'Descrição', sortable: true },
   { key: 'autor', label: 'Autor', sortable: true },
+  { key: 'numero_documento_fornecedor', label: 'Nº Doc. Fornecedor', sortable: true },
   { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
+  { key: 'revisao', label: 'Revisão', sortable: true },
   { key: 'project_id', label: 'Obra Vinculada', sortable: true },
   { key: 'data_emissao', label: 'Emissão', sortable: true },
   { key: 'data_validade', label: 'Validade', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// §6.1 — larguras default do redimensionamento/autofit da tabela de documentos do GED.
+const GED_DOC_COL_WIDTHS: Record<string, number> = {
+  nome: 260, extensao: 100, descricao: 220, autor: 150, numero_documento_fornecedor: 160,
+  tipo_documento: 160, revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120,
+  status: 110, actions: 140,
+};
 
 interface OpuraDocsModuleProps {
   activeOrganizationId: string | null;
@@ -131,6 +142,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [searchQuery, setSearchQuery] = usePersistedState<string>('opuraDocs:search', '');
   const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('opuraDocs:viewMode', 'list');
   const tableColumns = useTableColumns(COLUMNS, 'opuraDocsColumns');
+  const gedDocCols = useResizableColumns(GED_DOC_COL_WIDTHS, 'opuraDocsColWidths');
   const [uploadModalOpen, setUploadModalOpen] = React.useState(false);
   const [batchUploadOpen, setBatchUploadOpen] = React.useState(false);
   // Seleção para edição em lote (§10/§10.1 do guia) — checkbox por linha + intervalo Shift+clique.
@@ -146,6 +158,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocTokens, setEditDocTokens] = React.useState<Record<string, string>>({});
   const [editDocDesc, setEditDocDesc] = React.useState('');
   const [editDocAutor, setEditDocAutor] = React.useState('');
+  const [editDocNumeroFornecedor, setEditDocNumeroFornecedor] = React.useState('');
+  const [editDocRevisao, setEditDocRevisao] = React.useState('');
   const [editDocSupplierId, setEditDocSupplierId] = React.useState('');
   const [editDocAutorOutro, setEditDocAutorOutro] = React.useState(false);
   const [editDocEmissao, setEditDocEmissao] = React.useState('');
@@ -268,6 +282,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocName, setNewDocName] = React.useState('');
   const [newDocDesc, setNewDocDesc] = React.useState('');
   const [newDocAutor, setNewDocAutor] = React.useState('');
+  const [newDocNumeroFornecedor, setNewDocNumeroFornecedor] = React.useState('');
+  const [newDocRevisao, setNewDocRevisao] = React.useState('');
   // true = usuário escolheu "Outro" no seletor de Autor/Fornecedor (digita o nome livremente).
   const [newDocAutorOutro, setNewDocAutorOutro] = React.useState(false);
   const [newDocType, setNewDocType] = React.useState('');
@@ -1607,6 +1623,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           nome: docTitle || fileToUpload.name,
           descricao: newDocDesc || undefined,
             autor: newDocAutor || undefined,
+          numero_documento_fornecedor: newDocNumeroFornecedor || undefined,
+          revisao: newDocRevisao || undefined,
           categoria: newDocCategory,
           tipo_documento: newDocType,
           discipline_code: newDocDiscipline || undefined,
@@ -1631,6 +1649,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       setNewDocName('');
       setNewDocDesc('');
       setNewDocAutor('');
+      setNewDocNumeroFornecedor('');
+      setNewDocRevisao('');
       setNewDocAutorOutro(false);
       setNewDocType('');
       setNewDocDiscipline('');
@@ -1891,6 +1911,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
     setEditDocDesc(doc.descricao || '');
     setEditDocAutor(doc.autor || '');
+    setEditDocNumeroFornecedor(doc.numero_documento_fornecedor || '');
+    setEditDocRevisao(doc.revisao || '');
     // supplier_id vinculado → seletor mostra o fornecedor. Sem supplier_id mas com texto
     // livre em autor (documentos criados antes deste campo existir) → cai em "Outro",
     // preservando o texto já digitado.
@@ -1952,6 +1974,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         nome: finalDocName,
         descricao: editDocDesc || null,
         autor: editDocAutor || null,
+        numero_documento_fornecedor: editDocNumeroFornecedor || null,
+        revisao: editDocRevisao || null,
         supplier_id: editDocSupplierId || null,
         data_emissao: editDocEmissao || null,
         data_validade: editDocValidade || null,
@@ -2382,6 +2406,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 onSaveDefault={handleSaveColumnPreference}
                 savingDefault={savingColumnPrefs}
               />
+              {/* Autofit sob comando explícito — nunca automático (§6.1.2 do guia). */}
+              <button
+                onClick={() => gedDocCols.autoFit()}
+                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                title="Ajustar largura das colunas ao conteúdo"
+              >
+                <MoveHorizontal className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -2606,6 +2638,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <DocumentsTable
               documents={filteredDocuments}
               tableColumns={tableColumns}
+              cols={gedDocCols}
               selectable={canAccessTab(activeTab)}
               selectedIds={selectedDocIds}
               isRowSelectable={isDocSelectableForBatch}
@@ -2869,6 +2902,30 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     />
                   )}
                 </div>
+
+              {/* Nº do Documento (Fornecedor) e Revisão — texto livre, controle manual */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Nº do Documento (Fornecedor)</label>
+                  <input
+                    type="text"
+                    placeholder="Código/número dado pelo fornecedor..."
+                    value={newDocNumeroFornecedor}
+                    onChange={(e) => setNewDocNumeroFornecedor(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Revisão</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Rev. A, 00..."
+                    value={newDocRevisao}
+                    onChange={(e) => setNewDocRevisao(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  />
+                </div>
+              </div>
 
               {/* Emissão, Validade e Dias Alerta */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3980,7 +4037,30 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   )}
                 </div>
 
-              {/* Datas e Alertas em Grid */}
+              {/* Nº do Documento (Fornecedor) e Revisão — texto livre, controle manual */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Nº do Documento (Fornecedor)</label>
+                  <input
+                    type="text"
+                    placeholder="Código/número dado pelo fornecedor..."
+                    value={editDocNumeroFornecedor}
+                    onChange={(e) => setEditDocNumeroFornecedor(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Revisão</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Rev. A, 00..."
+                    value={editDocRevisao}
+                    onChange={(e) => setEditDocRevisao(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
               {/* Datas e Alertas em Grid */}
                 <div className={`grid ${editingDoc.categoria === 'engenharia' ? 'grid-cols-1 sm:grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'} gap-4`}>
                   <div className="space-y-1.5">

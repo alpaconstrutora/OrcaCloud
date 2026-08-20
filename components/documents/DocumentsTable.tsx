@@ -17,6 +17,14 @@ type TableColumnsState = Pick<
  * anterior (sem redimensionamento), sem quebrar as telas que ainda não migraram. */
 type ResizableColumnsState = ReturnType<typeof useResizableColumns>;
 
+/** Extensão do arquivo em maiúsculas (ex: "PDF", "DWG") a partir do nome/caminho
+ * armazenado — não é uma coluna persistida, é sempre derivada do arquivo ativo. */
+export const getDocumentExtension = (name?: string): string => {
+  if (!name) return '-';
+  const ext = name.split('.').pop();
+  return ext ? ext.toUpperCase() : '-';
+};
+
 /**
  * Ícone por tipo de arquivo (extraído de `OpuraDocsModule.tsx` — GED). Compartilhado
  * para que a coluna "Documento" fique idêntica em qualquer tela que use `<DocumentsTable>`.
@@ -86,9 +94,12 @@ const DEFAULT_EMPTY_STATE = (
  * dinâmicas (máscara de pasta, só o GED usa) não entram aqui — ver `dynamicColumns`. */
 const DOCUMENTS_TABLE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
   nome: { label: 'Documento', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  extensao: { label: 'Extensão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   descricao: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   autor: { label: 'Autor', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  numero_documento_fornecedor: { label: 'Nº Doc. Fornecedor', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   tipo_documento: { label: 'Tipo / Categoria', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  revisao: { label: 'Revisão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   project_id: { label: 'Obra Vinculada', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   data_emissao: { label: 'Emissão', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   data_validade: { label: 'Validade', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
@@ -99,9 +110,12 @@ const DOCUMENTS_TABLE_COLUMN_HEADERS: Record<string, { label: string; sortable?:
  * (min-w/max-w/truncate/whitespace) que afetam o layout da célula, não só a cor do texto. */
 const DOCUMENTS_TABLE_CELL_CLASS: Record<string, string> = {
   nome: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 min-w-[200px]',
+  extensao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   descricao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[260px] truncate',
   autor: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
+  numero_documento_fornecedor: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   tipo_documento: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
+  revisao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   project_id: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600',
   data_emissao: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
   data_validade: 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap',
@@ -134,12 +148,18 @@ function renderDocumentCell(
           </div>
         </div>
       );
+    case 'extensao':
+      return getDocumentExtension(doc.active_version?.storage_path);
     case 'descricao':
       return doc.descricao || '-';
     case 'autor':
       return doc.autor || '-';
+    case 'numero_documento_fornecedor':
+      return doc.numero_documento_fornecedor || '-';
     case 'tipo_documento':
       return doc.tipo_documento;
+    case 'revisao':
+      return doc.revisao || '-';
     case 'project_id':
       return ctx.resolveProjectName ? ctx.resolveProjectName(doc) : '-';
     case 'data_emissao':

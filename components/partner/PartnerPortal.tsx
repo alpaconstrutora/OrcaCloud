@@ -30,7 +30,8 @@ import {
   Settings2,
   Filter,
   ChevronRight,
-  Folder as FolderIcon
+  Folder as FolderIcon,
+  MoveHorizontal
 } from 'lucide-react';
 import { extractTokenFromFileName } from '../../utils/dmsUtils';
 import { supabase } from '../../lib/supabase';
@@ -39,7 +40,7 @@ import { partnerPortalTokenService } from '../../services/partnerPortalTokenServ
 import { contractService } from '../../services/contractService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState } from '../ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { DocumentsTable } from '../documents/DocumentsTable';
 import { DocumentQrLabelModal } from '../documents/DocumentQrLabelModal';
 import {
@@ -90,14 +91,21 @@ const NO_FOLDER = '__sem_pasta__';
 // mesma <DocumentsTable>, então as colunas precisam ser as mesmas para o layout ficar idêntico.
 const PARTNER_DOC_COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'extensao', label: 'Extensão', sortable: true },
   { key: 'autor', label: 'Autor', sortable: true },
+  { key: 'numero_documento_fornecedor', label: 'Nº Doc. Fornecedor', sortable: true },
   { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
+  { key: 'revisao', label: 'Revisão', sortable: true },
   { key: 'project_id', label: 'Obra Vinculada', sortable: true },
   { key: 'data_emissao', label: 'Emissão', sortable: true },
   { key: 'data_validade', label: 'Validade', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
+const PARTNER_DOC_COL_WIDTHS: Record<string, number> = {
+  nome: 260, extensao: 100, autor: 150, numero_documento_fornecedor: 160, tipo_documento: 160,
+  revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
+};
 
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken }) => {
   const isPreview = !!previewWorkspaceId;
@@ -290,6 +298,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [docStatusFilter, setDocStatusFilter] = usePersistedState<'all' | 'ativo' | 'alerta' | 'vencido'>('partnerPortalDocsFilters:status', 'all');
   const [showDocFilters, setShowDocFilters] = React.useState(false);
   const partnerDocColumns = useTableColumns(PARTNER_DOC_COLUMNS, 'partnerDocsColumns');
+  const partnerDocCols = useResizableColumns(PARTNER_DOC_COL_WIDTHS, 'partnerPortalDocsColWidths');
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
 
   // Árvore Pasta -> Disciplina (espelha o GED). Pastas e disciplinas vêm junto dos
@@ -1359,6 +1368,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                           onToggleColumn={partnerDocColumns.toggleColumn}
                           onReset={partnerDocColumns.resetColumns}
                         />
+                        {/* Autofit sob comando explícito — nunca automático (§6.1.2 do guia). */}
+                        <button
+                          onClick={() => partnerDocCols.autoFit()}
+                          className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                          title="Ajustar largura das colunas ao conteúdo"
+                        >
+                          <MoveHorizontal className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                     {showDocFilters && (
@@ -1386,6 +1403,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <DocumentsTable
                     documents={filteredSharedDocuments}
                     tableColumns={partnerDocColumns}
+                    cols={partnerDocCols}
                     resolveProjectName={() => '-'}
                     renderActions={(doc) => (
                       <>

@@ -69,8 +69,11 @@ const PARTNER_COLUMNS: ColumnConfig[] = [
 // usam a mesma <DocumentsTable>, entao as colunas tem que bater.
 const WS_DOC_COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'extensao', label: 'Extensão', sortable: true },
   { key: 'autor', label: 'Autor', sortable: true },
+  { key: 'numero_documento_fornecedor', label: 'Nº Doc. Fornecedor', sortable: true },
   { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
+  { key: 'revisao', label: 'Revisão', sortable: true },
   { key: 'project_id', label: 'Obra Vinculada', sortable: true },
   { key: 'data_emissao', label: 'Emissão', sortable: true },
   { key: 'data_validade', label: 'Validade', sortable: true },
@@ -78,7 +81,8 @@ const WS_DOC_COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 const WS_DOC_COL_WIDTHS: Record<string, number> = {
-  nome: 260, autor: 150, tipo_documento: 160, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
+  nome: 260, extensao: 100, autor: 150, numero_documento_fornecedor: 160, tipo_documento: 160,
+  revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
 };
 const PARTNER_COL_WIDTHS: Record<string, number> = {
   supplier: 220, organization: 180, users: 110, documents: 120, requests: 130, status: 120,

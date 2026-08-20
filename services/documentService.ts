@@ -664,6 +664,8 @@ export const documentService = {
         autor: docData.autor || null,
         categoria: docData.categoria,
         tipo_documento: docData.tipo_documento,
+        numero_documento_fornecedor: docData.numero_documento_fornecedor || null,
+        revisao: docData.revisao || null,
         discipline_code: docData.discipline_code || null,
         status: docData.status || 'ativo',
         data_emissao: docData.data_emissao || null,

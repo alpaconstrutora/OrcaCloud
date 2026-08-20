@@ -10,6 +10,12 @@ export interface OpuraDocument {
   autor?: string;
   categoria: OpuraDocumentCategoria;
   tipo_documento: string;
+  // Número do documento gerado pelo próprio fornecedor (texto livre — não é o
+  // [NUMERO] sequencial da máscara de nomenclatura, que é interno do GED).
+  numero_documento_fornecedor?: string;
+  // Revisão do documento (texto livre, ex: "Rev. A", "00") — controle manual,
+  // não reaproveita o token [REVISAO] da máscara de nomenclatura de pasta.
+  revisao?: string;
   // Código da disciplina (opura_dms_disciplines.code), escolhido explicitamente
   // no upload/edição — não é extraído do nome do arquivo.
   discipline_code?: string | null;

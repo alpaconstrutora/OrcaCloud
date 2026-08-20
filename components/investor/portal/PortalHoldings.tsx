@@ -4,7 +4,7 @@ import { HoldingItem } from '../types';
 import {
     CardHeader, DetailField, fmtBRL, fmtBRLCents, PortalCard, PortalEmpty,
     PrimaryButton, StatusPill, TagChip, Td, Th, PillTone,
-} from './PortalKit';
+} from '../../portal/PortalKit';
 
 interface Props {
     holdings: HoldingItem[];

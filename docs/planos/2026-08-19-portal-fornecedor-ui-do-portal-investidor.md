@@ -1,0 +1,73 @@
+# Portal do Fornecedor — aplicar o UI/UX do Portal do Investidor
+
+## Pedido original
+
+> Sessão de 2026-08-19, primeira mensagem, transcrita literalmente:
+>
+> ```
+> portal do fornecedor (visão do fornecedor): aplicar UI UX igual ao portal do investidor (visão do investidor)
+> ```
+
+Nada mais foi pedido nesta sessão.
+
+## Leitura do pedido
+
+"Visão do fornecedor" = o que o fornecedor vê, ou seja `isPublicExperience`
+(link público por token + prévia mobile). A visão do **gestor** sobre o mesmo
+módulo (`SupplierPortalManager` → `SupplierDashboard` sem token) fica no padrão
+do app, exatamente como o Portal do Investidor separa gestor × investidor.
+
+"Igual" foi lido ao pé da letra, inclusive o acento **coral `#E1553C`** — é uma
+linguagem só de "portal externo", não uma cor por portal. O azul/`Supplier
+Portal` anterior saiu. Se o usuário preferir um acento por portal, é uma troca
+de tokens no `PortalKit`.
+
+## Itens
+
+| # | Arquivo | O que muda | Como sei que terminou | Estado |
+|---|---|---|---|---|
+| 1 | `components/portal/PortalKit.tsx` | kit promovido de `investor/portal/` para servir os dois portais; docblock atualizado | os 8 arquivos de `investor/portal/*` importam de `../../portal/PortalKit` e o build passa | ✅ |
+| 2 | `components/supplier/portal/status.ts` | tons de pílula por status de pedido/cotação/NF + `orderTotal`/`isOpenOrder`/`isNegotiating` | `tsc` limpo; nenhum status do domínio sem tom | ✅ |
+| 3 | `components/supplier/portal/PortalOverview.tsx` | `KpiStrip` (5 KPIs reais) + faixa de insight + card com sub-abas Pedidos/Cotações/Notas | print desktop e mobile mostram KPIs e as 3 sub-abas com dado real | ✅ |
+| 4 | `components/supplier/portal/PortalOrders.tsx` | tabela com busca persistida, 4 filtros, linha expansível com `DetailField` + ações; cartões no mobile | print `orders_expandido` mostra a linha aberta com os 8 campos e os 2 botões | ✅ |
+| 5 | `components/supplier/portal/PortalQuotations.tsx` | tabela de RFQ com prazo relativo ("em 3 dias"/"prazo encerrado") e ação Responder | print `quotations` | ✅ |
+| 6 | `components/supplier/portal/PortalNegotiations.tsx` | aba Lances passa a listar **pedidos reais** em `Enviado`/`Em Negociação` | print `negotiations`; nenhum array fixo de exemplo restou no caminho do fornecedor | ✅ |
+| 7 | `components/supplier/portal/PortalInvoices.tsx` | envio de NF (drop zone coral) + tabela de notas com vínculo de pedido, ver e excluir (`useConfirm`) | print `documents` | ✅ |
+| 8 | `components/SupplierDashboard.tsx` | casca standalone (banner + header + sidebar + barra inferior + sheet "Mais"), título/abas do app escondidos no portal, prévia mobile, estados "Portal em configuração" e "Dados indisponíveis" | prints desktop+mobile das 5 abas; `scrollWidth == clientWidth` (sem scroll lateral) | ✅ |
+| 9 | `components/OrderLifeline.tsx`, `components/NegotiationHub.tsx` | prop `accent={'indigo'\|'portal'}`, padrão `indigo` (app inalterado) | prints `orders_logistica` e `negociacao_hub` em coral; nenhum `indigo` literal sobrou nos dois arquivos | ✅ |
+| 10 | `App.tsx` (`SupplierPortalTokenGate`) | guard deixa de aplicar `p-4 md:p-6` (a casca é dona do gutter) e o spinner vira coral | sem gutter duplicado no print | ✅ |
+| 11 | `docs/ui_ux_guia_unificado.md` | §24 vira "Portais externos" com os dois escopos + caminho novo do kit; §20.2/§20.2.1 atualizadas | seções lidas e coerentes com o código | ✅ |
+| 12 | `SupplyChainOrderDetails.tsx`, `QuotationResponseForm.tsx` | migrar acento e (no caso do formulário de cotação) tirar o overlay de tela cheia | — | ❌ **NÃO FEITO** — ver abaixo |
+
+## Item 12 — por que ficou de fora
+
+São as **mesmas telas** do módulo Suprimentos interno (o comprador abre as duas
+pelo app). Migrar exige a prop `accent` em ~64 pontos e regride o lado do
+comprador se algo escapar — é trabalho próprio, não um detalhe deste.
+
+Além do acento, `QuotationResponseForm` abre como **overlay de tela cheia**
+(`absolute inset-0 z-[110] bg-black/60`): no portal ele engole a casca inteira
+(sidebar e header somem). Isso contraria `UI_PATTERNS.md` (painel lateral é o
+padrão) e já é assim hoje no app — mudar é decisão de interação, não de cor.
+
+## Efeitos colaterais assumidos (fora de "só UI")
+
+1. **Aba Lances deixou de mostrar dado falso.** A versão anterior renderizava um
+   array fixo ("Cimento CP-II 50kg", "Edifício Horizon", lance "R$ 34,50") para
+   o fornecedor real no link público. No vocabulário do portal o estado vazio é
+   honesto, então a lista passou a vir dos pedidos reais.
+2. **Lista de abas vazia agora significa "nenhuma aba".** Era
+   `length > 0 ? salvas : todas` — o gestor que desligava todas via o portal
+   voltar com TODAS. Alinhado ao `deriveTabIds` do Portal do Investidor; com
+   zero abas o fornecedor vê "Portal em configuração".
+3. **KPIs da aba Estatísticas passaram a ser reais.** "Negociações Ativas: 12"
+   era literal no JSX.
+
+## Verificação executada
+
+- `npx tsc --noEmit` → 0 erros;
+- `npx vite build` → ok;
+- `bash scripts/check-ui-standard.sh` nos 6 arquivos tocados → 0 violações;
+- harness temporário (`__portal-preview.*`, já removido) + Playwright:
+  8 prints em `C:/tmp/pwtest/portalfornecedor` (1440×980 e 390×844), sem erro
+  de console e sem scroll horizontal.

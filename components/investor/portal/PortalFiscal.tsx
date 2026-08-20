@@ -1,7 +1,7 @@
 import React from 'react';
 import { Info } from 'lucide-react';
 import { InvestorContribution } from '../../../services/investorContributionsService';
-import { CardHeader, fmtBRLCents, KpiStrip, PortalCard, PortalEmpty, Td, Th } from './PortalKit';
+import { CardHeader, fmtBRLCents, KpiStrip, PortalCard, PortalEmpty, Td, Th } from '../../portal/PortalKit';
 
 interface Props {
     contributions: InvestorContribution[];

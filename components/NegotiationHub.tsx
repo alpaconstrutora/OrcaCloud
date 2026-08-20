@@ -3,6 +3,7 @@ import { MessageSquare, Gavel, User, Send, Calendar, Tag, CheckCircle2, History,
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { negotiationService, NegotiationProposal } from '../services/negotiationService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
+import { useConfirm } from './ui/confirm';
 
 interface NegotiationHubProps {
     order: PurchaseOrder;
@@ -12,9 +13,41 @@ interface NegotiationHubProps {
     onUpdate?: () => void;
     /** Acesso via link público (sem login) — mesmo padrão do Portal do Parceiro. */
     portalToken?: string;
+    /**
+     * Cor de acento. `indigo` é o padrão do app; `portal` é o coral do
+     * vocabulário dos portais externos (§24), usado na visão do fornecedor.
+     */
+    accent?: 'indigo' | 'portal';
 }
 
-const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail, currentUserRole, onClose, onUpdate, portalToken }) => {
+// Cada variante escrita por extenso — o JIT do Tailwind não enxerga classe
+// montada em runtime.
+const ACCENTS = {
+    indigo: {
+        solidBg: 'bg-indigo-600',
+        solidShadow: 'shadow-indigo-100',
+        softChip: 'bg-indigo-50 text-indigo-600',
+        dot: 'bg-indigo-500',
+        text: 'text-indigo-600',
+        ring: 'focus:ring-indigo-500/10',
+        underline: 'decoration-indigo-500/30',
+        submitHover: 'hover:bg-black',
+    },
+    portal: {
+        solidBg: 'bg-[#E1553C]',
+        solidShadow: 'shadow-[#F3D9D1]',
+        softChip: 'bg-[#FDEDE8] text-[#C24428]',
+        dot: 'bg-[#E1553C]',
+        text: 'text-[#C24428]',
+        ring: 'focus:ring-[#E1553C]/10',
+        underline: 'decoration-[#E1553C]/30',
+        submitHover: 'hover:bg-[#C8452E]',
+    },
+} as const;
+
+const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail, currentUserRole, onClose, onUpdate, portalToken, accent = 'indigo' }) => {
+    const A = ACCENTS[accent];
+    const confirm = useConfirm();
     const [proposals, setProposals] = useState<NegotiationProposal[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -103,7 +136,14 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
     };
 
     const handleAccept = async (proposalId: string) => {
-        if (!confirm('Deseja aceitar esta contraproposta? Isso atualizará o pedido final.')) return;
+        // §14 — confirmação pelo useConfirm() global (era window.confirm nativo,
+        // que no portal do fornecedor aparecia como caixa do navegador).
+        const ok = await confirm({
+            title: 'Aceitar esta contraproposta?',
+            message: 'O pedido final será atualizado com os valores e prazos propostos.',
+            confirmLabel: 'Aceitar',
+        });
+        if (!ok) return;
         try {
             if (portalToken) {
                 await supplierPortalTokenService.acceptNegotiationProposal(portalToken, proposalId, order.id);
@@ -128,7 +168,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
             {/* Header */}
             <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50 backdrop-blur-md">
                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${A.solidBg} ${A.solidShadow}`}>
                         <Gavel className="w-6 h-6" />
                     </div>
                     <div>
@@ -137,8 +177,8 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-full">
-                        <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${A.softChip}`}>
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${A.dot}`} />
                         <span className="text-xs font-black uppercase tracking-widest">{order.status}</span>
                     </div>
                     {onClose && (
@@ -173,13 +213,13 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     ? 'bg-black text-white border-black rounded-tr-none'
                                     : 'bg-white text-gray-900 border-gray-100 rounded-tl-none'
                                     } ${isAccepted ? 'ring-2 ring-emerald-500' : ''}`}>
-                                    <div className={`flex items-center gap-2 mb-3 text-xs font-black uppercase tracking-widest ${isMine ? 'text-gray-400' : 'text-indigo-600'}`}>
+                                    <div className={`flex items-center gap-2 mb-3 text-xs font-black uppercase tracking-widest ${isMine ? 'text-gray-400' : A.text}`}>
                                         <User className="w-3 h-3" />
                                         {prop.senderRole === 'buyer' ? 'Comprador' : 'Fornecedor'} ({prop.senderEmail})
                                     </div>
 
                                     {prop.message && (
-                                        <p className="text-sm font-medium leading-relaxed mb-4 italic opacity-90 underline decoration-indigo-500/30 underline-offset-4">
+                                        <p className={`text-sm font-medium leading-relaxed mb-4 italic opacity-90 underline underline-offset-4 ${A.underline}`}>
                                             "{prop.message}"
                                         </p>
                                     )}
@@ -198,7 +238,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                             ))}
                                             <div className="pt-2 mt-2 border-t border-white/10 flex justify-between text-xs font-black">
                                                 <span className="uppercase tracking-widest">Total Oferecido</span>
-                                                <span className={isMine ? 'text-emerald-400' : 'text-indigo-600'}>
+                                                <span className={isMine ? 'text-emerald-400' : A.text}>
                                                     {fmt(prop.items.reduce((s, i) => s + (i.total || 0), 0))}
                                                 </span>
                                             </div>
@@ -230,7 +270,9 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                         {!isMine && prop.status === 'pending' && (
                                             <button
                                                 onClick={() => handleAccept(prop.id)}
-                                                className="flex items-center gap-2 bg-emerald-500 text-white px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
+                                                // §17 — botão de ação na forma compacta do app (era pílula
+                                                // `rounded-full` em caixa alta, que o §8 reserva a status)
+                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] text-[13px] font-medium hover:bg-emerald-700 transition-all active:scale-95"
                                             >
                                                 <CheckCircle2 className="w-3 h-3" />
                                                 Aceitar
@@ -254,7 +296,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                 {/* Control Panel (Side) */}
                 <div className="w-80 border-l border-gray-100 p-6 bg-white space-y-6">
                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                        <Tag className="w-3 h-3 text-indigo-600" />
+                        <Tag className={`w-3 h-3 ${A.text}`} />
                         Sua Contraproposta
                     </h4>
 
@@ -266,7 +308,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     type="date"
                                     value={proposedDate}
                                     onChange={(e) => setProposedDate(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 />
                             </div>
                             <div>
@@ -274,7 +316,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 <select
                                     value={proposedPaymentMethod}
                                     onChange={(e) => setProposedPaymentMethod(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 >
                                     <option value="Boleto">Boleto</option>
                                     <option value="PIX">PIX</option>
@@ -290,7 +332,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 <select
                                     value={proposedTermType}
                                     onChange={(e) => setProposedTermType(e.target.value as any)}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 >
                                     <option value="Vista">À Vista</option>
                                     <option value="Parcelado">Parcelado</option>
@@ -302,7 +344,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     type="number"
                                     value={proposedDays}
                                     onChange={(e) => setProposedDays(parseInt(e.target.value) || 0)}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 />
                             </div>
                         </div>
@@ -314,7 +356,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     type="number"
                                     value={proposedInstallments}
                                     onChange={(e) => setProposedInstallments(parseInt(e.target.value) || 1)}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 />
                             </div>
                         )}
@@ -331,7 +373,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                                 type="number"
                                                 value={item.unitPrice}
                                                 onChange={(e) => handlePriceChange(idx, parseFloat(e.target.value) || 0)}
-                                                className="w-full bg-white border border-gray-100 rounded-lg pl-8 pr-3 py-2 text-form-input font-black outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                                className={`w-full bg-white border border-gray-100 rounded-lg pl-8 pr-3 py-2 text-form-input font-black outline-none focus:ring-2 ${A.ring}`}
                                             />
                                         </div>
                                     </div>
@@ -342,7 +384,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                         <div className="pt-4 border-t border-gray-50">
                             <div className="flex justify-between items-center mb-4">
                                 <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Novo Total</span>
-                                <span className="text-sm font-black text-indigo-600">
+                                <span className={`text-sm font-black ${A.text}`}>
                                     {fmt(proposedItems.reduce((s, i) => s + (i.total || 0), 0))}
                                 </span>
                             </div>
@@ -351,13 +393,13 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 placeholder="Mensagem opcional..."
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none h-20 mb-4"
+                                className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-form-input font-medium outline-none focus:ring-2 resize-none h-20 mb-4 ${A.ring}`}
                             />
 
                             <button
                                 onClick={handleSubmitProposal}
                                 disabled={submitting}
-                                className="w-full bg-indigo-600 text-white py-4 rounded-2xl flex items-center justify-center gap-2 text-button font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50"
+                                className={`w-full text-white py-4 rounded-2xl flex items-center justify-center gap-2 text-button font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 disabled:opacity-50 ${A.solidBg} ${A.submitHover} ${A.solidShadow}`}
                             >
                                 <Send className="w-4 h-4" />
                                 Enviar Proposta

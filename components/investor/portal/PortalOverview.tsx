@@ -7,7 +7,7 @@ import { AIInsight } from '../../../services/aiService';
 import {
     CardHeader, DetailField, fmtBRL, fmtBRLCents, fmtDate, fmtMonthShort, KpiStrip, PortalCard,
     PortalEmpty, PortalTabs, PrimaryButton, SoftButton, StatusPill, Td, Th, TagChip, PillTone,
-} from './PortalKit';
+} from '../../portal/PortalKit';
 
 interface Props {
     equity: string;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Download, FileText } from 'lucide-react';
 import { InvestorReport, REPORT_CATEGORY_LABELS, ReportCategory } from '../../../services/investorPortalService';
-import { CardHeader, fmtDate, PortalCard, PortalEmpty, TagChip, Td, Th } from './PortalKit';
+import { CardHeader, fmtDate, PortalCard, PortalEmpty, TagChip, Td, Th } from '../../portal/PortalKit';
 
 interface Props {
     reports: InvestorReport[];

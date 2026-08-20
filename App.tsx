@@ -325,10 +325,10 @@ const SupplierPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
   }, [token]);
 
   if (state === 'loading') return (
-    <div className="h-screen flex items-center justify-center bg-[#F8FAFC]">
+    <div className="h-screen flex items-center justify-center bg-[#F2F2F4]">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-black text-blue-700 uppercase tracking-widest">Carregando portal...</p>
+        <div className="w-8 h-8 border-4 border-[#E1553C] border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-black text-[#C24428] uppercase tracking-widest">Carregando portal...</p>
       </div>
     </div>
   );
@@ -343,14 +343,13 @@ const SupplierPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     </div>
   );
 
-  // Acesso via link público não passa por <Layout> (guard em App.tsx roda
-  // ANTES do <Layout>, ver render principal) — por isso o gutter §20.2 tem
-  // que ser reaplicado aqui, à mão. Era `md:p-8` (o valor antigo, 32px);
-  // nunca foi migrado porque só existe fora do Layout.
+  // Fora do <Layout> (guard roda antes dele). Desde 2026-08-19 o gutter §20.2
+  // vem da própria casca standalone do portal (igual ao Portal do Investidor e
+  // ao Portal do Cliente) — não duplicar aqui.
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6">
-      <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
-        <SupplierDashboardPublic supplierProfile={supplier} portalToken={token} />
+    <div className="min-h-screen bg-gray-50">
+      <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-[#E1553C] border-t-transparent rounded-full animate-spin" /></div>}>
+        <SupplierDashboardPublic supplierProfile={supplier} portalToken={token} isPreview />
       </React.Suspense>
     </div>
   );

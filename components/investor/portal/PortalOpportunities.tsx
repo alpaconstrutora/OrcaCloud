@@ -8,7 +8,7 @@ import { Investor } from '../../../services/investorService';
 import {
     CardHeader, DetailField, fmtBRL, PortalCard, PortalEmpty, PrimaryButton, SoftButton,
     StatusPill, TagChip, Td, Th, PillTone,
-} from './PortalKit';
+} from '../../portal/PortalKit';
 
 interface Props {
     opportunities: InvestorOpportunity[];

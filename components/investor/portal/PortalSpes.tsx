@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayoutGrid } from 'lucide-react';
-import { CardHeader, fmtBRL, fmtBRLCents, KpiStrip, PortalCard, PortalEmpty, TagChip, Td, Th } from './PortalKit';
+import { CardHeader, fmtBRL, fmtBRLCents, KpiStrip, PortalCard, PortalEmpty, TagChip, Td, Th } from '../../portal/PortalKit';
 
 export interface PortalSpe {
     id: string;

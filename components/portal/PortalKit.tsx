@@ -1,15 +1,23 @@
 import React from 'react';
 
 /**
- * Vocabulário visual do Portal do Investidor (acesso do investidor).
+ * Vocabulário visual dos PORTAIS EXTERNOS (o que o investidor / o fornecedor vê
+ * no acesso por link público).
  *
  * ⚠️ Exceção deliberada ao `docs/ui_ux_guia_unificado.md` §24 — autorizada pelo
- * usuário em 2026-08-15 ("vamos abrir exceção neste caso"). Vale SÓ para as 4
- * abas que o investidor vê. Nenhuma tela interna do app usa este arquivo.
+ * usuário em 2026-08-15 ("vamos abrir exceção neste caso") e estendida ao Portal
+ * do Fornecedor em 2026-08-19 ("aplicar UI UX igual ao portal do investidor").
+ * Vale SÓ para `components/investor/portal/*` e `components/supplier/portal/*`,
+ * mais os trechos recortados por `isPublicExperience` nos dois dashboards.
+ * Nenhuma tela interna do app usa este arquivo.
  *
  * O que diverge do guia (e só aqui): pílula de status com fundo (§8), `<thead>`
  * em caixa alta (§6.2), acento coral em vez do azul (§17) e faixa de KPIs com
  * divisores/tendência em vez do `KpiCard` (§4/§4.4).
+ *
+ * Morava em `components/investor/portal/PortalKit.tsx`; subiu para cá quando
+ * passou a servir dois portais — o kit é a fonte única de cor/medida do
+ * vocabulário. Tela de portal não escreve `bg-[#E1553C]` à mão.
  */
 
 // ── Tokens ────────────────────────────────────────────────────────────────────

@@ -13,9 +13,39 @@ interface OrderLifelineProps {
     onStatusChange?: (status: OrderStatus) => void;
     isEditable?: boolean;
     maxSelectableStatus?: OrderStatus;
+    /**
+     * Cor de acento. `indigo` é o padrão do app; `portal` é o coral do
+     * vocabulário dos portais externos (§24) — usado só na visão do fornecedor
+     * no link público, para o trilho não brigar com a casca coral.
+     */
+    accent?: 'indigo' | 'portal';
 }
 
-const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery, separationDate, shippedDate, deliveredDate, onStatusChange, isEditable, maxSelectableStatus }) => {
+// Classes por acento — não dá para interpolar cor em Tailwind (o JIT não vê a
+// classe montada em runtime), então cada variante fica escrita por extenso.
+const ACCENTS = {
+    indigo: {
+        line: 'bg-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.4)]',
+        current: 'bg-indigo-600 text-white scale-110 shadow-xl shadow-indigo-200 ring-4 ring-indigo-50 animate-pulse-subtle',
+        done: 'bg-indigo-100 text-indigo-600',
+        label: 'text-indigo-600',
+        badge: 'bg-indigo-50 border-indigo-100',
+        badgeIcon: 'text-indigo-500',
+        badgeText: 'text-indigo-700',
+    },
+    portal: {
+        line: 'bg-[#E1553C] shadow-[0_0_20px_rgba(225,85,60,0.35)]',
+        current: 'bg-[#E1553C] text-white scale-110 shadow-xl shadow-[#F3D9D1] ring-4 ring-[#FDEDE8]',
+        done: 'bg-[#FDEDE8] text-[#C24428]',
+        label: 'text-[#C24428]',
+        badge: 'bg-[#FDEDE8] border-[#F3D9D1]',
+        badgeIcon: 'text-[#E1553C]',
+        badgeText: 'text-[#C24428]',
+    },
+} as const;
+
+const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery, separationDate, shippedDate, deliveredDate, onStatusChange, isEditable, maxSelectableStatus, accent = 'indigo' }) => {
+    const A = ACCENTS[accent];
     const steps = [
         { id: 'BIDDING' as OrderStatus, label: 'Lances', icon: <ShoppingBag className="w-5 h-5" /> },
         { id: 'CONFIRMED' as OrderStatus, label: 'Confirmado', icon: <CheckCircle2 className="w-5 h-5" />, date: undefined },
@@ -39,7 +69,7 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
 
                 {/* Progress Line */}
                 <div
-                    className="absolute top-1/2 left-0 h-1 bg-indigo-600 -translate-y-1/2 rounded-full transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(79,70,229,0.4)]"
+                    className={`absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full transition-all duration-1000 ease-out ${A.line}`}
                     style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
                 />
 
@@ -60,9 +90,9 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
                                 disabled={!canSelect}
                                 className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-sm
                   ${isCurrent
-                                        ? 'bg-indigo-600 text-white scale-110 shadow-xl shadow-indigo-200 ring-4 ring-indigo-50 animate-pulse-subtle'
+                                        ? A.current
                                         : isActive
-                                            ? 'bg-indigo-100 text-indigo-600'
+                                            ? A.done
                                             : 'bg-white text-gray-300 border border-gray-100'}
                   ${canSelect ? 'hover:scale-110 cursor-pointer active:scale-95' : 'cursor-default'}
                 `}
@@ -76,7 +106,7 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
 
                             <div className="mt-4 flex flex-col items-center">
                                 <span className={`text-xs font-black uppercase tracking-widest transition-colors
-                  ${isCurrent ? 'text-indigo-600' : isActive ? 'text-gray-900' : 'text-gray-400'}
+                  ${isCurrent ? A.label : isActive ? 'text-gray-900' : 'text-gray-400'}
                 `}>
                                     {step.label}
                                 </span>
@@ -86,10 +116,10 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
                                     </span>
                                 )}
                                 {isCurrent && estimatedDelivery && (
-                                    <div className="absolute -bottom-10 whitespace-nowrap bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 animate-in fade-in slide-in-from-top-2 duration-700">
+                                    <div className={`absolute -bottom-10 whitespace-nowrap px-3 py-1.5 rounded-lg border animate-in fade-in slide-in-from-top-2 duration-700 ${A.badge}`}>
                                         <div className="flex items-center gap-2">
-                                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                                            <span className="text-xs font-bold text-indigo-700 uppercase tracking-tight">Prev: {estimatedDelivery}</span>
+                                            <Clock className={`w-3.5 h-3.5 ${A.badgeIcon}`} />
+                                            <span className={`text-xs font-bold uppercase tracking-tight ${A.badgeText}`}>Prev: {estimatedDelivery}</span>
                                         </div>
                                     </div>
                                 )}

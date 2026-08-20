@@ -201,7 +201,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §21 Rótulo de campo e título de modal
 - [ ] §22 Atualizar estado local em vez de recarregar a tabela inteira (criar/editar/excluir) + preservar scroll ao voltar de edição em página cheia
 - [ ] §23 Migalha de pão — decisão explícita (usa `ui/Breadcrumb.tsx` com 3+ níveis internos, ou "Voltar" com 1 salto, ou nada por §18)
-- [ ] §24 Portal do Investidor — a tela auditada está dentro ou fora do escopo da exceção? (fora = §4/§6.2/§8/§17 valem inteiras)
+- [ ] §24 Portais externos (investidor/fornecedor) — a tela auditada está dentro ou fora do escopo da exceção? (fora = §4/§6.2/§8/§17 valem inteiras)
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -1679,7 +1679,10 @@ O respiro entre a moldura do app (sidebar, barra superior) e o conteúdo da tela
 > ✅ **Full-bleed** (banner sangrando até a borda) é o único caso que cancela o
 > gutter, e os valores **têm que acompanhar** o `<main>`: `-mx-4 md:-mx-6`.
 > Com `md:-mx-8` contra um `md:p-6` sobra margem negativa e nasce scroll
-> lateral. Referência: `SupplierDashboard.tsx` (casca do portal público).
+> lateral. Origem do caso: `SupplierDashboard.tsx` (casca do portal público)
+> — que em 2026-08-19 deixou de precisar do full-bleed, porque a casca passou
+> a ser dona do gutter (§20.2.1). A regra continua valendo para quem cancelar
+> o gutter do `<main>` de verdade.
 > ❌ Não mexer no `<main>` para consertar UMA tela — é o container de todas.
 > ℹ️ **Por que 24px e não 32px:** o vão do topo pesa mais do que mede. O `h1`
 > de §20 é 30px numa caixa de linha de 36px, então ~8px de meia-entrelinha
@@ -1707,8 +1710,12 @@ header e `<main>` inclusos), não filhos do `<main>` do Layout.
 > Foram encontrados três desvios reais, nenhum causado pela mesma pessoa/dia —
 > prova de que sem um valor de referência escrito, cada wrapper novo inventa
 > o próprio número:
->   - `App.tsx` (Portal do Fornecedor, guard de token) — `md:p-8`, o padrão
->     **antigo** (32px), nunca migrado por viver fora do Layout.
+>   - `App.tsx` (Portal do Fornecedor, guard de token) — era `md:p-8`, o padrão
+>     **antigo** (32px), nunca migrado por viver fora do Layout. Desde
+>     2026-08-19 o guard não aplica padding nenhum: quem carrega o
+>     `p-4 md:p-6` é a casca standalone do `SupplierDashboard`, como no
+>     Portal do Investidor. Com isso o full-bleed `-mx-4 -mt-4` que existia
+>     na casca deixou de ser necessário e foi removido.
 >   - `App.tsx` (Portal do Investidor, guard de token) e `BrokerPortal.tsx`
 >     (standalone) — `p-6` fixo, sem o piso `p-4` do mobile.
 >   - `fiscal/FiscalModule.tsx` — `px-7 py-6` (28px, valor que não existe em
@@ -1901,6 +1908,13 @@ Semântica: `<nav aria-label="Trilha de navegação">`.
 > primário (§17), que é o único azul sólido da tela.
 > ✅ Quando existe, a trilha fica **acima do `<h1>`** dentro do mesmo bloco de
 > título (§20), não numa barra própria.
+> ⚠️ **Exceção — módulo casca que troca sub-telas inteiras.** Quando quem conhece
+> a pilha é um componente **casca** e cada nível é uma sub-tela que traz o
+> próprio título, não existe bloco de título onde injetar a trilha: é o mesmo
+> conflito estrutural do `tabsSlot` (§19.3). Aí ela vai numa barra fina própria,
+> `px-4 py-3 border-b border-gray-100 bg-white`, acima da área de conteúdo.
+> Referência: `ServicesCommercialModule.tsx`. Só vale para casca — tela que tem
+> `<h1>` próprio não usa a barra.
 > ℹ️ `text-xs` aqui (e não o `text-sm` do corpo) é deliberado: a trilha é
 > secundária ao título que vem logo abaixo.
 
@@ -1912,39 +1926,64 @@ Semântica: `<nav aria-label="Trilha de navegação">`.
 | `OpuraCnoModule.tsx:810` | ✅ migrado — trilha navegável (o crumb raiz limpa a obra selecionada) |
 | `OfficesDashboard.tsx:192` | ✅ N/A — era só um botão "Voltar" com comentário errado; comentário corrigido |
 | `TasksMobileApp.tsx:797` | ✅ N/A — chrome mobile (exceção acima) |
+| `ServicesCommercialModule.tsx:110` | ✅ migrado — **o caso canônico do app** (Comercial › CRM Serviços): Pipeline → Oportunidade → Visita/Orçamento/Proposta/Contrato. A trilha anterior pulava o nível "Oportunidade" e omitia `contract-detail` por inteiro; ver nota abaixo. |
 | `OpuraAssetsModule.tsx:802` | ❌ pendente — `Corporativo / Gestão de Bens` é caminho de módulo estático, sem navegação: a correção é **remover**, não migrar. Não feito aqui porque mexe no cabeçalho em card que o §20 marca como "não migre sem decisão explícita". |
+
+> 🔴 **A trilha ad hoc pode mentir sobre a pilha — confira contra os `onBack`.**
+> Em `ServicesCommercialModule` a trilha renderizava `Pipeline / Visita` enquanto
+> o `onBack` da própria sub-tela voltava para `opportunity`. O nível do meio —
+> obrigatório no caminho, já que visita/orçamento/proposta só são alcançáveis de
+> dentro da oportunidade — não aparecia, então o único destino clicável era o
+> topo: exatamente a ambiguidade que a migalha deveria resolver. Ao migrar
+> qualquer trilha, derive os níveis do **destino dos `onBack`**, não da lista de
+> views que por acaso estava no `includes()`.
 
 ---
 
-## 24. PORTAL DO INVESTIDOR — vocabulário próprio (exceção autorizada)
+## 24. PORTAIS EXTERNOS — vocabulário próprio (exceção autorizada)
 
-**Escopo — e só ele:** as abas que o **investidor** vê no acesso por link
-público (`isPublicExperience` em `InvestorDashboard.tsx`) — desde 2026-08-16 são
-as 10 do módulo (Resumo, Simulador, Carteira, Financeiro, Fiscal, Oportunidades,
-Documentos, Comunicados, SPE, Relatórios) —, mais a casca standalone (§20.2.1).
-Arquivos: `components/investor/portal/*` e os trechos de `InvestorDashboard.tsx`
-recortados por `isPublicExperience`.
+**Escopo — e só ele:** as abas que o **investidor** e o **fornecedor** veem no
+acesso por link público (`isPublicExperience` em `InvestorDashboard.tsx` e em
+`SupplierDashboard.tsx`), mais a casca standalone (§20.2.1).
 
-**Fora do escopo:** todo o resto do app, inclusive a visão do gestor sobre o
-mesmo módulo (abas Financeiro, Fiscal, Comunicados, SPE, Relatórios, e o
-`InvestorSummaryDashboard`/`HoldingsList`/`OpportunitiesTab`/`ReportsTab`
-antigos, que continuam servindo o admin). Nada aqui autoriza um segundo
-vocabulário numa tela interna.
+| Portal | Abas no vocabulário | Arquivos |
+|---|---|---|
+| Investidor (desde 2026-08-15) | as 10 do módulo (Resumo, Simulador, Carteira, Financeiro, Fiscal, Oportunidades, Documentos, Comunicados, SPE, Relatórios) | `components/investor/portal/*` + trechos de `InvestorDashboard.tsx` sob `isPublicExperience` |
+| Fornecedor (desde 2026-08-19) | as 5 do módulo (Estatísticas, Lances, Cotações, Pedidos, Nota Fiscal) | `components/supplier/portal/*` + trechos de `SupplierDashboard.tsx` sob `isPublicExperience` |
+
+O kit vive em **`components/portal/PortalKit.tsx`** (era
+`components/investor/portal/PortalKit.tsx` até virar de dois portais).
+
+**Fora do escopo:** todo o resto do app, inclusive a visão do **gestor** sobre os
+mesmos módulos — `InvestorSummaryDashboard`/`HoldingsList`/`OpportunitiesTab`/
+`ReportsTab` do lado do investidor, e os `render*` do `SupplierDashboard` quando
+`isPublicExperience` é falso, do lado do fornecedor. Nada aqui autoriza um
+segundo vocabulário numa tela interna.
+
+**Telas de detalhe compartilhadas.** `SupplyChainOrderDetails.tsx` e
+`QuotationResponseForm.tsx` são as MESMAS telas do módulo Suprimentos interno;
+não foram migradas e continuam no acento indigo/azul. Já `OrderLifeline.tsx` e
+`NegotiationHub.tsx` ganharam uma prop `accent={'indigo' | 'portal'}` (padrão
+`indigo`, para o app não mudar) — é esse o caminho quando um componente
+compartilhado precisar dos dois acentos. **Não duplique o componente.**
 
 **Origem:** 2026-08-15, a pedido explícito do usuário, a partir de um desenho de
 referência externo (dashboard estilo Shakuro). Perguntado se queria o layout do
 print no vocabulário do guia ou o print fiel, respondeu *"Fiel ao print,
 inclusive pílulas e laranja"* e *"vamos abrir exceção neste caso. vamos testar
-esse novo UI UX"*. É um **experimento de produto delimitado**, não a nova régua
-do app.
+esse novo UI UX"*. Em 2026-08-19 o usuário pediu *"portal do fornecedor (visão do
+fornecedor): aplicar UI UX igual ao portal do investidor (visão do investidor)"*
+— daí a extensão ao segundo portal, com o MESMO acento coral (é uma linguagem só
+de "portal externo", não uma cor por portal). É um **experimento de produto
+delimitado aos portais**, não a nova régua do app.
 
 ### Os quatro desvios (e só eles)
 
-| Elemento | Guia | Portal do Investidor | Por quê |
+| Elemento | Guia | Portais externos | Por quê |
 |---|---|---|---|
 | Status | §8 texto colorido, sem pílula | pílula `rounded-[6px]` + fundo + `uppercase tracking-wider` (`StatusPill`) | é a âncora visual do desenho de referência; o portal é leitura passiva, sem coluna de ações competindo pelo olho |
 | `<thead>` | §6.2 sentence case | `uppercase tracking-[0.08em]` `text-[11px]` (`Th`) | idem — separa cabeçalho de dado sem linha divisória vertical (o portal não usa `border-r`) |
-| Cor de ação | §17 azul sólido | coral `#E1553C` (`PrimaryButton`, aba ativa, série do gráfico, barra de progresso) | identidade própria do portal do investidor, distinta do app interno |
+| Cor de ação | §17 azul sólido | coral `#E1553C` (`PrimaryButton`, aba ativa, série do gráfico, barra de progresso) | identidade própria dos portais externos, distinta do app interno |
 | Faixa de KPIs | §4 `KpiCard` com ícone colorido por métrica | card único com divisores verticais, sem ícone, com delta de tendência (`KpiStrip`) | é a variante que a §4.4 registrou como proposta; aqui ela existe **só** neste vocabulário, não no `KpiCard.tsx` |
 
 ### O que continua valendo (não é exceção)
@@ -1959,9 +1998,14 @@ do app.
 
 ### Regra de manutenção
 
-Toda cor/medida do vocabulário mora em `components/investor/portal/PortalKit.tsx`.
+Toda cor/medida do vocabulário mora em `components/portal/PortalKit.tsx`.
 Tela do portal **não escreve `bg-[#E1553C]` à mão** — usa a primitiva. Se
 precisar de um elemento novo, ele nasce no kit.
+
+> ⚠️ A casca standalone (banner, header, sidebar, barra inferior) e os mapas de
+> `accent` dos componentes compartilhados ainda escrevem os hex à mão — são
+> `className` de layout, fora do alcance das primitivas. Se um terceiro portal
+> entrar, extraia a casca antes de copiá-la pela terceira vez.
 
 > ℹ️ `scripts/check-ui-standard.sh` **continua acusando** esses arquivos (§8 pílula
 > e afins) — o checador é textual. A saída correta é apontar para esta seção, não

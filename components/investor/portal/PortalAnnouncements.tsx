@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bell, CheckCircle2 } from 'lucide-react';
 import { investorPortalTokenService } from '../../../services/investorPortalTokenService';
-import { CardHeader, parseDate, PortalCard, PortalEmpty, PrimaryButton, StatusPill } from './PortalKit';
+import { CardHeader, parseDate, PortalCard, PortalEmpty, PrimaryButton, StatusPill } from '../../portal/PortalKit';
 
 interface Props {
     announcements: any[];

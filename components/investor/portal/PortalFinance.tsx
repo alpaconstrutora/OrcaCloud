@@ -4,7 +4,7 @@ import { InvestorContribution } from '../../../services/investorContributionsSer
 import {
     CardHeader, fmtBRL, fmtBRLCents, fmtDate, KpiStrip, parseDate, PortalCard, PortalEmpty,
     PortalTabs, StatusPill, Td, Th, PillTone,
-} from './PortalKit';
+} from '../../portal/PortalKit';
 
 interface Props {
     contributions: InvestorContribution[];

@@ -835,38 +835,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </div>
                     </div>
 
-                    {/* Logistics Life-line */}
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden relative">
-                        <div className={`absolute top-0 left-0 w-1.5 h-full ${A.bar}`} />
-                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-10 flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${A.chip}`}>
-                                <Truck className={`w-4 h-4 ${A.icon}`} />
-                            </div>
-                            Fluxo de Atendimento
-                        </h3>
-                        <div className="px-4">
-                            <OrderLifeline
-                                accent={accent}
-                                status={(() => {
-                                    switch (order.status) {
-                                        case 'Confirmado': return 'CONFIRMED';
-                                        case 'Em Negociação':
-                                        case 'Enviado': return 'BIDDING';
-                                        case 'Separação': return 'PREPARING';
-                                        case 'Em Trânsito': return 'SHIPPED';
-                                        case 'Entregue': return 'DELIVERED';
-                                        case 'Recebido': return 'RECEIVED';
-                                        case 'Divergência': return 'DIVERTED';
-                                        default: return 'BIDDING';
-                                    }
-                                })()}
-                                estimatedDelivery={order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'A definir'}
-                                separationDate={order.separationDate}
-                                shippedDate={order.shippedDate}
-                                deliveredDate={order.actualDeliveryDate}
-                            />
-                        </div>
-                    </div>
+                    {/* O "Fluxo de Atendimento" (OrderLifeline) morava aqui e era
+                        exatamente a mesma linha do tempo da tela de Logística do
+                        pedido — dois lugares mostrando o mesmo dado. Ficou só na
+                        tela dedicada, alcançável pelo botão "Rastreio" do
+                        cabeçalho (e pelo botão "Logística do pedido" da lista).
+                        Removido a pedido do usuário em 2026-08-20. */}
 
                     {/* Items Table */}
                     <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -1268,7 +1242,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                     {/* Linked NFes (Invoices) */}
                     <div className="relative bg-white p-7 rounded-3xl shadow-sm border border-gray-100">
-                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
+                        {/* pr-36: o botão "Anexar NFe" é `absolute` no canto — sem
+                            reservar a faixa dele, o título passa por baixo quando
+                            a coluna é estreita (portal, sidebar de 64). */}
+                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 pr-36 flex items-center gap-3">
                             <div className={`p-2 rounded-xl ${A.docChip}`}>
                                 <FileText className={`w-4 h-4 ${A.docIcon}`} />
                             </div>

@@ -60,6 +60,13 @@ import {
     SEM_EMPREENDIMENTO,
     type RentalAnalysisScope,
 } from '../lib/rentalByEmpreendimento';
+// Segundo eixo de partição da aba Análise — por categoria do cliente
+// (`clients.category`), não por empreendimento. Ver lib/rentalByClientType.ts.
+import {
+    groupRentalByClientType,
+    SEM_CATEGORIA,
+    type RentalClientTypeScope,
+} from '../lib/rentalByClientType';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 interface RentalsModuleProps {
@@ -233,14 +240,21 @@ const ANALYSIS_COLUMNS: ColumnConfig[] = [
     { key: 'occupancyRate', label: 'Ocupação física', sortable: true },
     { key: 'financialRate', label: 'Ocupação financeira', sortable: true },
     { key: 'monthlyRevenue', label: 'Receita mensal', sortable: true },
+    { key: 'referenceMonthlyRevenue', label: 'Receita mensal de referência', sortable: true },
+    { key: 'annualRevenue', label: 'Receita anual', sortable: true },
     { key: 'vacancyDays', label: 'Vacância média', sortable: true },
     { key: 'noi', label: 'NOI', sortable: true },
     { key: 'waleYears', label: 'WALE', sortable: true },
     { key: 'overdue90Rate', label: 'Vencido > 90 dias', sortable: true },
+    { key: 'valuePerSqmMax', label: 'Valor máx. locação /m²', sortable: true },
+    { key: 'valuePerSqmMin', label: 'Valor mín. locação /m²', sortable: true },
+    { key: 'valuePerSqmAvg', label: 'Valor médio locação /m²', sortable: true },
 ];
 const ANALYSIS_DEFAULT_COL_WIDTHS: Record<string, number> = {
     name: 230, unitsCount: 100, occupancyRate: 130, financialRate: 155,
-    monthlyRevenue: 140, vacancyDays: 130, noi: 130, waleYears: 90, overdue90Rate: 145,
+    monthlyRevenue: 140, referenceMonthlyRevenue: 165, annualRevenue: 140,
+    vacancyDays: 130, noi: 130, waleYears: 90, overdue90Rate: 145,
+    valuePerSqmMax: 155, valuePerSqmMin: 155, valuePerSqmAvg: 160,
 };
 
 const moneyBRL = (v: number) =>
@@ -275,6 +289,10 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
             return orDash(row.financial.rate, percent1);
         case 'monthlyRevenue':
             return moneyBRL(row.monthlyRevenue);
+        case 'referenceMonthlyRevenue':
+            return moneyBRL(row.referenceMonthlyRevenue);
+        case 'annualRevenue':
+            return moneyBRL(row.monthlyRevenue * 12);
         case 'vacancyDays':
             return row.vacancy ? `${row.vacancy.averageDays} dias` : '—';
         case 'noi':
@@ -283,6 +301,44 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
             return orDash(row.executive?.wale.years, anos => `${anos.toFixed(1)} anos`);
         case 'overdue90Rate':
             return orDash(row.executive?.collection.overdue90Rate, percent1);
+        case 'valuePerSqmMax':
+            return orDash(row.valuePerSqm.max, moneyBRL);
+        case 'valuePerSqmMin':
+            return orDash(row.valuePerSqm.min, moneyBRL);
+        case 'valuePerSqmAvg':
+            return orDash(row.valuePerSqm.avg, moneyBRL);
+        default:
+            return null;
+    }
+};
+
+// Colunas da tabela "Por tipo de cliente" da aba Análise — segundo eixo de
+// partição, ao lado de "Por empreendimento" (ver lib/rentalByClientType.ts).
+// Sem coluna de ações, mesmo motivo da tabela irmã: não há ação por linha.
+const CLIENT_TYPE_COLUMNS: ColumnConfig[] = [
+    { key: 'label', label: 'Tipo de cliente', sortable: true },
+    { key: 'clientCount', label: 'Nº de clientes', sortable: true },
+    { key: 'avgRentalValue', label: 'Valor médio de locação', sortable: true },
+    { key: 'avgValuePerSqm', label: 'Valor médio de locação /m²', sortable: true },
+];
+const CLIENT_TYPE_DEFAULT_COL_WIDTHS: Record<string, number> = {
+    label: 220, clientCount: 140, avgRentalValue: 190, avgValuePerSqm: 200,
+};
+
+/** Célula da tabela "Por tipo de cliente" — mesmo `orDash`/`moneyBRL` da
+ *  tabela "Por empreendimento" (uma fonte de formatação só). */
+const renderClientTypeCell = (key: string, row: RentalClientTypeScope): React.ReactNode => {
+    switch (key) {
+        case 'label':
+            return row.categoryId === SEM_CATEGORIA
+                ? <span className="text-gray-400">{row.label}</span>
+                : row.label;
+        case 'clientCount':
+            return row.clientCount;
+        case 'avgRentalValue':
+            return moneyBRL(row.avgRentalValue);
+        case 'avgValuePerSqm':
+            return orDash(row.avgValuePerSqm, moneyBRL);
         default:
             return null;
     }
@@ -716,6 +772,16 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const analysisTableTotalWidth = ANALYSIS_COLUMNS
         .filter(c => analysisTableColumns.visibleColumns.includes(c.key))
         .reduce((sum, c) => sum + analysisCols.getWidth(c.key), 0);
+
+    // Colunas + ordenação + redimensionamento + busca da tabela "Por tipo de
+    // cliente" — segundo eixo de partição da aba Análise, ver
+    // lib/rentalByClientType.ts.
+    const [clientTypeSearch, setClientTypeSearch] = usePersistedState<string>('rentalsClientTypeSearch', '');
+    const clientTypeTableColumns = useTableColumns(CLIENT_TYPE_COLUMNS, 'rentalsClientTypeColumns');
+    const clientTypeCols = useResizableColumns(CLIENT_TYPE_DEFAULT_COL_WIDTHS, 'rentalsClientTypeColWidths');
+    const clientTypeTableTotalWidth = CLIENT_TYPE_COLUMNS
+        .filter(c => clientTypeTableColumns.visibleColumns.includes(c.key))
+        .reduce((sum, c) => sum + clientTypeCols.getWidth(c.key), 0);
 
     // Modals Control
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -1469,6 +1535,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 case 'noi': return r.noi?.noi ?? null;
                 case 'waleYears': return r.executive?.wale.years ?? null;
                 case 'overdue90Rate': return r.executive?.collection.overdue90Rate ?? null;
+                case 'annualRevenue': return r.monthlyRevenue * 12;
+                case 'valuePerSqmMax': return r.valuePerSqm.max;
+                case 'valuePerSqmMin': return r.valuePerSqm.min;
+                case 'valuePerSqmAvg': return r.valuePerSqm.avg;
                 default: return (r[key] as string | number | null) ?? null;
             }
         };
@@ -1489,6 +1559,44 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             return direction === 'asc' ? av - bv : bv - av;
         });
     }, [analysis.rows, analysisSearch, analysisTableColumns.sortColumn, analysisTableColumns.sortDirection]);
+
+    /**
+     * A aba Análise, agrupada por TIPO DE CLIENTE (`clients.category`) — segundo
+     * eixo de partição, independente de empreendimento (cliente não pertence a
+     * um único empreendimento). Mesmo bruto já carregado (`deals`/`properties`/
+     * `clients`), sem consulta nova. Ver lib/rentalByClientType.ts.
+     */
+    const clientTypeAnalysis = useMemo(() => groupRentalByClientType({
+        deals,
+        properties,
+        clients,
+    }), [deals, properties, clients]);
+
+    // Linhas da tabela "Por tipo de cliente": busca por rótulo + ordenação pelo
+    // cabeçalho — mesmo padrão de analysisRows.
+    const clientTypeRows = useMemo(() => {
+        const termo = clientTypeSearch.trim().toLowerCase();
+        const filtradas = termo
+            ? clientTypeAnalysis.rows.filter(r => r.label.toLowerCase().includes(termo))
+            : clientTypeAnalysis.rows;
+
+        const sortKey = clientTypeTableColumns.sortColumn as keyof RentalClientTypeScope | null;
+        if (!sortKey) return filtradas;
+
+        const direction = clientTypeTableColumns.sortDirection;
+        return [...filtradas].sort((a, b) => {
+            const av = a[sortKey] as string | number | null;
+            const bv = b[sortKey] as string | number | null;
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            if (typeof av === 'string' || typeof bv === 'string') {
+                const cmp = String(av).localeCompare(String(bv), 'pt-BR');
+                return direction === 'asc' ? cmp : -cmp;
+            }
+            return direction === 'asc' ? av - bv : bv - av;
+        });
+    }, [clientTypeAnalysis.rows, clientTypeSearch, clientTypeTableColumns.sortColumn, clientTypeTableColumns.sortDirection]);
 
     // A regra mora em `dealBaseValue` (nível do módulo) porque a coluna
     // "Referência Total" da visão mestre soma exatamente este mesmo número.
@@ -2084,6 +2192,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     key={c.key}
                                                     className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
                                                         c.key === 'monthlyRevenue' || c.key === 'noi'
+                                                            || c.key === 'referenceMonthlyRevenue' || c.key === 'annualRevenue'
+                                                            || c.key === 'valuePerSqmMax' || c.key === 'valuePerSqmMin' || c.key === 'valuePerSqmAvg'
                                                             ? 'font-medium text-gray-800'
                                                             : c.key === 'name'
                                                                 ? 'font-normal text-gray-700 truncate'
@@ -2091,6 +2201,111 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     }`}
                                                 >
                                                     {renderAnalysisCell(c.key, row)}
+                                                </td>
+                                            ))}
+                                            <td aria-hidden="true"></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Tabela por tipo de cliente — segundo eixo de partição da aba
+                Análise (ver lib/rentalByClientType.ts), mesma toolbar acoplada
+                (§5.2) da tabela "Por empreendimento". Sem clique-para-filtrar:
+                não existe "escopo de tipo de cliente" como existe para
+                empreendimento. */}
+            {!currentBuilding && activeTab === 'analysis' && isAllEmpreendimentos && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden mt-3">
+                    <div className="p-4 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar tipo de cliente..."
+                                    value={clientTypeSearch}
+                                    onChange={e => setClientTypeSearch(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={CLIENT_TYPE_COLUMNS}
+                                    visibleColumns={clientTypeTableColumns.visibleColumns}
+                                    showColumnConfig={clientTypeTableColumns.showColumnConfig}
+                                    onToggleShow={() => clientTypeTableColumns.setShowColumnConfig(!clientTypeTableColumns.showColumnConfig)}
+                                    onToggleColumn={clientTypeTableColumns.toggleColumn}
+                                    onReset={clientTypeTableColumns.resetColumns}
+                                />
+                                <button
+                                    onClick={() => clientTypeCols.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {clientTypeRows.length === 0 ? (
+                        <div className="text-center py-12">
+                            <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum tipo de cliente encontrado</h3>
+                            <p className="text-sm text-gray-500">
+                                {clientTypeSearch
+                                    ? 'Tente ajustar a busca.'
+                                    : 'Nenhum contrato de locação fechado tem cliente vinculado.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table ref={clientTypeCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: clientTypeTableTotalWidth }}>
+                                <colgroup>
+                                    {CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key)).map(c => (
+                                        <col key={c.key} data-col-key={c.key} style={{ width: `${clientTypeCols.getWidth(c.key)}px` }} />
+                                    ))}
+                                    {/* Espaçador (§6.1.1) — mesma posição da tabela irmã. */}
+                                    <col />
+                                </colgroup>
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        {CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key)).map(c => (
+                                            <SortableHeader
+                                                key={c.key}
+                                                colKey={c.key}
+                                                label={c.label}
+                                                uppercase={false}
+                                                sortColumn={clientTypeTableColumns.sortColumn}
+                                                sortDirection={clientTypeTableColumns.sortDirection}
+                                                onSort={clientTypeTableColumns.handleColumnSort}
+                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <clientTypeCols.ResizeHandle colKey={c.key} />
+                                            </SortableHeader>
+                                        ))}
+                                        <th aria-hidden="true" className="border-r border-gray-100"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {clientTypeRows.map(row => (
+                                        <tr key={row.categoryId} className="hover:bg-blue-50/50 transition-colors">
+                                            {CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key)).map(c => (
+                                                <td
+                                                    key={c.key}
+                                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                        c.key === 'avgRentalValue' || c.key === 'avgValuePerSqm'
+                                                            ? 'font-medium text-gray-800'
+                                                            : c.key === 'label'
+                                                                ? 'font-normal text-gray-700 truncate'
+                                                                : 'font-normal text-gray-600'
+                                                    }`}
+                                                >
+                                                    {renderClientTypeCell(c.key, row)}
                                                 </td>
                                             ))}
                                             <td aria-hidden="true"></td>

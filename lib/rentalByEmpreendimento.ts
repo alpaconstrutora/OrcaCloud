@@ -65,6 +65,7 @@ export interface AnalysisProperty extends PortfolioNode {
     // obrigaria a um cast em quem passa a lista real.
     price?: number;
     rental_price?: number;
+    private_area?: number;
 }
 
 export interface AnalysisDeal {
@@ -75,7 +76,28 @@ export interface AnalysisDeal {
     units?: { property_id: string; value?: number | null }[] | null;
     value?: number | null;
     installment_value?: number | null;
+    /** Só usado por `rentalByClientType.ts` para resolver cliente → categoria —
+     *  este arquivo não agrupa por cliente. */
+    client_id?: string | null;
 }
+
+/** Unidades do negócio: a lista explícita quando existe, senão o imóvel solto.
+ *  Mesmo padrão de `dealPropertyIds` em `RentalsModule.tsx`, mas sobre o tipo
+ *  estreito `AnalysisDeal` — exportado porque `rentalByClientType.ts` precisa
+ *  da mesma conta de área para "Valor médio de locação /m²" por categoria. */
+export const dealPropertyIds = (d: AnalysisDeal): string[] =>
+    d.units && d.units.length > 0
+        ? d.units.map(u => u.property_id)
+        : (d.property_id ? [d.property_id] : []);
+
+/** Soma da área privativa das unidades do negócio. `byId` já vem em chave
+ *  normalizada (ver `key()` abaixo) — quem chamar de fora precisa da mesma
+ *  normalização nas chaves do Map. */
+export const dealArea = (d: AnalysisDeal, byId: Map<string, AnalysisProperty>): number =>
+    dealPropertyIds(d).reduce((sum, id) => {
+        const p = byId.get(String(id ?? '').toLowerCase());
+        return sum + (p?.private_area ? Number(p.private_area) : 0);
+    }, 0);
 
 export interface AnalysisContract {
     id: string;
@@ -109,6 +131,12 @@ export interface RentalAnalysisScope {
     activeAssets: number;
     /** Soma das parcelas mensais contratadas. Soma = total. */
     monthlyRevenue: number;
+    /** Soma do Valor base (Inteligência de Aluguéis, `rentalValueOf`) de TODAS
+     *  as unidades locáveis do balde — alugadas E vagas. É o teto de
+     *  potencial ao preço sugerido, não a receita já contratada (essa é
+     *  `monthlyRevenue`) — mesma distinção de
+     *  `feedback_locacoes_valor_base_vs_aluguel_contratado`. Soma = total. */
+    referenceMonthlyRevenue: number;
     /** Patrimônio por rollup das raízes do balde. Soma = total. */
     portfolioValue: number;
     /** receita mensal ÷ patrimônio. `null` sem patrimônio. */
@@ -125,6 +153,10 @@ export interface RentalAnalysisScope {
         collection: CollectionSnapshot;
         contractsConsidered: number;
     } | null;
+    /** máx/mín/médio de (parcela contratada ÷ área privativa) entre os
+     *  contratos FECHADOS do balde (mesma população de `monthlyRevenue`).
+     *  `null` = nenhum contrato do balde tinha área válida — não é 0. */
+    valuePerSqm: { max: number | null; min: number | null; avg: number | null };
 }
 
 export interface GroupRentalAnalysisInput {
@@ -355,7 +387,25 @@ export const groupRentalAnalysis = (
         );
 
         const receita = b.deals.reduce((acc, d) => acc + getDealInstallmentValue(d), 0);
+        // Teto de potencial: Valor base de TODA folha do balde, alugada ou
+        // vaga — não só das que já têm negócio fechado (isso é `receita`).
+        const receitaReferencia = b.leaves.reduce((acc, p) => acc + rentalValueOf(p), 0);
         const patrimonio = sumPortfolioValue(b.subtree, p => Number(p.price) || 0);
+
+        // Valor/m²: mesma população de `receita` (contratos RENTAL fechados).
+        // Contrato sem área válida (unidade sem `private_area` cadastrada) não
+        // entra na amostra — dividir por zero inventaria um valor.
+        const valoresM2 = b.deals
+            .map(d => ({ area: dealArea(d, byId), valor: getDealInstallmentValue(d) }))
+            .filter(x => x.area > 0)
+            .map(x => x.valor / x.area);
+        const valuePerSqm = valoresM2.length > 0
+            ? {
+                max: Math.max(...valoresM2),
+                min: Math.min(...valoresM2),
+                avg: valoresM2.reduce((a, b2) => a + b2, 0) / valoresM2.length,
+            }
+            : { max: null, min: null, avg: null };
 
         // `null` (não medido) só quando o insumo INTEIRO está ausente. Balde sem
         // evento, com o log disponível, é medição legítima de zero vaga.
@@ -405,6 +455,7 @@ export const groupRentalAnalysis = (
             occupancyRate: b.leaves.length > 0 ? alugadas / b.leaves.length : null,
             activeAssets: b.subtree.filter(p => p.type === 'BUILDING' || !p.parent_id).length,
             monthlyRevenue: receita,
+            referenceMonthlyRevenue: receitaReferencia,
             portfolioValue: patrimonio,
             monthlyYield: patrimonio > 0 ? receita / patrimonio : null,
             financial: {
@@ -418,6 +469,7 @@ export const groupRentalAnalysis = (
             vacancy: vacancia,
             noi,
             executive,
+            valuePerSqm,
         };
     };
 

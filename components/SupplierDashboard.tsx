@@ -654,6 +654,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             }}
                             currentUser={effectiveSupplier ? { email: effectiveSupplier.email || '', name: effectiveSupplier.name } : undefined}
                             portalToken={portalToken}
+                            accent={isPublicExperience ? 'portal' : 'indigo'}
                         />
                     </div>
                 );

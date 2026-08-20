@@ -37,18 +37,34 @@ de tokens no `PortalKit`.
 | 9 | `components/OrderLifeline.tsx`, `components/NegotiationHub.tsx` | prop `accent={'indigo'\|'portal'}`, padrão `indigo` (app inalterado) | prints `orders_logistica` e `negociacao_hub` em coral; nenhum `indigo` literal sobrou nos dois arquivos | ✅ |
 | 10 | `App.tsx` (`SupplierPortalTokenGate`) | guard deixa de aplicar `p-4 md:p-6` (a casca é dona do gutter) e o spinner vira coral | sem gutter duplicado no print | ✅ |
 | 11 | `docs/ui_ux_guia_unificado.md` | §24 vira "Portais externos" com os dois escopos + caminho novo do kit; §20.2/§20.2.1 atualizadas | seções lidas e coerentes com o código | ✅ |
-| 12 | `SupplyChainOrderDetails.tsx`, `QuotationResponseForm.tsx` | migrar acento e (no caso do formulário de cotação) tirar o overlay de tela cheia | — | ❌ **NÃO FEITO** — ver abaixo |
+| 12 | `SupplyChainOrderDetails.tsx` | prop `accent` (44 pontos: header, cards, fluxo de atendimento, itens, painel "Status Interno", Documentos Fiscais) + repasse para `OrderLifeline`/`NegotiationHub` | prints 1440 e 1920 da tela de detalhe e da de rastreio, tudo coral | ✅ (2026-08-20) |
+| 13 | `OrderLifeline.tsx` | rótulos deixavam de caber e se sobrepunham abaixo de ~800px: `overflow-x-auto` + `min-w-[760px]` + `px-8` (folga da pílula "Prev:") | print 1440 sem sobreposição | ✅ (2026-08-20) |
+| 14 | `QuotationResponseForm.tsx` | migrar acento e tirar o overlay de tela cheia | — | ❌ **NÃO FEITO** — ver abaixo |
 
-## Item 12 — por que ficou de fora
+## Pedido de 2026-08-20 (itens 12 e 13)
 
-São as **mesmas telas** do módulo Suprimentos interno (o comprador abre as duas
-pelo app). Migrar exige a prop `accent` em ~64 pontos e regride o lado do
-comprador se algo escapar — é trabalho próprio, não um detalhe deste.
+> `faltou aplicar na página de detalhes do pedido. veja print`
+>
+> (print da tela `SupplyChainOrderDetails` dentro do portal, ainda em
+> indigo/violeta/âmbar.)
 
-Além do acento, `QuotationResponseForm` abre como **overlay de tela cheia**
-(`absolute inset-0 z-[110] bg-black/60`): no portal ele engole a casca inteira
-(sidebar e header somem). Isso contraria `UI_PATTERNS.md` (painel lateral é o
-padrão) e já é assim hoje no app — mudar é decisão de interação, não de cor.
+Feito com o mesmo padrão de prop `accent` (`'indigo' | 'portal'`, padrão
+`indigo`), agora com um mapa de tokens maior: `text`, `icon`, `softBtn`,
+`panel`, `chip`, `bar`, `solid`, `onSolid`, `onSolidSecondary`, `doc*`.
+
+**Cores semânticas ficaram como estão** nos dois contextos: emerald de
+"Confirmar Pedido", âmbar do painel de Divergências, cor do status do pedido
+(`getStatusStyles`) e o azul do toast de informação. O âmbar de "Documentos
+Fiscais" **entrou** no acento porque ali ele é decorativo (cor da seção), não
+semântico.
+
+## Item 14 — por que ficou de fora
+
+`QuotationResponseForm` é a **mesma tela** do módulo Suprimentos interno e abre
+como **overlay de tela cheia** (`absolute inset-0 z-[110] bg-black/60`): no
+portal ele engole a casca inteira (sidebar e header somem). Isso contraria
+`UI_PATTERNS.md` (painel lateral é o padrão) e já é assim hoje no app — mudar é
+decisão de interação, não de cor.
 
 ## Efeitos colaterais assumidos (fora de "só UI")
 

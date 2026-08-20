@@ -62,8 +62,16 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
     const currentStepIndex = steps.findIndex(s => s.id === status);
 
     return (
-        <div className="w-full py-8">
-            <div className="relative flex justify-between items-center max-w-4xl mx-auto">
+        // Abaixo de ~800px os rótulos ("EM TRÂNSITO", "DIVERGÊNCIA") são mais
+        // largos que o passo e se sobrepõem em vez de truncar. `min-w` + scroll
+        // horizontal no container resolve sem encolher a tipografia — o mesmo
+        // recurso que as tabelas usam. Ficou visível quando o Portal do
+        // Fornecedor ganhou sidebar e a coluna de conteúdo estreitou.
+        <div className="w-full py-8 overflow-x-auto scrollbar-hide">
+            {/* px-8: a pílula "Prev:" é mais larga que o passo e sangra para a
+                esquerda do primeiro círculo — sem essa folga o overflow acima
+                a corta. */}
+            <div className="relative flex justify-between items-center max-w-4xl min-w-[760px] mx-auto px-8">
                 {/* Background Line */}
                 <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-100 -translate-y-1/2 rounded-full" />
 

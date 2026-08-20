@@ -1960,12 +1960,19 @@ mesmos módulos — `InvestorSummaryDashboard`/`HoldingsList`/`OpportunitiesTab`
 `isPublicExperience` é falso, do lado do fornecedor. Nada aqui autoriza um
 segundo vocabulário numa tela interna.
 
-**Telas de detalhe compartilhadas.** `SupplyChainOrderDetails.tsx` e
-`QuotationResponseForm.tsx` são as MESMAS telas do módulo Suprimentos interno;
-não foram migradas e continuam no acento indigo/azul. Já `OrderLifeline.tsx` e
-`NegotiationHub.tsx` ganharam uma prop `accent={'indigo' | 'portal'}` (padrão
-`indigo`, para o app não mudar) — é esse o caminho quando um componente
-compartilhado precisar dos dois acentos. **Não duplique o componente.**
+**Telas de detalhe compartilhadas.** Quando um componente serve o app E o portal,
+o caminho é uma prop `accent={'indigo' | 'portal'}` com **padrão `indigo`** (o
+app não muda) e um mapa `ACCENTS` no topo do arquivo, com cada variante escrita
+por extenso — o JIT do Tailwind não enxerga classe montada em runtime.
+**Não duplique o componente.** Já migrados: `OrderLifeline.tsx`,
+`NegotiationHub.tsx` e `SupplyChainOrderDetails.tsx` (este repassa o `accent`
+para os dois primeiros). Falta `QuotationResponseForm.tsx`.
+
+⚠️ **Cor semântica não entra no `accent`**: emerald de confirmação, âmbar de
+divergência, vermelho de erro e a cor do status do pedido valem igual nos dois
+contextos. O teste é: a cor significa alguma coisa, ou é só a identidade da
+seção? Se for identidade, entra no `accent` — foi o caso do âmbar de
+"Documentos Fiscais" em `SupplyChainOrderDetails`.
 
 **Origem:** 2026-08-15, a pedido explícito do usuário, a partir de um desenho de
 referência externo (dashboard estilo Shakuro). Perguntado se queria o layout do

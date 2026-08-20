@@ -857,6 +857,48 @@ export const documentService = {
     }
   },
 
+  // ─── RENOMEAR A EXTENSÃO DO ARQUIVO DA VERSÃO ATIVA ──────────
+  // Mesma lista de extensões aceita no upload (executeUpload, OpuraDocsModule.tsx).
+  async renameActiveVersionExtension(
+    document: Pick<OpuraDocument, 'id' | 'active_version'>,
+    newExtension: 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'
+  ): Promise<void> {
+    const version = document.active_version;
+    if (!version) {
+      throw new Error('Documento sem versão ativa — não há arquivo para renomear.');
+    }
+
+    const oldPath = version.storage_path;
+    const newPath = oldPath.replace(/\.[^./]+$/, `.${newExtension}`);
+    if (newPath === oldPath) return; // já tem essa extensão
+
+    const { error: moveError } = await supabase.storage.from('opura-docs').move(oldPath, newPath);
+    if (moveError) {
+      throw new Error(`Erro ao renomear o arquivo no Storage: ${moveError.message}`);
+    }
+
+    const MIME_BY_EXTENSION: Record<string, string> = {
+      pdf: 'application/pdf',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      dwg: 'application/acad',
+      jpg: 'image/jpeg',
+      png: 'image/png',
+    };
+
+    const { error: updateError } = await supabase
+      .from('opura_document_versions')
+      .update({ storage_path: newPath, mime_type: MIME_BY_EXTENSION[newExtension] })
+      .eq('id', version.id);
+
+    if (updateError) {
+      // Arquivo já foi movido no Storage — desfazer para não deixar storage_path
+      // do banco apontando para um caminho que não existe mais.
+      await supabase.storage.from('opura-docs').move(newPath, oldPath);
+      throw new Error(`Erro ao atualizar o registro da versão: ${updateError.message}`);
+    }
+  },
+
   // ─── BLOQUEIO PARA EDIÇÃO (TRAVA) ────────────────────────────
   // A trava de fato mora nas RPCs SECURITY DEFINER abaixo + um trigger no
   // banco (migration 20270821000007) que rejeita UPDATE de conteúdo por

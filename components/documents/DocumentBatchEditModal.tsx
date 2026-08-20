@@ -38,6 +38,17 @@ const STATUS_OPTIONS: { value: OpuraDocumentStatus; label: string }[] = [
 
 const ALERTA_OPTIONS = [90, 60, 30, 15, 7];
 
+// Mesma lista aceita no upload (executeUpload, OpuraDocsModule.tsx) — trocar
+// para uma extensão fora dela geraria um arquivo que o próprio upload rejeitaria.
+const EXTENSAO_OPTIONS: { value: 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'; label: string }[] = [
+  { value: 'pdf', label: 'PDF' },
+  { value: 'docx', label: 'DOCX' },
+  { value: 'xlsx', label: 'XLSX' },
+  { value: 'dwg', label: 'DWG' },
+  { value: 'jpg', label: 'JPG' },
+  { value: 'png', label: 'PNG' },
+];
+
 /**
  * Edição em lote do GED — modal dedicado (não Sheet: `docs/ui_ux_guia_unificado.md`
  * §10 já prescreve modal para isso). Campo vazio = não altera aquele campo, exceto
@@ -64,6 +75,12 @@ export function DocumentBatchEditModal({
   const [autorSupplierId, setAutorSupplierId] = React.useState('');
   const [autorOutro, setAutorOutro] = React.useState(false);
   const [autorNome, setAutorNome] = React.useState('');
+  const [revisao, setRevisao] = React.useState('');
+  // Extensão não é metadado — trocar renomeia o arquivo de cada documento no
+  // Storage (ver documentService.renameActiveVersionExtension). Por isso fica
+  // fora de `buildCommonUpdates`/`updateDocumentsBatch` e tem sua própria
+  // confirmação antes de salvar.
+  const [extensaoNova, setExtensaoNova] = React.useState<'' | 'pdf' | 'docx' | 'xlsx' | 'dwg' | 'jpg' | 'png'>('');
   const [status, setStatus] = React.useState('');
   const [dataEmissao, setDataEmissao] = React.useState('');
   const [dataValidade, setDataValidade] = React.useState('');
@@ -87,13 +104,15 @@ export function DocumentBatchEditModal({
 
   const noneChanged =
     !tipoDocumento && !disciplineCode && !descricao.trim() && !autorChanged && !status &&
-    !dataEmissao && !dataValidade && !alertaDias && !projectId && !companyId && !addTagsInput.trim();
+    !dataEmissao && !dataValidade && !alertaDias && !projectId && !companyId && !addTagsInput.trim() &&
+    !revisao.trim() && !extensaoNova;
 
   const buildCommonUpdates = (): OpuraDocumentUpdate => {
     const updates: OpuraDocumentUpdate = {};
     if (tipoDocumento) updates.tipo_documento = tipoDocumento;
     if (disciplineCode) updates.discipline_code = disciplineCode;
     if (descricao.trim()) updates.descricao = descricao.trim();
+    if (revisao.trim()) updates.revisao = revisao.trim();
     if (autorChanged) {
       updates.autor = autorNomeFinal;
       // "Outro"/multi-org desfaz o vínculo com fornecedor — o autor passa a ser texto
@@ -115,6 +134,8 @@ export function DocumentBatchEditModal({
     if (tipoDocumento) labels.push(`Tipo=${tipoDocumento}`);
     if (disciplineCode) labels.push(`Disciplina=${disciplineCode}`);
     if (descricao.trim()) labels.push('Descrição');
+    if (revisao.trim()) labels.push(`Revisão=${revisao.trim()}`);
+    if (extensaoNova) labels.push(`Extensão do arquivo=${extensaoNova.toUpperCase()}`);
     if (autorChanged) labels.push(`Autor=${autorNomeFinal}`);
     if (status) labels.push(`Status=${status}`);
     if (dataEmissao) labels.push('Data de emissão');
@@ -142,6 +163,20 @@ export function DocumentBatchEditModal({
 
   const handleSave = async () => {
     if (noneChanged) return;
+
+    // Extensão renomeia o ARQUIVO no Storage de cada documento selecionado —
+    // diferente dos outros campos (metadado). Confirmação extra antes de mexer
+    // em arquivo, mesmo já dentro de um modal de edição em lote.
+    if (extensaoNova) {
+      const ok = await confirm({
+        title: 'Renomear a extensão do arquivo?',
+        message: `O arquivo de ${documents.length} documento${documents.length !== 1 ? 's' : ''} será renomeado para .${extensaoNova} no Storage. Isso não converte o conteúdo do arquivo — só troca a extensão do nome. Documentos sem versão ativa serão ignorados.`,
+        variant: 'warning',
+        confirmLabel: 'Renomear',
+      });
+      if (!ok) return;
+    }
+
     setSaving(true);
 
     const ids = documents.map((d) => d.id);
@@ -167,7 +202,16 @@ export function DocumentBatchEditModal({
         results.forEach((r) => (r.status === 'fulfilled' ? tagsOk++ : tagsFailed++));
       }
 
-      if (hasCommonUpdates || tagsOk > 0) setSavedOnce(true);
+      let extOk = 0;
+      let extFailed = 0;
+      if (extensaoNova) {
+        const results = await Promise.allSettled(
+          documents.map((doc) => documentService.renameActiveVersionExtension(doc, extensaoNova))
+        );
+        results.forEach((r) => (r.status === 'fulfilled' ? extOk++ : extFailed++));
+      }
+
+      if (hasCommonUpdates || tagsOk > 0 || extOk > 0) setSavedOnce(true);
 
       // Auditoria por documento, em paralelo — não bloqueia a resposta ao usuário.
       Promise.allSettled(
@@ -182,9 +226,12 @@ export function DocumentBatchEditModal({
         )
       ).catch(() => {});
 
-      if (tagsFailed > 0) {
+      if (tagsFailed > 0 || extFailed > 0) {
         const prefix = hasCommonUpdates ? 'Campos comuns atualizados. ' : '';
-        notify(`${prefix}Tags: ${tagsOk} de ${tagsOk + tagsFailed} documentos atualizados, ${tagsFailed} com erro.`, 'error');
+        const parts: string[] = [];
+        if (newTags.length > 0) parts.push(`Tags: ${tagsOk} de ${tagsOk + tagsFailed} documentos`);
+        if (extensaoNova) parts.push(`Extensão: ${extOk} de ${extOk + extFailed} arquivos`);
+        notify(`${prefix}${parts.join(' · ')} atualizado(s), com erro em parte deles.`, 'error');
         onSaved();
         return;
       }
@@ -264,6 +311,18 @@ export function DocumentBatchEditModal({
                   <option key={d.id} value={d.code}>{d.code} - {d.name}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500">Revisão</label>
+              <input
+                type="text"
+                placeholder="Ex: Rev. A, 00 — deixe vazio para não alterar"
+                value={revisao}
+                onChange={(e) => setRevisao(e.target.value)}
+                disabled={saving}
+                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -411,6 +470,33 @@ export function DocumentBatchEditModal({
               disabled={saving}
               className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50 resize-none"
             />
+          </div>
+
+          {/* Extensão renomeia o ARQUIVO no Storage (não é metadado) — por isso fica
+              separada dos demais campos, com aviso próprio sempre visível. */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-500">Extensão do arquivo</label>
+            <select
+              value={extensaoNova}
+              onChange={(e) => setExtensaoNova(e.target.value as typeof extensaoNova)}
+              disabled={saving}
+              className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+            >
+              <option value="">— Não alterar —</option>
+              {EXTENSAO_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            {extensaoNova && (
+              <div className="flex items-start gap-2 p-3 rounded-[10px] bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  Isso renomeia o arquivo de cada documento selecionado no Storage para
+                  .{extensaoNova} — não converte o conteúdo do arquivo, só o nome. Documentos
+                  sem versão ativa serão ignorados.
+                </span>
+              </div>
+            )}
           </div>
 
           {isMultiOrg && (

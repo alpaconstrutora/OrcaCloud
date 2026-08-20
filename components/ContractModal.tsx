@@ -1099,11 +1099,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         onChange={(e) => setFormData({ ...formData, contract_type: e.target.value as ContractType })}
                                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
-                                        <optgroup label="Serviços ao Cliente">
-                                            {contractTypes.filter(t => t.category === 'Serviços').map(t => (
-                                                <option key={t.id} value={t.name}>{t.name}</option>
-                                            ))}
-                                        </optgroup>
+                                        {isOutgoing && (
+                                            <optgroup label="Serviços ao Cliente">
+                                                {contractTypes.filter(t => t.category === 'Serviços').map(t => (
+                                                    <option key={t.id} value={t.name}>{t.name}</option>
+                                                ))}
+                                            </optgroup>
+                                        )}
                                         <optgroup label="Suprimentos">
                                             {contractTypes.filter(t => t.category === 'Suprimentos').map(t => (
                                                 <option key={t.id} value={t.name}>{t.name}</option>

@@ -100,8 +100,8 @@ function App() {
       model={modelo}
       tool="selecionar"
       levelId={modelo.levels[0].id}
-      selectedId={null}
-      onSelect={() => {}}
+      selectedIds={[]}
+      onSelecionar={() => {}}
       onAddWall={() => {}}
       onAddOpening={() => {}}
       larguraAberturaMm={900}

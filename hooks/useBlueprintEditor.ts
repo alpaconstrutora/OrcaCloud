@@ -57,6 +57,20 @@ export interface UseBlueprintEditor {
   loading: boolean;
   tool: BlueprintTool;
   setTool: (t: BlueprintTool) => void;
+  /**
+   * A seleção. Guarda ids HETEROGÊNEOS: parede, abertura ou medição — quem
+   * consome desambigua por lookup, como sempre foi.
+   */
+  selectedIds: string[];
+  setSelectedIds: (ids: string[]) => void;
+  /**
+   * A seleção quando ela tem exatamente UM item; `null` caso contrário.
+   *
+   * Derivado, não estado. É o que mantém intactas as operações de cardinalidade
+   * 1 — painel da parede, dividir, unir, espessura, esticar: todas continuam
+   * lendo um id só, e com N selecionados simplesmente somem da tela, em vez de
+   * agirem sobre um item arbitrário do conjunto.
+   */
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
 
@@ -89,7 +103,9 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
   const [model, setModel] = useState<BlueprintModel>(historyRef.current.current);
   const [loading, setLoading] = useState(true);
   const [tool, setTool] = useState<BlueprintTool>('parede');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const setSelectedId = useCallback((id: string | null) => setSelectedIds(id ? [id] : []), []);
 
   const [saveState, setSaveState] = useState<SaveState>('limpo');
   const [lastError, setLastError] = useState<string | null>(null);
@@ -250,7 +266,7 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
     if (!historyRef.current.canUndo) return;
     const atual = historyRef.current.undo();
     setModel(atual);
-    setSelectedId(null);
+    setSelectedIds([]);
     agendarAutosave(atual);
     force((n) => n + 1);
   }, [agendarAutosave]);
@@ -259,7 +275,7 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
     if (!historyRef.current.canRedo) return;
     const atual = historyRef.current.redo();
     setModel(atual);
-    setSelectedId(null);
+    setSelectedIds([]);
     agendarAutosave(atual);
     force((n) => n + 1);
   }, [agendarAutosave]);
@@ -306,6 +322,8 @@ export function useBlueprintEditor(branchId: string | null): UseBlueprintEditor 
     loading,
     tool,
     setTool,
+    selectedIds,
+    setSelectedIds,
     selectedId,
     setSelectedId,
     run,

@@ -83,8 +83,8 @@ function App() {
       model={modelo}
       tool={ferramenta}
       levelId={levelId}
-      selectedId={null}
-      onSelect={() => {}}
+      selectedIds={[]}
+      onSelecionar={() => {}}
       onAddWall={() => null}
       onAddOpening={() => {}}
       larguraAberturaMm={900}

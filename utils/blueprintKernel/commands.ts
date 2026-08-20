@@ -8,7 +8,7 @@
  * cliente reenviar um lote depois de uma queda de rede sem criar parede fantasma.
  */
 
-import { KernelError } from './units';
+import { KernelError, assertIntegerMm, roundToMm } from './units';
 import {
   type BlueprintModel,
   type ObjectId,
@@ -18,6 +18,7 @@ import {
   cloneModel,
   findWall,
   nextId,
+  pontasDeslocadas,
   wallLength,
 } from './model';
 import { type Point, areCollinear, interiorPoint, pointInPolygon, pointsEqual } from './geom';
@@ -50,6 +51,38 @@ export type Command =
   | { type: 'AddBoundary'; levelId: ObjectId; a: Point; b: Point }
   | { type: 'SetThickness'; wallId: ObjectId; thicknessMm: number }
   | { type: 'MoveVertex'; wallId: ObjectId; end: 'a' | 'b'; to: Point }
+  /**
+   * Desloca um CONJUNTO de paredes de uma vez, rigidamente.
+   *
+   * Existe em vez de um lote de `MoveVertex` por três motivos independentes,
+   * cada um suficiente sozinho:
+   *
+   * 1. `applyBatch` roda `recomputeSpaces` + `assertModelInvariants` +
+   *    `snapshotHash` A CADA comando. Mover 40 paredes seriam 80 recomputações
+   *    do arranjo planar num único gesto do usuário.
+   * 2. **Os estados intermediários de um lote são inválidos.** `MoveVertex`
+   *    mexe numa ponta de cada vez, e com uma ponta andada a parede fica mais
+   *    curta — o suficiente para `OPENING_OUT_OF_BOUNDS` recusar o lote inteiro
+   *    numa translação que, vista como um todo, não encurta nada. Aqui as duas
+   *    pontas andam juntas: o comprimento é preservado por construção, então
+   *    nenhuma abertura sai de posição.
+   * 3. Um gesto = um passo de desfazer, sem depender de `runBatch` para fingir
+   *    atomicidade.
+   *
+   * As ABERTURAS não precisam de nada: `offsetMm` é relativo à parede que as
+   * hospeda, e a parede inteira andou.
+   *
+   * `arrastarVizinhas` é a diferença entre MOVER e ESTICAR, na linguagem do CAD:
+   * ligado, as pontas de paredes NÃO selecionadas que compartilham vértice com a
+   * seleção andam junto (nada desencosta, mas a vizinha muda de comprimento);
+   * desligado, o bloco se desprende, mantendo as próprias medidas.
+   */
+  | {
+      type: 'TranslateWalls';
+      wallIds: ObjectId[];
+      delta: Point;
+      arrastarVizinhas: boolean;
+    }
   | { type: 'SplitWall'; wallId: ObjectId; at: Point }
   | { type: 'MergeWalls'; firstId: ObjectId; secondId: ObjectId }
   | { type: 'DeleteWall'; wallId: ObjectId }
@@ -206,6 +239,42 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
           );
         }
       }
+      break;
+    }
+
+    case 'TranslateWalls': {
+      if (command.wallIds.length === 0) {
+        throw new KernelError('EMPTY_SELECTION', 'Nenhuma parede para deslocar');
+      }
+
+      const dx = assertIntegerMm(roundToMm(command.delta.x), 'delta.x');
+      const dy = assertIntegerMm(roundToMm(command.delta.y), 'delta.y');
+
+      // `findWall` lança em id inexistente — resolver TODAS antes de mexer em
+      // qualquer uma é o que garante que um id errado no meio da lista não
+      // deixe metade do conjunto deslocada.
+      command.wallIds.forEach((id) => findWall(next, id));
+
+      // A MESMA conta que a prévia do arraste usa. Ver `pontasDeslocadas`.
+      const destinos = pontasDeslocadas(
+        next.walls,
+        command.wallIds,
+        { x: dx, y: dy },
+        command.arrastarVizinhas,
+      );
+
+      for (const w of next.walls) {
+        const destino = destinos.get(w.id);
+        if (!destino) continue;
+        w.a = { x: assertIntegerMm(destino.a.x, 'x deslocado'), y: assertIntegerMm(destino.a.y, 'y deslocado') };
+        w.b = { x: assertIntegerMm(destino.b.x, 'x deslocado'), y: assertIntegerMm(destino.b.y, 'y deslocado') };
+        diff.updated.push(w.id);
+      }
+
+      // Só as VIZINHAS podem ter mudado de comprimento — as selecionadas
+      // andaram rígidas. `assertModelInvariants` no fim de `applyCommand` cobre
+      // a abertura que ficaria fora da parede, e como a cópia é feita antes de
+      // validar, o modelo original fica intacto quando isso acontece.
       break;
     }
 

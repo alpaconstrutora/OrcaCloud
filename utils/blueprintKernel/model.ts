@@ -8,7 +8,7 @@
  */
 
 import { KernelError, assertIntegerMm } from './units';
-import type { Point } from './geom';
+import { pointKey, type Point } from './geom';
 
 export type ObjectId = string;
 
@@ -179,6 +179,62 @@ export function findLevel(model: BlueprintModel, id: ObjectId): Level {
   const level = model.levels.find((l) => l.id === id);
   if (!level) throw new KernelError('LEVEL_NOT_FOUND', `Nível inexistente: ${id}`);
   return level;
+}
+
+/**
+ * Onde cada ponta PARA depois de deslocar um conjunto de paredes.
+ *
+ * Devolve só as paredes que se mexem, com as pontas novas. Não altera nada: é
+ * a conta, separada de quem a aplica.
+ *
+ * Existe separada do comando `TranslateWalls` para que a PRÉVIA do arraste e o
+ * COMANDO gravado sejam a mesma geometria. Uma prévia que não bate com o
+ * resultado ensina o usuário a não confiar nela — e a alternativa, reimplementar
+ * a regra no renderizador, é a cópia que diverge em silêncio (foi assim que a
+ * regra de ponta livre ficou certa na tela e errada no papel).
+ *
+ * `arrastarVizinhas` distingue MOVER de ESTICAR: ligado, a ponta de uma parede
+ * NÃO selecionada que compartilha vértice com a seleção anda junto; desligado, o
+ * bloco se desprende, mantendo as próprias medidas.
+ */
+export function pontasDeslocadas(
+  walls: Wall[],
+  wallIds: ObjectId[],
+  delta: Point,
+  arrastarVizinhas: boolean,
+): Map<ObjectId, { a: Point; b: Point }> {
+  const selecionadas = new Set(wallIds);
+  const alvos = walls.filter((w) => selecionadas.has(w.id));
+
+  // OS VÉRTICES ORIGINAIS, ANTES DE QUALQUER DESLOCAMENTO. Deslocar primeiro e
+  // procurar as vizinhas depois casaria com o lugar novo — e o lugar novo é
+  // justamente onde a vizinha NÃO está.
+  const vertices = new Set<string>();
+  for (const w of alvos) {
+    vertices.add(pointKey(w.a));
+    vertices.add(pointKey(w.b));
+  }
+
+  const andar = (p: Point): Point => ({ x: p.x + delta.x, y: p.y + delta.y });
+  const saida = new Map<ObjectId, { a: Point; b: Point }>();
+
+  for (const w of alvos) saida.set(w.id, { a: andar(w.a), b: andar(w.b) });
+
+  if (arrastarVizinhas) {
+    for (const w of walls) {
+      if (selecionadas.has(w.id)) continue;
+      // Igualdade EXATA de coordenada, o mesmo casamento que o editor já usa
+      // para esticar uma parede arrastando o canto junto: no kernel os vértices
+      // são milímetro inteiro, e uma junção só existe quando as duas pontas
+      // caem no mesmo ponto.
+      const mexeA = vertices.has(pointKey(w.a));
+      const mexeB = vertices.has(pointKey(w.b));
+      if (!mexeA && !mexeB) continue;
+      saida.set(w.id, { a: mexeA ? andar(w.a) : w.a, b: mexeB ? andar(w.b) : w.b });
+    }
+  }
+
+  return saida;
 }
 
 /** Comprimento do eixo da parede, em mm inteiros. */

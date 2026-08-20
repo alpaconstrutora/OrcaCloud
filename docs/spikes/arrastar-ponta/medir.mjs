@@ -35,7 +35,8 @@ const browser = await chromium.launch({
   headless: true,
   channel: process.env.BROWSER_CHANNEL ?? 'chrome',
 });
-const page = await browser.newPage({ viewport: { width: 1000, height: 700 } });
+const ALTURA = 700;
+const page = await browser.newPage({ viewport: { width: 1000, height: ALTURA } });
 
 /**
  * @param orto  liga a trava
@@ -54,9 +55,14 @@ async function arrastar(orto, desvioY) {
     return w;
   });
 
-  // Converter mm do modelo para pixel de tela pela mesma matemática do canvas:
-  // a vista nasce em escala 0.05 e deslocamento (60,60).
-  const paraTela = (p) => ({ x: 60 + p.x * 0.05, y: 60 + p.y * 0.05 });
+  // A MESMA matemática de `paraTela`: escala inicial 0,05 px/mm, margem de 60 px
+  // e a ORIGEM NO RODAPÉ — o Y do modelo cresce para cima, o da tela para baixo.
+  //
+  // ⚠️ Esta conta somava Y direto, como o canvas fazia antes de a inversão ser
+  // corrigida (09/08/2026). Enquanto ficou assim, o script mirava 580 px acima
+  // da alça, não pegava nada e relatava "o gesto não move nada" — um harness que
+  // sempre reprova é um harness que ninguém roda.
+  const paraTela = (p) => ({ x: 60 + p.x * 0.05, y: ALTURA - 60 - p.y * 0.05 });
   const de = paraTela(alvo.b);
 
   await page.waitForTimeout(120); // deixa a alça ser desenhada

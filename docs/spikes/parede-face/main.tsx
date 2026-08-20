@@ -84,8 +84,8 @@ function App() {
       model={model}
       tool="parede"
       levelId={levelId}
-      selectedId={null}
-      onSelect={() => {}}
+      selectedIds={[]}
+      onSelecionar={() => {}}
       onAddWall={adicionarParede}
       alinhamento={alinhamento}
       onInverterLado={() => setAlinhamento(inverterLado)}

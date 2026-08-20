@@ -208,8 +208,8 @@ function Harness({ imagem }: { imagem: HTMLImageElement }) {
       model={cena === 'porta' ? modeloComPorta() : emptyModel()}
       tool={desenhando ? 'medir-area' : 'selecionar'}
       levelId={null}
-      selectedId={null}
-      onSelect={() => {}}
+      selectedIds={[]}
+      onSelecionar={() => {}}
       onAddWall={() => {}}
       onAddOpening={() => {}}
       onDelete={() => {}}

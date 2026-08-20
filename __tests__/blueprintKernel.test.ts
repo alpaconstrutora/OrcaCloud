@@ -43,6 +43,7 @@ import {
   snapshotHash,
   travarOrtogonal,
   vertexDegrees,
+  wallLength,
 } from '../utils/blueprintKernel';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2007,5 +2008,208 @@ describe('esticar parede arrastando o canto junto (decisão de produto de 12/08/
     ];
 
     expect(() => applyBatch(built.model, lote)).toThrow(KernelError);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mover a seleção — `TranslateWalls` (pedido de 19/08/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TranslateWalls — mover um conjunto de paredes', () => {
+  /** Sala 4000×3000 com uma porta na parede sul, colada no fim dela. */
+  function salaComPorta() {
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    const [sul, leste, norte, oeste] = built.model.walls;
+    // Porta de 900 mm terminando exatamente em 4000 — o pior caso para
+    // `OPENING_OUT_OF_BOUNDS`: qualquer encurtamento da parede a expulsa.
+    const comPorta = applyCommand(built.model, {
+      type: 'AddOpening',
+      wallId: sul.id,
+      kind: 'door',
+      offsetMm: 3100,
+      widthMm: 900,
+      heightMm: 2100,
+      sillMm: 0,
+    }).model;
+    return { model: comPorta, sul, leste, norte, oeste };
+  }
+
+  const comprimentos = (m: BlueprintModel) =>
+    Object.fromEntries(m.walls.map((w) => [w.id, wallLength(w)]));
+
+  it('translação rígida preserva TODOS os comprimentos e não expulsa a abertura', () => {
+    const { model, sul, leste, norte, oeste } = salaComPorta();
+    const antes = comprimentos(model);
+
+    const depois = applyCommand(model, {
+      type: 'TranslateWalls',
+      wallIds: [sul.id, leste.id, norte.id, oeste.id],
+      delta: point(2000, -1500),
+      arrastarVizinhas: false,
+    }).model;
+
+    expect(comprimentos(depois)).toEqual(antes);
+    expect(depois.spaces).toHaveLength(1);
+    expect(depois.spaces[0].areaMm2).toBe(model.spaces[0].areaMm2);
+    const sulDepois = depois.walls.find((w) => w.id === sul.id)!;
+    expect(sulDepois.a).toEqual({ x: 2000, y: -1500 });
+    expect(sulDepois.b).toEqual({ x: 6000, y: -1500 });
+  });
+
+  it('o mesmo gesto por lote de MoveVertex seria RECUSADO — é a razão de o comando existir', () => {
+    // Prova a justificativa escrita no cabeçalho do comando: ponta a ponta cria
+    // um estado intermediário mais curto, e a porta colada no limite cai fora.
+    // Se algum dia isto passar, o comentário do kernel envelheceu junto.
+    const { model, sul } = salaComPorta();
+    const lote: Command[] = [
+      { type: 'MoveVertex', wallId: sul.id, end: 'a', to: point(2000, 0) },
+      { type: 'MoveVertex', wallId: sul.id, end: 'b', to: point(6000, 0) },
+    ];
+    expect(() => applyBatch(model, lote)).toThrow(/OPENING_OUT_OF_BOUNDS|fora da parede/);
+  });
+
+  it('sem arrastarVizinhas o bloco DESPRENDE: a vizinha fica onde estava', () => {
+    const { model, sul, leste } = salaComPorta();
+
+    const depois = applyCommand(model, {
+      type: 'TranslateWalls',
+      wallIds: [sul.id],
+      delta: point(0, -1000),
+      arrastarVizinhas: false,
+    }).model;
+
+    expect(depois.walls.find((w) => w.id === leste.id)!.a).toEqual({ x: 4000, y: 0 });
+    // Desencostou: o anel abriu e não há mais ambiente fechado.
+    expect(depois.spaces).toHaveLength(0);
+  });
+
+  it('com arrastarVizinhas a ponta da vizinha acompanha — e SÓ ela', () => {
+    const { model, sul, leste, oeste } = salaComPorta();
+    const compAntes = comprimentos(model);
+
+    const depois = applyCommand(model, {
+      type: 'TranslateWalls',
+      wallIds: [sul.id],
+      delta: point(0, -1000),
+      arrastarVizinhas: true,
+    }).model;
+
+    const lesteDepois = depois.walls.find((w) => w.id === leste.id)!;
+    const oesteDepois = depois.walls.find((w) => w.id === oeste.id)!;
+    // A ponta compartilhada andou; a do outro extremo NÃO.
+    expect(lesteDepois.a).toEqual({ x: 4000, y: -1000 });
+    expect(lesteDepois.b).toEqual({ x: 4000, y: 3000 });
+    expect(oesteDepois.b).toEqual({ x: 0, y: -1000 });
+    expect(oesteDepois.a).toEqual({ x: 0, y: 3000 });
+    // Nada desencostou: ambiente fechado, agora 1000 mm mais alto.
+    expect(depois.spaces).toHaveLength(1);
+    expect(depois.spaces[0].areaMm2).toBe(16_000_000);
+    // A vizinha MUDOU de comprimento — é o que distingue esticar de mover.
+    expect(wallLength(lesteDepois)).toBe(compAntes[leste.id] + 1000);
+    // A selecionada, não.
+    expect(wallLength(depois.walls.find((w) => w.id === sul.id)!)).toBe(compAntes[sul.id]);
+  });
+
+  it('vizinha que encolheria abaixo da abertura é recusada, e o original fica intacto', () => {
+    // Porta ocupando quase toda a parede LESTE. Empurrar a SUL para cima com
+    // "esticar" encurta a LESTE, e a porta não cabe mais.
+    const { model, levelId } = withLevel();
+    const built = applyBatch(model, room(levelId, 0, 0, 4000, 3000));
+    const [sul, leste] = built.model.walls;
+    const comPorta = applyCommand(built.model, {
+      type: 'AddOpening',
+      wallId: leste.id,
+      kind: 'door',
+      offsetMm: 100,
+      widthMm: 2800,
+      heightMm: 2100,
+      sillMm: 0,
+    }).model;
+    const antes = snapshotHash(comPorta);
+
+    expect(() =>
+      applyCommand(comPorta, {
+        type: 'TranslateWalls',
+        wallIds: [sul.id],
+        delta: point(0, 2000),
+        arrastarVizinhas: true,
+      }),
+    ).toThrow(KernelError);
+
+    // A cópia antes de validar é o que garante isto: nada ficou pela metade.
+    expect(snapshotHash(comPorta)).toBe(antes);
+    expect(comPorta.walls.find((w) => w.id === sul.id)!.a).toEqual({ x: 0, y: 0 });
+  });
+
+  it('recusa lista vazia, id inexistente e coordenada fora do alcance', () => {
+    const { model, sul, leste } = salaComPorta();
+
+    expect(() =>
+      applyCommand(model, {
+        type: 'TranslateWalls',
+        wallIds: [],
+        delta: point(100, 0),
+        arrastarVizinhas: false,
+      }),
+    ).toThrow(KernelError);
+
+    // Id inexistente no MEIO da lista: nenhuma parede pode ter andado.
+    const antes = snapshotHash(model);
+    expect(() =>
+      applyCommand(model, {
+        type: 'TranslateWalls',
+        wallIds: [sul.id, 'wal_9999', leste.id],
+        delta: point(100, 0),
+        arrastarVizinhas: false,
+      }),
+    ).toThrow(KernelError);
+    expect(snapshotHash(model)).toBe(antes);
+
+    expect(() =>
+      applyCommand(model, {
+        type: 'TranslateWalls',
+        wallIds: [sul.id],
+        delta: point(9_000_000, 0),
+        arrastarVizinhas: false,
+      }),
+    ).toThrow(KernelError);
+
+    // Delta zero não é erro — o canvas já não emite, e o kernel não precisa de
+    // uma segunda trava para a mesma coisa.
+    const parado = applyCommand(model, {
+      type: 'TranslateWalls',
+      wallIds: [sul.id],
+      delta: point(0, 0),
+      arrastarVizinhas: false,
+    });
+    expect(parado.hash).toBe(antes);
+  });
+
+  it('delta fracionário é arredondado a milímetro inteiro, não propagado', () => {
+    const { model, sul } = salaComPorta();
+    const depois = applyCommand(model, {
+      type: 'TranslateWalls',
+      wallIds: [sul.id],
+      delta: { x: 1000.4, y: -999.6 },
+      arrastarVizinhas: false,
+    }).model;
+    expect(depois.walls.find((w) => w.id === sul.id)!.a).toEqual({ x: 1000, y: -1000 });
+  });
+
+  it('um gesto é UM passo de desfazer, mesmo movendo o desenho inteiro', () => {
+    const { model, sul, leste, norte, oeste } = salaComPorta();
+    const historico = new ModelHistory(model);
+    historico.apply({
+      type: 'TranslateWalls',
+      wallIds: [sul.id, leste.id, norte.id, oeste.id],
+      delta: point(500, 500),
+      arrastarVizinhas: false,
+    });
+    expect(historico.current.walls.find((w) => w.id === sul.id)!.a).toEqual({ x: 500, y: 500 });
+
+    historico.undo();
+    expect(historico.current.walls.find((w) => w.id === sul.id)!.a).toEqual({ x: 0, y: 0 });
+    expect(historico.canUndo).toBe(false);
   });
 });

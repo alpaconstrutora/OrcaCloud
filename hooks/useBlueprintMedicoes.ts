@@ -187,6 +187,48 @@ export function useBlueprintMedicoes(
     [linhas],
   );
 
+  /**
+   * Desloca as formas indicadas por um vetor, em milímetro do modelo.
+   *
+   * É o gesto "mover a seleção" chegando nesta camada. Translação não muda área
+   * nem comprimento, então o número medido continua valendo — o que muda é só
+   * onde o contorno cai sobre a planta de fundo.
+   *
+   * ⚠️ **Não passa pelo histórico do editor.** Ctrl+Z não desfaz isto, pela mesma
+   * razão registrada no cabeçalho deste hook: desfazer não pode apagar um
+   * levantamento. Quem move parede e medição juntas vê só as paredes voltarem —
+   * e é a UI que avisa, em vez de fingir que as duas andam no mesmo passo.
+   *
+   * Otimista, como `atualizar`: o desenho não pode esperar a rede para acompanhar
+   * um arraste que já terminou.
+   */
+  const deslocar = useCallback(
+    async (ids: string[], delta: Point) => {
+      if (ids.length === 0 || (delta.x === 0 && delta.y === 0)) return;
+      const alvo = new Set(ids);
+      const mover = (pontos: Point[]) => pontos.map((p) => ({ x: p.x + delta.x, y: p.y + delta.y }));
+
+      const movidas = linhas
+        .filter((l) => alvo.has(l.id))
+        .map((l) => ({ id: l.id, pontos: mover(formaDaLinha(l).pontos) }));
+      if (movidas.length === 0) return;
+
+      setLinhas((atual) =>
+        atual.map((l) =>
+          alvo.has(l.id) ? { ...l, pontos: movidas.find((m) => m.id === l.id)!.pontos } : l,
+        ),
+      );
+
+      try {
+        await regravarPontos(movidas);
+      } catch (e) {
+        setErro(e instanceof Error ? e.message : String(e));
+        void recarregar();
+      }
+    },
+    [linhas, recarregar],
+  );
+
   const enviarAoOrcamento = useCallback(
     async (
       projectId: string | null,
@@ -252,6 +294,7 @@ export function useBlueprintMedicoes(
     atualizar,
     remover,
     reposicionar,
+    deslocar,
     enviarAoOrcamento,
   };
 }

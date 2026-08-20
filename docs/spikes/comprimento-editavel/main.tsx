@@ -132,8 +132,8 @@ function App() {
           model={model}
           tool="selecionar"
           levelId={levelId}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
+          selectedIds={selectedId ? [selectedId] : []}
+          onSelecionar={(ids) => setSelectedId(ids[0] ?? null)}
           onAddWall={() => null}
           onAddOpening={() => {}}
           onDelete={() => {}}

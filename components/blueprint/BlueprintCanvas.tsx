@@ -7,12 +7,15 @@ import {
   eixoDaParede,
   poligonoPeloLado,
   retanguloPorCantos,
+  intersectSegments,
+  pointInPolygon,
   type AlinhamentoParede,
   type BlueprintModel,
   type Opening,
   type Point,
   type Wall,
   point,
+  pontasDeslocadas,
   wallLength,
 } from '../../utils/blueprintKernel';
 import {
@@ -105,6 +108,14 @@ const HIT_PX = 8;
 const LINHA_PAREDE_PX = 1.2;
 /** Mesmo teto do kernel (MAX_COORD_MM). Ver o comentário em `capturar`. */
 const LIMITE_MM = 1_000_000;
+/**
+ * Quanto o ponteiro pode andar, em pixels, e o gesto ainda contar como clique.
+ *
+ * Sem essa folga, todo clique no vazio abriria um laço de área zero — e um laço
+ * de área zero não pega nada, mas também não limpa a seleção, que é o que o
+ * clique no vazio sempre fez.
+ */
+const FOLGA_CLIQUE_PX = 3;
 
 /** Folga entre a borda do desenho e o rótulo, em pixels de tela. */
 const FOLGA_ROTULO_PX = 11;
@@ -186,6 +197,64 @@ function rotuloDoTraco(
   );
 }
 
+/**
+ * Ponto do mundo em milímetro inteiro e dentro do alcance do kernel.
+ *
+ * `point()` recusa fração e coordenada fora de ±1.000.000 mm com exceção, e
+ * estas contas rodam a cada movimento do ponteiro — sem limitar antes, afastar
+ * a vista e mexer o mouse derrubaria a aba de dentro de um handler.
+ */
+function arredondar(p: { x: number; y: number }): Point {
+  const limitar = (v: number) => Math.max(-LIMITE_MM, Math.min(LIMITE_MM, Math.round(v)));
+  return point(limitar(p.x), limitar(p.y));
+}
+
+/** Distância de um ponto ao segmento `a`–`b`, em mm. */
+function distanciaAoSegmento(a: Point, b: Point, p: { x: number; y: number }): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const comp2 = dx * dx + dy * dy;
+  if (comp2 === 0) return Math.hypot(a.x - p.x, a.y - p.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / comp2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y);
+}
+
+/** As arestas de uma sequência de pontos. `fechado` acrescenta a de volta. */
+function arestas(pontos: Point[], fechado: boolean) {
+  const saida: { a: Point; b: Point }[] = [];
+  for (let i = 0; i + 1 < pontos.length; i++) saida.push({ a: pontos[i], b: pontos[i + 1] });
+  if (fechado && pontos.length > 2) {
+    saida.push({ a: pontos[pontos.length - 1], b: pontos[0] });
+  }
+  return saida;
+}
+
+/** Todos os vértices caem dentro do retângulo? — o laço "janela". */
+function anelDentroDe(pontos: Point[], ret: Point[]): boolean {
+  return pontos.length > 0 && pontos.every((p) => pointInPolygon(ret, p));
+}
+
+/**
+ * A figura encosta no retângulo? — o laço "interseção".
+ *
+ * Três testes, e os três são necessários: vértice dentro do retângulo (figura
+ * parcialmente dentro), canto do retângulo dentro da figura (retângulo pequeno
+ * inteiramente dentro de uma parede grossa) e cruzamento de arestas (a figura
+ * atravessa o retângulo de lado a lado, sem nenhum vértice dentro).
+ */
+function anelToca(pontos: Point[], ret: Point[], fechado: boolean): boolean {
+  if (pontos.length === 0) return false;
+  if (pontos.some((p) => pointInPolygon(ret, p))) return true;
+  if (fechado && pontos.length > 2 && ret.some((p) => pointInPolygon(pontos, p))) return true;
+  for (const s of arestas(pontos, fechado)) {
+    for (const t of arestas(ret, true)) {
+      if (intersectSegments(s, t).kind !== 'none') return true;
+    }
+  }
+  return false;
+}
+
 /** Correção de uma ponta já criada, para o canto fechar mitrado. */
 export interface AjustePonta {
   wallId: string;
@@ -197,8 +266,32 @@ interface Props {
   model: BlueprintModel;
   tool: BlueprintTool;
   levelId: string | null;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  /**
+   * A seleção inteira, com ids HETEROGÊNEOS: parede, abertura ou medição.
+   *
+   * É uma lista, e não um id, porque o gesto que o módulo não tinha era
+   * justamente "pegue este bloco e ande com ele". As operações de cardinalidade
+   * 1 (alça de ponta, arrastar abertura) continuam existindo e são consultadas
+   * por `unicoSelecionado`, logo abaixo.
+   */
+  selectedIds: string[];
+  onSelecionar: (ids: string[]) => void;
+  /**
+   * Desloca as paredes selecionadas. Sem isto o arraste mostra a prévia e não
+   * grava nada — o mesmo contrato de `onMoveVertex`.
+   */
+  onMoverSelecao?: (wallIds: string[], delta: Point) => void;
+  /** Desloca as medições selecionadas. Camada separada, gravação separada. */
+  onMoverMedicoes?: (ids: string[], delta: Point) => void;
+  /**
+   * Modo ESTICAR: as pontas de paredes não selecionadas que compartilham
+   * vértice com a seleção andam junto.
+   *
+   * Chega até aqui porque a PRÉVIA tem de aplicar a mesma regra do commit —
+   * mostrar o bloco desprendendo e gravar as vizinhas coladas faria o desenho
+   * "pular" ao soltar.
+   */
+  arrastarVizinhas?: boolean;
   /**
    * Confirma um trecho de parede, com o eixo JÁ resolvido pelo alinhamento.
    *
@@ -256,9 +349,8 @@ interface Props {
   medicoes?: FormaMedida[];
   /** Conclui uma forma medida. `null` em `pontos` cancela. */
   onMedicaoPronta?: (tipo: TipoMedida, pontos: Point[]) => void;
-  /** Id da medição selecionada, para destacar. */
+  /** Id da medição escolhida na LISTA lateral, para destacar junto com a seleção. */
   medicaoSelecionada?: string | null;
-  onSelecionarMedicao?: (id: string | null) => void;
   /** Move a ponta de uma parede. Sem isto, a alça é desenhada e não faz nada. */
   onMoveVertex?: (wallId: string, end: 'a' | 'b', to: Point) => void;
   /**
@@ -286,8 +378,11 @@ export default function BlueprintCanvas({
   model,
   tool,
   levelId,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onSelecionar,
+  onMoverSelecao,
+  onMoverMedicoes,
+  arrastarVizinhas = false,
   onAddWall,
   alinhamento = 'EIXO',
   ladosPoligono = 6,
@@ -310,7 +405,6 @@ export default function BlueprintCanvas({
   medicoes = [],
   onMedicaoPronta,
   medicaoSelecionada = null,
-  onSelecionarMedicao,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -351,6 +445,25 @@ export default function BlueprintCanvas({
   const mesmoLado = !ultimoTrecho || ultimoTrecho.lado === alinhamento;
   const [cursor, setCursor] = useState<Point | null>(null);
   const [arrastando, setArrastando] = useState(false);
+  /**
+   * Laço em curso, em MILÍMETRO do modelo.
+   *
+   * A DIREÇÃO decide o modo, como em todo CAD: da esquerda para a direita pega
+   * só o que está inteiramente dentro ("janela"); da direita para a esquerda
+   * pega tudo que o retângulo toca ("interseção"). Guardar os dois pontos, em
+   * vez de um retângulo normalizado, é o que preserva essa direção.
+   */
+  const [laco, setLaco] = useState<{ origem: Point; atual: Point } | null>(null);
+  /**
+   * Arraste da seleção inteira: de onde o gesto partiu e quanto já andou.
+   *
+   * O deslocamento é guardado como VETOR, não como posição de destino, porque é
+   * o vetor que se aplica igual a todas as entidades — encaixar cada uma na
+   * grade individualmente destruiria as relações internas do conjunto.
+   */
+  const [movendoSelecao, setMovendoSelecao] = useState<
+    { origem: Point; delta: Point } | null
+  >(null);
   const [previaAbertura, setPreviaAbertura] = useState<{ wallId: string; offsetMm: number } | null>(null);
   /** Ponta em arraste, e para onde ela iria se soltasse agora. */
   const [movendo, setMovendo] = useState<{ wallId: string; end: 'a' | 'b' } | null>(null);
@@ -382,8 +495,65 @@ export default function BlueprintCanvas({
     onPassoEfetivo?.(passoEfetivo);
   }, [passoEfetivo, onPassoEfetivo]);
 
-  const paredesDoNivel = model.walls.filter((w) => !levelId || w.levelId === levelId);
-  const ambientesDoNivel = model.spaces.filter((s) => !levelId || s.levelId === levelId);
+  // Memoizadas porque o efeito de DESENHO depende delas: um filtro solto devolve
+  // array novo a cada render e faria a planta ser repintada por qualquer mudança
+  // de estado da tela, inclusive as que não mexem em geometria nenhuma.
+  const paredesReais = useMemo(
+    () => model.walls.filter((w) => !levelId || w.levelId === levelId),
+    [model.walls, levelId],
+  );
+  const ambientesDoNivel = useMemo(
+    () => model.spaces.filter((s) => !levelId || s.levelId === levelId),
+    [model.spaces, levelId],
+  );
+
+  // ── Seleção ───────────────────────────────────────────────────────────────
+  //
+  // `selectedIds` é a fonte; tudo o mais aqui é derivado dela. `unicoSelecionado`
+  // existe porque duas operações do editor são, por definição, de UM item só —
+  // arrastar a alça de uma ponta e deslizar uma abertura. Com N selecionados
+  // elas simplesmente não se oferecem, em vez de agirem sobre um item arbitrário
+  // do conjunto.
+  const selecao = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const unicoSelecionado = selectedIds.length === 1 ? selectedIds[0] : null;
+  const idsDeParedesSelecionadas = paredesReais.filter((w) => selecao.has(w.id)).map((w) => w.id);
+  const idsDeMedicoesSelecionadas = medicoes.filter((f) => selecao.has(f.id)).map((f) => f.id);
+
+  /**
+   * As paredes COMO ELAS APARECEM AGORA na tela.
+   *
+   * Durante o arraste da seleção, é o conjunto já deslocado — a mesma escolha
+   * que o arraste de abertura faz (desenhar a porta no offset novo, e não um
+   * fantasma ao lado dela): o que se vê durante o gesto é exatamente o que fica
+   * ao soltar. O modelo só muda no `pointerup`.
+   *
+   * A conta vem do KERNEL (`pontasDeslocadas`), a mesma que o comando aplica —
+   * inclusive o arrasto das vizinhas no modo Esticar. Reimplementá-la aqui seria
+   * a cópia que diverge em silêncio.
+   */
+  const paredesDoNivel = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0) || idsDeParedesSelecionadas.length === 0) {
+      return paredesReais;
+    }
+    const destinos = pontasDeslocadas(paredesReais, idsDeParedesSelecionadas, d, arrastarVizinhas);
+    return paredesReais.map((w) => {
+      const destino = destinos.get(w.id);
+      return destino ? { ...w, a: destino.a, b: destino.b } : w;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paredesReais, movendoSelecao, selecao, arrastarVizinhas]);
+
+  /** As medições como aparecem agora — deslocadas junto durante o arraste. */
+  const medicoesDoNivel = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    if (!d || (d.x === 0 && d.y === 0)) return medicoes;
+    return medicoes.map((f) =>
+      selecao.has(f.id)
+        ? { ...f, pontos: f.pontos.map((p) => ({ x: p.x + d.x, y: p.y + d.y })) }
+        : f,
+    );
+  }, [medicoes, movendoSelecao, selecao]);
 
   // ── Conversões ────────────────────────────────────────────────────────────
   //
@@ -642,6 +812,74 @@ export default function BlueprintCanvas({
     [paredesDoNivel, vista.escala, espessuraMm],
   );
 
+  /**
+   * Qual forma MEDIDA está sob o cursor.
+   *
+   * Existia a prop para avisar da seleção e não existia o teste que a dispara —
+   * medição só era selecionável pela lista lateral. Sem isto, uma medição não
+   * pode ser pega para arrastar, e "selecionar parte e mover" deixaria de fora
+   * justamente a camada que fica por cima da planta de fundo.
+   */
+  const medicaoSob = useCallback(
+    (mundo: { x: number; y: number }): FormaMedida | null => {
+      const limite = HIT_PX / vista.escala;
+      for (const f of medicoes) {
+        if (f.pontos.length === 0) continue;
+        if (f.tipo === 'PONTO') {
+          if (f.pontos.some((p) => Math.hypot(p.x - mundo.x, p.y - mundo.y) <= limite)) return f;
+          continue;
+        }
+        // Dentro do polígono conta: é uma área, e clicar no meio dela é o gesto
+        // natural. A borda entra pelo teste de distância logo abaixo.
+        if (f.tipo === 'POLIGONO' && pointInPolygon(f.pontos, arredondar(mundo))) return f;
+        for (let i = 0; i + 1 < f.pontos.length; i++) {
+          if (distanciaAoSegmento(f.pontos[i], f.pontos[i + 1], mundo) <= limite) return f;
+        }
+        if (f.tipo === 'POLIGONO' && f.pontos.length > 2) {
+          const ultimo = f.pontos[f.pontos.length - 1];
+          if (distanciaAoSegmento(ultimo, f.pontos[0], mundo) <= limite) return f;
+        }
+      }
+      return null;
+    },
+    [medicoes, vista.escala],
+  );
+
+  /**
+   * O que o laço pegou.
+   *
+   * A parede é testada pelo CORPO, não pelo eixo: parede grossa raspando a borda
+   * do retângulo se comportaria de um jeito que ninguém consegue explicar
+   * olhando para a tela. `cantosDaParede` é a mesma função que o desenho usa,
+   * então o que se vê e o que o laço pega são a mesma figura.
+   */
+  const idsNoLaco = useCallback(
+    (origem: Point, atual: Point): string[] => {
+      const ret = retanguloPorCantos(origem, atual);
+      if (ret.length === 0) return [];
+      // Esquerda → direita: só o que está INTEIRO dentro. Direita → esquerda:
+      // tudo que TOCA. É a convenção do AutoCAD, e o rótulo na tela a anuncia.
+      const soDentro = atual.x >= origem.x;
+      const pegos: string[] = [];
+
+      for (const w of paredesDoNivel) {
+        const corpo = cantosDaParede(w.a, w.b, w.thicknessMm);
+        if (corpo.length === 0) continue;
+        if (soDentro ? anelDentroDe(corpo, ret) : anelToca(corpo, ret, true)) pegos.push(w.id);
+      }
+
+      for (const f of medicoes) {
+        if (f.pontos.length === 0) continue;
+        const fechado = f.tipo === 'POLIGONO';
+        const dentro = f.pontos.every((p) => pointInPolygon(ret, p));
+        if (soDentro ? dentro : anelToca(f.pontos, ret, fechado)) pegos.push(f.id);
+      }
+
+      return pegos;
+    },
+    [paredesDoNivel, medicoes],
+  );
+
   // ── Tamanho ───────────────────────────────────────────────────────────────
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -849,7 +1087,7 @@ export default function BlueprintCanvas({
     // Passada 1 — silhueta
     for (const t of traco) {
       if (t.comp < 0.5) continue;
-      ctx.strokeStyle = t.w.id === selectedId ? COR_SELECIONADA : COR_PAREDE;
+      ctx.strokeStyle = selecao.has(t.w.id) ? COR_SELECIONADA : COR_PAREDE;
       ctx.lineWidth = t.cheia;
       ctx.beginPath();
       ctx.moveTo(t.a.x - t.ux * t.extA, t.a.y - t.uy * t.extA);
@@ -937,7 +1175,7 @@ export default function BlueprintCanvas({
       ctx.fill();
 
       // 2. batentes
-      ctx.strokeStyle = o.id === selectedId ? COR_SELECIONADA : COR_PAREDE;
+      ctx.strokeStyle = selecao.has(o.id) ? COR_SELECIONADA : COR_PAREDE;
       ctx.lineWidth = LINHA_PAREDE_PX;
       ctx.beginPath();
       ctx.moveTo(t1.x, t1.y);
@@ -1186,11 +1424,11 @@ export default function BlueprintCanvas({
     // confundirem com a geometria derivada. A distinção não é estética: uma é
     // recalculável e a outra é a afirmação de uma pessoa, e quem olha a tela
     // precisa saber qual está vendo.
-    for (const f of medicoes) {
+    for (const f of medicoesDoNivel) {
       const pts = f.pontos.map(paraTela);
       if (pts.length === 0) continue;
 
-      const selecionada = f.id === medicaoSelecionada;
+      const selecionada = selecao.has(f.id) || f.id === medicaoSelecionada;
       ctx.strokeStyle = f.cor;
       ctx.lineWidth = selecionada ? 2.5 : 1.5;
       ctx.setLineDash([6, 4]);
@@ -1261,8 +1499,11 @@ export default function BlueprintCanvas({
     // Desenhá-las é o que torna o arraste DESCOBRÍVEL. Uma ponta arrastável sem
     // marca na tela é a mesma classe de defeito de um botão que não funciona: a
     // ação existe e ninguém encontra.
-    const selecionadaParaAlca = paredesDoNivel.find((w) => w.id === selectedId);
-    if (selecionadaParaAlca && !movendo) {
+    // Só na parede que está SOZINHA na seleção: com um bloco selecionado, a
+    // alça de uma ponta seria uma segunda ação disputando o mesmo pixel do
+    // arraste do conjunto.
+    const selecionadaParaAlca = paredesDoNivel.find((w) => w.id === unicoSelecionado);
+    if (selecionadaParaAlca && !movendo && !movendoSelecao) {
       for (const extremo of [selecionadaParaAlca.a, selecionadaParaAlca.b]) {
         const t = paraTela(extremo);
         ctx.fillStyle = '#ffffff';
@@ -1391,6 +1632,77 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── Laço de seleção ──────────────────────────────────────────────────────
+    //
+    // Os dois modos precisam ser DISTINGUÍVEIS na tela. A convenção direcional
+    // do CAD é invisível para quem não a conhece: sem o traço tracejado e sem o
+    // rótulo, a pessoa descobre por acidente que arrastar para trás pega mais
+    // coisa — e passa a evitar o laço.
+    // Rótulo que segue o cursor tem de caber na tela. Laçar de baixo para cima
+    // levava o texto para trás da faixa de ajuda do rodapé — e um rótulo que
+    // não se lê é um rótulo que não existe.
+    const dentroDaTela = (x: number, y: number) => ({
+      x: Math.max(70, Math.min(tamanho.w - 70, x)),
+      y: Math.max(14, Math.min(tamanho.h - 44, y)),
+    });
+
+    if (laco) {
+      const a = paraTela(laco.origem);
+      const b = paraTela(laco.atual);
+      const soDentro = laco.atual.x >= laco.origem.x;
+      const cor = soDentro ? COR_PREVIA : COR_ALERTA;
+
+      ctx.strokeStyle = cor;
+      ctx.fillStyle = `${cor}18`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash(soDentro ? [] : [6, 4]);
+      ctx.beginPath();
+      ctx.rect(a.x, a.y, b.x - a.x, b.y - a.y);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const posLaco = dentroDaTela(b.x, b.y - 14);
+      escreverRotulo(ctx, soDentro ? 'Inteiro dentro' : 'Tudo que tocar', posLaco.x, posLaco.y, cor, 11);
+    }
+
+    // Cota do deslocamento, durante o arraste da seleção.
+    //
+    // É a informação que decide o gesto — "andei 2 m para a direita?" — e
+    // conferi-la depois de soltar seria tarde.
+    if (movendoSelecao && (movendoSelecao.delta.x !== 0 || movendoSelecao.delta.y !== 0)) {
+      const { delta } = movendoSelecao;
+      const de = paraTela(movendoSelecao.origem);
+      const para = paraTela({
+        x: movendoSelecao.origem.x + delta.x,
+        y: movendoSelecao.origem.y + delta.y,
+      } as Point);
+
+      ctx.strokeStyle = COR_SELECIONADA;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(de.x, de.y);
+      ctx.lineTo(para.x, para.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Vírgula, não ponto: é a convenção do país e a mesma dos outros rótulos
+      // desta tela. Duas grafias de decimal no mesmo desenho fazem parecer que
+      // uma delas veio de outro sistema.
+      const emMetros = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
+      const distancia = Math.hypot(delta.x, delta.y);
+      const posCota = dentroDaTela(para.x, para.y - 14);
+      escreverRotulo(
+        ctx,
+        `${emMetros(distancia)} m · Δx ${emMetros(delta.x)} · Δy ${emMetros(delta.y)}`,
+        posCota.x,
+        posCota.y,
+        COR_SELECIONADA,
+        11,
+      );
+    }
+
     // Marcador de captura
     if (cursor && (tool === 'parede' || tool === 'poligono' || tool === 'retangulo')) {
       const c = paraTela(cursor);
@@ -1412,7 +1724,8 @@ export default function BlueprintCanvas({
     fechandoContorno,
     alinhamento,
     cursor,
-    selectedId,
+    selecao,
+    unicoSelecionado,
     tool,
     espessuraMm,
     larguraAberturaMm,
@@ -1422,12 +1735,14 @@ export default function BlueprintCanvas({
     mostrarMedidasParedes,
     fundo,
     calibP1,
-    medicoes,
+    medicoesDoNivel,
     medicaoSelecionada,
     medindo,
     movendo,
     destinoPonta,
     movendoAbertura,
+    movendoSelecao,
+    laco,
     ancoraDaForma,
     verticesPoligono,
     eixosDoPoligono,
@@ -1488,11 +1803,47 @@ export default function BlueprintCanvas({
     return movendo.end === 'a' ? w.b : w.a;
   }
 
+  /**
+   * O deslocamento do arraste, já encaixado e travado.
+   *
+   * O encaixe é no DESLOCAMENTO, não na posição de destino: arredondar cada
+   * entidade para a grade destruiria as relações internas do conjunto — duas
+   * paredes a 1350 mm uma da outra ficariam a 1300 ou 1400 sem ninguém pedir.
+   * Deslocando todo mundo pelo mesmo vetor, o bloco anda inteiro.
+   *
+   * A trava ortogonal entra DEPOIS do encaixe e sobre o próprio vetor: zerar uma
+   * componente de um vetor que já é múltiplo do passo o mantém na grade.
+   */
+  function deltaDoArraste(origem: Point, mundo: { x: number; y: number }, e: { shiftKey: boolean }) {
+    const limitar = (v: number) => Math.max(-LIMITE_MM, Math.min(LIMITE_MM, v));
+    const passo = passoEfetivo;
+    let dx = limitar(Math.round((mundo.x - origem.x) / passo) * passo);
+    let dy = limitar(Math.round((mundo.y - origem.y) / passo) * passo);
+    if (ortoAtivo(e)) {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
+    return { x: dx, y: dy };
+  }
+
   function aoMover(e: React.PointerEvent) {
     const { px, py } = posicao(e);
 
     if (arrastando) {
       setVista((v) => ({ ...v, dx: v.dx + e.movementX, dy: v.dy + e.movementY }));
+      return;
+    }
+
+    if (movendoSelecao) {
+      const mundo = paraMundo(px, py);
+      setMovendoSelecao((atual) =>
+        atual ? { ...atual, delta: deltaDoArraste(atual.origem, mundo, e) } : atual,
+      );
+      return;
+    }
+
+    if (laco) {
+      setLaco((atual) => (atual ? { ...atual, atual: arredondar(paraMundo(px, py)) } : atual));
       return;
     }
 
@@ -1655,7 +2006,7 @@ export default function BlueprintCanvas({
       // ALÇA ANTES DE SELEÇÃO. As alças só existem na parede JÁ selecionada —
       // é a convenção de CAD (selecionar, depois pegar o grip) e evita que um
       // clique para selecionar vire um arraste acidental de geometria.
-      const selecionada = model.walls.find((w) => w.id === selectedId);
+      const selecionada = model.walls.find((w) => w.id === unicoSelecionado);
       if (selecionada) {
         const limite = ALCA_PX / vista.escala;
         for (const end of ['a', 'b'] as const) {
@@ -1677,13 +2028,42 @@ export default function BlueprintCanvas({
       // ARRASTAR A ABERTURA JÁ SELECIONADA — mesma convenção da alça de parede
       // logo acima: seleciona, depois pega. Sem o "já selecionada", todo clique
       // para escolher a parede perto de uma porta viraria um empurrão nela.
-      if (aberturaClicada && aberturaClicada.id === selectedId && w) {
+      if (aberturaClicada && aberturaClicada.id === unicoSelecionado && w) {
         setMovendoAbertura({ openingId: aberturaClicada.id, offsetMm: aberturaClicada.offsetMm });
         canvasRef.current?.setPointerCapture(e.pointerId);
         return;
       }
 
-      onSelect(aberturaClicada?.id ?? w?.id ?? null);
+      const f = medicaoSob(mundo);
+      const clicado = aberturaClicada?.id ?? w?.id ?? f?.id ?? null;
+      const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
+
+      // ARRASTAR O QUE JÁ ESTÁ SELECIONADO. Apertar sobre um item do conjunto
+      // pega o conjunto INTEIRO — é o MOVE do CAD. Vem depois dos dois testes
+      // de alça acima, e antes da seleção: sem essa ordem, pegar o bloco
+      // primeiro reduziria a seleção ao item apertado e o gesto viraria "mover
+      // uma parede só", calado.
+      if (clicado && selecao.has(clicado) && !acumular) {
+        setMovendoSelecao({ origem: arredondar(mundo), delta: { x: 0, y: 0 } });
+        canvasRef.current?.setPointerCapture(e.pointerId);
+        return;
+      }
+
+      if (clicado) {
+        onSelecionar(
+          acumular
+            ? selecao.has(clicado)
+              ? selectedIds.filter((id) => id !== clicado)
+              : [...selectedIds, clicado]
+            : [clicado],
+        );
+        return;
+      }
+
+      // Vazio: começa o LAÇO. Só vira seleção de fato ao soltar — um clique sem
+      // arrastar continua limpando a seleção, como sempre limpou.
+      setLaco({ origem: arredondar(mundo), atual: arredondar(mundo) });
+      canvasRef.current?.setPointerCapture(e.pointerId);
       return;
     }
 
@@ -1749,9 +2129,43 @@ export default function BlueprintCanvas({
     setMedindo([]);
   }
 
+  /** Grava o deslocamento da seleção. Vale para o arraste e para as setas. */
+  function comitarDeslocamento(delta: Point) {
+    if (delta.x === 0 && delta.y === 0) return;
+    if (idsDeParedesSelecionadas.length > 0) {
+      onMoverSelecao?.(idsDeParedesSelecionadas, delta);
+    }
+    if (idsDeMedicoesSelecionadas.length > 0) {
+      onMoverMedicoes?.(idsDeMedicoesSelecionadas, delta);
+    }
+  }
+
   function aoSoltar(e: React.PointerEvent) {
     if (arrastando) {
       setArrastando(false);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
+    if (movendoSelecao) {
+      // Delta zero não emite nada: um clique sem arrastar cai aqui, e gravar
+      // isso encheria o histórico de passos que não mudam nada — cada um deles
+      // um "desfazer" que parece travado.
+      comitarDeslocamento(movendoSelecao.delta);
+      setMovendoSelecao(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
+    if (laco) {
+      const { origem, atual } = laco;
+      // Arraste menor que a folga de clique É clique: sem isto, todo clique no
+      // vazio viraria um laço de área zero e a seleção nunca se limparia.
+      const arrastou =
+        Math.abs(atual.x - origem.x) * vista.escala > FOLGA_CLIQUE_PX ||
+        Math.abs(atual.y - origem.y) * vista.escala > FOLGA_CLIQUE_PX;
+      const pegos = arrastou ? idsNoLaco(origem, atual) : [];
+      const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
+      onSelecionar(acumular ? [...new Set([...selectedIds, ...pegos])] : pegos);
+      setLaco(null);
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 
@@ -1810,20 +2224,47 @@ export default function BlueprintCanvas({
       onInverterLado();
       return;
     }
+    // Ctrl+A seleciona o nível inteiro — paredes e medições. É o caminho para
+    // "mover a planta toda" sem laçar de canto a canto com o zoom afastado.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault();
+      onSelecionar([...paredesDoNivel.map((w) => w.id), ...medicoes.map((f) => f.id)]);
+      return;
+    }
+
+    // Setas deslocam a seleção um passo de grade (Shift = 10 passos). É o único
+    // jeito de mover com precisão sem mira: o arraste depende da mão.
+    const passos: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, 1],
+      ArrowDown: [0, -1],
+    };
+    const direcao = passos[e.key];
+    if (direcao && selectedIds.length > 0 && !movendoSelecao) {
+      e.preventDefault();
+      const fator = passoEfetivo * (e.shiftKey ? 10 : 1);
+      comitarDeslocamento({ x: direcao[0] * fator, y: direcao[1] * fator } as Point);
+      return;
+    }
+
     if (e.key === 'Escape') {
       setCadeia([]);
       setTrechos([]);
       // Desistir do arraste em curso: a abertura fica onde estava, porque o
-      // modelo só muda ao soltar.
+      // modelo só muda ao soltar. Vale igual para o arraste da seleção e para o
+      // laço — os dois só produzem efeito no `pointerup`.
       setMovendoAbertura(null);
       setMovendo(null);
       setDestinoPonta(null);
+      setMovendoSelecao(null);
+      setLaco(null);
       setAncoraDaForma(null);
       setCalibP1(null);
       setMedindo([]);
-      onSelect(null);
+      onSelecionar([]);
     }
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
       e.preventDefault();
       onDelete();
     }
@@ -1838,11 +2279,13 @@ export default function BlueprintCanvas({
         aria-label="Área de desenho da planta. Use a lista de ambientes ao lado para navegar por teclado."
         className="block h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         style={{
-          cursor: arrastando || movendo || movendoAbertura
+          cursor: arrastando || movendo || movendoAbertura || movendoSelecao
             ? 'grabbing'
-            : tool !== 'selecionar' && tool !== 'abertura'
+            : laco
               ? 'crosshair'
-              : 'default',
+              : tool !== 'selecionar' && tool !== 'abertura'
+                ? 'crosshair'
+                : 'default',
         }}
         onPointerMove={aoMover}
         onPointerDown={aoApertar}
@@ -1868,7 +2311,11 @@ export default function BlueprintCanvas({
                 ? 'Clique para fechar o trecho · volte ao 1º ponto para fechar o contorno · Esc cancela'
                 : 'Clique para fechar o trecho · Esc cancela'
               : 'Clique para iniciar a parede'
-            : 'Clique numa parede para selecionar · Delete remove'}
+            : tool === 'selecionar'
+              ? selectedIds.length > 1
+                ? `${selectedIds.length} selecionados · arraste para mover · setas ajustam · Delete remove`
+                : 'Clique para selecionar · arraste no vazio para laçar (← pega o que tocar) · Ctrl+A tudo'
+              : 'Clique numa parede para selecionar · Delete remove'}
         <span className="ml-2 text-slate-400">
           · grade {rotuloPasso(passoEfetivo)}
           {tool === 'parede'

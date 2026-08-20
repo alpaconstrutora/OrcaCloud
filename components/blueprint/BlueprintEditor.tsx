@@ -20,6 +20,8 @@ import {
   Square,
   Spline,
   Hash,
+  Move,
+  MoveDiagonal,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -30,6 +32,7 @@ import ControlesDeFundo, { ResumoDaAfericao } from './ControlesDeFundo';
 import AbasDoPainel from './AbasDoPainel';
 import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
+import PainelSelecaoMultipla from './PainelSelecaoMultipla';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
@@ -103,6 +106,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [aba, setAba] = useState<AbaDoPainel>('ambientes');
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [ortogonal, setOrtogonal] = useState(true);
+  /**
+   * O que acontece nas junções quando se move PARTE do desenho.
+   *
+   * `MOVER` desprende o bloco, que anda mantendo as próprias medidas — é o MOVE
+   * do AutoCAD, e é o padrão porque preserva o que já foi conferido. `ESTICAR`
+   * arrasta junto a ponta das paredes vizinhas não selecionadas: nada desencosta,
+   * mas o comprimento delas muda sem ninguém ter pedido. Os dois são legítimos e
+   * não dá para adivinhar qual a pessoa quer — por isso é uma chave, não uma
+   * regra escondida.
+   */
+  const [modoMover, setModoMover] = useState<'MOVER' | 'ESTICAR'>('MOVER');
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
   const [mostrarMedidas, setMostrarMedidas] = useState(false);
   /** Lados da ferramenta Polígono. 6 porque quem escolhe a ferramenta quer o
@@ -307,8 +321,15 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     );
   }
 
+  // Cardinalidade 1: `selectedId` é `null` quando há mais de um selecionado, e
+  // é isso que faz o painel de parede sumir sozinho em favor do de conjunto.
   const paredeSel = editor.model.walls.find((w) => w.id === editor.selectedId) ?? null;
   const aberturaSel = editor.model.openings.find((o) => o.id === editor.selectedId) ?? null;
+
+  const selecionados = useMemo(() => new Set(editor.selectedIds), [editor.selectedIds]);
+  const paredesSelecionadas = editor.model.walls.filter((w) => selecionados.has(w.id));
+  const aberturasSelecionadas = editor.model.openings.filter((o) => selecionados.has(o.id));
+  const medicoesSelecionadas = medicoes.formas.filter((f) => selecionados.has(f.id));
 
   function adicionarAbertura(wallId: string, offsetMm: number) {
     // Vão livre nasce como porta: do piso (peitoril zero) até a altura de verga.
@@ -622,6 +643,50 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /**
+   * O funil ÚNICO da seleção.
+   *
+   * A seleção do desenho e a da lista de medições são dois estados diferentes —
+   * medição vive fora do modelo canônico e fora do histórico. Passar as duas por
+   * aqui é o que impede que a lista lateral mostre uma coisa e o canvas outra.
+   * A lista destaca uma medição só, então só a seleção de UMA a alimenta.
+   */
+  function selecionar(ids: string[]) {
+    editor.setSelectedIds(ids);
+    const unica = ids.length === 1 ? ids[0] : null;
+    medicoes.setSelecionada(unica && medicoes.formas.some((f) => f.id === unica) ? unica : null);
+  }
+
+  /**
+   * Desloca as paredes selecionadas — o gesto que faltava no módulo.
+   *
+   * UM comando, e não um lote de `MoveVertex`: o lote recomputaria o arranjo
+   * planar a cada ponta e, pior, passaria por estados intermediários em que a
+   * parede está mais curta — o bastante para uma porta colada no limite cair
+   * fora e derrubar o gesto inteiro. Ver o cabeçalho de `TranslateWalls`.
+   */
+  function moverSelecao(wallIds: string[], delta: Point) {
+    editor.run({
+      type: 'TranslateWalls',
+      wallIds,
+      delta,
+      arrastarVizinhas: modoMover === 'ESTICAR',
+    });
+  }
+
+  /**
+   * Desloca as medições selecionadas.
+   *
+   * ⚠️ Camada separada, gravação separada: medição NÃO entra no histórico de
+   * desfazer (a decisão está em `useBlueprintMedicoes` — Ctrl+Z apagando um
+   * levantamento seria irrecuperável). Movendo paredes e medições juntas, um
+   * Ctrl+Z reverte só as paredes. Avisar é mais honesto que disfarçar: duas
+   * pilhas coordenadas por uma tecla se desalinham no terceiro desfazer.
+   */
+  function moverMedicoes(ids: string[], delta: Point) {
+    void medicoes.deslocar(ids, delta);
+  }
+
+  /**
    * Desliza a abertura ao longo da parede. O canvas já grampeia o arraste entre
    * as vizinhas, então a recusa do kernel aqui é rede de segurança — e, se vier,
    * já aparece na faixa de aviso do topo com a distância máxima no texto.
@@ -631,11 +696,33 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   function removerSelecionada() {
-    if (!editor.selectedId) return;
-    // Abertura e parede sao objetos diferentes com a mesma tecla de atalho.
-    if (aberturaSel) editor.run({ type: 'DeleteOpening', openingId: aberturaSel.id });
-    else editor.run({ type: 'DeleteWall', wallId: editor.selectedId });
-    editor.setSelectedId(null);
+    const ids = editor.selectedIds;
+    if (ids.length === 0) return;
+
+    const paredes = ids.filter((id) => editor.model.walls.some((w) => w.id === id));
+    const naSelecao = new Set(paredes);
+    // ⚠️ `DeleteWall` JÁ APAGA as aberturas que a parede hospeda. Mandar
+    // `DeleteOpening` depois procuraria uma abertura que não existe mais e
+    // abortaria o lote inteiro — levando junto as exclusões que já estavam
+    // certas. Só entram no lote as aberturas cuja parede FICA.
+    const aberturas = ids.filter((id) => {
+      const o = editor.model.openings.find((x) => x.id === id);
+      return o ? !naSelecao.has(o.wallId) : false;
+    });
+
+    const lote: Command[] = [
+      ...aberturas.map((openingId) => ({ type: 'DeleteOpening', openingId }) as const),
+      ...paredes.map((wallId) => ({ type: 'DeleteWall', wallId }) as const),
+    ];
+    if (lote.length > 0) editor.runBatch(lote);
+
+    // Medições são de outra camada e de outro serviço — apagar uma parede não
+    // pode apagar um levantamento por tabela, então elas saem por fora do lote.
+    for (const id of ids) {
+      if (medicoes.formas.some((f) => f.id === id)) void medicoes.remover(id);
+    }
+
+    selecionar([]);
   }
 
   const rotuloSalvamento: Record<string, string> = {
@@ -899,6 +986,34 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           Orto
         </button>
 
+        {/* MOVER × ESTICAR. Só aparece na ferramenta de seleção: fora dela não
+            há conjunto para mover, e um botão que não faz nada na ferramenta em
+            uso é ruído numa barra que já quebra linha. */}
+        {editor.tool === 'selecionar' ? (
+          <button
+            type="button"
+            onClick={() => setModoMover((v) => (v === 'MOVER' ? 'ESTICAR' : 'MOVER'))}
+            aria-pressed={modoMover === 'ESTICAR'}
+            title={
+              modoMover === 'MOVER'
+                ? 'MOVER: o bloco selecionado anda inteiro, mantendo as medidas. Onde encostava em parede não selecionada, desencosta.'
+                : 'ESTICAR: as paredes vizinhas não selecionadas acompanham pela ponta. Nada desencosta, mas o comprimento delas muda.'
+            }
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+              modoMover === 'ESTICAR'
+                ? 'border-blue-600 bg-blue-50 text-blue-700'
+                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {modoMover === 'ESTICAR' ? (
+              <MoveDiagonal className="h-3.5 w-3.5" />
+            ) : (
+              <Move className="h-3.5 w-3.5" />
+            )}
+            {modoMover === 'ESTICAR' ? 'Esticar' : 'Mover'}
+          </button>
+        ) : null}
+
         <label className="flex items-center gap-2 text-xs text-slate-600">
           Grade
           <select
@@ -1079,8 +1194,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               model={editor.model}
               tool={editor.tool}
               levelId={levelId}
-              selectedId={editor.selectedId}
-              onSelect={editor.setSelectedId}
+              selectedIds={editor.selectedIds}
+              onSelecionar={selecionar}
+              onMoverSelecao={moverSelecao}
+              onMoverMedicoes={moverMedicoes}
+              arrastarVizinhas={modoMover === 'ESTICAR'}
               onAddWall={adicionarParede}
               alinhamento={alinhamento}
               ladosPoligono={ladosPoligono}
@@ -1110,7 +1228,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
               medicoes={medicoesVisiveis}
               medicaoSelecionada={medicoes.selecionada}
-              onSelecionarMedicao={medicoes.setSelecionada}
               onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
             />
           )}
@@ -1175,6 +1292,24 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               Derivados da topologia — não são desenhados à mão.
             </p>
           </div>
+
+          {editor.selectedIds.length > 1 ? (
+            <PainelSelecaoMultipla
+              paredes={paredesSelecionadas}
+              aberturas={aberturasSelecionadas.length}
+              medicoes={medicoesSelecionadas}
+              modo={modoMover}
+              onMover={(dx, dy) => {
+                if (paredesSelecionadas.length > 0) {
+                  moverSelecao(paredesSelecionadas.map((w) => w.id), { x: dx, y: dy } as Point);
+                }
+                if (medicoesSelecionadas.length > 0) {
+                  moverMedicoes(medicoesSelecionadas.map((f) => f.id), { x: dx, y: dy } as Point);
+                }
+              }}
+              onExcluir={removerSelecionada}
+            />
+          ) : null}
 
           <PainelParedeSelecionada
             parede={paredeSel}

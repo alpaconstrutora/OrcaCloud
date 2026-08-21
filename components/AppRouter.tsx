@@ -1462,11 +1462,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'contas-a-pagar':
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" /></div>}>
-          {/* `?? undefined` e não `|| ''`: a sentinela de "Todas as organizações"
-              é ausência, não string vazia (CLAUDE.md REGRA #5). O componente já
-              normaliza com `organizationId || undefined`. */}
+          {/* Sem prop de organização: o componente lê do useOrgContext, que é a
+              autoridade única (CLAUDE.md REGRA #5) — o `activeOrganizationId` cru
+              deste router fica `null` com uma EMPRESA selecionada no topo (só
+              muda ao escolher organização diretamente), o que travava "Fechar
+              competência" mesmo com o seletor do topo mostrando algo escolhido. */}
           <ContasPagarManager
-            organizationId={activeOrganizationId ?? undefined}
             organizations={organizations}
           />
         </React.Suspense>

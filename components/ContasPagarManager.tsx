@@ -18,6 +18,7 @@ import { Money, formatMoney, formatDateBR } from './ui/Format';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
+import { useOrgContext } from '../hooks/useOrgContext';
 
 type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
 
@@ -163,8 +164,6 @@ function renderContaCell(key: string, inv: InvoiceRow, fromBoleto: boolean, over
 }
 
 interface Props {
-    /** Org ativa no seletor global do topo. Vazio/undefined = "Todas as organizações". */
-    organizationId?: string;
     /** Só para resolver o nome da org no cabeçalho do PDF — não há seletor nesta tela. */
     organizations?: Organization[];
     /* `tabsSlot` removido em 2026-08-15: só o ProjectFinancialManager o passava,
@@ -208,7 +207,7 @@ const VISAO_LABELS: Record<Visao, string> = {
     fechamento: 'Fechamento por CC',
 };
 
-export default function ContasPagarManager({ organizationId, organizations }: Props) {
+export default function ContasPagarManager({ organizations }: Props) {
     const [visao, setVisao] = usePersistedState<Visao>('contasPagarManager:visao', 'parcelas');
     const [payables, setPayables] = useState<Payable[]>([]);
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
@@ -252,9 +251,16 @@ export default function ContasPagarManager({ organizationId, organizations }: Pr
         setTimeout(() => setNotification(null), 4500);
     };
 
-    // Org vem do seletor global do topo; vazio = "Todas as organizações" (REGRA #5:
-    // não bloqueia leitura — o service não filtra e a RLS recorta).
-    const effectiveOrgId = organizationId || undefined;
+    // Org vem do useOrgContext, NÃO de prop (REGRA #5: prop é o que se deforma no
+    // caminho). AppRouter/App.tsx repassavam o `activeOrganizationId` CRU do store,
+    // que fica `null` com uma EMPRESA selecionada no topo (o label do topo mostra o
+    // nome da empresa, mas `activeOrganizationId` só é setado ao escolher
+    // organização diretamente) — isso travava "Fechar competência" pedindo
+    // organização mesmo com o seletor do topo mostrando algo escolhido.
+    // `null` = "Todas as organizações": não bloqueia leitura — o service não filtra
+    // e a RLS recorta.
+    const { orgId: contextOrgId } = useOrgContext();
+    const effectiveOrgId = contextOrgId ?? undefined;
 
     async function carregar(orgId?: string) {
         setLoading(true);

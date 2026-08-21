@@ -1,7 +1,7 @@
 import React from 'react';
-import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Upload, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { PurchaseOrder, Invoice, PurchaseOrderItem } from '../types';
+import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
 import { whatsappService } from '../services/whatsappService';
@@ -9,7 +9,6 @@ import { discrepancyService, PurchaseDiscrepancy, DiscrepancyStatus } from '../s
 import { notificationLogService, NotificationLogEntry } from '../services/notificationLogService';
 import { supplierService } from '../services/supplierService';
 import { projectService } from '../services/projectService';
-import { invoiceService } from '../services/invoiceService';
 import { ThreeWayMatchPanel } from './ThreeWayMatchPanel';
 import OrderLifeline, { OrderStatus } from './OrderLifeline';
 import OrderChat from './OrderChat';
@@ -66,12 +65,6 @@ const ACCENTS = {
         borderHover: 'hover:border-indigo-500',
         spinner: 'border-blue-600',
         negotiateBtn: 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-100',
-        docChip: 'bg-amber-50',
-        docIcon: 'text-amber-500',
-        docBtn: 'bg-amber-50 text-amber-600 border-amber-100/50 hover:bg-amber-100',
-        docRowHover: 'hover:border-amber-200 hover:bg-amber-50/20',
-        docFileIcon: 'text-amber-600',
-        docActionHover: 'hover:text-amber-600',
         onSolidSecondary: 'bg-amber-500 text-white hover:bg-amber-600 border border-amber-400',
     },
     portal: {
@@ -94,12 +87,6 @@ const ACCENTS = {
         borderHover: 'hover:border-[#E1553C]',
         spinner: 'border-[#E1553C]',
         negotiateBtn: 'bg-[#FDEDE8] text-[#C24428] hover:bg-[#FBE0D8] border-[#F3D9D1]',
-        docChip: 'bg-[#FDEDE8]',
-        docIcon: 'text-[#E1553C]',
-        docBtn: 'bg-[#FDEDE8] text-[#C24428] border-[#F3D9D1] hover:bg-[#FBE0D8]',
-        docRowHover: 'hover:border-[#F3D9D1] hover:bg-[#FDF8F6]',
-        docFileIcon: 'text-[#C24428]',
-        docActionHover: 'hover:text-[#C24428]',
         // Dentro do card sólido coral, âmbar brigaria — usa a mesma superfície
         // translúcida do botão "Negociar Condições".
         onSolidSecondary: 'bg-white/10 text-white hover:bg-white/20 border border-white/20',
@@ -127,20 +114,17 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'details' | 'logistics'>(initialView);
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
-    const [invoices, setInvoices] = React.useState<Invoice[]>([]);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
     const [projectName, setProjectName] = React.useState('');
     const [loading, setLoading] = React.useState(true);
     const [showNegotiation, setShowNegotiation] = React.useState(false);
     const [currentUser, setCurrentUser] = React.useState<{ email: string; name: string } | null>(propUser || null);
-    const [isUploadingInvoice, setIsUploadingInvoice] = React.useState(false);
     const [editingIndex, setEditingIndex] = React.useState<number | null>(null);
     const [editQty, setEditQty] = React.useState<number>(0);
     const [editPrice, setEditPrice] = React.useState<number>(0);
     const [editDescription, setEditDescription] = React.useState<string>('');
     const [editUnit, setEditUnit] = React.useState<string>('');
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [receipts, setReceipts] = React.useState<PurchaseReceipt[]>([]);
     // Bucket 'receipts' é privado: photo_path guarda o PATH; resolvemos signed URL
     // (15min) por path para exibir a foto do comprovante. (Fase 1 privatização storage.)
@@ -247,14 +231,14 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 setLoading(true);
 
                 if (portalToken) {
-                    // Modo link público: só o que é fluxo do fornecedor (pedido + notas
-                    // fiscais vinculadas) carrega por aqui — sem recibos/divergências/logs,
-                    // que são ferramentas internas de compras (ver comentário no prop).
+                    // Modo link público: só o pedido carrega por aqui — sem recibos/
+                    // divergências/logs, que são ferramentas internas de compras (ver
+                    // comentário no prop). Notas fiscais moraram aqui e viraram a aba
+                    // dedicada Nota Fiscal do portal (ver 2026-08-21).
                     const res = await supplierPortalTokenService.getOrderDetail(portalToken, orderId);
                     if (cancelled) return;
                     if (res.valid && res.order) {
                         setOrder(res.order);
-                        setInvoices(res.invoices);
                         setSupplierName(propUser?.name || 'Fornecedor');
                         setSupplierEmail(propUser?.email || '');
                     }
@@ -280,10 +264,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         if (cancelled) return;
                         setProjectName(project?.name || 'Obra Desconhecida');
                     }
-
-                    const linkedInvoices = await invoiceService.listInvoicesByOrder(orderId);
-                    if (cancelled) return;
-                    setInvoices(linkedInvoices);
 
                     const orderReceipts = await receiptService.listByOrder(orderId);
                     if (cancelled) return;
@@ -335,20 +315,17 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 const res = await supplierPortalTokenService.getOrderDetail(portalToken, orderId);
                 if (!res.valid || !res.order) return null;
                 setOrder(res.order);
-                setInvoices(res.invoices);
                 return res.order;
             }
 
-            const [allOrders, linkedInvoices, orderReceipts, orderDiscrepancies, orderNotifLogs] = await Promise.all([
+            const [allOrders, orderReceipts, orderDiscrepancies, orderNotifLogs] = await Promise.all([
                 orderService.listOrders(),
-                invoiceService.listInvoicesByOrder(orderId),
                 receiptService.listByOrder(orderId),
                 discrepancyService.listByOrder(orderId),
                 notificationLogService.listByOrder(orderId),
             ]);
             const foundOrder = allOrders.find(o => o.id === orderId) || null;
             if (foundOrder) setOrder(foundOrder);
-            setInvoices(linkedInvoices);
             setReceipts(orderReceipts);
             resolveReceiptPhotos(orderReceipts);
             setDiscrepancies(orderDiscrepancies);
@@ -405,50 +382,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             notify(error instanceof Error ? error.message : "Erro ao duplicar o pedido.", "error");
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleInvoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !order) return;
-
-        // Check file type
-        const allowedTypes = ['application/pdf', 'text/xml', 'application/xml', 'image/jpeg', 'image/png'];
-        if (!allowedTypes.includes(file.type) && !file.name.endsWith('.xml')) {
-            notify("Tipo de arquivo não suportado. Use PDF, XML ou Imagens.", "error");
-            return;
-        }
-
-        try {
-            setIsUploadingInvoice(true);
-            if (portalToken) {
-                await supplierPortalTokenService.uploadInvoice(portalToken, file, order.id);
-            } else {
-                await invoiceService.uploadInvoice(order.supplierId, file, undefined, order.id);
-            }
-            await loadOrderData();
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        } catch (err) {
-            console.error("Erro ao subir nota:", err);
-            notify("Erro ao anexar nota fiscal.", "error");
-        } finally {
-            setIsUploadingInvoice(false);
-        }
-    };
-
-    // Visualizar NFe = abrir link assinado; via token, a assinatura passa pela Edge
-    // Function (sessão anon não tem RLS de storage para o bucket privado `invoices`).
-    const handleViewInvoice = async (filePath: string) => {
-        try {
-            if (portalToken) {
-                const url = await supplierPortalTokenService.getInvoiceDownloadUrl(portalToken, filePath);
-                window.open(url, '_blank', 'noreferrer');
-            } else {
-                await invoiceService.openInvoice(filePath);
-            }
-        } catch (err) {
-            console.error("Error opening invoice:", err);
-            notify("Erro ao gerar link de acesso ao documento.", "error");
         }
     };
 
@@ -775,595 +708,530 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Content */}
-                <div className="lg:col-span-2 space-y-8">
-                    {/* Information Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
-                            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Building2 className="w-12 h-12 text-gray-900" />
-                            </div>
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                <span className={`w-1.5 h-1.5 rounded-full ${A.bar}`} />
-                                Fornecedor
-                            </h3>
-                            <div>
-                                <p className="text-base font-black text-gray-900 leading-tight">{supplierName || 'Carregando...'}</p>
-                                <p className="text-xs font-bold text-gray-400 uppercase mt-1">{supplierEmail || 'E-mail não informado'}</p>
-                            </div>
-                        </div>
+            <div className={`p-8 rounded-[2rem] shadow-xl flex flex-col gap-6 text-white relative overflow-hidden ${A.solid}`}>
+                <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
 
-                        <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
-                            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <Truck className={`w-12 h-12 ${A.icon}`} />
-                            </div>
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                <span className={`w-1.5 h-1.5 rounded-full ${A.dot}`} />
-                                Logística
-                            </h3>
-                            <div>
-                                <p className="text-base font-black text-gray-900 leading-tight">{order.deliveryMethod || 'CIF - Fornecedor'}</p>
-                                <p className="text-xs font-bold text-gray-400 uppercase mt-1 flex items-center gap-1">
-                                    <Package className="w-3 h-3" />
-                                    Destino: {order.deliveryLocation || 'Canteiro'}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
-                            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                <CreditCard className="w-12 h-12 text-emerald-500" />
-                            </div>
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                                Pagamento
-                            </h3>
-                            <div>
-                                <p className="text-base font-black text-gray-900 leading-tight">{order.paymentMethod || 'A combinar'}</p>
-                                <div className="mt-1 flex items-center gap-2 flex-wrap">
-                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${order.paymentTermType === 'Parcelado' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                        {order.paymentTermType || 'Vista'}
-                                    </span>
-                                    <p className="text-xs font-bold text-gray-400">
-                                        {order.paymentTermType === 'Parcelado'
-                                            ? `${order.paymentInstallments || 1}x sem juros`
-                                            : `Prazo: ${order.paymentDays || 0} dias`}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* O "Fluxo de Atendimento" (OrderLifeline) morava aqui e era
-                        exatamente a mesma linha do tempo da tela de Logística do
-                        pedido — dois lugares mostrando o mesmo dado. Ficou só na
-                        tela dedicada, alcançável pelo botão "Rastreio" do
-                        cabeçalho (e pelo botão "Logística do pedido" da lista).
-                        Removido a pedido do usuário em 2026-08-20. */}
-
-                    {/* Items Table */}
-                    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-3">
-                                <div className={`p-2 rounded-xl ${A.chipAlt}`}>
-                                    <Package className={`w-4 h-4 ${A.chipAltIcon}`} />
-                                </div>
-                                Itens do Pedido
-                                <span className={`ml-2 px-2 py-0.5 rounded-lg text-xs ${A.chipAltPill}`}>{order.items.length} itens</span>
-                            </h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                            {/* min-w: 7 colunas com px-6 não cabem na coluna de
-                                conteúdo do portal (sidebar de 64) — rola dentro
-                                do card em vez de espremer a descrição */}
-                            <table className="w-full min-w-[760px] text-left text-sm border-collapse">
-                                {/* §6.2 sentence case + §6.6 px-6 e separador vertical */}
-                                <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                    <tr>
-                                        <th className="px-6 py-2 border-r border-gray-100">Código</th>
-                                        <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Un</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Unitário</th>
-                                        <th className="px-6 py-2 border-r border-gray-100 text-right">Total</th>
-                                        <th className="px-6 py-2 text-center">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {order.items.map((item, idx) => (
-                                        <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code}</td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-xs">
-                                                {editingIndex === idx ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editDescription}
-                                                        onChange={(e) => setEditDescription(e.target.value)}
-                                                        className={`w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 ${A.ring}`}
-                                                    />
-                                                ) : item.description}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
-                                                {editingIndex === idx ? (
-                                                    <input
-                                                        type="number"
-                                                        value={editQty}
-                                                        onChange={(e) => setEditQty(parseFloat(e.target.value) || 0)}
-                                                        className={`w-20 text-right border border-gray-300 rounded px-2 py-1 outline-none focus:ring-2 ${A.ring}`}
-                                                    />
-                                                ) : item.quantity}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
-                                                {editingIndex === idx ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editUnit}
-                                                        onChange={(e) => setEditUnit(e.target.value)}
-                                                        className={`w-16 text-center border border-gray-300 rounded px-2 py-1 text-form-input outline-none focus:ring-2 ${A.ring}`}
-                                                    />
-                                                ) : item.unit}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
-                                                {editingIndex === idx ? (
-                                                    <input
-                                                        type="number"
-                                                        value={editPrice}
-                                                        onChange={(e) => setEditPrice(parseFloat(e.target.value) || 0)}
-                                                        className={`w-24 text-right border border-gray-300 rounded px-2 py-1 outline-none focus:ring-2 ${A.ring}`}
-                                                    />
-                                                ) : (
-                                                    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitPrice)
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 bg-gray-50/30">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(editingIndex === idx ? (editQty * editPrice) : item.total)}
-                                            </td>
-                                            <td className="px-6 py-2.5 text-center">
-                                                <div className="flex items-center justify-center gap-1.5">
-                                                    {editingIndex === idx ? (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleSaveItemEdit(idx)}
-                                                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                                title="Salvar"
-                                                            >
-                                                                <CheckCircle2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setEditingIndex(null)}
-                                                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                                title="Cancelar"
-                                                            >
-                                                                <X className="w-4 h-4" />
-                                                            </button>
-                                                        </>
-                                                    ) : !portalToken ? (
-                                                        <>
-                                                            {/* §9: ação sempre visível — nunca opacity-0 + group-hover */}
-                                                            <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(idx, item)} />
-                                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteItem(idx)} />
-                                                        </>
-                                                    ) : null}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                                <tfoot className="bg-gray-900 text-white">
-                                    <tr>
-                                        <td colSpan={6} className="px-6 py-4 text-right text-sm font-normal opacity-60">Valor total do pedido</td>
-                                        <td className="px-6 py-4 text-right text-xl font-medium">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
+                <div>
+                    <h3 className="text-xs font-black text-white/60 uppercase tracking-widest mb-1">Status Interno</h3>
+                    <p className="text-sm font-bold leading-tight">
+                        Este pedido encontra-se no estágio de <span className="bg-white/20 px-2 py-0.5 rounded-md text-white">{order.status}</span>.
+                    </p>
                 </div>
 
-                {/* Sidebar Info */}
-                <div className="space-y-8">
-                    <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100">
-                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${A.chip}`}>
-                                <FileText className={`w-4 h-4 ${A.icon}`} />
-                            </div>
-                            Observações
-                        </h3>
-                        <div className="relative">
-                            <div className={`absolute top-0 left-0 w-1 h-full rounded-full ${A.barSoft}`} />
-                            <p className="text-sm text-gray-600 pl-4 py-1 italic leading-relaxed">
-                                {order.notes || "Nenhuma observação registrada pelo comprador."}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
-                        fora do escopo do link público */}
-                    {!portalToken && <ThreeWayMatchPanel orderId={order.id} />}
-
-                    {/* Receipts from purchase_receipts table */}
-                    {receipts.length > 0 && (
-                        <div className="space-y-4">
-                            {receipts.map((receipt, rIdx) => (
-                                <div key={receipt.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-                                            {receipt.status === 'Recebido' ? (
-                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                            ) : receipt.status === 'Divergência' ? (
-                                                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                                            ) : (
-                                                <Package className={`w-4 h-4 ${A.chipAltIcon}`} />
-                                            )}
-                                            {receipt.status === 'Parcial' ? 'Recebimento Parcial' : `Conferência de Entrega`}
-                                            {receipts.length > 1 && (
-                                                <span className="text-xs font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">#{receipts.length - rIdx}</span>
-                                            )}
-                                        </h3>
-                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                                            {new Date(receipt.receivedAt).toLocaleString('pt-BR')}
-                                        </span>
-                                    </div>
-
-                                    {receipt.items.length > 0 && (
-                                        <div className="overflow-x-auto rounded-xl border border-gray-100">
-                                            <table className="w-full">
-                                                <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                    <tr>
-                                                        <th className="px-6 py-2 text-left border-r border-gray-100">Item</th>
-                                                        <th className="px-6 py-2 text-right border-r border-gray-100">Pedido</th>
-                                                        <th className="px-6 py-2 text-right">Recebido</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-50">
-                                                    {receipt.items.map(item => {
-                                                        const isShort = item.quantityReceived < item.quantityOrdered;
-                                                        return (
-                                                            <tr key={item.orderItemCode} className={isShort ? 'bg-amber-50/50' : ''}>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                                    <p className="text-sm font-normal text-gray-700">{item.description}</p>
-                                                                    {item.issue && (
-                                                                        <p className="text-xs text-amber-600 mt-0.5">{item.issue}</p>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
-                                                                    {item.quantityOrdered} {item.unit}
-                                                                </td>
-                                                                <td className={`px-6 py-2.5 text-right text-sm font-normal ${isShort ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                                                    {item.quantityReceived} {item.unit}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-
-                                    {receipt.notes && (
-                                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Observações</p>
-                                            <p className="text-sm text-gray-700 italic">"{receipt.notes}"</p>
-                                        </div>
-                                    )}
-
-                                    {receipt.photoPath && receiptPhotoUrls[receipt.photoPath] && (
-                                        <a
-                                            href={receiptPhotoUrls[receipt.photoPath]}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className={`block relative group overflow-hidden rounded-xl border-2 border-gray-100 transition-all aspect-video bg-gray-50 ${A.borderHover}`}
-                                        >
-                                            <img
-                                                src={receiptPhotoUrls[receipt.photoPath]}
-                                                alt="Comprovante"
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                            />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <div className="bg-white/90 p-2 rounded-lg flex items-center gap-2 text-xs font-bold text-gray-900">
-                                                    <ExternalLink className="w-4 h-4" />
-                                                    Ver em tamanho real
-                                                </div>
-                                            </div>
-                                        </a>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+                <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
+                    {order.status === 'Rascunho' && (
+                        <button
+                            onClick={() => handleUpdateStatus('Enviado')}
+                            className={`w-full py-3.5 bg-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-lg active:scale-95 ${A.onSolid}`}
+                        >
+                            Enviar para Fornecedor
+                        </button>
                     )}
 
-                    {/* Discrepancy Workflow */}
-                    {discrepancies.length > 0 && (
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                            <div className="flex items-center gap-2">
-                                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">
-                                    Divergências
-                                </h3>
-                                <span className="ml-auto px-2 py-0.5 rounded-lg text-xs font-black bg-amber-100 text-amber-700">
-                                    {discrepancies.filter(d => d.status === 'Pendente').length} pendente(s)
-                                </span>
-                            </div>
+                    {order.status === 'Enviado' && (() => {
+                        const isSupplier = currentUser && supplierEmail &&
+                            currentUser.email.toLowerCase() === supplierEmail.toLowerCase();
 
+                        return isSupplier ? (
                             <div className="space-y-3">
-                                {discrepancies.map(d => {
-                                    const statusColors: Record<string, string> = {
-                                        Pendente:  'bg-amber-100 text-amber-700 border-amber-200',
-                                        Resolvida: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-                                        Aceita:    'bg-blue-100 text-blue-700 border-blue-200',
-                                        Devolvida: 'bg-gray-100 text-gray-600 border-gray-200',
-                                    };
-                                    return (
-                                        <div key={d.id} className={`p-4 rounded-2xl border space-y-3 ${d.status === 'Pendente' ? 'border-amber-200 bg-amber-50/50' : 'border-gray-100 bg-gray-50/50'}`}>
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-bold text-gray-900 leading-snug">{d.description}</p>
-                                                    <p className="text-xs text-gray-500 mt-0.5">
-                                                        {d.quantity} {d.unit} —{' '}
-                                                        <span className="font-bold text-amber-600 uppercase">{d.issue}</span>
-                                                    </p>
-                                                </div>
-                                                <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${statusColors[d.status]}`}>
-                                                    {d.status}
-                                                </span>
-                                            </div>
-
-                                            {d.resolutionNotes && (
-                                                <p className="text-xs text-gray-500 italic border-l-2 border-gray-200 pl-2">
-                                                    {d.resolutionNotes}
-                                                </p>
-                                            )}
-
-                                            {d.status === 'Pendente' && (
-                                                <div className="space-y-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Observação da resolução (opcional)"
-                                                        value={resolutionInputs[d.id] || ''}
-                                                        onChange={e => setResolutionInputs(prev => ({ ...prev, [d.id]: e.target.value }))}
-                                                        className="w-full text-form-input rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-                                                    />
-                                                    <div className="flex gap-2">
-                                                        {(['Resolvida', 'Aceita', 'Devolvida'] as DiscrepancyStatus[]).map(s => (
-                                                            <button
-                                                                key={s}
-                                                                onClick={() => handleResolveDiscrepancy(d.id, s)}
-                                                                disabled={resolvingId === d.id}
-                                                                className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${
-                                                                    s === 'Resolvida' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' :
-                                                                    s === 'Aceita'    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' :
-                                                                                        'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                                }`}
-                                                            >
-                                                                {resolvingId === d.id ? '...' : s}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className={`p-8 rounded-[2rem] shadow-xl flex flex-col gap-6 text-white relative overflow-hidden ${A.solid}`}>
-                        <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
-
-                        <div>
-                            <h3 className="text-xs font-black text-white/60 uppercase tracking-widest mb-1">Status Interno</h3>
-                            <p className="text-sm font-bold leading-tight">
-                                Este pedido encontra-se no estágio de <span className="bg-white/20 px-2 py-0.5 rounded-md text-white">{order.status}</span>.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col gap-3 pt-6 border-t border-white/10">
-                            {order.status === 'Rascunho' && (
                                 <button
-                                    onClick={() => handleUpdateStatus('Enviado')}
-                                    className={`w-full py-3.5 bg-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-lg active:scale-95 ${A.onSolid}`}
+                                    onClick={() => handleUpdateStatus('Confirmado')}
+                                    className="w-full py-3.5 bg-emerald-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg active:scale-95 border border-emerald-400"
                                 >
-                                    Enviar para Fornecedor
+                                    Confirmar Pedido
                                 </button>
-                            )}
-
-                            {order.status === 'Enviado' && (() => {
-                                const isSupplier = currentUser && supplierEmail &&
-                                    currentUser.email.toLowerCase() === supplierEmail.toLowerCase();
-
-                                return isSupplier ? (
-                                    <div className="space-y-3">
-                                        <button
-                                            onClick={() => handleUpdateStatus('Confirmado')}
-                                            className="w-full py-3.5 bg-emerald-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg active:scale-95 border border-emerald-400"
-                                        >
-                                            Confirmar Pedido
-                                        </button>
-                                        <button
-                                            onClick={() => setShowNegotiation(true)}
-                                            className="w-full py-3.5 bg-white/10 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/20 active:scale-95"
-                                        >
-                                            Negociar Condições
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="p-4 bg-white/10 rounded-2xl border border-white/10 backdrop-blur-sm">
-                                        <p className="text-xs text-white/80 font-bold uppercase tracking-widest animate-pulse">
-                                            Aguardando aceite do fornecedor...
-                                        </p>
-                                    </div>
-                                );
-                            })()}
-
-                            {order.status === 'Em Negociação' && (
                                 <button
                                     onClick={() => setShowNegotiation(true)}
-                                    className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${A.onSolidSecondary}`}
+                                    className="w-full py-3.5 bg-white/10 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/20 active:scale-95"
                                 >
-                                    Entrar na Sala de Negociação
+                                    Negociar Condições
                                 </button>
-                            )}
-
-                            {(order.status === 'Rascunho' || order.status === 'Enviado') && (
-                                <button
-                                    onClick={() => handleUpdateStatus('Cancelado')}
-                                    className="w-full py-3 border border-white/20 text-white/60 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
-                                >
-                                    Cancelar Pedido
-                                </button>
-                            )}
-
-                            {order.status === 'Confirmado' && (
-                                <div className="p-4 bg-white/10 rounded-2xl border border-white/10">
-                                    <p className="text-xs text-white font-black uppercase tracking-widest mb-2 flex items-center gap-2">
-                                        <CheckCircle2 className="w-3 h-3" />
-                                        Confirmado
-                                    </p>
-                                    <p className="text-xs text-white/70 leading-relaxed font-bold">
-                                        O fornecedor aceitou o pedido. Aguarde a atualização das etapas de logística.
-                                    </p>
-                                </div>
-                            )}
-
-                            {['Entregue', 'Recebido', 'Divergência'].includes(order.status) && (
-                                <button
-                                    onClick={() => handleUpdateStatus('Cancelado')}
-                                    className="w-full py-3 border border-white/20 text-white/60 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
-                                >
-                                    Cancelar Pedido
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Linked NFes (Invoices) */}
-                    <div className="relative bg-white p-7 rounded-3xl shadow-sm border border-gray-100">
-                        {/* pr-36: o botão "Anexar NFe" é `absolute` no canto — sem
-                            reservar a faixa dele, o título passa por baixo quando
-                            a coluna é estreita (portal, sidebar de 64). */}
-                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 pr-36 flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${A.docChip}`}>
-                                <FileText className={`w-4 h-4 ${A.docIcon}`} />
-                            </div>
-                            Documentos Fiscais
-                        </h3>
-
-                        <div className="absolute top-7 right-7">
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleInvoiceUpload}
-                                className="hidden"
-                                accept=".pdf,.xml,image/*"
-                            />
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploadingInvoice}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-all disabled:opacity-50 ${A.docBtn}`}
-                            >
-                                {isUploadingInvoice ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                    <Upload className="w-3.5 h-3.5" />
-                                )}
-                                Anexar NFe
-                            </button>
-                        </div>
-
-                        {invoices.length > 0 ? (
-                            <div className="space-y-3">
-                                {invoices.map((inv) => (
-                                    <div key={inv.id} className={`flex items-center justify-between p-4 bg-gray-50/50 rounded-[1.25rem] border border-gray-100 group transition-all ${A.docRowHover}`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2.5 bg-white rounded-xl shadow-sm ${A.docFileIcon}`}>
-                                                <FileText className="w-4 h-4" />
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-black text-gray-900 truncate max-w-[150px] uppercase tracking-tight">{inv.fileName}</p>
-                                                <p className="text-xs font-bold text-gray-400 mt-0.5">{new Date(inv.createdAt).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
-                                        <a
-                                            href="#"
-                                            onClick={(e) => { e.preventDefault(); handleViewInvoice(inv.filePath); }}
-                                            className={`p-2 text-gray-400 hover:bg-white rounded-xl shadow-sm transition-all ${A.docActionHover}`}
-                                            title="Ver Documento"
-                                        >
-                                            <ExternalLink className="w-4 h-4" />
-                                        </a>
-                                    </div>
-                                ))}
                             </div>
                         ) : (
-                            <div className="text-center py-10 bg-gray-50/30 rounded-3xl border border-dashed border-gray-100">
-                                <FileText className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                                <p className="text-xs text-gray-400 font-black uppercase tracking-widest">Nenhuma NFe vinculada</p>
+                            <div className="p-4 bg-white/10 rounded-2xl border border-white/10 backdrop-blur-sm">
+                                <p className="text-xs text-white/80 font-bold uppercase tracking-widest animate-pulse">
+                                    Aguardando aceite do fornecedor...
+                                </p>
                             </div>
-                        )}
-                    </div>
+                        );
+                    })()}
 
-                    {/* Notification Log */}
-                    {notifLogs.length > 0 && (
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
-                                <div className={`p-2 rounded-xl ${A.chipAlt}`}>
-                                    <Zap className={`w-4 h-4 ${A.chipAltIcon}`} />
-                                </div>
-                                Histórico de Notificações
-                                <span className="ml-auto text-xs font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">{notifLogs.length}</span>
-                            </h3>
-                            <div className="space-y-2">
-                                {notifLogs.map(log => {
-                                    const channelIcon = log.channel === 'email' ? '✉' : log.channel === 'whatsapp' ? '💬' : '⚡';
-                                    const channelLabel = log.channel === 'email' ? 'E-mail' : log.channel === 'whatsapp' ? 'WhatsApp' : 'Webhook';
-                                    return (
-                                        <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50/50 border border-gray-100">
-                                            <span className="text-base leading-none mt-0.5">{channelIcon}</span>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">{channelLabel}</span>
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
-                                                        log.status === 'sent'   ? 'bg-emerald-100 text-emerald-700' :
-                                                        log.status === 'failed' ? 'bg-red-100 text-red-600' :
-                                                                                   'bg-amber-100 text-amber-700'
-                                                    }`}>{log.status === 'sent' ? 'Enviado' : log.status === 'failed' ? 'Falhou' : 'Pendente'}</span>
-                                                </div>
-                                                {log.recipient && (
-                                                    <p className="text-xs text-gray-500 font-medium truncate mt-0.5">{log.recipient}</p>
-                                                )}
-                                                {log.subject && (
-                                                    <p className="text-xs text-gray-700 font-bold truncate">{log.subject}</p>
-                                                )}
-                                                {log.error && (
-                                                    <p className="text-xs text-red-500 mt-0.5 truncate" title={log.error}>{log.error}</p>
-                                                )}
-                                            </div>
-                                            <span className="text-[9px] text-gray-400 font-bold shrink-0">
-                                                {new Date(log.createdAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                    {order.status === 'Em Negociação' && (
+                        <button
+                            onClick={() => setShowNegotiation(true)}
+                            className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 ${A.onSolidSecondary}`}
+                        >
+                            Entrar na Sala de Negociação
+                        </button>
+                    )}
+
+                    {(order.status === 'Rascunho' || order.status === 'Enviado') && (
+                        <button
+                            onClick={() => handleUpdateStatus('Cancelado')}
+                            className="w-full py-3 border border-white/20 text-white/60 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
+                        >
+                            Cancelar Pedido
+                        </button>
+                    )}
+
+                    {order.status === 'Confirmado' && (
+                        <div className="p-4 bg-white/10 rounded-2xl border border-white/10">
+                            <p className="text-xs text-white font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Confirmado
+                            </p>
+                            <p className="text-xs text-white/70 leading-relaxed font-bold">
+                                O fornecedor aceitou o pedido. Aguarde a atualização das etapas de logística.
+                            </p>
                         </div>
                     )}
 
-                    {/* Chat Section — canal interno de compras, fora do escopo do link público
-                        (exige sessão authenticated; sem RPC de token para isto ainda) */}
-                    {!portalToken && currentUser && (
-                        <div className="mt-6">
-                            <OrderChat
-                                orderId={orderId}
-                                currentUser={currentUser}
-                            />
-                        </div>
+                    {['Entregue', 'Recebido', 'Divergência'].includes(order.status) && (
+                        <button
+                            onClick={() => handleUpdateStatus('Cancelado')}
+                            className="w-full py-3 border border-white/20 text-white/60 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all active:scale-95"
+                        >
+                            Cancelar Pedido
+                        </button>
                     )}
                 </div>
             </div>
+
+            {/* Information Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Building2 className="w-12 h-12 text-gray-900" />
+                    </div>
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${A.bar}`} />
+                        Fornecedor
+                    </h3>
+                    <div>
+                        <p className="text-base font-black text-gray-900 leading-tight">{supplierName || 'Carregando...'}</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase mt-1">{supplierEmail || 'E-mail não informado'}</p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Truck className={`w-12 h-12 ${A.icon}`} />
+                    </div>
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full ${A.dot}`} />
+                        Logística
+                    </h3>
+                    <div>
+                        <p className="text-base font-black text-gray-900 leading-tight">{order.deliveryMethod || 'CIF - Fornecedor'}</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase mt-1 flex items-center gap-1">
+                            <Package className="w-3 h-3" />
+                            Destino: {order.deliveryLocation || 'Canteiro'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4 relative overflow-hidden group hover:shadow-md transition-all">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <CreditCard className="w-12 h-12 text-emerald-500" />
+                    </div>
+                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                        Pagamento
+                    </h3>
+                    <div>
+                        <p className="text-base font-black text-gray-900 leading-tight">{order.paymentMethod || 'A combinar'}</p>
+                        <div className="mt-1 flex items-center gap-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${order.paymentTermType === 'Parcelado' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {order.paymentTermType || 'Vista'}
+                            </span>
+                            <p className="text-xs font-bold text-gray-400">
+                                {order.paymentTermType === 'Parcelado'
+                                    ? `${order.paymentInstallments || 1}x sem juros`
+                                    : `Prazo: ${order.paymentDays || 0} dias`}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* O "Fluxo de Atendimento" (OrderLifeline) morava aqui e era
+                exatamente a mesma linha do tempo da tela de Logística do
+                pedido — dois lugares mostrando o mesmo dado. Ficou só na
+                tela dedicada, alcançável pelo botão "Rastreio" do
+                cabeçalho (e pelo botão "Logística do pedido" da lista).
+                Removido a pedido do usuário em 2026-08-20. */}
+
+            {/* Items Table */}
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-8 border-b border-gray-50 flex items-center justify-between">
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-3">
+                        <div className={`p-2 rounded-xl ${A.chipAlt}`}>
+                            <Package className={`w-4 h-4 ${A.chipAltIcon}`} />
+                        </div>
+                        Itens do Pedido
+                        <span className={`ml-2 px-2 py-0.5 rounded-lg text-xs ${A.chipAltPill}`}>{order.items.length} itens</span>
+                    </h3>
+                </div>
+                <div className="overflow-x-auto">
+                    {/* min-w: 7 colunas com px-6 não cabem na coluna de
+                        conteúdo do portal (sidebar de 64) — rola dentro
+                        do card em vez de espremer a descrição */}
+                    <table className="w-full min-w-[760px] text-left text-sm border-collapse">
+                        {/* §6.2 sentence case + §6.6 px-6 e separador vertical */}
+                        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr>
+                                <th className="px-6 py-2 border-r border-gray-100">Código</th>
+                                <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd</th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right">Un</th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right">Unitário</th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right">Total</th>
+                                <th className="px-6 py-2 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {order.items.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50/50 transition-colors group">
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{item.code}</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-xs">
+                                        {editingIndex === idx ? (
+                                            <input
+                                                type="text"
+                                                value={editDescription}
+                                                onChange={(e) => setEditDescription(e.target.value)}
+                                                className={`w-full border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:ring-2 ${A.ring}`}
+                                            />
+                                        ) : item.description}
+                                    </td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
+                                        {editingIndex === idx ? (
+                                            <input
+                                                type="number"
+                                                value={editQty}
+                                                onChange={(e) => setEditQty(parseFloat(e.target.value) || 0)}
+                                                className={`w-20 text-right border border-gray-300 rounded px-2 py-1 outline-none focus:ring-2 ${A.ring}`}
+                                            />
+                                        ) : item.quantity}
+                                    </td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
+                                        {editingIndex === idx ? (
+                                            <input
+                                                type="text"
+                                                value={editUnit}
+                                                onChange={(e) => setEditUnit(e.target.value)}
+                                                className={`w-16 text-center border border-gray-300 rounded px-2 py-1 text-form-input outline-none focus:ring-2 ${A.ring}`}
+                                            />
+                                        ) : item.unit}
+                                    </td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                        {editingIndex === idx ? (
+                                            <input
+                                                type="number"
+                                                value={editPrice}
+                                                onChange={(e) => setEditPrice(parseFloat(e.target.value) || 0)}
+                                                className={`w-24 text-right border border-gray-300 rounded px-2 py-1 outline-none focus:ring-2 ${A.ring}`}
+                                            />
+                                        ) : (
+                                            new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitPrice)
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 bg-gray-50/30">
+                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(editingIndex === idx ? (editQty * editPrice) : item.total)}
+                                    </td>
+                                    <td className="px-6 py-2.5 text-center">
+                                        <div className="flex items-center justify-center gap-1.5">
+                                            {editingIndex === idx ? (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleSaveItemEdit(idx)}
+                                                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                        title="Salvar"
+                                                    >
+                                                        <CheckCircle2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setEditingIndex(null)}
+                                                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Cancelar"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </>
+                                            ) : !portalToken ? (
+                                                <>
+                                                    {/* §9: ação sempre visível — nunca opacity-0 + group-hover */}
+                                                    <ActionIconButton kind="edit" size="sm" onClick={() => handleStartEdit(idx, item)} />
+                                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteItem(idx)} />
+                                                </>
+                                            ) : null}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                        <tfoot className="bg-gray-900 text-white">
+                            <tr>
+                                <td colSpan={6} className="px-6 py-4 text-right text-sm font-normal opacity-60">Valor total do pedido</td>
+                                <td className="px-6 py-4 text-right text-xl font-medium">
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <div className="bg-white p-7 rounded-3xl shadow-sm border border-gray-100">
+                <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
+                    <div className={`p-2 rounded-xl ${A.chip}`}>
+                        <FileText className={`w-4 h-4 ${A.icon}`} />
+                    </div>
+                    Observações
+                </h3>
+                <div className="relative">
+                    <div className={`absolute top-0 left-0 w-1 h-full rounded-full ${A.barSoft}`} />
+                    <p className="text-sm text-gray-600 pl-4 py-1 italic leading-relaxed">
+                        {order.notes || "Nenhuma observação registrada pelo comprador."}
+                    </p>
+                </div>
+            </div>
+
+            {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
+                fora do escopo do link público */}
+            {!portalToken && <ThreeWayMatchPanel orderId={order.id} />}
+
+            {/* Receipts from purchase_receipts table */}
+            {receipts.length > 0 && (
+                <div className="space-y-4">
+                    {receipts.map((receipt, rIdx) => (
+                        <div key={receipt.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                    {receipt.status === 'Recebido' ? (
+                                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                    ) : receipt.status === 'Divergência' ? (
+                                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                    ) : (
+                                        <Package className={`w-4 h-4 ${A.chipAltIcon}`} />
+                                    )}
+                                    {receipt.status === 'Parcial' ? 'Recebimento Parcial' : `Conferência de Entrega`}
+                                    {receipts.length > 1 && (
+                                        <span className="text-xs font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">#{receipts.length - rIdx}</span>
+                                    )}
+                                </h3>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                    {new Date(receipt.receivedAt).toLocaleString('pt-BR')}
+                                </span>
+                            </div>
+
+                            {receipt.items.length > 0 && (
+                                <div className="overflow-x-auto rounded-xl border border-gray-100">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr>
+                                                <th className="px-6 py-2 text-left border-r border-gray-100">Item</th>
+                                                <th className="px-6 py-2 text-right border-r border-gray-100">Pedido</th>
+                                                <th className="px-6 py-2 text-right">Recebido</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {receipt.items.map(item => {
+                                                const isShort = item.quantityReceived < item.quantityOrdered;
+                                                return (
+                                                    <tr key={item.orderItemCode} className={isShort ? 'bg-amber-50/50' : ''}>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                                            <p className="text-sm font-normal text-gray-700">{item.description}</p>
+                                                            {item.issue && (
+                                                                <p className="text-xs text-amber-600 mt-0.5">{item.issue}</p>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">
+                                                            {item.quantityOrdered} {item.unit}
+                                                        </td>
+                                                        <td className={`px-6 py-2.5 text-right text-sm font-normal ${isShort ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                                            {item.quantityReceived} {item.unit}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {receipt.notes && (
+                                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Observações</p>
+                                    <p className="text-sm text-gray-700 italic">"{receipt.notes}"</p>
+                                </div>
+                            )}
+
+                            {receipt.photoPath && receiptPhotoUrls[receipt.photoPath] && (
+                                <a
+                                    href={receiptPhotoUrls[receipt.photoPath]}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`block relative group overflow-hidden rounded-xl border-2 border-gray-100 transition-all aspect-video bg-gray-50 ${A.borderHover}`}
+                                >
+                                    <img
+                                        src={receiptPhotoUrls[receipt.photoPath]}
+                                        alt="Comprovante"
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <div className="bg-white/90 p-2 rounded-lg flex items-center gap-2 text-xs font-bold text-gray-900">
+                                            <ExternalLink className="w-4 h-4" />
+                                            Ver em tamanho real
+                                        </div>
+                                    </div>
+                                </a>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Discrepancy Workflow */}
+            {discrepancies.length > 0 && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">
+                            Divergências
+                        </h3>
+                        <span className="ml-auto px-2 py-0.5 rounded-lg text-xs font-black bg-amber-100 text-amber-700">
+                            {discrepancies.filter(d => d.status === 'Pendente').length} pendente(s)
+                        </span>
+                    </div>
+
+                    <div className="space-y-3">
+                        {discrepancies.map(d => {
+                            const statusColors: Record<string, string> = {
+                                Pendente:  'bg-amber-100 text-amber-700 border-amber-200',
+                                Resolvida: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                                Aceita:    'bg-blue-100 text-blue-700 border-blue-200',
+                                Devolvida: 'bg-gray-100 text-gray-600 border-gray-200',
+                            };
+                            return (
+                                <div key={d.id} className={`p-4 rounded-2xl border space-y-3 ${d.status === 'Pendente' ? 'border-amber-200 bg-amber-50/50' : 'border-gray-100 bg-gray-50/50'}`}>
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-900 leading-snug">{d.description}</p>
+                                            <p className="text-xs text-gray-500 mt-0.5">
+                                                {d.quantity} {d.unit} —{' '}
+                                                <span className="font-bold text-amber-600 uppercase">{d.issue}</span>
+                                            </p>
+                                        </div>
+                                        <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border ${statusColors[d.status]}`}>
+                                            {d.status}
+                                        </span>
+                                    </div>
+
+                                    {d.resolutionNotes && (
+                                        <p className="text-xs text-gray-500 italic border-l-2 border-gray-200 pl-2">
+                                            {d.resolutionNotes}
+                                        </p>
+                                    )}
+
+                                    {d.status === 'Pendente' && (
+                                        <div className="space-y-2">
+                                            <input
+                                                type="text"
+                                                placeholder="Observação da resolução (opcional)"
+                                                value={resolutionInputs[d.id] || ''}
+                                                onChange={e => setResolutionInputs(prev => ({ ...prev, [d.id]: e.target.value }))}
+                                                className="w-full text-form-input rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                                            />
+                                            <div className="flex gap-2">
+                                                {(['Resolvida', 'Aceita', 'Devolvida'] as DiscrepancyStatus[]).map(s => (
+                                                    <button
+                                                        key={s}
+                                                        onClick={() => handleResolveDiscrepancy(d.id, s)}
+                                                        disabled={resolvingId === d.id}
+                                                        className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50 ${
+                                                            s === 'Resolvida' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' :
+                                                            s === 'Aceita'    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' :
+                                                                                'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        }`}
+                                                    >
+                                                        {resolvingId === d.id ? '...' : s}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+
+            {/* "Documentos Fiscais" (upload + lista de NFe) morava aqui e
+                duplicava telas já dedicadas a nota fiscal: a aba Nota Fiscal
+                do fornecedor (InvoiceManager/PortalInvoices) e, do lado do
+                comprador, Financeiro › Contas a Pagar › aba Notas. Mesmo
+                dado, dois lugares — removido a pedido do usuário em
+                2026-08-21 (mesmo raciocínio da remoção do Fluxo de
+                Atendimento em 2026-08-20). */}
+
+            {/* Notification Log */}
+            {notifLogs.length > 0 && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
+                        <div className={`p-2 rounded-xl ${A.chipAlt}`}>
+                            <Zap className={`w-4 h-4 ${A.chipAltIcon}`} />
+                        </div>
+                        Histórico de Notificações
+                        <span className="ml-auto text-xs font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">{notifLogs.length}</span>
+                    </h3>
+                    <div className="space-y-2">
+                        {notifLogs.map(log => {
+                            const channelIcon = log.channel === 'email' ? '✉' : log.channel === 'whatsapp' ? '💬' : '⚡';
+                            const channelLabel = log.channel === 'email' ? 'E-mail' : log.channel === 'whatsapp' ? 'WhatsApp' : 'Webhook';
+                            return (
+                                <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50/50 border border-gray-100">
+                                    <span className="text-base leading-none mt-0.5">{channelIcon}</span>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">{channelLabel}</span>
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
+                                                log.status === 'sent'   ? 'bg-emerald-100 text-emerald-700' :
+                                                log.status === 'failed' ? 'bg-red-100 text-red-600' :
+                                                                           'bg-amber-100 text-amber-700'
+                                            }`}>{log.status === 'sent' ? 'Enviado' : log.status === 'failed' ? 'Falhou' : 'Pendente'}</span>
+                                        </div>
+                                        {log.recipient && (
+                                            <p className="text-xs text-gray-500 font-medium truncate mt-0.5">{log.recipient}</p>
+                                        )}
+                                        {log.subject && (
+                                            <p className="text-xs text-gray-700 font-bold truncate">{log.subject}</p>
+                                        )}
+                                        {log.error && (
+                                            <p className="text-xs text-red-500 mt-0.5 truncate" title={log.error}>{log.error}</p>
+                                        )}
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 font-bold shrink-0">
+                                        {new Date(log.createdAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Chat Section — canal interno de compras, fora do escopo do link público
+                (exige sessão authenticated; sem RPC de token para isto ainda) */}
+            {!portalToken && currentUser && (
+                <div className="mt-6">
+                    <OrderChat
+                        orderId={orderId}
+                        currentUser={currentUser}
+                    />
+                </div>
+            )}
             {/* Receipt Modal */}
             {showReceiptModal && order && (
                 <OrderReceiptModal

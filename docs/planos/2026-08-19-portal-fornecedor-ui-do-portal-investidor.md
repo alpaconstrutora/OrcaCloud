@@ -41,6 +41,8 @@ de tokens no `PortalKit`.
 | 13 | `OrderLifeline.tsx` | rótulos deixavam de caber e se sobrepunham abaixo de ~800px: `overflow-x-auto` + `min-w-[760px]` + `px-8` (folga da pílula "Prev:") | print 1440 sem sobreposição | ✅ (2026-08-20) |
 | 14 | `SupplyChainOrderDetails.tsx` | remover o card "Fluxo de Atendimento" da tela de detalhe — era a mesma `OrderLifeline` da tela de Logística | a linha do tempo não aparece mais em Detalhes e continua nas DUAS rotas de logística (botão "Rastreio" do cabeçalho e "Logística do pedido" da lista) | ✅ (2026-08-20) |
 | 15 | `QuotationResponseForm.tsx` | migrar acento e tirar o overlay de tela cheia | — | ❌ **NÃO FEITO** — ver abaixo |
+| 16 | `SupplyChainOrderDetails.tsx` | remover o card "Documentos Fiscais" (upload + lista de NFe) da tela de detalhe — duplicava a aba Nota Fiscal do fornecedor e, do lado do comprador, Contas a Pagar › Notas | "Documentos Fiscais" não aparece mais em Detalhes; código morto (`invoices`, `invoiceService`, `handleInvoiceUpload`, `handleViewInvoice`, `fileInputRef`, tokens `doc*`) removido | ✅ (2026-08-21) |
+| 17 | `SupplyChainOrderDetails.tsx` | mover o card "Status Interno" para logo após o cabeçalho e remover o split 2/3+1/3 — Itens do Pedido (e o resto do conteúdo) passam a ocupar a largura toda | prints desktop (1600px) e mobile confirmam Status Interno no topo e tabela sem coluna lateral disputando espaço; `scrollH === clientH` (sem conteúdo cortado) | ✅ (2026-08-21) |
 
 ## Pedido de 2026-08-20 (itens 12 e 13)
 
@@ -99,6 +101,41 @@ decisão de interação, não de cor.
    zero abas o fornecedor vê "Portal em configuração".
 3. **KPIs da aba Estatísticas passaram a ser reais.** "Negociações Ativas: 12"
    era literal no JSX.
+
+## Pedido de 2026-08-21 (itens 16 e 17)
+
+> ```
+> 1. o mesmo acontece com Documentos Fiscais, veja print. Como temos uma
+>    página dedicada a Nota fiscal Vamos manter na página apenas na página
+>    Nota fiscal Documentos Fiscais e anexas NF e remover da página detalhes
+>    do pedido
+> 2. mover o card Status Interno para cima e deixar a tabela opcupar o espaço
+>    todo da janela
+> ```
+
+Mesma lógica do item 14 (2026-08-20): "Documentos Fiscais" duplicava dado que
+já tem casa própria — a diferença é que aqui há **duas** casas, uma por lado:
+Nota Fiscal do fornecedor (`InvoiceManager`/`PortalInvoices`) e, do lado do
+comprador, Financeiro › Contas a Pagar › aba Notas (`ContasPagarManager.tsx`).
+Confirmei a existência da segunda antes de remover — sem ela, o comprador
+perderia a única forma de ver/anexar a NFe de um pedido específico.
+
+Junto com a remoção, saiu o código que só existia para aquele card: estado
+`invoices`/`isUploadingInvoice`, `fileInputRef`, os handlers
+`handleInvoiceUpload`/`handleViewInvoice`, as chamadas a
+`invoiceService.listInvoicesByOrder` nos dois carregamentos, e os 6 tokens
+`doc*` do mapa `ACCENTS` (ficaram órfãos).
+
+O card "Status Interno" — que ficava no meio da coluna lateral (1/3 de
+largura) — virou a primeira seção depois do cabeçalho, e o split
+`grid-cols-1 lg:grid-cols-3` (2/3 conteúdo + 1/3 sidebar) foi removido: toda a
+tela passou a ser uma pilha de seções de largura total (`Status Interno` →
+`Information Grid` → `Itens do Pedido` → `Observações` → painéis internos do
+comprador → `Chat`), a mesma reorganização que "Fluxo de Atendimento" e
+"Documentos Fiscais" já tinham deixado precisando de solução. O conteúdo do
+card `Status Interno` (título, texto, botões) não foi redesenhado — só
+reposicionado; se o resultado (card colorido bem largo com botões `w-full`
+esticados) não agradar, dá pra revisitar como um banner horizontal.
 
 ## Verificação executada
 

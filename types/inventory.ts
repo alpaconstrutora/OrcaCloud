@@ -280,3 +280,71 @@ export interface CreateMaterialRequestInput {
         notes?: string;
     }>;
 }
+
+// ── Catálogo de Itens (Cadastro de Itens) ────────────────────────────────────
+
+export type StockItemSource = 'avulso' | 'catalogo' | 'orcamento' | 'planilha' | 'recebimento';
+
+export interface StockItem {
+    id: string;
+    organizationId: string;
+    inputCode: string;
+    inputDescription: string;
+    inputUnit: string;
+    category?: string;
+    defaultSupplierId?: string;
+    defaultSupplierName?: string; // join
+    notes?: string;
+    isActive: boolean;
+    source?: StockItemSource;
+    originProjectId?: string;
+    unitCostHint?: number;
+    created_at: string;
+    updated_at: string;
+}
+
+// inputCode ausente/vazio = gerado automaticamente (AVU-000001) pelo banco
+export interface CreateStockItemInput {
+    id?: string; // presente = edição
+    inputCode?: string;
+    inputDescription: string;
+    inputUnit: string;
+    category?: string;
+    defaultSupplierId?: string | null;
+    notes?: string;
+    isActive?: boolean;
+    source?: StockItemSource;
+    originProjectId?: string | null;
+    unitCostHint?: number;
+}
+
+// Linha crua de uma das três origens de importação, antes da pré-visualização
+export interface StockItemImportRow {
+    inputCode?: string;
+    inputDescription: string;
+    inputUnit: string;
+    category?: string;
+    unitCostHint?: number;
+    source: StockItemSource;
+    originProjectId?: string;
+    /** Preenchido só quando a planilha traz saldo inicial a lançar. */
+    initialQuantity?: number;
+}
+
+export interface StockItemImportRowResult {
+    row: StockItemImportRow;
+    item?: StockItem;
+    status: 'created' | 'updated' | 'error';
+    message?: string;
+}
+
+export interface StockItemImportResult {
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: Array<{ row: StockItemImportRow; message: string }>;
+    /** Detalhe por linha, na mesma ordem da entrada — usado para saber o
+     *  input_code resolvido de cada linha (necessário para lançar saldo
+     *  inicial depois do import, quando a planilha trouxe quantidade). */
+    results: StockItemImportRowResult[];
+}

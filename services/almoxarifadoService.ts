@@ -169,23 +169,6 @@ function rowToWarehouse(r: Record<string, unknown>): Warehouse {
     };
 }
 
-function rowToItem(r: Record<string, unknown>): StockItem {
-    return {
-        id: r.id as string,
-        organizationId: r.organization_id as string,
-        inputCode: r.input_code as string,
-        inputDescription: r.input_description as string,
-        inputUnit: r.input_unit as string,
-        category: r.category as string | undefined,
-        defaultSupplierId: r.default_supplier_id as string | undefined,
-        defaultSupplierName: (r.suppliers as Record<string, unknown> | null)?.name as string | undefined,
-        notes: r.notes as string | undefined,
-        isActive: r.is_active as boolean,
-        created_at: r.created_at as string,
-        updated_at: r.updated_at as string,
-    };
-}
-
 function rowToMovement(r: Record<string, unknown>): StockMovement {
     return {
         id: r.id as string,
@@ -283,41 +266,11 @@ export const almoxarifadoService = {
     },
 
     // ── Stock items (catálogo) ─────────────────────────────────────────────────
-
-    async listStockItems(organizationId: string): Promise<StockItem[]> {
-        const { data, error } = await supabase
-            .from('stock_items')
-            .select('id, organization_id, input_code, input_description, input_unit, category, default_supplier_id, notes, is_active, created_at, updated_at, suppliers(name)')
-            .eq('organization_id', organizationId)
-            .eq('is_active', true)
-            .order('input_description');
-        if (error) throw error;
-        return (data || []).map(r => rowToItem(r as unknown as Record<string, unknown>));
-    },
-
-    async upsertStockItem(input: {
-        id?: string; organizationId: string; inputCode: string; inputDescription: string;
-        inputUnit: string; category?: string; defaultSupplierId?: string; notes?: string;
-    }): Promise<StockItem> {
-        const payload = {
-            organization_id: input.organizationId,
-            input_code: input.inputCode,
-            input_description: input.inputDescription,
-            input_unit: input.inputUnit,
-            category: input.category ?? null,
-            default_supplier_id: input.defaultSupplierId ?? null,
-            notes: input.notes ?? null,
-        };
-        let q;
-        if (input.id) {
-            q = supabase.from('stock_items').update(payload).eq('id', input.id).select('id, organization_id, input_code, input_description, input_unit, category, default_supplier_id, notes, is_active, created_at, updated_at').single();
-        } else {
-            q = supabase.from('stock_items').insert(payload).select('id, organization_id, input_code, input_description, input_unit, category, default_supplier_id, notes, is_active, created_at, updated_at').single();
-        }
-        const { data, error } = await q;
-        if (error) throw error;
-        return rowToItem(data as unknown as Record<string, unknown>);
-    },
+    // Removido em 2026-08-21: este service nunca teve importador (código morto,
+    // ver docs/planos/2026-08-21-almoxarifado-cadastro-de-itens.md). O CRUD do
+    // catálogo agora vive em services/inventoryService.ts, junto com o resto do
+    // módulo que a tela realmente usa (listStockItems/upsertStockItem/
+    // setStockItemActive/importStockItems).
 
     // ── Net position & summary ─────────────────────────────────────────────────
 

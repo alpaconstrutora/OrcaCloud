@@ -6,7 +6,8 @@ import {
     ChevronRight,
     Layers,
     Package,
-    Box
+    Box,
+    Check
 } from 'lucide-react';
 import { sinapiService } from '../services/sinapiService';
 import { customDatabaseService } from '../services/customDatabaseService';
@@ -19,9 +20,31 @@ interface DatabasePickerModalProps {
     title?: string;
     subtitle?: string;
     zIndex?: number;
+    /** true = seleção múltipla (checkbox por linha); onSelectMany fecha o modal ao confirmar. Default false — comportamento antigo intacto. */
+    multiple?: boolean;
+    onSelectMany?: (items: SinapiItem[]) => void;
 }
 
-const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClose, onSelect, title, subtitle, zIndex = 110 }) => {
+const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClose, onSelect, title, subtitle, zIndex = 110, multiple = false, onSelectMany }) => {
+    const [selected, setSelected] = React.useState<Map<string, SinapiItem>>(new Map());
+
+    React.useEffect(() => {
+        if (isOpen) setSelected(new Map());
+    }, [isOpen]);
+
+    const toggleSelected = (item: SinapiItem) => {
+        setSelected(prev => {
+            const next = new Map(prev);
+            if (next.has(item.code)) next.delete(item.code); else next.set(item.code, item);
+            return next;
+        });
+    };
+
+    const confirmSelection = () => {
+        onSelectMany?.(Array.from(selected.values()));
+        onClose();
+    };
+
     // Search States (Replicated from DatabaseExplorer)
     const [searchTerm, setSearchTerm] = React.useState('');
     const [searchCode, setSearchCode] = React.useState('');
@@ -274,13 +297,20 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                         </div>
                     ) : searchResults.length > 0 ? (
                         <div className="grid grid-cols-1 gap-2">
-                            {searchResults.map(result => (
+                            {searchResults.map(result => {
+                                const isSelected = selected.has(result.code);
+                                return (
                                 <div
                                     key={result.code}
-                                    onClick={() => onSelect(result)}
-                                    className="bg-white p-3 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md cursor-pointer transition-all group flex items-center justify-between"
+                                    onClick={() => multiple ? toggleSelected(result) : onSelect(result)}
+                                    className={`bg-white p-3 rounded-lg border hover:border-blue-300 hover:shadow-md cursor-pointer transition-all group flex items-center justify-between ${isSelected ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
                                 >
                                     <div className="flex items-center gap-3">
+                                        {multiple && (
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                                                {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                                            </div>
+                                        )}
                                         <div className="font-mono text-xs font-bold bg-gray-100 px-2 py-1 rounded text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
                                             {result.code}
                                         </div>
@@ -298,10 +328,11 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                                         <span className="text-sm font-bold text-emerald-600 whitespace-nowrap">
                                             R$ {result.price.toFixed(2)}
                                         </span>
-                                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500" />
+                                        {!multiple && <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-500" />}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400">
@@ -310,6 +341,19 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                         </div>
                     )}
                 </div>
+
+                {multiple && (
+                    <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0">
+                        <span className="text-sm text-gray-500">{selected.size} {selected.size === 1 ? 'item selecionado' : 'itens selecionados'}</span>
+                        <button
+                            onClick={confirmSelection}
+                            disabled={selected.size === 0}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
+                        >
+                            Adicionar {selected.size > 0 ? selected.size : ''}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

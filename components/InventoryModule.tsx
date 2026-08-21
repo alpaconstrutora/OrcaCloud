@@ -24,6 +24,7 @@ import {
     TrendingUp,
     ShieldAlert,
     ClipboardList,
+    Boxes,
 } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
@@ -32,6 +33,10 @@ import { useStore } from '../store/useStore';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import StockItemsTab, { STOCK_ITEMS_COLUMNS } from './inventory/StockItemsTab';
+import StockItemSheet from './inventory/StockItemSheet';
+import StockItemImportModal from './inventory/StockItemImportModal';
+import StockItemSelect from './inventory/StockItemSelect';
 import type {
     Warehouse as WarehouseType,
     StockBalance,
@@ -42,6 +47,7 @@ import type {
     StockSummary,
     MaterialRequest,
     MaterialRequestItem,
+    StockItem,
     CreateWarehouseInput,
     CreateStockMovementInput,
     CreateSupplierLeadTimeInput,
@@ -64,17 +70,19 @@ interface Props {
     onChangeView: (view: string) => void;
 }
 
-type Tab = 'saldos' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transferencias' | 'posicao' | 'requisicoes';
+type Tab = 'saldos' | 'itens' | 'movimentos' | 'almoxarifados' | 'lead_times' | 'transferencias' | 'posicao' | 'requisicoes';
 
 // ─── Modal de movimento manual ────────────────────────────────────────────────
 interface MovementModalProps {
     warehouses: WarehouseType[];
     defaultType: 'in' | 'out' | 'adjust';
+    stockItems: StockItem[];
+    onItemsChanged: () => void;
     onClose: () => void;
     onCreated: () => void;
 }
 
-const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, onClose, onCreated }) => {
+const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, stockItems, onItemsChanged, onClose, onCreated }) => {
     const [form, setForm] = React.useState<CreateStockMovementInput>({
         warehouseId: warehouses[0]?.id ?? '',
         inputDescription: '',
@@ -88,9 +96,12 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
     });
     const [saving, setSaving] = React.useState(false);
     const [err, setErr] = React.useState('');
+    const [newItemSheetOpen, setNewItemSheetOpen] = React.useState(false);
 
     // Em "Todas as organizações" a lista de almoxarifados cruza várias orgs —
     // a organização do movimento vem do almoxarifado escolhido, não de um seletor à parte.
+    const orgId = warehouses.find(w => w.id === form.warehouseId)?.organizationId ?? warehouses[0]?.organizationId ?? '';
+
     const save = async () => {
         if (!form.warehouseId || !form.inputDescription || form.quantity <= 0) {
             setErr('Preencha almoxarifado, insumo e quantidade.');
@@ -136,30 +147,12 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Insumo / Descrição *</label>
-                            <input
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                value={form.inputDescription}
-                                onChange={e => setForm(f => ({ ...f, inputDescription: e.target.value }))}
-                                placeholder="Ex: Cimento CP-II 50kg"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-form-label text-gray-700 mb-1">Código</label>
-                            <input
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                value={form.inputCode ?? ''}
-                                onChange={e => setForm(f => ({ ...f, inputCode: e.target.value || undefined }))}
-                                placeholder="SINAPI ou próprio"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-form-label text-gray-700 mb-1">Unidade *</label>
-                            <input
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                value={form.inputUnit}
-                                onChange={e => setForm(f => ({ ...f, inputUnit: e.target.value }))}
-                                placeholder="sc, m³, un"
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Insumo *</label>
+                            <StockItemSelect
+                                items={stockItems}
+                                value={form.inputDescription ? { inputCode: form.inputCode, inputDescription: form.inputDescription, inputUnit: form.inputUnit } : null}
+                                onChange={v => setForm(f => ({ ...f, inputCode: v.inputCode, inputDescription: v.inputDescription, inputUnit: v.inputUnit }))}
+                                onCreateNew={() => setNewItemSheetOpen(true)}
                             />
                         </div>
                         <div>
@@ -221,6 +214,17 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                     </div>
                 </div>
             </div>
+
+            <StockItemSheet
+                open={newItemSheetOpen}
+                onClose={() => setNewItemSheetOpen(false)}
+                organizationId={orgId}
+                item={null}
+                onSaved={item => {
+                    setForm(f => ({ ...f, inputCode: item.inputCode, inputDescription: item.inputDescription, inputUnit: item.inputUnit }));
+                    onItemsChanged();
+                }}
+            />
         </div>
     );
 };
@@ -441,6 +445,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [createWarehouseOrgId, setCreateWarehouseOrgId] = React.useState<string | undefined>(undefined);
     const [createRequestOrgId, setCreateRequestOrgId] = React.useState<string | undefined>(undefined);
+    const [createItemOrgId, setCreateItemOrgId] = React.useState<string | undefined>(undefined);
+    const [importOrgId, setImportOrgId] = React.useState<string | undefined>(undefined);
 
     const handleNewWarehouse = async () => {
         const target = await resolveWriteOrg('single');
@@ -458,6 +464,19 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
         setShowRequestModal(true);
     };
 
+    const handleNewStockItem = async () => {
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        setCreateItemOrgId(target.orgId);
+        setStockItemSheet(true);
+    };
+
+    const handleOpenImport = async () => {
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        setImportOrgId(target.orgId);
+    };
+
     const [tab, setTab] = React.useState<Tab>('saldos');
     const [loading, setLoading] = React.useState(false);
 
@@ -468,26 +487,37 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [transfers, setTransfers] = React.useState<StockTransfer[]>([]);
     const [netPositions, setNetPositions] = React.useState<StockNetPosition[]>([]);
     const [summary, setSummary] = React.useState<StockSummary[]>([]);
+    const [stockItems, setStockItems] = React.useState<StockItem[]>([]);
 
     const [selectedWarehouseId, setSelectedWarehouseId] = usePersistedState<string>('inventory-warehouse-filter', '');
     const [searchTerm, setSearchTerm] = usePersistedState('inventory-search', '');
-    
+
     // Configurações de Tabelas
     const tableSaldos = useTableColumns(COLUMNS_SALDOS, 'inventory-saldos-cols');
     const tableMovimentos = useTableColumns(COLUMNS_MOVIMENTOS, 'inventory-movimentos-cols');
-    
+    const tableItems = useTableColumns(STOCK_ITEMS_COLUMNS, 'inventory-itens-cols');
+
     // View modes
     const [viewMode, setViewMode] = usePersistedState<'list'|'grid'>('inventory-view-mode', 'list');
 
     const [movementModal, setMovementModal] = React.useState<'in' | 'out' | 'adjust' | null>(null);
     const [warehouseModal, setWarehouseModal] = React.useState<WarehouseType | true | null>(null);
     const [transferModal, setTransferModal] = React.useState(false);
+    const [stockItemSheet, setStockItemSheet] = React.useState<StockItem | true | null>(null);
 
     // Requisições
     const [requests, setRequests] = React.useState<MaterialRequest[]>([]);
     const [reqFilter, setReqFilter] = React.useState('');
     const [showRequestModal, setShowRequestModal] = React.useState(false);
     const [approvingRequest, setApprovingRequest] = React.useState<MaterialRequest | null>(null);
+
+    const refreshStockItems = React.useCallback(async () => {
+        try {
+            setStockItems(await inventoryService.listStockItems(activeOrganizationId));
+        } catch (e) {
+            console.error(e);
+        }
+    }, [activeOrganizationId]);
 
     const load = React.useCallback(async () => {
         setLoading(true);
@@ -496,13 +526,14 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             setWarehouses(whs);
             if (!selectedWarehouseId && whs.length > 0) setSelectedWarehouseId(whs[0].id);
 
-            const [bal, mov, lts, trfs, net, smry] = await Promise.all([
+            const [bal, mov, lts, trfs, net, smry, items] = await Promise.all([
                 inventoryService.listBalances(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
                 inventoryService.listMovements(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
                 inventoryService.listLeadTimes(activeOrganizationId),
                 inventoryService.listTransfers(activeOrganizationId),
                 inventoryService.getNetPositions(activeOrganizationId, { warehouseId: selectedWarehouseId || undefined }),
                 inventoryService.getStockSummary(activeOrganizationId, selectedWarehouseId || undefined),
+                inventoryService.listStockItems(activeOrganizationId),
             ]);
             setBalances(bal);
             setMovements(mov);
@@ -510,6 +541,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             setTransfers(trfs);
             setNetPositions(net);
             setSummary(smry);
+            setStockItems(items);
         } catch (e) {
             console.error(e);
         } finally {
@@ -535,6 +567,10 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
         !searchTerm || b.inputDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
         b.inputCode?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    const filteredStockItems = stockItems.filter(i =>
+        !searchTerm || i.inputDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        i.inputCode?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const totalValue = balances.reduce((s, b) => s + b.totalValue, 0);
     const lowStock = balances.filter(b => b.quantity <= 0).length;
@@ -548,18 +584,37 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     <p className="text-sm text-gray-500 mt-1">Controle de estoque, movimentos e posição de materiais</p>
                 </div>
                 <div className="flex gap-2">
-                    <button
-                        onClick={() => setMovementModal('in')}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
-                    >
-                        <ArrowDownCircle className="w-4 h-4" /> Entrada
-                    </button>
-                    <Button
-                        variant="danger"
-                        onClick={() => setMovementModal('out')}
-                    >
-                        <ArrowUpCircle className="w-4 h-4" /> Saída
-                    </Button>
+                    {tab === 'itens' ? (
+                        <>
+                            <button
+                                onClick={handleOpenImport}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95"
+                            >
+                                Importar
+                            </button>
+                            <button
+                                onClick={handleNewStockItem}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95"
+                            >
+                                <Plus className="w-[15px] h-[15px]" /> Novo Item
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                onClick={() => setMovementModal('in')}
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
+                            >
+                                <ArrowDownCircle className="w-4 h-4" /> Entrada
+                            </button>
+                            <Button
+                                variant="danger"
+                                onClick={() => setMovementModal('out')}
+                            >
+                                <ArrowUpCircle className="w-4 h-4" /> Saída
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -587,6 +642,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             <div className="flex items-center gap-1 border-b border-gray-200">
                 {([
                     { key: 'saldos', label: 'Saldos', icon: Package },
+                    { key: 'itens', label: 'Itens', icon: Boxes },
                     { key: 'posicao', label: 'Posição Líquida', icon: Activity },
                     { key: 'movimentos', label: 'Movimentos', icon: History },
                     { key: 'transferencias', label: 'Transferências', icon: ArrowLeftRight },
@@ -641,6 +697,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                     {tab === 'saldos' && <ColumnConfigButton columns={COLUMNS_SALDOS} visibleColumns={tableSaldos.visibleColumns} showColumnConfig={tableSaldos.showColumnConfig} onToggleShow={() => tableSaldos.setShowColumnConfig(!tableSaldos.showColumnConfig)} onToggleColumn={tableSaldos.toggleColumn} onReset={tableSaldos.resetColumns} />}
                     {tab === 'movimentos' && <ColumnConfigButton columns={COLUMNS_MOVIMENTOS} visibleColumns={tableMovimentos.visibleColumns} showColumnConfig={tableMovimentos.showColumnConfig} onToggleShow={() => tableMovimentos.setShowColumnConfig(!tableMovimentos.showColumnConfig)} onToggleColumn={tableMovimentos.toggleColumn} onReset={tableMovimentos.resetColumns} />}
+                    {tab === 'itens' && <ColumnConfigButton columns={STOCK_ITEMS_COLUMNS} visibleColumns={tableItems.visibleColumns} showColumnConfig={tableItems.showColumnConfig} onToggleShow={() => tableItems.setShowColumnConfig(!tableItems.showColumnConfig)} onToggleColumn={tableItems.toggleColumn} onReset={tableItems.resetColumns} />}
                 </div>
             </div>
 
@@ -652,6 +709,18 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 
             {!loading && (
                 <>
+                    {/* ── TAB: ITENS ── */}
+                    {tab === 'itens' && (
+                        <StockItemsTab
+                            items={filteredStockItems}
+                            tableItems={tableItems}
+                            onEdit={item => setStockItemSheet(item)}
+                            onNew={handleNewStockItem}
+                            onImport={handleOpenImport}
+                            onChanged={refreshStockItems}
+                        />
+                    )}
+
                     {/* ── TAB: SALDOS ── */}
                     {tab === 'saldos' && (
                         <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -1128,6 +1197,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             createOrgId={createRequestOrgId}
                             onNewRequest={handleNewRequest}
                             warehouses={warehouses.filter(w => w.isActive)}
+                            stockItems={stockItems.filter(i => i.isActive)}
+                            onItemsChanged={refreshStockItems}
                             requests={requests}
                             reqFilter={reqFilter}
                             setReqFilter={setReqFilter}
@@ -1150,6 +1221,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 <MovementModal
                     warehouses={warehouses.filter(w => w.isActive)}
                     defaultType={movementModal}
+                    stockItems={stockItems.filter(i => i.isActive)}
+                    onItemsChanged={refreshStockItems}
                     onClose={() => setMovementModal(null)}
                     onCreated={() => { setMovementModal(null); load(); }}
                 />
@@ -1168,8 +1241,30 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
             {transferModal && (
                 <TransferModal
                     warehouses={warehouses.filter(w => w.isActive)}
+                    stockItems={stockItems.filter(i => i.isActive)}
+                    onItemsChanged={refreshStockItems}
                     onClose={() => setTransferModal(false)}
                     onCreated={() => { setTransferModal(false); load(); }}
+                />
+            )}
+
+            {stockItemSheet && (stockItemSheet !== true ? stockItemSheet.organizationId : createItemOrgId) && (
+                <StockItemSheet
+                    open
+                    organizationId={stockItemSheet !== true ? stockItemSheet.organizationId : createItemOrgId!}
+                    item={stockItemSheet !== true ? stockItemSheet : null}
+                    onClose={() => { setStockItemSheet(null); setCreateItemOrgId(undefined); }}
+                    onSaved={() => { setStockItemSheet(null); setCreateItemOrgId(undefined); refreshStockItems(); }}
+                />
+            )}
+            {importOrgId && (
+                <StockItemImportModal
+                    isOpen
+                    organizationId={importOrgId}
+                    existingItems={stockItems}
+                    warehouses={warehouses.filter(w => w.isActive)}
+                    onClose={() => setImportOrgId(undefined)}
+                    onImported={refreshStockItems}
                 />
             )}
         </div>
@@ -1179,11 +1274,13 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 // ─── Modal de transferência ────────────────────────────────────────────────────
 interface TransferModalProps {
     warehouses: WarehouseType[];
+    stockItems: StockItem[];
+    onItemsChanged: () => void;
     onClose: () => void;
     onCreated: () => void;
 }
 
-const TransferModal: React.FC<TransferModalProps> = ({ warehouses, onClose, onCreated }) => {
+const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, onItemsChanged, onClose, onCreated }) => {
     const keyRef = React.useRef(0);
     const [form, setForm] = React.useState<CreateTransferInput>({
         fromWarehouseId: warehouses[0]?.id ?? '',
@@ -1193,6 +1290,8 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, onClose, onCr
     });
     const [saving, setSaving] = React.useState(false);
     const [err, setErr] = React.useState('');
+    const [newItemForIndex, setNewItemForIndex] = React.useState<number | null>(null);
+    const orgId = warehouses.find(w => w.id === form.fromWarehouseId)?.organizationId ?? warehouses[0]?.organizationId ?? '';
 
     const addItem = () => {
         keyRef.current += 1;
@@ -1279,17 +1378,14 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, onClose, onCr
                         <div className="space-y-3">
                             {form.items.map((item, idx) => (
                                 <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-gray-50/50 border border-gray-200 rounded-xl p-4">
-                                    <div className="col-span-5">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
-                                        <input className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.inputDescription} onChange={e => updateItem(idx, { inputDescription: e.target.value })} placeholder="Insumo" />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Cód.</label>
-                                        <input className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.inputCode ?? ''} onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })} />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Un</label>
-                                        <input className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.inputUnit} onChange={e => updateItem(idx, { inputUnit: e.target.value })} />
+                                    <div className="col-span-9">
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Insumo</label>
+                                        <StockItemSelect
+                                            items={stockItems}
+                                            value={item.inputDescription ? { inputCode: item.inputCode, inputDescription: item.inputDescription, inputUnit: item.inputUnit } : null}
+                                            onChange={v => updateItem(idx, { inputCode: v.inputCode, inputDescription: v.inputDescription, inputUnit: v.inputUnit })}
+                                            onCreateNew={() => setNewItemForIndex(idx)}
+                                        />
                                     </div>
                                     <div className="col-span-2">
                                         <label className="block text-xs font-medium text-gray-500 mb-1">Qtd</label>
@@ -1321,6 +1417,17 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, onClose, onCr
                     </div>
                 </div>
             </div>
+
+            <StockItemSheet
+                open={newItemForIndex !== null}
+                onClose={() => setNewItemForIndex(null)}
+                organizationId={orgId}
+                item={null}
+                onSaved={item => {
+                    if (newItemForIndex !== null) updateItem(newItemForIndex, { inputCode: item.inputCode, inputDescription: item.inputDescription, inputUnit: item.inputUnit });
+                    onItemsChanged();
+                }}
+            />
         </div>
     );
 };
@@ -1349,6 +1456,8 @@ interface RequisitionsTabProps {
     createOrgId: string | undefined;
     onNewRequest: () => void;
     warehouses: WarehouseType[];
+    stockItems: StockItem[];
+    onItemsChanged: () => void;
     requests: MaterialRequest[];
     reqFilter: string;
     setReqFilter: (f: string) => void;
@@ -1360,7 +1469,7 @@ interface RequisitionsTabProps {
 }
 
 const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
-    createOrgId, onNewRequest, warehouses, requests, reqFilter, setReqFilter,
+    createOrgId, onNewRequest, warehouses, stockItems, onItemsChanged, requests, reqFilter, setReqFilter,
     showRequestModal, setShowRequestModal, approvingRequest, setApprovingRequest, reload,
 }) => {
     const [delivering, setDelivering] = React.useState<string | null>(null);
@@ -1581,6 +1690,8 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                 <RequestModal
                     orgId={createOrgId}
                     warehouses={warehouses}
+                    stockItems={stockItems}
+                    onItemsChanged={onItemsChanged}
                     onClose={() => setShowRequestModal(false)}
                     onCreated={() => { setShowRequestModal(false); reload(); }}
                 />
@@ -1600,11 +1711,13 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
 interface RequestModalProps {
     orgId: string;
     warehouses: WarehouseType[];
+    stockItems: StockItem[];
+    onItemsChanged: () => void;
     onClose: () => void;
     onCreated: () => void;
 }
 
-const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose, onCreated }) => {
+const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockItems, onItemsChanged, onClose, onCreated }) => {
     const keyRef = React.useRef(0);
     const [form, setForm] = React.useState<CreateMaterialRequestInput>({
         requestedBy: '',
@@ -1613,6 +1726,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
     });
     const [saving, setSaving] = React.useState(false);
     const [err, setErr] = React.useState('');
+    const [newItemForIndex, setNewItemForIndex] = React.useState<number | null>(null);
 
     const addItem = () => {
         keyRef.current += 1;
@@ -1701,29 +1815,13 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                         <div className="space-y-3">
                             {form.items.map((item, idx) => (
                                 <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-gray-50/50 border border-gray-200 rounded-xl p-4">
-                                    <div className="col-span-5">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Descrição *</label>
-                                        <input
-                                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                            value={item.inputDescription}
-                                            onChange={e => updateItem(idx, { inputDescription: e.target.value })}
-                                            placeholder="Insumo"
-                                        />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Cód.</label>
-                                        <input
-                                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                            value={item.inputCode ?? ''}
-                                            onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })}
-                                        />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Un</label>
-                                        <input
-                                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                            value={item.inputUnit}
-                                            onChange={e => updateItem(idx, { inputUnit: e.target.value })}
+                                    <div className="col-span-9">
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Insumo *</label>
+                                        <StockItemSelect
+                                            items={stockItems}
+                                            value={item.inputDescription ? { inputCode: item.inputCode, inputDescription: item.inputDescription, inputUnit: item.inputUnit } : null}
+                                            onChange={v => updateItem(idx, { inputCode: v.inputCode, inputDescription: v.inputDescription, inputUnit: v.inputUnit })}
+                                            onCreateNew={() => setNewItemForIndex(idx)}
                                         />
                                     </div>
                                     <div className="col-span-2">
@@ -1761,6 +1859,17 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                     </div>
                 </div>
             </div>
+
+            <StockItemSheet
+                open={newItemForIndex !== null}
+                onClose={() => setNewItemForIndex(null)}
+                organizationId={orgId}
+                item={null}
+                onSaved={item => {
+                    if (newItemForIndex !== null) updateItem(newItemForIndex, { inputCode: item.inputCode, inputDescription: item.inputDescription, inputUnit: item.inputUnit });
+                    onItemsChanged();
+                }}
+            />
         </div>
     );
 };

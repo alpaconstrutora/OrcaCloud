@@ -20,6 +20,10 @@ import {
     CreateTransferInput,
     CreateStockMinLevelInput,
     StockConsumptionItem,
+    StockItem,
+    CreateStockItemInput,
+    StockItemImportRow,
+    StockItemImportResult,
 } from '../types/inventory';
 
 const WAREHOUSE_COLS =
@@ -33,6 +37,9 @@ const BALANCE_COLS =
 
 const LEAD_TIME_COLS =
     'id, organization_id, supplier_id, input_code, category_id, lead_time_days, notes, created_at, updated_at, supplier:suppliers(name)';
+
+const STOCK_ITEM_COLS =
+    'id, organization_id, input_code, input_description, input_unit, category, default_supplier_id, notes, is_active, source, origin_project_id, unit_cost_hint, created_at, updated_at, default_supplier:suppliers(name)';
 
 function mapWarehouse(row: Record<string, unknown>): Warehouse {
     return {
@@ -86,6 +93,26 @@ function mapBalance(row: Record<string, unknown>): StockBalance {
         quantity: qty,
         avgUnitCost: avg,
         totalValue: qty * avg,
+        updated_at: row.updated_at as string,
+    };
+}
+
+function mapStockItem(row: Record<string, unknown>): StockItem {
+    return {
+        id: row.id as string,
+        organizationId: row.organization_id as string,
+        inputCode: row.input_code as string,
+        inputDescription: row.input_description as string,
+        inputUnit: row.input_unit as string,
+        category: row.category as string | undefined,
+        defaultSupplierId: row.default_supplier_id as string | undefined,
+        defaultSupplierName: (row.default_supplier as Record<string, unknown> | null)?.name as string | undefined,
+        notes: row.notes as string | undefined,
+        isActive: row.is_active as boolean,
+        source: row.source as StockItem['source'],
+        originProjectId: row.origin_project_id as string | undefined,
+        unitCostHint: row.unit_cost_hint != null ? Number(row.unit_cost_hint) : undefined,
+        created_at: row.created_at as string,
         updated_at: row.updated_at as string,
     };
 }
@@ -161,6 +188,118 @@ export const inventoryService = {
             .single();
         if (error) throw error;
         return mapWarehouse(data as Record<string, unknown>);
+    },
+
+    // ─── CATÁLOGO DE ITENS ─────────────────────────────────────────────────────
+    // stock_items é o cadastro mestre por organização. Código vazio/ausente é
+    // gerado pelo banco (trigger fn_stock_items_generate_code, AVU-000001) —
+    // não gerar código no front. Ver migration 20270913000004.
+
+    async listStockItems(
+        organizationId: string | null,
+        opts?: { onlyActive?: boolean; search?: string; category?: string }
+    ): Promise<StockItem[]> {
+        let query = supabase
+            .from('stock_items')
+            .select(STOCK_ITEM_COLS)
+            .order('input_description');
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        if (opts?.onlyActive) query = query.eq('is_active', true);
+        if (opts?.category) query = query.eq('category', opts.category);
+        if (opts?.search) {
+            const term = opts.search.trim();
+            query = query.or(`input_description.ilike.%${term}%,input_code.ilike.%${term}%`);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return (data ?? []).map(r => mapStockItem(r as Record<string, unknown>));
+    },
+
+    async getStockItem(id: string): Promise<StockItem> {
+        const { data, error } = await supabase
+            .from('stock_items')
+            .select(STOCK_ITEM_COLS)
+            .eq('id', id)
+            .single();
+        if (error) throw error;
+        return mapStockItem(data as Record<string, unknown>);
+    },
+
+    async upsertStockItem(organizationId: string, input: CreateStockItemInput): Promise<StockItem> {
+        // Código é imutável depois de criado (é a chave de estoque/movimentos) —
+        // só entra no payload de criação; edição nunca reescreve input_code.
+        const common = {
+            input_description: input.inputDescription,
+            input_unit: input.inputUnit,
+            category: input.category ?? null,
+            default_supplier_id: input.defaultSupplierId ?? null,
+            notes: input.notes ?? null,
+            is_active: input.isActive ?? true,
+        };
+        const query = input.id
+            ? supabase.from('stock_items').update(common).eq('id', input.id)
+            : supabase.from('stock_items').upsert(
+                {
+                    organization_id: organizationId,
+                    // ausente/vazio → o trigger do banco gera o AVU-XXXXXX
+                    input_code: input.inputCode?.trim() || null,
+                    source: input.source ?? 'avulso',
+                    origin_project_id: input.originProjectId ?? null,
+                    unit_cost_hint: input.unitCostHint ?? null,
+                    ...common,
+                },
+                { onConflict: 'organization_id,input_code' }
+            );
+        const { data, error } = await query.select(STOCK_ITEM_COLS).single();
+        if (error) throw error;
+        return mapStockItem(data as Record<string, unknown>);
+    },
+
+    async setStockItemActive(id: string, isActive: boolean): Promise<void> {
+        const { error } = await supabase.from('stock_items').update({ is_active: isActive }).eq('id', id);
+        if (error) throw error;
+    },
+
+    // Importação em lote (base de dados / obra-orçamento / planilha — StockItemImportModal).
+    // Upsert em lotes de 50, no molde de customDatabaseService.saveBatch.
+    async importStockItems(organizationId: string, rows: StockItemImportRow[]): Promise<StockItemImportResult> {
+        const result: StockItemImportResult = { created: 0, updated: 0, skipped: 0, errors: [], results: [] };
+        const BATCH_SIZE = 50;
+
+        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+            const chunk = rows.slice(i, i + BATCH_SIZE);
+            for (const row of chunk) {
+                if (!row.inputDescription?.trim() || !row.inputUnit?.trim()) {
+                    result.skipped++;
+                    result.errors.push({ row, message: 'Descrição e unidade são obrigatórias.' });
+                    result.results.push({ row, status: 'error', message: 'Descrição e unidade são obrigatórias.' });
+                    continue;
+                }
+                try {
+                    const before = row.inputCode
+                        ? await supabase.from('stock_items').select('id').eq('organization_id', organizationId).eq('input_code', row.inputCode).maybeSingle()
+                        : null;
+                    const saved = await this.upsertStockItem(organizationId, {
+                        inputCode: row.inputCode,
+                        inputDescription: row.inputDescription,
+                        inputUnit: row.inputUnit,
+                        category: row.category,
+                        unitCostHint: row.unitCostHint,
+                        source: row.source,
+                        originProjectId: row.originProjectId,
+                    });
+                    const status = before?.data ? 'updated' : 'created';
+                    result[status]++;
+                    result.results.push({ row, item: saved, status });
+                } catch (e: unknown) {
+                    const message = (e as Error).message;
+                    result.skipped++;
+                    result.errors.push({ row, message });
+                    result.results.push({ row, status: 'error', message });
+                }
+            }
+        }
+        return result;
     },
 
     // ─── MOVIMENTOS ────────────────────────────────────────────────────────────

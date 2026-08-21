@@ -90,7 +90,6 @@ function renderEmpreendimentoCell(
           </div>
           <div className="min-w-0">
             <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
-            <p className="text-sm font-normal text-gray-400 truncate">{item.spe_razao_social || '—'}</p>
           </div>
         </div>
       );
@@ -486,13 +485,13 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                           <ActionIconButton kind="edit" onClick={() => { setDuplicating(null); setEditing(item); setIsFormOpen(true); }} />
                           <ActionIconButton kind="duplicate" onClick={() => handleDuplicate(item)} />
+                          <ActionIconButton
+                            kind="move"
+                            title="Criar obra para este empreendimento"
+                            icon={<HardHat className="w-4 h-4" />}
+                            onClick={() => setCreatingObraFor(item)}
+                          />
                           <InlineActionTray>
-                            <ActionIconButton
-                              kind="move"
-                              title="Criar obra para este empreendimento"
-                              icon={<HardHat className="w-4 h-4" />}
-                              onClick={() => setCreatingObraFor(item)}
-                            />
                             <ActionIconButton kind="delete" onClick={(e) => handleDelete(e, item)} />
                           </InlineActionTray>
                         </div>

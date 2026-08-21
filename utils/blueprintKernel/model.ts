@@ -80,12 +80,39 @@ export function nomeDoTipoDeAbertura(kind: Opening['kind']): string {
   return 'Vão livre';
 }
 
+/**
+ * Que tipo de limite este é.
+ *
+ * `TERRENO` participa do anel do LOTE — é dele que saem área, perímetro e
+ * recuos. `DIVISA` é um limite solto: alinhamento, servidão, divisão interna
+ * sem material. A distinção existe porque só o anel do lote tem área com
+ * significado jurídico, e misturar os dois faria a área do terreno mudar quando
+ * alguém traçasse uma divisória qualquer.
+ */
+export type BoundaryKind = 'TERRENO' | 'DIVISA';
+
+/**
+ * Papel da divisa no lote, para os recuos.
+ *
+ * Recuo de frente, de fundos e de lateral são medidas DIFERENTES, e não há como
+ * inferir qual é qual só pela geometria — a frente é a que dá para a rua, e isso
+ * é informação do mundo, não do desenho.
+ */
+export type BoundaryPapel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA';
+
 /** Limite sem material físico — divide ambiente sem existir como parede. */
 export interface Boundary {
   id: ObjectId;
   levelId: ObjectId;
   a: Point;
   b: Point;
+  /**
+   * Omitido em payload gravado sob kernel ≤ 0.4.0, quando o campo não existia.
+   * Lido como `DIVISA` na volta — o comportamento de antes, que é o que aquele
+   * desenho significava.
+   */
+  kind: BoundaryKind;
+  papel?: BoundaryPapel | null;
 }
 
 /** Ambiente derivado do arranjo planar. Contorno NUNCA é declarado pelo usuário. */
@@ -181,56 +208,75 @@ export function findLevel(model: BlueprintModel, id: ObjectId): Level {
   return level;
 }
 
+export function findBoundary(model: BlueprintModel, id: ObjectId): Boundary {
+  const boundary = model.boundaries.find((b) => b.id === id);
+  if (!boundary) throw new KernelError('BOUNDARY_NOT_FOUND', `Limite inexistente: ${id}`);
+  return boundary;
+}
+
+/** O mínimo que `pontasDeslocadas` precisa saber: um id e duas pontas. */
+export interface SegmentoIdentificado {
+  id: ObjectId;
+  a: Point;
+  b: Point;
+}
+
 /**
- * Onde cada ponta PARA depois de deslocar um conjunto de paredes.
+ * Onde cada ponta PARA depois de deslocar um conjunto de segmentos.
  *
- * Devolve só as paredes que se mexem, com as pontas novas. Não altera nada: é
- * a conta, separada de quem a aplica.
+ * Devolve só os que se mexem, com as pontas novas. Não altera nada: é a conta,
+ * separada de quem a aplica.
  *
- * Existe separada do comando `TranslateWalls` para que a PRÉVIA do arraste e o
- * COMANDO gravado sejam a mesma geometria. Uma prévia que não bate com o
+ * Existe separada do comando `TranslateEntities` para que a PRÉVIA do arraste e
+ * o COMANDO gravado sejam a mesma geometria. Uma prévia que não bate com o
  * resultado ensina o usuário a não confiar nela — e a alternativa, reimplementar
  * a regra no renderizador, é a cópia que diverge em silêncio (foi assim que a
  * regra de ponta livre ficou certa na tela e errada no papel).
  *
- * `arrastarVizinhas` distingue MOVER de ESTICAR: ligado, a ponta de uma parede
- * NÃO selecionada que compartilha vértice com a seleção anda junto; desligado, o
- * bloco se desprende, mantendo as próprias medidas.
+ * ⚠️ **Recebe PAREDES E LIMITES juntos, e isso não é generalização gratuita.**
+ * Enquanto só olhava paredes, arrastar um bloco com `arrastarVizinhas` deixava
+ * para trás qualquer divisa encostada nele — o anel do lote abria e o ambiente
+ * derivado sumia, sem erro nenhum na tela. As duas famílias têm de estar na
+ * MESMA conta para que a vizinhança seja vista.
+ *
+ * `arrastarVizinhas` distingue MOVER de ESTICAR: ligado, a ponta de um segmento
+ * NÃO selecionado que compartilha vértice com a seleção anda junto; desligado,
+ * o bloco se desprende, mantendo as próprias medidas.
  */
 export function pontasDeslocadas(
-  walls: Wall[],
-  wallIds: ObjectId[],
+  segmentos: SegmentoIdentificado[],
+  idsSelecionados: ObjectId[],
   delta: Point,
   arrastarVizinhas: boolean,
 ): Map<ObjectId, { a: Point; b: Point }> {
-  const selecionadas = new Set(wallIds);
-  const alvos = walls.filter((w) => selecionadas.has(w.id));
+  const selecionados = new Set(idsSelecionados);
+  const alvos = segmentos.filter((s) => selecionados.has(s.id));
 
   // OS VÉRTICES ORIGINAIS, ANTES DE QUALQUER DESLOCAMENTO. Deslocar primeiro e
   // procurar as vizinhas depois casaria com o lugar novo — e o lugar novo é
   // justamente onde a vizinha NÃO está.
   const vertices = new Set<string>();
-  for (const w of alvos) {
-    vertices.add(pointKey(w.a));
-    vertices.add(pointKey(w.b));
+  for (const s of alvos) {
+    vertices.add(pointKey(s.a));
+    vertices.add(pointKey(s.b));
   }
 
   const andar = (p: Point): Point => ({ x: p.x + delta.x, y: p.y + delta.y });
   const saida = new Map<ObjectId, { a: Point; b: Point }>();
 
-  for (const w of alvos) saida.set(w.id, { a: andar(w.a), b: andar(w.b) });
+  for (const s of alvos) saida.set(s.id, { a: andar(s.a), b: andar(s.b) });
 
   if (arrastarVizinhas) {
-    for (const w of walls) {
-      if (selecionadas.has(w.id)) continue;
+    for (const s of segmentos) {
+      if (selecionados.has(s.id)) continue;
       // Igualdade EXATA de coordenada, o mesmo casamento que o editor já usa
       // para esticar uma parede arrastando o canto junto: no kernel os vértices
       // são milímetro inteiro, e uma junção só existe quando as duas pontas
       // caem no mesmo ponto.
-      const mexeA = vertices.has(pointKey(w.a));
-      const mexeB = vertices.has(pointKey(w.b));
+      const mexeA = vertices.has(pointKey(s.a));
+      const mexeB = vertices.has(pointKey(s.b));
       if (!mexeA && !mexeB) continue;
-      saida.set(w.id, { a: mexeA ? andar(w.a) : w.a, b: mexeB ? andar(w.b) : w.b });
+      saida.set(s.id, { a: mexeA ? andar(s.a) : s.a, b: mexeB ? andar(s.b) : s.b });
     }
   }
 
@@ -424,6 +470,35 @@ export function assertModelInvariants(model: BlueprintModel): void {
           `Aberturas ${prev.id} e ${curr.id} se sobrepõem na parede ${wallId}`,
         );
       }
+    }
+  }
+
+  // ── Limites ──────────────────────────────────────────────────────────────
+  //
+  // Este laço faltava. Enquanto `AddBoundary` não tinha chamador na UI, um
+  // limite degenerado era inalcançável; agora que se desenha terreno, ele passa
+  // a ser um clique duplo no mesmo vértice. Limite de comprimento zero entra no
+  // arranjo planar como aresta nula e some do anel do lote SEM ERRO — a área
+  // sairia menor e nada na tela explicaria por quê.
+  const idsDeLimite = new Set<ObjectId>();
+  for (const b of model.boundaries) {
+    if (idsDeLimite.has(b.id)) {
+      throw new KernelError('DUPLICATE_ID', `Limite duplicado: ${b.id}`);
+    }
+    idsDeLimite.add(b.id);
+
+    if (b.a.x === b.b.x && b.a.y === b.b.y) {
+      throw new KernelError('DEGENERATE_BOUNDARY', `Limite de comprimento zero: ${b.id}`);
+    }
+    for (const [ponta, p] of [
+      ['a', b.a],
+      ['b', b.b],
+    ] as const) {
+      assertIntegerMm(p.x, `${b.id}.${ponta}.x`);
+      assertIntegerMm(p.y, `${b.id}.${ponta}.y`);
+    }
+    if (!model.levels.some((l) => l.id === b.levelId)) {
+      throw new KernelError('LEVEL_NOT_FOUND', `Limite ${b.id} num nível inexistente: ${b.levelId}`);
     }
   }
 }

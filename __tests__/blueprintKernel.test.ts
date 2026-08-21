@@ -2015,7 +2015,7 @@ describe('esticar parede arrastando o canto junto (decisão de produto de 12/08/
 // Mover a seleção — `TranslateWalls` (pedido de 19/08/2026)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('TranslateWalls — mover um conjunto de paredes', () => {
+describe('TranslateEntities — mover um conjunto de paredes e limites', () => {
   /** Sala 4000×3000 com uma porta na parede sul, colada no fim dela. */
   function salaComPorta() {
     const { model, levelId } = withLevel();
@@ -2043,8 +2043,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
     const antes = comprimentos(model);
 
     const depois = applyCommand(model, {
-      type: 'TranslateWalls',
+      type: 'TranslateEntities',
       wallIds: [sul.id, leste.id, norte.id, oeste.id],
+      boundaryIds: [],
       delta: point(2000, -1500),
       arrastarVizinhas: false,
     }).model;
@@ -2073,8 +2074,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
     const { model, sul, leste } = salaComPorta();
 
     const depois = applyCommand(model, {
-      type: 'TranslateWalls',
+      type: 'TranslateEntities',
       wallIds: [sul.id],
+      boundaryIds: [],
       delta: point(0, -1000),
       arrastarVizinhas: false,
     }).model;
@@ -2089,8 +2091,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
     const compAntes = comprimentos(model);
 
     const depois = applyCommand(model, {
-      type: 'TranslateWalls',
+      type: 'TranslateEntities',
       wallIds: [sul.id],
+      boundaryIds: [],
       delta: point(0, -1000),
       arrastarVizinhas: true,
     }).model;
@@ -2130,8 +2133,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
 
     expect(() =>
       applyCommand(comPorta, {
-        type: 'TranslateWalls',
+        type: 'TranslateEntities',
         wallIds: [sul.id],
+        boundaryIds: [],
         delta: point(0, 2000),
         arrastarVizinhas: true,
       }),
@@ -2147,8 +2151,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
 
     expect(() =>
       applyCommand(model, {
-        type: 'TranslateWalls',
+        type: 'TranslateEntities',
         wallIds: [],
+        boundaryIds: [],
         delta: point(100, 0),
         arrastarVizinhas: false,
       }),
@@ -2158,8 +2163,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
     const antes = snapshotHash(model);
     expect(() =>
       applyCommand(model, {
-        type: 'TranslateWalls',
+        type: 'TranslateEntities',
         wallIds: [sul.id, 'wal_9999', leste.id],
+        boundaryIds: [],
         delta: point(100, 0),
         arrastarVizinhas: false,
       }),
@@ -2168,8 +2174,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
 
     expect(() =>
       applyCommand(model, {
-        type: 'TranslateWalls',
+        type: 'TranslateEntities',
         wallIds: [sul.id],
+        boundaryIds: [],
         delta: point(9_000_000, 0),
         arrastarVizinhas: false,
       }),
@@ -2178,8 +2185,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
     // Delta zero não é erro — o canvas já não emite, e o kernel não precisa de
     // uma segunda trava para a mesma coisa.
     const parado = applyCommand(model, {
-      type: 'TranslateWalls',
+      type: 'TranslateEntities',
       wallIds: [sul.id],
+      boundaryIds: [],
       delta: point(0, 0),
       arrastarVizinhas: false,
     });
@@ -2189,8 +2197,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
   it('delta fracionário é arredondado a milímetro inteiro, não propagado', () => {
     const { model, sul } = salaComPorta();
     const depois = applyCommand(model, {
-      type: 'TranslateWalls',
+      type: 'TranslateEntities',
       wallIds: [sul.id],
+      boundaryIds: [],
       delta: { x: 1000.4, y: -999.6 },
       arrastarVizinhas: false,
     }).model;
@@ -2201,8 +2210,9 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
     const { model, sul, leste, norte, oeste } = salaComPorta();
     const historico = new ModelHistory(model);
     historico.apply({
-      type: 'TranslateWalls',
+      type: 'TranslateEntities',
       wallIds: [sul.id, leste.id, norte.id, oeste.id],
+      boundaryIds: [],
       delta: point(500, 500),
       arrastarVizinhas: false,
     });
@@ -2211,5 +2221,234 @@ describe('TranslateWalls — mover um conjunto de paredes', () => {
     historico.undo();
     expect(historico.current.walls.find((w) => w.id === sul.id)!.a).toEqual({ x: 0, y: 0 });
     expect(historico.canUndo).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Limites de primeira classe — a ferramenta de Terreno (pedido de 21/08/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Boundary — mover, apagar e validar', () => {
+  /** Lote triangular fechado, só de limites de TERRENO. */
+  function lote() {
+    const { model, levelId } = withLevel();
+    const cantos = [point(0, 0), point(10_000, 0), point(10_000, 8000)];
+    const built = applyBatch(
+      model,
+      cantos.map((a, i) => ({
+        type: 'AddBoundary' as const,
+        levelId,
+        a,
+        b: cantos[(i + 1) % cantos.length],
+        kind: 'TERRENO' as const,
+      })),
+    );
+    return { model: built.model, levelId, cantos };
+  }
+
+  it('⚠️ anel de TERRENO NÃO vira ambiente — senão o lote entraria como PISO', () => {
+    // Boundary sempre participou do arranjo planar, e um anel fechado dele
+    // produzia um `Space`. Para o contorno de LOTE isso é estrago, não recurso:
+    // `computeQuantities` deriva piso de cada ambiente, e uma casa de 18,67 m²
+    // num lote de 30×30 passava a somar 900 m² de piso no orçamento. Era o mesmo
+    // dano que desenhar o lote com a ferramenta Parede faria com alvenaria — só
+    // que na outra linha da planilha.
+    const { model } = lote();
+    expect(model.boundaries).toHaveLength(3);
+    expect(model.spaces).toHaveLength(0);
+  });
+
+  it('mas DIVISA continua dividindo ambiente, como sempre dividiu', () => {
+    // A separação só existe porque os dois casos são diferentes de verdade:
+    // divisória sem material é geometria de cômodo; contorno de lote não é.
+    const { model, levelId } = withLevel();
+    const sala = applyBatch(model, room(levelId, 0, 0, 6000, 3000)).model;
+    expect(sala.spaces).toHaveLength(1);
+
+    const dividida = applyCommand(sala, {
+      type: 'AddBoundary',
+      levelId,
+      a: point(3000, 0),
+      b: point(3000, 3000),
+      kind: 'DIVISA',
+    }).model;
+    expect(dividida.spaces).toHaveLength(2);
+  });
+
+  it('desenhar o lote não muda uma linha do quantitativo', () => {
+    const { model, levelId } = withLevel();
+    const casa = applyBatch(model, room(levelId, 0, 0, 5000, 4000)).model;
+    const antes = computeQuantities(casa).totais.areaPisoM2;
+
+    const comLote = applyBatch(casa, [
+      [-5000, -5000, 25_000, -5000],
+      [25_000, -5000, 25_000, 25_000],
+      [25_000, 25_000, -5000, 25_000],
+      [-5000, 25_000, -5000, -5000],
+    ].map(([ax, ay, bx, by]) => ({
+      type: 'AddBoundary' as const,
+      levelId,
+      a: point(ax, ay),
+      b: point(bx, by),
+      kind: 'TERRENO' as const,
+    }))).model;
+
+    expect(computeQuantities(comLote).totais.areaPisoM2).toBe(antes);
+    expect(comLote.spaces).toHaveLength(casa.spaces.length);
+  });
+
+  it('MoveBoundaryVertex move a ponta e recusa colapsar o limite', () => {
+    const { model } = lote();
+    const primeiro = model.boundaries[0];
+
+    const depois = applyCommand(model, {
+      type: 'MoveBoundaryVertex',
+      boundaryId: primeiro.id,
+      end: 'b',
+      to: point(12_000, 0),
+    }).model;
+    expect(depois.boundaries.find((b) => b.id === primeiro.id)!.b).toEqual({ x: 12_000, y: 0 });
+
+    expect(() =>
+      applyCommand(model, {
+        type: 'MoveBoundaryVertex',
+        boundaryId: primeiro.id,
+        end: 'b',
+        to: primeiro.a,
+      }),
+    ).toThrow(KernelError);
+  });
+
+  it('DeleteBoundary tira a divisa do modelo', () => {
+    const { model } = lote();
+    const alvo = model.boundaries[0].id;
+    const depois = applyCommand(model, { type: 'DeleteBoundary', boundaryId: alvo }).model;
+    expect(depois.boundaries).toHaveLength(2);
+    expect(depois.boundaries.some((b) => b.id === alvo)).toBe(false);
+  });
+
+  it('SetBoundaryPapel grava qual recuo se aplica àquela divisa', () => {
+    const { model } = lote();
+    const alvo = model.boundaries[0];
+    const depois = applyCommand(model, {
+      type: 'SetBoundaryPapel',
+      boundaryId: alvo.id,
+      papel: 'FRENTE',
+    }).model;
+    expect(depois.boundaries.find((b) => b.id === alvo.id)!.papel).toBe('FRENTE');
+  });
+
+  it('recusa limite de comprimento zero — a guarda que faltava', () => {
+    // Enquanto nenhuma UI criava limite, isto era inalcançável. Desenhando lote
+    // por clique, vira um clique duplo no mesmo vértice: a aresta nula some do
+    // anel dentro do arranjo planar SEM ERRO, e a área do lote sai menor.
+    const { model, levelId } = withLevel();
+    expect(() =>
+      applyCommand(model, {
+        type: 'AddBoundary',
+        levelId,
+        a: point(1000, 1000),
+        b: point(1000, 1000),
+        kind: 'TERRENO',
+      }),
+    ).toThrow(KernelError);
+  });
+
+  it('kind omitido continua sendo DIVISA — o chamador antigo não decide sobre terreno', () => {
+    const { model, levelId } = withLevel();
+    const depois = applyCommand(model, {
+      type: 'AddBoundary',
+      levelId,
+      a: point(0, 0),
+      b: point(3000, 0),
+    }).model;
+    expect(depois.boundaries[0].kind).toBe('DIVISA');
+    expect(depois.boundaries[0].papel).toBeNull();
+  });
+
+  it('TranslateEntities move parede E limite no MESMO passo', () => {
+    const { model, levelId } = withLevel();
+    const comParede = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const comLimite = applyCommand(comParede, {
+      type: 'AddBoundary',
+      levelId,
+      a: point(0, 0),
+      b: point(4000, 0),
+      kind: 'TERRENO',
+    }).model;
+    const parede = comLimite.walls[0];
+    const limite = comLimite.boundaries[0];
+
+    const depois = applyCommand(comLimite, {
+      type: 'TranslateEntities',
+      wallIds: [parede.id],
+      boundaryIds: [limite.id],
+      delta: point(1000, 2000),
+      arrastarVizinhas: false,
+    }).model;
+
+    expect(depois.walls.find((w) => w.id === parede.id)!.a).toEqual({ x: 1000, y: 2000 });
+    expect(depois.boundaries.find((b) => b.id === limite.id)!.a).toEqual({ x: 1000, y: 2000 });
+  });
+
+  it('com arrastarVizinhas, a divisa encostada na parede ACOMPANHA — o defeito latente', () => {
+    // Enquanto a conta só olhava paredes, arrastar um bloco deixava a divisa
+    // para trás: o anel do lote abria e o ambiente sumia, sem erro na tela.
+    const { model, levelId } = withLevel();
+    const comParede = applyBatch(model, room(levelId, 0, 0, 4000, 3000)).model;
+    const sul = comParede.walls[0]; // (0,0) → (4000,0)
+    const comLimite = applyCommand(comParede, {
+      type: 'AddBoundary',
+      levelId,
+      a: point(4000, 0),
+      b: point(9000, 0),
+      kind: 'TERRENO',
+    }).model;
+    const limite = comLimite.boundaries[0];
+
+    const depois = applyCommand(comLimite, {
+      type: 'TranslateEntities',
+      wallIds: [sul.id],
+      boundaryIds: [],
+      delta: point(0, -1500),
+      arrastarVizinhas: true,
+    }).model;
+
+    // A ponta do limite que compartilhava o vértice (4000,0) andou junto.
+    expect(depois.boundaries.find((b) => b.id === limite.id)!.a).toEqual({ x: 4000, y: -1500 });
+    // A outra ponta, não.
+    expect(depois.boundaries.find((b) => b.id === limite.id)!.b).toEqual({ x: 9000, y: 0 });
+  });
+
+  it('id de limite inexistente aborta o comando inteiro', () => {
+    const { model } = lote();
+    const antes = snapshotHash(model);
+    expect(() =>
+      applyCommand(model, {
+        type: 'TranslateEntities',
+        wallIds: [],
+        boundaryIds: [model.boundaries[0].id, 'bnd_9999'],
+        delta: point(100, 0),
+        arrastarVizinhas: false,
+      }),
+    ).toThrow(KernelError);
+    expect(snapshotHash(model)).toBe(antes);
+  });
+
+  it('payload de kernel 0.4.0 (sem kind) carrega como DIVISA, sem quebrar', () => {
+    const { model } = lote();
+    const payload = JSON.parse(canonicalPayload(model));
+    // Simula o snapshot antigo: apaga os campos que só existem desde 0.5.0.
+    payload.kernel = 'blueprint-kernel-ts-0.4.0';
+    for (const b of payload.boundaries) {
+      delete b.kind;
+      delete b.papel;
+    }
+    const recarregado = modelFromCanonicalPayload(parseCanonicalPayload(JSON.stringify(payload)));
+    expect(recarregado.boundaries).toHaveLength(3);
+    expect(recarregado.boundaries.every((b) => b.kind === 'DIVISA')).toBe(true);
+    // A GEOMETRIA sobrevive: é o que garante que acervo antigo continua legível.
+    expect(recarregado.spaces).toHaveLength(1);
+    expect(recarregado.spaces[0].areaMm2).toBe(40_000_000);
   });
 });

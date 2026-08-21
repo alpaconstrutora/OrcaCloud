@@ -22,6 +22,8 @@ import {
   Hash,
   Move,
   MoveDiagonal,
+  LandPlot,
+  Waypoints,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -33,6 +35,18 @@ import AbasDoPainel from './AbasDoPainel';
 import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
+import PainelTerreno from './PainelTerreno';
+import { useConfirm } from '../ui/confirm';
+import { empreendimentoService } from '../../services/empreendimentoService';
+import type { Empreendimento } from '../../types/empreendimento';
+import {
+  areaEmM2,
+  calcularAproveitamento,
+  envelopeConstrutivo,
+  medirTerreno,
+  RECUOS_ZERO,
+  type Recuos,
+} from '../../utils/blueprintTerreno';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
@@ -50,6 +64,7 @@ import {
   formatarQuantidade,
   isFreeWallEnd,
   pontaEsticada,
+  type BoundaryKind,
   type AlinhamentoParede,
   type Command,
   type Opening,
@@ -117,6 +132,20 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * regra escondida.
    */
   const [modoMover, setModoMover] = useState<'MOVER' | 'ESTICAR'>('MOVER');
+  /**
+   * Recuos e limites da zona — estado de TELA, não do modelo.
+   *
+   * Não entram no payload canônico de propósito: são parâmetro urbanístico do
+   * município, não geometria do desenho, e gravá-los no snapshot faria o hash da
+   * planta mudar porque alguém digitou um recuo. O que É do desenho — qual lado
+   * é a frente — vive no modelo, em `Boundary.papel`.
+   */
+  const [recuos, setRecuos] = useState<Recuos>(RECUOS_ZERO);
+  const [taxaOcupacaoMax, setTaxaOcupacaoMax] = useState<number | null>(null);
+  const [coeficienteMax, setCoeficienteMax] = useState<number | null>(null);
+  const [empreendimentos, setEmpreendimentos] = useState<Empreendimento[]>([]);
+  const [gravandoArea, setGravandoArea] = useState(false);
+  const [erroArea, setErroArea] = useState<string | null>(null);
   /** Mostra o comprimento de cada parede no desenho, como uma cota de planta. */
   const [mostrarMedidas, setMostrarMedidas] = useState(false);
   /** Lados da ferramenta Polígono. 6 porque quem escolhe a ferramenta quer o
@@ -140,6 +169,40 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   const [tipoAbertura, setTipoAbertura] = useState<TipoAbertura>('door');
 
   const levelId = editor.model.levels[0]?.id ?? null;
+  const confirmar = useConfirm();
+
+  /**
+   * Empreendimentos da organização, para o write-back da área do terreno.
+   *
+   * Carregados aqui, e não no painel, porque o painel é apresentacional — a
+   * mesma divisão de `PainelParedeSelecionada`, que é o que permitiu testá-lo
+   * sem canvas.
+   */
+  useEffect(() => {
+    let vivo = true;
+    empreendimentoService
+      .list(study.organization_id)
+      .then((lista) => vivo && setEmpreendimentos(lista))
+      // Silencioso de propósito: não poder listar empreendimento não pode
+      // impedir de desenhar. O bloco de gravação simplesmente não aparece.
+      .catch(() => vivo && setEmpreendimentos([]));
+    return () => {
+      vivo = false;
+    };
+  }, [study.organization_id]);
+
+  /**
+   * O empreendimento sugerido pela OBRA do estudo.
+   *
+   * `blueprint_studies.project_id` aponta para a obra, e `empreendimentos`
+   * também guarda `project_id`. É por aí que se sugere — e é só sugestão: quem
+   * grava é o usuário, escolhendo na lista. Inferir e gravar calado poria a área
+   * do terreno na ficha errada, e isso só apareceria no memorial de incorporação.
+   */
+  const empreendimentoSugerido = useMemo(() => {
+    if (!study.project_id) return null;
+    return empreendimentos.find((e) => e.project_id === study.project_id)?.id ?? null;
+  }, [empreendimentos, study.project_id]);
 
   const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
   const [camadaAtiva, setCamadaAtiva] = useState('Geral');
@@ -328,8 +391,41 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   const selecionados = useMemo(() => new Set(editor.selectedIds), [editor.selectedIds]);
   const paredesSelecionadas = editor.model.walls.filter((w) => selecionados.has(w.id));
+  const limitesSelecionados = editor.model.boundaries.filter((b) => selecionados.has(b.id));
   const aberturasSelecionadas = editor.model.openings.filter((o) => selecionados.has(o.id));
   const medicoesSelecionadas = medicoes.formas.filter((f) => selecionados.has(f.id));
+
+  /** A divisa sozinha na seleção — cardinalidade 1, como `paredeSel`. */
+  const limiteSel = editor.model.boundaries.find((b) => b.id === editor.selectedId) ?? null;
+
+  /**
+   * O lote medido a partir das divisas. `null` enquanto não houver nenhuma.
+   *
+   * A área NÃO vem de `Space`: um anel em volta da casa daria a área do quintal,
+   * porque ambiente desconta buraco. Ver o cabeçalho de `blueprintTerreno`.
+   */
+  const limitesDoNivel = useMemo(
+    () => editor.model.boundaries.filter((b) => !levelId || b.levelId === levelId),
+    [editor.model.boundaries, levelId],
+  );
+  const terreno = useMemo(() => medirTerreno(limitesDoNivel), [limitesDoNivel]);
+
+  /** O que sobra para construir depois dos recuos. `null` sem lote. */
+  const envelope = useMemo(
+    () => (terreno ? envelopeConstrutivo(terreno, limitesDoNivel, recuos) : null),
+    [terreno, limitesDoNivel, recuos],
+  );
+
+  const aproveitamento = useMemo(
+    () =>
+      terreno
+        ? calcularAproveitamento(
+            terreno,
+            editor.model.spaces.filter((sp) => !levelId || sp.levelId === levelId),
+          )
+        : null,
+    [terreno, editor.model.spaces, levelId],
+  );
 
   function adicionarAbertura(wallId: string, offsetMm: number) {
     // Vão livre nasce como porta: do piso (peitoril zero) até a altura de verga.
@@ -642,6 +738,59 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     editor.run({ type: 'MoveVertex', wallId, end, to });
   }
 
+  /** Nasce uma divisa. `TERRENO` entra no anel do lote; `DIVISA` fica solta. */
+  function adicionarLimite(a: Point, b: Point, kind: BoundaryKind) {
+    editor.run({ type: 'AddBoundary', levelId: levelId ?? '', a, b, kind });
+  }
+
+  /**
+   * Move a ponta de uma divisa E ARRASTA A VIZINHA JUNTO.
+   *
+   * O lote é um anel: mexer numa ponta sem levar a divisa que compartilha aquele
+   * vértice abre o canto, e um contorno aberto não tem área — o painel passaria
+   * a acusar erro de fechamento por causa de um gesto que parecia inofensivo.
+   * Mesmo lote de comandos, mesma disciplina de `esticarParede`.
+   */
+  function moverPontaLimite(boundaryId: string, end: 'a' | 'b', to: Point) {
+    const divisa = editor.model.boundaries.find((b) => b.id === boundaryId);
+    if (!divisa) return;
+    const pontaAtual = divisa[end];
+
+    const lote: Command[] = [{ type: 'MoveBoundaryVertex', boundaryId, end, to }];
+    for (const outra of editor.model.boundaries) {
+      if (outra.id === boundaryId || outra.levelId !== divisa.levelId) continue;
+      if (outra.a.x === pontaAtual.x && outra.a.y === pontaAtual.y) {
+        lote.push({ type: 'MoveBoundaryVertex', boundaryId: outra.id, end: 'a', to });
+      }
+      if (outra.b.x === pontaAtual.x && outra.b.y === pontaAtual.y) {
+        lote.push({ type: 'MoveBoundaryVertex', boundaryId: outra.id, end: 'b', to });
+      }
+    }
+    editor.runBatch(lote);
+  }
+
+  /**
+   * Muda o COMPRIMENTO da divisa selecionada, digitando.
+   *
+   * Anda a ponta `b` sobre o mesmo eixo, com `pontaEsticada` — a mesma função
+   * que estica parede. Qual ponta anda importa menos aqui do que na parede:
+   * numa divisa de lote as duas costumam estar presas ao anel, e o arraste da
+   * vizinha (acima) mantém o contorno fechado de qualquer jeito.
+   */
+  function esticarDivisa(comprimentoMm: number) {
+    if (!limiteSel) return;
+    let nova: Point;
+    try {
+      nova = pontaEsticada(limiteSel.a, limiteSel.b, comprimentoMm);
+    } catch (e) {
+      // Coordenada fora de ±1.000.000 mm (alguém digitou metros achando que eram
+      // milímetros). Recusa silenciosa: o campo ressincroniza no próximo render.
+      if (e instanceof KernelError) return;
+      throw e;
+    }
+    moverPontaLimite(limiteSel.id, 'b', nova);
+  }
+
   /**
    * O funil ÚNICO da seleção.
    *
@@ -657,17 +806,22 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   }
 
   /**
-   * Desloca as paredes selecionadas — o gesto que faltava no módulo.
+   * Desloca paredes E limites selecionados — o gesto que faltava no módulo.
    *
    * UM comando, e não um lote de `MoveVertex`: o lote recomputaria o arranjo
    * planar a cada ponta e, pior, passaria por estados intermediários em que a
    * parede está mais curta — o bastante para uma porta colada no limite cair
-   * fora e derrubar o gesto inteiro. Ver o cabeçalho de `TranslateWalls`.
+   * fora e derrubar o gesto inteiro. Ver o cabeçalho de `TranslateEntities`.
+   *
+   * As duas famílias vão no MESMO comando porque a vizinhança do modo Esticar
+   * precisa enxergar as duas: dividindo, uma divisa encostada numa parede
+   * ficaria para trás e o anel do lote abriria em silêncio.
    */
-  function moverSelecao(wallIds: string[], delta: Point) {
+  function moverSelecao(wallIds: string[], boundaryIds: string[], delta: Point) {
     editor.run({
-      type: 'TranslateWalls',
+      type: 'TranslateEntities',
       wallIds,
+      boundaryIds,
       delta,
       arrastarVizinhas: modoMover === 'ESTICAR',
     });
@@ -684,6 +838,47 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    */
   function moverMedicoes(ids: string[], delta: Point) {
     void medicoes.deslocar(ids, delta);
+  }
+
+  /**
+   * Leva a área medida na planta para a ficha do empreendimento.
+   *
+   * Mostra o valor ATUAL antes de trocar. Substituir um número que alguém
+   * digitou, sem dizer qual era, é o tipo de gravação que só se descobre quando
+   * já não dá para voltar — a ficha não tem histórico.
+   */
+  async function gravarAreaNoEmpreendimento(empreendimentoId: string) {
+    if (!terreno || !terreno.fechado) return;
+    const alvo = empreendimentos.find((e) => e.id === empreendimentoId);
+    if (!alvo) return;
+
+    const nova = Number(areaEmM2(terreno).toFixed(2));
+    const atual = alvo.terreno_area ?? null;
+
+    const ok = await confirmar({
+      title: `Gravar ${nova.toFixed(2).replace('.', ',')} m² em ${alvo.name}?`,
+      message:
+        atual === null
+          ? 'O empreendimento ainda não tem área de terreno registrada.'
+          : `A área atual (${Number(atual).toFixed(2).replace('.', ',')} m²) será substituída.`,
+      confirmLabel: 'Gravar',
+      variant: atual === null ? 'default' : 'warning',
+    });
+    if (!ok) return;
+
+    setGravandoArea(true);
+    setErroArea(null);
+    try {
+      const salvo = await empreendimentoService.update(empreendimentoId, { terreno_area: nova });
+      // §22 do guia: atualiza o array local, sem recarregar a lista inteira.
+      setEmpreendimentos((lista) => lista.map((e) => (e.id === salvo.id ? salvo : e)));
+    } catch (e) {
+      // A falha aparece ONDE a ação foi pedida. Mandá-la para a faixa de erro do
+      // kernel, no topo, misturaria "o desenho é inválido" com "a rede caiu".
+      setErroArea(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGravandoArea(false);
+    }
   }
 
   /**
@@ -710,9 +905,12 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
       return o ? !naSelecao.has(o.wallId) : false;
     });
 
+    const limites = ids.filter((id) => editor.model.boundaries.some((b) => b.id === id));
+
     const lote: Command[] = [
       ...aberturas.map((openingId) => ({ type: 'DeleteOpening', openingId }) as const),
       ...paredes.map((wallId) => ({ type: 'DeleteWall', wallId }) as const),
+      ...limites.map((boundaryId) => ({ type: 'DeleteBoundary', boundaryId }) as const),
     ];
     if (lote.length > 0) editor.runBatch(lote);
 
@@ -825,6 +1023,27 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           valor="abertura"
           icone={DoorOpen}
           rotulo="Abertura"
+          onClick={editor.setTool}
+        />
+
+        {/* TERRENO. Separado das ferramentas de desenho porque o que sai daqui
+            NÃO é construção: é divisa, sem espessura e sem custo. Desenhar lote
+            com a ferramenta Parede poria o perímetro do terreno no orçamento
+            como alvenaria. */}
+        <span className="h-5 w-px bg-slate-200" aria-hidden />
+
+        <Ferramenta
+          atual={editor.tool}
+          valor="terreno"
+          icone={LandPlot}
+          rotulo="Terreno"
+          onClick={editor.setTool}
+        />
+        <Ferramenta
+          atual={editor.tool}
+          valor="divisa"
+          icone={Waypoints}
+          rotulo="Divisa"
           onClick={editor.setTool}
         />
 
@@ -1215,6 +1434,9 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               ortogonal={ortogonal}
               mostrarMedidasParedes={mostrarMedidas}
               onMoveVertex={moverPonta}
+              envelope={envelope?.valido ? envelope.anel : []}
+              onAddLimite={adicionarLimite}
+              onMoveBoundaryVertex={moverPontaLimite}
               onMoveOpening={moverAbertura}
               fundo={
                 fundo.imagem && fundo.underlay
@@ -1296,12 +1518,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           {editor.selectedIds.length > 1 ? (
             <PainelSelecaoMultipla
               paredes={paredesSelecionadas}
+              limites={limitesSelecionados.length}
               aberturas={aberturasSelecionadas.length}
               medicoes={medicoesSelecionadas}
               modo={modoMover}
               onMover={(dx, dy) => {
-                if (paredesSelecionadas.length > 0) {
-                  moverSelecao(paredesSelecionadas.map((w) => w.id), { x: dx, y: dy } as Point);
+                if (paredesSelecionadas.length > 0 || limitesSelecionados.length > 0) {
+                  moverSelecao(
+                    paredesSelecionadas.map((w) => w.id),
+                    limitesSelecionados.map((b) => b.id),
+                    { x: dx, y: dy } as Point,
+                  );
                 }
                 if (medicoesSelecionadas.length > 0) {
                   moverMedicoes(medicoesSelecionadas.map((f) => f.id), { x: dx, y: dy } as Point);
@@ -1310,6 +1537,32 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               onExcluir={removerSelecionada}
             />
           ) : null}
+
+          <PainelTerreno
+            terreno={terreno}
+            divisaSelecionada={limiteSel}
+            onComprimento={esticarDivisa}
+            onPapel={(papel) =>
+              limiteSel && editor.run({ type: 'SetBoundaryPapel', boundaryId: limiteSel.id, papel })
+            }
+            recuos={recuos}
+            onRecuo={(papel, mm) => setRecuos((r) => ({ ...r, [papel]: mm }))}
+            envelope={envelope}
+            aproveitamento={aproveitamento}
+            taxaOcupacaoMax={taxaOcupacaoMax}
+            coeficienteMax={coeficienteMax}
+            onTaxaOcupacaoMax={setTaxaOcupacaoMax}
+            onCoeficienteMax={setCoeficienteMax}
+            empreendimentos={empreendimentos.map((e) => ({
+              id: e.id,
+              nome: e.name,
+              areaAtualM2: e.terreno_area ?? null,
+            }))}
+            empreendimentoSugerido={empreendimentoSugerido}
+            onGravarArea={(id) => void gravarAreaNoEmpreendimento(id)}
+            gravando={gravandoArea}
+            erro={erroArea}
+          />
 
           <PainelParedeSelecionada
             parede={paredeSel}

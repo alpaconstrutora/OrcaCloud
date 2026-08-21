@@ -11,6 +11,8 @@ import {
   pointInPolygon,
   type AlinhamentoParede,
   type BlueprintModel,
+  type Boundary,
+  type BoundaryKind,
   type Opening,
   type Point,
   type Wall,
@@ -31,6 +33,7 @@ import {
   type PontoPx,
   type Underlay,
 } from '../../utils/blueprintUnderlay';
+import { anelDoTerreno } from '../../utils/blueprintTerreno';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
 /**
@@ -61,6 +64,12 @@ const COR_GRADE_FORTE = '#cbd5e1';
 /** Cinza neutro para a cota de parede — distinto do preto da própria parede e
  * do azul/vermelho de prévia/seleção, para não competir com eles. */
 const COR_COTA = '#64748b';
+/** Divisa do LOTE. Verde de topografia, distante do azul da prévia e do vermelho da seleção. */
+const COR_TERRENO = '#15803d';
+/** Preenchimento do lote — fraco, só para dizer "a área é esta". */
+const COR_TERRENO_FUNDO = 'rgba(21, 128, 61, 0.06)';
+/** Envelope construtivo — restrição, não construção. Hachura, nunca preenchimento. */
+const COR_ENVELOPE = 'rgba(217, 119, 6, 0.45)';
 
 /**
  * Abaixo disto, em pixels de tela, a parede não ganha rótulo de comprimento.
@@ -277,10 +286,14 @@ interface Props {
   selectedIds: string[];
   onSelecionar: (ids: string[]) => void;
   /**
-   * Desloca as paredes selecionadas. Sem isto o arraste mostra a prévia e não
-   * grava nada — o mesmo contrato de `onMoveVertex`.
+   * Desloca paredes e limites selecionados. Sem isto o arraste mostra a prévia e
+   * não grava nada — o mesmo contrato de `onMoveVertex`.
+   *
+   * As duas famílias numa chamada só porque elas têm de andar no MESMO comando:
+   * separadas, a vizinhança do modo Esticar não enxergaria a outra e o anel do
+   * lote abriria em silêncio.
    */
-  onMoverSelecao?: (wallIds: string[], delta: Point) => void;
+  onMoverSelecao?: (wallIds: string[], boundaryIds: string[], delta: Point) => void;
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
   onMoverMedicoes?: (ids: string[], delta: Point) => void;
   /**
@@ -292,6 +305,13 @@ interface Props {
    * "pular" ao soltar.
    */
   arrastarVizinhas?: boolean;
+  /**
+   * Anel do envelope construtivo, já recuado. Vazio não desenha nada.
+   *
+   * Vem pronto de fora em vez de ser calculado aqui: os recuos são do painel, o
+   * papel de cada divisa é do modelo, e a conta é do kernel. O canvas desenha.
+   */
+  envelope?: Point[];
   /**
    * Confirma um trecho de parede, com o eixo JÁ resolvido pelo alinhamento.
    *
@@ -354,6 +374,15 @@ interface Props {
   /** Move a ponta de uma parede. Sem isto, a alça é desenhada e não faz nada. */
   onMoveVertex?: (wallId: string, end: 'a' | 'b', to: Point) => void;
   /**
+   * Confirma um trecho de LIMITE — divisa de terreno.
+   *
+   * Sem `ajustes` como o de parede: limite não tem espessura, logo não tem canto
+   * para mitrar. O vértice clicado é o vértice, e é isso.
+   */
+  onAddLimite?: (a: Point, b: Point, kind: BoundaryKind) => void;
+  /** Move a ponta de um limite. Espelha `onMoveVertex`. */
+  onMoveBoundaryVertex?: (boundaryId: string, end: 'a' | 'b', to: Point) => void;
+  /**
    * Desliza a abertura ao longo da parede que já a hospeda. Sem isto, o arraste
    * mostra a prévia e não grava nada.
    */
@@ -383,6 +412,7 @@ export default function BlueprintCanvas({
   onMoverSelecao,
   onMoverMedicoes,
   arrastarVizinhas = false,
+  envelope = [],
   onAddWall,
   alinhamento = 'EIXO',
   ladosPoligono = 6,
@@ -400,6 +430,8 @@ export default function BlueprintCanvas({
   mostrarMedidasParedes = false,
   fundo = null,
   onMoveVertex,
+  onAddLimite,
+  onMoveBoundaryVertex,
   onMoveOpening,
   onCalibrar,
   medicoes = [],
@@ -438,6 +470,15 @@ export default function BlueprintCanvas({
    * mudar de lado ali.
    */
   const [trechos, setTrechos] = useState<{ wallId: string; lado: AlinhamentoParede }[]>([]);
+  /**
+   * Ponta em arraste num LIMITE. Estado separado de `movendo` (que é de parede)
+   * porque o commit vai para outro comando — `MoveBoundaryVertex`, não
+   * `MoveVertex`. Um estado só, com o tipo decidido no fim, esconderia essa
+   * bifurcação no lugar mais fácil de errar.
+   */
+  const [movendoLimite, setMovendoLimite] = useState<{ boundaryId: string; end: 'a' | 'b' } | null>(
+    null,
+  );
   const inicio = cadeia.length > 0 ? cadeia[cadeia.length - 1] : null;
   const antesDoInicio = cadeia.length > 1 ? cadeia[cadeia.length - 2] : null;
   const ultimoTrecho = trechos.length > 0 ? trechos[trechos.length - 1] : null;
@@ -502,6 +543,10 @@ export default function BlueprintCanvas({
     () => model.walls.filter((w) => !levelId || w.levelId === levelId),
     [model.walls, levelId],
   );
+  const limitesReais = useMemo(
+    () => model.boundaries.filter((b) => !levelId || b.levelId === levelId),
+    [model.boundaries, levelId],
+  );
   const ambientesDoNivel = useMemo(
     () => model.spaces.filter((s) => !levelId || s.levelId === levelId),
     [model.spaces, levelId],
@@ -517,32 +562,53 @@ export default function BlueprintCanvas({
   const selecao = useMemo(() => new Set(selectedIds), [selectedIds]);
   const unicoSelecionado = selectedIds.length === 1 ? selectedIds[0] : null;
   const idsDeParedesSelecionadas = paredesReais.filter((w) => selecao.has(w.id)).map((w) => w.id);
+  const idsDeLimitesSelecionados = limitesReais.filter((b) => selecao.has(b.id)).map((b) => b.id);
   const idsDeMedicoesSelecionadas = medicoes.filter((f) => selecao.has(f.id)).map((f) => f.id);
+
+  /**
+   * Onde cada ponta PARARIA se o arraste fosse solto agora — vazio fora dele.
+   *
+   * ⚠️ Paredes e limites entram JUNTOS na conta, exatamente como no comando
+   * `TranslateEntities`. Calcular separado faria a vizinhança de uma família não
+   * enxergar a outra, e a prévia mostraria a divisa desprendendo da parede
+   * enquanto o commit as manteria coladas — a linha "pularia" ao soltar, e o
+   * usuário aprenderia a não confiar na prévia.
+   *
+   * A conta vem do KERNEL (`pontasDeslocadas`), a mesma que o comando aplica.
+   * Reimplementá-la aqui seria a cópia que diverge em silêncio.
+   */
+  const destinosDoArraste = useMemo(() => {
+    const d = movendoSelecao?.delta;
+    const ids = [...idsDeParedesSelecionadas, ...idsDeLimitesSelecionados];
+    if (!d || (d.x === 0 && d.y === 0) || ids.length === 0) return null;
+    return pontasDeslocadas([...paredesReais, ...limitesReais], ids, d, arrastarVizinhas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paredesReais, limitesReais, movendoSelecao, selecao, arrastarVizinhas]);
 
   /**
    * As paredes COMO ELAS APARECEM AGORA na tela.
    *
-   * Durante o arraste da seleção, é o conjunto já deslocado — a mesma escolha
-   * que o arraste de abertura faz (desenhar a porta no offset novo, e não um
-   * fantasma ao lado dela): o que se vê durante o gesto é exatamente o que fica
-   * ao soltar. O modelo só muda no `pointerup`.
-   *
-   * A conta vem do KERNEL (`pontasDeslocadas`), a mesma que o comando aplica —
-   * inclusive o arrasto das vizinhas no modo Esticar. Reimplementá-la aqui seria
-   * a cópia que diverge em silêncio.
+   * Durante o arraste, é o conjunto já deslocado — a mesma escolha que o arraste
+   * de abertura faz (desenhar a porta no offset novo, e não um fantasma ao lado
+   * dela): o que se vê durante o gesto é exatamente o que fica ao soltar. O
+   * modelo só muda no `pointerup`.
    */
   const paredesDoNivel = useMemo(() => {
-    const d = movendoSelecao?.delta;
-    if (!d || (d.x === 0 && d.y === 0) || idsDeParedesSelecionadas.length === 0) {
-      return paredesReais;
-    }
-    const destinos = pontasDeslocadas(paredesReais, idsDeParedesSelecionadas, d, arrastarVizinhas);
+    if (!destinosDoArraste) return paredesReais;
     return paredesReais.map((w) => {
-      const destino = destinos.get(w.id);
+      const destino = destinosDoArraste.get(w.id);
       return destino ? { ...w, a: destino.a, b: destino.b } : w;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paredesReais, movendoSelecao, selecao, arrastarVizinhas]);
+  }, [paredesReais, destinosDoArraste]);
+
+  /** Os limites como aparecem agora — mesma regra das paredes. */
+  const limitesDoNivel = useMemo(() => {
+    if (!destinosDoArraste) return limitesReais;
+    return limitesReais.map((b) => {
+      const destino = destinosDoArraste.get(b.id);
+      return destino ? { ...b, a: destino.a, b: destino.b } : b;
+    });
+  }, [limitesReais, destinosDoArraste]);
 
   /** As medições como aparecem agora — deslocadas junto durante o arraste. */
   const medicoesDoNivel = useMemo(() => {
@@ -813,6 +879,23 @@ export default function BlueprintCanvas({
   );
 
   /**
+   * Qual LIMITE está sob o cursor.
+   *
+   * Sem meia espessura na conta, ao contrário de `paredeSob`: limite não tem
+   * corpo — é uma linha. A tolerância é só a folga de clique.
+   */
+  const limiteSob = useCallback(
+    (mundo: { x: number; y: number }): Boundary | null => {
+      const limite = HIT_PX / vista.escala;
+      for (const b of limitesDoNivel) {
+        if (distanciaAoSegmento(b.a, b.b, mundo) <= limite) return b;
+      }
+      return null;
+    },
+    [limitesDoNivel, vista.escala],
+  );
+
+  /**
    * Qual forma MEDIDA está sob o cursor.
    *
    * Existia a prop para avisar da seleção e não existia o teste que a dispara —
@@ -868,6 +951,12 @@ export default function BlueprintCanvas({
         if (soDentro ? anelDentroDe(corpo, ret) : anelToca(corpo, ret, true)) pegos.push(w.id);
       }
 
+      // Limite é uma linha sem corpo: o "anel" dele são as duas pontas.
+      for (const b of limitesDoNivel) {
+        const seg = [b.a, b.b];
+        if (soDentro ? anelDentroDe(seg, ret) : anelToca(seg, ret, false)) pegos.push(b.id);
+      }
+
       for (const f of medicoes) {
         if (f.pontos.length === 0) continue;
         const fechado = f.tipo === 'POLIGONO';
@@ -877,7 +966,7 @@ export default function BlueprintCanvas({
 
       return pegos;
     },
-    [paredesDoNivel, medicoes],
+    [paredesDoNivel, limitesDoNivel, medicoes],
   );
 
   // ── Tamanho ───────────────────────────────────────────────────────────────
@@ -1291,6 +1380,152 @@ export default function BlueprintCanvas({
       }
     }
 
+    // ── LIMITES (divisas de terreno) ─────────────────────────────────────────
+    //
+    // Traço fino TRACEJADO, nunca a faixa cheia da parede. A distinção não é
+    // estética: limite não tem material, não entra no orçamento e não se
+    // constrói. Desenhá-lo com a mesma gramática da parede faria alguém cotar
+    // alvenaria em cima de uma divisa jurídica.
+    //
+    // O anel do TERRENO ganha preenchimento fraco — é a única figura da tela
+    // cuja ÁREA é o produto, e vê-la preenchida é o que diz "este é o lote".
+    if (limitesDoNivel.length > 0) {
+      // Durante o traçado quem preenche é a PRÉVIA, que já mostra o lote com o
+      // lado em curso. Preencher os dois empilha alpha sobre alpha e produz uma
+      // cunha mais escura que não significa nada.
+      const tracandoTerreno = tool === 'terreno' && cadeia.length > 0;
+      const anel = tracandoTerreno ? [] : anelDoTerreno(limitesDoNivel);
+      if (anel.length >= 3) {
+        ctx.fillStyle = COR_TERRENO_FUNDO;
+        ctx.beginPath();
+        const t0 = paraTela(anel[0]);
+        ctx.moveTo(t0.x, t0.y);
+        for (const p of anel.slice(1)) {
+          const t = paraTela(p);
+          ctx.lineTo(t.x, t.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      for (const b of limitesDoNivel) {
+        const a = paraTela(b.a);
+        const z = paraTela(b.b);
+        const selecionado = selecao.has(b.id);
+        ctx.strokeStyle = selecionado
+          ? COR_SELECIONADA
+          : b.kind === 'TERRENO'
+            ? COR_TERRENO
+            : COR_COTA;
+        ctx.lineWidth = selecionado ? 2.5 : 1.5;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(z.x, z.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Cota de cada divisa, no MESMO botão "Medidas" das paredes. É a medida
+        // que se confere contra o memorial descritivo, e ela não pode depender
+        // de outro controle que ninguém liga.
+        const compPx = Math.hypot(z.x - a.x, z.y - a.y);
+        if (mostrarMedidasParedes && compPx >= MIN_PX_COTA_PAREDE) {
+          const mm = Math.round(Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y));
+          rotuloDoTraco(
+            ctx,
+            `${(mm / 1000).toFixed(2).replace('.', ',')} m`,
+            a,
+            z,
+            2,
+            selecionado ? COR_SELECIONADA : COR_TERRENO,
+          );
+        }
+      }
+
+      // Alças da divisa selecionada, pela mesma convenção da parede: só na que
+      // está SOZINHA na seleção, e desenhadas — ponta arrastável sem marca é
+      // ação que ninguém encontra.
+      const limiteParaAlca = limitesDoNivel.find((b) => b.id === unicoSelecionado);
+      if (limiteParaAlca && !movendoLimite && !movendoSelecao) {
+        for (const extremo of [limiteParaAlca.a, limiteParaAlca.b]) {
+          const t = paraTela(extremo);
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = COR_SELECIONADA;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(t.x - 4, t.y - 4, 8, 8);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+
+    // ── Envelope construtivo ─────────────────────────────────────────────────
+    //
+    // Hachurado, e não preenchido cheio: é uma RESTRIÇÃO, não uma construção.
+    // Preenchido sólido, ele competiria visualmente com os ambientes derivados e
+    // alguém acabaria lendo "o que pode ser construído" como "o que foi".
+    if (envelope.length >= 3) {
+      const pts = envelope.map(paraTela);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+      ctx.closePath();
+      ctx.clip();
+
+      // Hachura a 45°, varrendo a área de desenho inteira e recortada pelo anel.
+      ctx.strokeStyle = COR_ENVELOPE;
+      ctx.lineWidth = 1;
+      const passo = 14;
+      for (let d = -tamanho.h; d < tamanho.w + tamanho.h; d += passo) {
+        ctx.beginPath();
+        ctx.moveTo(d, 0);
+        ctx.lineTo(d + tamanho.h, tamanho.h);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = COR_ENVELOPE;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (const t of pts.slice(1)) ctx.lineTo(t.x, t.y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Prévia do arraste de ponta de LIMITE.
+    if (movendoLimite && destinoPonta) {
+      const b = limitesDoNivel.find((x) => x.id === movendoLimite.boundaryId);
+      if (b) {
+        const fixa = paraTela(movendoLimite.end === 'a' ? b.b : b.a);
+        const solta = paraTela(destinoPonta);
+        const ancora = movendoLimite.end === 'a' ? b.b : b.a;
+
+        ctx.strokeStyle = COR_SELECIONADA;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.moveTo(fixa.x, fixa.y);
+        ctx.lineTo(solta.x, solta.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const comp = Math.hypot(destinoPonta.x - ancora.x, destinoPonta.y - ancora.y);
+        rotuloDoTraco(
+          ctx,
+          `${(comp / 1000).toFixed(2).replace('.', ',')} m`,
+          fixa,
+          solta,
+          2,
+          COR_SELECIONADA,
+        );
+      }
+    }
+
     // Prévia da forma fechada em curso — a faixa de cada lado, já no eixo
     // mitrado, e a medida que interessa a cada ferramenta.
     if (ancoraDaForma && verticesPoligono.length >= 3) {
@@ -1364,6 +1599,73 @@ export default function BlueprintCanvas({
       }
     }
 
+    // Prévia do contorno de TERRENO / DIVISA em curso.
+    //
+    // A diferença entre as duas ferramentas vive AQUI e em nenhum outro lugar:
+    // o terreno mostra o lado de fechamento e a área se formando, para a pessoa
+    // ver o lote nascer; a divisa mostra só o lado em curso, porque ela é um
+    // traçado aberto e desenhar um fechamento prometeria algo que não vai
+    // acontecer.
+    if ((tool === 'terreno' || tool === 'divisa') && inicio && cursor) {
+      const pontos = [...cadeia, cursor];
+      const emTela = pontos.map(paraTela);
+
+      if (tool === 'terreno' && pontos.length >= 3) {
+        ctx.fillStyle = COR_TERRENO_FUNDO;
+        ctx.beginPath();
+        ctx.moveTo(emTela[0].x, emTela[0].y);
+        for (const t of emTela.slice(1)) ctx.lineTo(t.x, t.y);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // SÓ o que ainda não existe: o lado em curso e, no terreno, o de
+      // fechamento. Redesenhar a cadeia inteira sobrepõe tracejado a tracejado
+      // em fases diferentes, e o resultado na tela é uma linha CHEIA — os lados
+      // já criados pareceriam de outro tipo, bem no meio do gesto.
+      const emCurso: { de: Point; para: Point }[] = [{ de: inicio, para: cursor }];
+      if (tool === 'terreno' && pontos.length >= 3) {
+        emCurso.push({ de: cursor, para: cadeia[0] });
+      }
+
+      ctx.strokeStyle = COR_PREVIA;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([10, 5]);
+      ctx.beginPath();
+      for (const lado of emCurso) {
+        const a = paraTela(lado.de);
+        const b = paraTela(lado.para);
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // A cota do lado em curso, em tempo real: é a medida que se confere contra
+      // o memorial, e conferi-la depois de clicar seria tarde.
+      const mm = Math.round(Math.hypot(cursor.x - inicio.x, cursor.y - inicio.y));
+      if (mm > 0) {
+        rotuloDoTraco(
+          ctx,
+          `${(mm / 1000).toFixed(2).replace('.', ',')} m`,
+          paraTela(inicio),
+          paraTela(cursor),
+          2,
+          COR_PREVIA,
+        );
+      }
+
+      // O primeiro vértice fica marcado: é onde se clica para FECHAR.
+      if (cadeia.length >= 2) {
+        const zero = paraTela(cadeia[0]);
+        ctx.strokeStyle = COR_PREVIA;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(zero.x, zero.y, 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
     // Prévia da parede em curso.
     //
     // A faixa é desenhada sobre o EIXO RESOLVIDO, não sobre o traçado: no
@@ -1371,7 +1673,7 @@ export default function BlueprintCanvas({
     // parede "pular" meia espessura ao soltar o clique — e prévia que não bate
     // com o resultado é prévia em que ninguém confia. A linha fina contínua marca
     // o traçado em si, para o canto clicado continuar visível sob a faixa.
-    if (inicio && cursor) {
+    if (tool === 'parede' && inicio && cursor) {
       const eixoPrevia = eixoDaParede({ a: inicio, b: cursor }, espessuraMm, alinhamento, {
         antes: mesmoLado ? antesDoInicio : null,
         depois: fechandoContorno(cursor) && trechos[0]?.lado === alinhamento ? cadeia[1] : null,
@@ -1704,7 +2006,14 @@ export default function BlueprintCanvas({
     }
 
     // Marcador de captura
-    if (cursor && (tool === 'parede' || tool === 'poligono' || tool === 'retangulo')) {
+    if (
+      cursor &&
+      (tool === 'parede' ||
+        tool === 'poligono' ||
+        tool === 'retangulo' ||
+        tool === 'terreno' ||
+        tool === 'divisa')
+    ) {
       const c = paraTela(cursor);
       ctx.strokeStyle = COR_PREVIA;
       ctx.lineWidth = 1.5;
@@ -1736,6 +2045,9 @@ export default function BlueprintCanvas({
     fundo,
     calibP1,
     medicoesDoNivel,
+    limitesDoNivel,
+    movendoLimite,
+    envelope,
     medicaoSelecionada,
     medindo,
     movendo,
@@ -1855,6 +2167,15 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (movendoLimite) {
+      const b = limitesDoNivel.find((x) => x.id === movendoLimite.boundaryId);
+      const ancora = b ? (movendoLimite.end === 'a' ? b.b : b.a) : null;
+      let alvo = capturar(paraMundo(px, py));
+      if (ancora && ortoAtivo(e)) alvo = travarOrtogonal(ancora, alvo);
+      setDestinoPonta(alvo);
+      return;
+    }
+
     if (movendoAbertura) {
       const o = model.openings.find((x) => x.id === movendoAbertura.openingId);
       const w = o ? model.walls.find((x) => x.id === o.wallId) : null;
@@ -1902,6 +2223,15 @@ export default function BlueprintCanvas({
       if (tool === 'poligono' && ancoraDaForma && ortoAtivo(e)) {
         alvo = travarOrtogonal(ancoraDaForma, alvo);
       }
+      setCursor(alvo);
+      return;
+    }
+
+    if (tool === 'terreno' || tool === 'divisa') {
+      // A prévia tem de aplicar a MESMA trava do clique, senão a linha "pula"
+      // ao soltar e o usuário aprende a não confiar nela.
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (inicio && ortoAtivo(e)) alvo = travarOrtogonal(inicio, alvo);
       setCursor(alvo);
       return;
     }
@@ -2020,6 +2350,21 @@ export default function BlueprintCanvas({
         }
       }
 
+      // Alça do LIMITE selecionado, pela mesma convenção da parede logo acima.
+      const limiteSelecionado = limitesDoNivel.find((b) => b.id === unicoSelecionado);
+      if (limiteSelecionado) {
+        const alcance = ALCA_PX / vista.escala;
+        for (const end of ['a', 'b'] as const) {
+          const p = limiteSelecionado[end];
+          if (Math.hypot(p.x - mundo.x, p.y - mundo.y) <= alcance) {
+            setMovendoLimite({ boundaryId: limiteSelecionado.id, end });
+            setDestinoPonta(p);
+            canvasRef.current?.setPointerCapture(e.pointerId);
+            return;
+          }
+        }
+      }
+
       // Abertura antes de parede: ela esta POR CIMA e e menor, entao se o
       // clique cair nas duas o usuario quis a de cima.
       const w = paredeSob(mundo);
@@ -2034,8 +2379,12 @@ export default function BlueprintCanvas({
         return;
       }
 
+      // Limite antes de parede: ele é uma LINHA sobre a planta e costuma cair
+      // por cima de uma parede encostada nele. Quem clica numa divisa quer a
+      // divisa — a parede continua alcançável a meia espessura de distância.
+      const limiteClicado = limiteSob(mundo);
       const f = medicaoSob(mundo);
-      const clicado = aberturaClicada?.id ?? w?.id ?? f?.id ?? null;
+      const clicado = aberturaClicada?.id ?? limiteClicado?.id ?? w?.id ?? f?.id ?? null;
       const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
 
       // ARRASTAR O QUE JÁ ESTÁ SELECIONADO. Apertar sobre um item do conjunto
@@ -2064,6 +2413,37 @@ export default function BlueprintCanvas({
       // arrastar continua limpando a seleção, como sempre limpou.
       setLaco({ origem: arredondar(mundo), atual: arredondar(mundo) });
       canvasRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // ── TERRENO e DIVISA ─────────────────────────────────────────────────────
+    //
+    // Mesmo motor de encadeamento do traçado de parede — `cadeia`, captura,
+    // fechamento pelo primeiro vértice — emitindo `AddBoundary` em vez de
+    // `AddWall`, e SEM MITRA: limite não tem espessura, logo não tem canto para
+    // mitrar. O vértice clicado é o vértice.
+    if (tool === 'terreno' || tool === 'divisa') {
+      let ponto = capturarTracado(mundo);
+      if (!inicio) {
+        setCadeia([ponto]);
+        setTrechos([]);
+        return;
+      }
+      if (ortoAtivo(e)) ponto = travarOrtogonal(inicio, ponto);
+      if (ponto.x === inicio.x && ponto.y === inicio.y) return;
+
+      const kind: BoundaryKind = tool === 'terreno' ? 'TERRENO' : 'DIVISA';
+      onAddLimite?.(inicio, ponto, kind);
+
+      // Voltar ao primeiro vértice FECHA o contorno e encerra a polilinha — o
+      // lado que acabou de nascer é o de fechamento. É como se fecha contorno em
+      // qualquer CAD, e evita depender de um botão fora do desenho.
+      if (fechandoContorno(ponto)) {
+        setCadeia([]);
+        setTrechos([]);
+        return;
+      }
+      setCadeia((c) => [...c, ponto]);
       return;
     }
 
@@ -2123,6 +2503,26 @@ export default function BlueprintCanvas({
 
   /** Duplo clique encerra a forma em curso — a saída para quem não quer fechar. */
   function aoDuploClique() {
+    // TERRENO fecha sozinho no duplo clique: o lado de volta ao primeiro vértice
+    // é gerado sem precisar acertar o clique em cima dele. É a saída para quem
+    // desenhou o contorno e não quer mirar no ponto de partida.
+    if (tool === 'terreno' && cadeia.length >= 3 && inicio) {
+      const primeiro = cadeia[0];
+      if (inicio.x !== primeiro.x || inicio.y !== primeiro.y) {
+        onAddLimite?.(inicio, primeiro, 'TERRENO');
+      }
+      setCadeia([]);
+      setTrechos([]);
+      return;
+    }
+    // DIVISA não fecha sozinha — ela é um traçado aberto por natureza, e fechar
+    // por conta própria inventaria um lado que ninguém desenhou.
+    if (tool === 'divisa') {
+      setCadeia([]);
+      setTrechos([]);
+      return;
+    }
+
     if (medindo.length === 0) return;
     const tipo: TipoMedida = tool === 'medir-area' ? 'POLIGONO' : 'LINHA';
     if (medindo.length >= pontosMinimos(tipo)) onMedicaoPronta?.(tipo, medindo);
@@ -2132,8 +2532,8 @@ export default function BlueprintCanvas({
   /** Grava o deslocamento da seleção. Vale para o arraste e para as setas. */
   function comitarDeslocamento(delta: Point) {
     if (delta.x === 0 && delta.y === 0) return;
-    if (idsDeParedesSelecionadas.length > 0) {
-      onMoverSelecao?.(idsDeParedesSelecionadas, delta);
+    if (idsDeParedesSelecionadas.length > 0 || idsDeLimitesSelecionados.length > 0) {
+      onMoverSelecao?.(idsDeParedesSelecionadas, idsDeLimitesSelecionados, delta);
     }
     if (idsDeMedicoesSelecionadas.length > 0) {
       onMoverMedicoes?.(idsDeMedicoesSelecionadas, delta);
@@ -2187,6 +2587,19 @@ export default function BlueprintCanvas({
       canvasRef.current?.releasePointerCapture(e.pointerId);
     }
 
+    if (movendoLimite) {
+      const b = limitesDoNivel.find((x) => x.id === movendoLimite.boundaryId);
+      const outra = b ? (movendoLimite.end === 'a' ? b.b : b.a) : null;
+      // Soltar em cima da outra ponta faria um limite de comprimento zero, que o
+      // kernel recusa. Descartar em silêncio: o usuário desistiu do arraste.
+      if (destinoPonta && outra && (destinoPonta.x !== outra.x || destinoPonta.y !== outra.y)) {
+        onMoveBoundaryVertex?.(movendoLimite.boundaryId, movendoLimite.end, destinoPonta);
+      }
+      setMovendoLimite(null);
+      setDestinoPonta(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+    }
+
     if (movendoAbertura) {
       const o = model.openings.find((x) => x.id === movendoAbertura.openingId);
       // Só emite se a abertura de fato andou. Um clique sem arrastar cai aqui
@@ -2228,7 +2641,11 @@ export default function BlueprintCanvas({
     // "mover a planta toda" sem laçar de canto a canto com o zoom afastado.
     if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
       e.preventDefault();
-      onSelecionar([...paredesDoNivel.map((w) => w.id), ...medicoes.map((f) => f.id)]);
+      onSelecionar([
+        ...paredesDoNivel.map((w) => w.id),
+        ...limitesDoNivel.map((b) => b.id),
+        ...medicoes.map((f) => f.id),
+      ]);
       return;
     }
 
@@ -2256,6 +2673,7 @@ export default function BlueprintCanvas({
       // laço — os dois só produzem efeito no `pointerup`.
       setMovendoAbertura(null);
       setMovendo(null);
+      setMovendoLimite(null);
       setDestinoPonta(null);
       setMovendoSelecao(null);
       setLaco(null);
@@ -2279,7 +2697,7 @@ export default function BlueprintCanvas({
         aria-label="Área de desenho da planta. Use a lista de ambientes ao lado para navegar por teclado."
         className="block h-full w-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         style={{
-          cursor: arrastando || movendo || movendoAbertura || movendoSelecao
+          cursor: arrastando || movendo || movendoLimite || movendoAbertura || movendoSelecao
             ? 'grabbing'
             : laco
               ? 'crosshair'
@@ -2297,7 +2715,17 @@ export default function BlueprintCanvas({
       />
 
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
-        {tool === 'retangulo'
+        {tool === 'terreno' || tool === 'divisa'
+          ? inicio
+            ? cadeia.length >= 2
+              ? tool === 'terreno'
+                ? 'Clique no 1º vértice para FECHAR o lote · duplo clique fecha sozinho · Esc cancela'
+                : 'Clique para o próximo trecho · volte ao 1º vértice para fechar · Esc cancela'
+              : 'Clique para o próximo vértice · Esc cancela'
+            : tool === 'terreno'
+              ? 'Clique no 1º vértice do terreno'
+              : 'Clique onde a divisa começa'
+          : tool === 'retangulo'
           ? ancoraDaForma
             ? 'Arraste até o canto OPOSTO · clique fecha o ambiente · Esc cancela'
             : 'Clique num CANTO do ambiente'

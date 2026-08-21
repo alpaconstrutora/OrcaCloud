@@ -354,7 +354,19 @@ export function buildArrangement(
 ): ArrangementResult {
   const rawSegments: Segment[] = [
     ...model.walls.filter((w) => w.levelId === level.id).map((w) => ({ a: w.a, b: w.b })),
-    ...model.boundaries.filter((b) => b.levelId === level.id).map((b) => ({ a: b.a, b: b.b })),
+    // ⚠️ SÓ os limites `DIVISA`. O contorno de TERRENO fica FORA do arranjo, e
+    // isso não é detalhe: um anel de lote em volta da casa fecharia uma face, a
+    // face viraria `Space`, e `computeQuantities` derivaria PISO dela. Medido:
+    // uma casa de 18,67 m² num lote de 30×30 passava a somar 900 m² de piso no
+    // orçamento. Era o mesmo estrago que a ferramenta Parede faria com alvenaria
+    // — só que na outra linha da planilha.
+    //
+    // `DIVISA` continua entrando, e é o que preserva o caso 11 (limite sem
+    // material divide o ambiente como uma parede dividiria): dividir cômodo é
+    // justamente o que ela sempre significou.
+    ...model.boundaries
+      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO')
+      .map((b) => ({ a: b.a, b: b.b })),
   ];
 
   if (rawSegments.length === 0) return { spaces: [], danglingVertices: [] };
@@ -557,7 +569,19 @@ export function vertexDegrees(
 ): Map<string, number> {
   const rawSegments: Segment[] = [
     ...model.walls.filter((w) => w.levelId === level.id).map((w) => ({ a: w.a, b: w.b })),
-    ...model.boundaries.filter((b) => b.levelId === level.id).map((b) => ({ a: b.a, b: b.b })),
+    // ⚠️ SÓ os limites `DIVISA`. O contorno de TERRENO fica FORA do arranjo, e
+    // isso não é detalhe: um anel de lote em volta da casa fecharia uma face, a
+    // face viraria `Space`, e `computeQuantities` derivaria PISO dela. Medido:
+    // uma casa de 18,67 m² num lote de 30×30 passava a somar 900 m² de piso no
+    // orçamento. Era o mesmo estrago que a ferramenta Parede faria com alvenaria
+    // — só que na outra linha da planilha.
+    //
+    // `DIVISA` continua entrando, e é o que preserva o caso 11 (limite sem
+    // material divide o ambiente como uma parede dividiria): dividir cômodo é
+    // justamente o que ela sempre significou.
+    ...model.boundaries
+      .filter((b) => b.levelId === level.id && b.kind !== 'TERRENO')
+      .map((b) => ({ a: b.a, b: b.b })),
   ];
   const split = splitAtIntersections(rawSegments);
   const { vertices, indexOf } = snapVertices(

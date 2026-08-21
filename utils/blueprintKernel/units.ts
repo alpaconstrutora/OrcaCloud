@@ -28,8 +28,16 @@
  * `modelFromCanonicalPayload` os lê com `?? true`/`?? false`, o mesmo padrão de
  * `labels` na entrada 0.3.0 — snapshot antigo continua legível, só não recalcula
  * hash igual ao de hoje.
+ *
+ * 0.5.0 (21/08/2026) — `Boundary` ganhou `kind` (TERRENO/DIVISA) e `papel`
+ * (frente/fundos/laterais), para a ferramenta de terreno. Os atributos viajam no
+ * PAYLOAD, e não numa tabela ao lado, porque `modelFromCanonicalPayload`
+ * reconstrói os limites com ids `bnd_` NOVOS — id de limite não sobrevive a
+ * publicar+recarregar, então referência externa por id se perderia no primeiro
+ * publish. Payload sob 0.4.0 não tem os campos; lidos como `'DIVISA'`/`null`,
+ * que é o que aquele desenho significava.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.4.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.5.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

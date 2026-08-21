@@ -48,7 +48,16 @@ export type BlueprintTool =
   /** Formas MEDIDAS — afirmadas à mão, não derivadas do arranjo planar. */
   | 'medir-area'
   | 'medir-linha'
-  | 'contar';
+  | 'contar'
+  /**
+   * Contorno do LOTE. Os dois desenham limites (`Boundary`), não paredes — lote
+   * é divisa jurídica, não construção, e não pode virar linha de alvenaria no
+   * orçamento. A diferença entre eles é só o gesto e a prévia: `terreno` mostra
+   * o lado de fechamento e a área se formando; `divisa` mostra só o lado em
+   * curso. Os dois fecham voltando ao primeiro vértice.
+   */
+  | 'terreno'
+  | 'divisa';
 
 export type SaveState = 'limpo' | 'pendente' | 'salvando' | 'salvo' | 'erro';
 

@@ -18,6 +18,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { BlueprintStudy } from '../../types/blueprint';
+import { ConfirmProvider } from '../../components/ui/confirm';
 
 // ─── Dublês ───────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,14 @@ const study: BlueprintStudy = {
 
 async function montar() {
   const { default: BlueprintEditor } = await import('../../components/blueprint/BlueprintEditor');
-  render(<BlueprintEditor study={study} branchId="brc_1" onBack={() => {}} />);
+  // `ConfirmProvider` vem do root do app (`index.tsx`) — montar o editor sem ele
+  // é montar uma árvore que não existe em produção. O painel do Terreno usa
+  // `useConfirm` antes de substituir a área do empreendimento na ficha.
+  render(
+    <ConfirmProvider>
+      <BlueprintEditor study={study} branchId="brc_1" onBack={() => {}} />
+    </ConfirmProvider>,
+  );
   // O nível "Térreo" é criado num efeito depois do carregamento.
   await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
 }

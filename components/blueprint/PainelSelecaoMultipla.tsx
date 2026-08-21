@@ -26,6 +26,8 @@ function lerNumero(texto: string): number | null {
 
 interface Props {
   paredes: Wall[];
+  /** Divisas de terreno na seleção. Contam à parte: não têm espessura nem custo. */
+  limites: number;
   /** Aberturas selecionadas DIRETAMENTE — as hospedadas andam com a parede. */
   aberturas: number;
   medicoes: FormaMedida[];
@@ -38,6 +40,7 @@ interface Props {
 
 export default function PainelSelecaoMultipla({
   paredes,
+  limites,
   aberturas,
   medicoes,
   onMover,
@@ -50,6 +53,7 @@ export default function PainelSelecaoMultipla({
   const comprimentoTotal = paredes.reduce((soma, w) => soma + wallLength(w), 0);
   const partes = [
     paredes.length > 0 ? `${paredes.length} parede${paredes.length > 1 ? 's' : ''}` : null,
+    limites > 0 ? `${limites} divisa${limites > 1 ? 's' : ''}` : null,
     aberturas > 0 ? `${aberturas} abertura${aberturas > 1 ? 's' : ''}` : null,
     medicoes.length > 0 ? `${medicoes.length} medição(ões)` : null,
   ].filter(Boolean);

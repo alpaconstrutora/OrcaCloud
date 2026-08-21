@@ -16,6 +16,10 @@ import {
   type Wall,
   assertModelInvariants,
   cloneModel,
+  type BoundaryKind,
+  type BoundaryPapel,
+  findBoundary,
+  findLevel,
   findWall,
   nextId,
   pontasDeslocadas,
@@ -48,11 +52,27 @@ export type Command =
       hingeAtStart?: boolean;
       swingReversed?: boolean;
     }
-  | { type: 'AddBoundary'; levelId: ObjectId; a: Point; b: Point }
+  /**
+   * Limite sem material. `kind` distingue o anel do LOTE de uma divisa solta —
+   * ver `BoundaryKind`. Omitido continua valendo `DIVISA`, para não obrigar o
+   * chamador antigo (os testes de ambiente dividido) a decidir sobre terreno.
+   */
+  | {
+      type: 'AddBoundary';
+      levelId: ObjectId;
+      a: Point;
+      b: Point;
+      kind?: BoundaryKind;
+      papel?: BoundaryPapel | null;
+    }
+  | { type: 'MoveBoundaryVertex'; boundaryId: ObjectId; end: 'a' | 'b'; to: Point }
+  | { type: 'DeleteBoundary'; boundaryId: ObjectId }
+  /** Qual recuo se aplica a esta divisa. `null` tira o papel. */
+  | { type: 'SetBoundaryPapel'; boundaryId: ObjectId; papel: BoundaryPapel | null }
   | { type: 'SetThickness'; wallId: ObjectId; thicknessMm: number }
   | { type: 'MoveVertex'; wallId: ObjectId; end: 'a' | 'b'; to: Point }
   /**
-   * Desloca um CONJUNTO de paredes de uma vez, rigidamente.
+   * Desloca um CONJUNTO de paredes e limites de uma vez, rigidamente.
    *
    * Existe em vez de um lote de `MoveVertex` por três motivos independentes,
    * cada um suficiente sozinho:
@@ -78,8 +98,14 @@ export type Command =
    * desligado, o bloco se desprende, mantendo as próprias medidas.
    */
   | {
-      type: 'TranslateWalls';
+      type: 'TranslateEntities';
       wallIds: ObjectId[];
+      /**
+       * Limites deslocados no MESMO passo das paredes. Separar em dois comandos
+       * quebraria o anel do lote em cada passo intermediário — e é justamente o
+       * anel que o `arrastarVizinhas` precisa enxergar inteiro.
+       */
+      boundaryIds: ObjectId[];
       delta: Point;
       arrastarVizinhas: boolean;
     }
@@ -201,14 +227,51 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
     }
 
     case 'AddBoundary': {
+      // A MESMA guarda de `AddWall`. Faltava enquanto nenhuma UI criava limite:
+      // agora que se desenha terreno clicando, dois cliques no mesmo vértice
+      // produziriam uma aresta nula, que o arranjo planar engole sem erro — o
+      // lado sumiria do anel e a área do lote sairia menor, calada.
+      if (pointsEqual(command.a, command.b)) {
+        throw new KernelError('DEGENERATE_BOUNDARY', 'Limite de comprimento zero');
+      }
+      findLevel(next, command.levelId);
       const id = nextId(next, 'bnd');
       next.boundaries.push({
         id,
         levelId: command.levelId,
         a: { ...command.a },
         b: { ...command.b },
+        kind: command.kind ?? 'DIVISA',
+        papel: command.papel ?? null,
       });
       diff.created.push(id);
+      break;
+    }
+
+    case 'MoveBoundaryVertex': {
+      const boundary = findBoundary(next, command.boundaryId);
+      const outra = command.end === 'a' ? boundary.b : boundary.a;
+      if (pointsEqual(command.to, outra)) {
+        throw new KernelError('DEGENERATE_BOUNDARY', 'Mover o vértice colapsaria o limite');
+      }
+      boundary[command.end] = { ...command.to };
+      diff.updated.push(boundary.id);
+      // Sem a checagem de abertura que `MoveVertex` faz: limite não hospeda
+      // porta nem janela. Encurtá-lo não pode deixar nada pendurado fora.
+      break;
+    }
+
+    case 'DeleteBoundary': {
+      const boundary = findBoundary(next, command.boundaryId);
+      next.boundaries = next.boundaries.filter((b) => b.id !== boundary.id);
+      diff.deleted.push(boundary.id);
+      break;
+    }
+
+    case 'SetBoundaryPapel': {
+      const boundary = findBoundary(next, command.boundaryId);
+      boundary.papel = command.papel;
+      diff.updated.push(boundary.id);
       break;
     }
 
@@ -242,33 +305,38 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
       break;
     }
 
-    case 'TranslateWalls': {
-      if (command.wallIds.length === 0) {
-        throw new KernelError('EMPTY_SELECTION', 'Nenhuma parede para deslocar');
+    case 'TranslateEntities': {
+      if (command.wallIds.length === 0 && command.boundaryIds.length === 0) {
+        throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
 
       const dx = assertIntegerMm(roundToMm(command.delta.x), 'delta.x');
       const dy = assertIntegerMm(roundToMm(command.delta.y), 'delta.y');
 
-      // `findWall` lança em id inexistente — resolver TODAS antes de mexer em
-      // qualquer uma é o que garante que um id errado no meio da lista não
-      // deixe metade do conjunto deslocada.
+      // `findWall`/`findBoundary` lançam em id inexistente — resolver TODOS
+      // antes de mexer em qualquer um é o que garante que um id errado no meio
+      // da lista não deixe metade do conjunto deslocada.
       command.wallIds.forEach((id) => findWall(next, id));
+      command.boundaryIds.forEach((id) => findBoundary(next, id));
 
-      // A MESMA conta que a prévia do arraste usa. Ver `pontasDeslocadas`.
+      // PAREDES E LIMITES NA MESMA CONTA. Rodar duas vezes, uma para cada
+      // família, faria a vizinhança de um tipo não enxergar o outro: arrastar um
+      // bloco de paredes com "esticar" deixaria a divisa encostada nele para
+      // trás, o anel do lote abriria e o ambiente derivado sumiria sem erro.
       const destinos = pontasDeslocadas(
-        next.walls,
-        command.wallIds,
+        [...next.walls, ...next.boundaries],
+        [...command.wallIds, ...command.boundaryIds],
         { x: dx, y: dy },
         command.arrastarVizinhas,
       );
 
-      for (const w of next.walls) {
-        const destino = destinos.get(w.id);
+      const inteiro = (v: number) => assertIntegerMm(v, 'coordenada deslocada');
+      for (const alvo of [...next.walls, ...next.boundaries]) {
+        const destino = destinos.get(alvo.id);
         if (!destino) continue;
-        w.a = { x: assertIntegerMm(destino.a.x, 'x deslocado'), y: assertIntegerMm(destino.a.y, 'y deslocado') };
-        w.b = { x: assertIntegerMm(destino.b.x, 'x deslocado'), y: assertIntegerMm(destino.b.y, 'y deslocado') };
-        diff.updated.push(w.id);
+        alvo.a = { x: inteiro(destino.a.x), y: inteiro(destino.a.y) };
+        alvo.b = { x: inteiro(destino.b.x), y: inteiro(destino.b.y) };
+        diff.updated.push(alvo.id);
       }
 
       // Só as VIZINHAS podem ter mudado de comprimento — as selecionadas

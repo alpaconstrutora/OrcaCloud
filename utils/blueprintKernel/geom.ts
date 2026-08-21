@@ -388,6 +388,16 @@ function mitra(
   r: Point,
   meia: number,
   lado: 'DIREITA' | 'ESQUERDA',
+  /**
+   * Deslocamento do segundo lado, quando ele difere do primeiro.
+   *
+   * Existe para o RECUO de terreno: frente, fundos e laterais são distâncias
+   * DIFERENTES, e o canto entre duas delas é a interseção de duas paralelas
+   * deslocadas por valores distintos. A conta já era essa — só faltava deixar os
+   * dois valores entrarem. Omitido, os dois lados usam `meia`, que é o caso da
+   * parede (espessura única) e mantém o comportamento de sempre.
+   */
+  meiaDoSegundo = meia,
 ): Point | null {
   const n1 = normalDoLado(p, q, lado);
   const n2 = normalDoLado(q, r, lado);
@@ -401,12 +411,97 @@ function mitra(
   if (den === 0) return null;
 
   const a1 = { x: q.x + n1.x * meia, y: q.y + n1.y * meia };
-  const a2 = { x: q.x + n2.x * meia, y: q.y + n2.y * meia };
+  const a2 = { x: q.x + n2.x * meiaDoSegundo, y: q.y + n2.y * meiaDoSegundo };
   const t = ((a2.x - a1.x) * d2.y - (a2.y - a1.y) * d2.x) / den;
   const cruz = { x: a1.x + t * d1.x, y: a1.y + t * d1.y };
 
-  if (Math.hypot(cruz.x - q.x, cruz.y - q.y) > meia * MITRA_MAX) return null;
+  // O teto usa o MAIOR dos dois deslocamentos: com valores diferentes, medir
+  // contra o menor recusaria mitras legítimas de um recuo grande ao lado de um
+  // pequeno, e o canto cairia em reta bem onde ele mais precisa fechar.
+  const teto = Math.max(Math.abs(meia), Math.abs(meiaDoSegundo)) * MITRA_MAX;
+  if (Math.hypot(cruz.x - q.x, cruz.y - q.y) > teto) return null;
   return point(roundToMm(cruz.x), roundToMm(cruz.y));
+}
+
+/**
+ * O anel deslocado para DENTRO, com um recuo por lado.
+ *
+ * É o envelope construtivo do lote: cada divisa recua pela sua distância
+ * (frente, fundos, laterais são medidas diferentes) e os cantos fecham pela
+ * interseção das paralelas — a mesma mitra que fecha o canto da parede.
+ *
+ * `recuos[i]` é o recuo do lado que vai de `anel[i]` a `anel[i+1]`. Recuo zero
+ * mantém o lado onde está.
+ *
+ * ⚠️ Recuo grande demais num lote estreito faz os lados se cruzarem e o anel
+ * "virar do avesso". Não é erro do cálculo: é o lote não comportar aqueles
+ * recuos, e quem chama precisa dizer isso a quem olha, em vez de desenhar um
+ * polígono impossível. `envelopeValido` responde isso.
+ */
+export function anelRecuado(anel: Point[], recuos: number[]): Point[] {
+  const n = anel.length;
+  if (n < 3 || recuos.length !== n) return [];
+
+  // Sentido do contorno decide para que lado é "dentro". Anti-horário → a normal
+  // que aponta para dentro é a da ESQUERDA; horário, a da DIREITA. Sem isto o
+  // envelope cresceria para FORA em metade dos lotes, sem nada explicando.
+  const lado: 'DIREITA' | 'ESQUERDA' = signedArea(anel) > 0 ? 'ESQUERDA' : 'DIREITA';
+
+  const saida: Point[] = [];
+  for (let i = 0; i < n; i++) {
+    const anterior = anel[(i + n - 1) % n];
+    const atual = anel[i];
+    const proximo = anel[(i + 1) % n];
+    // O vértice `i` é o encontro do lado (i−1 → i) com o lado (i → i+1), então
+    // ele usa os recuos DESSES dois lados.
+    const recuoAntes = recuos[(i + n - 1) % n];
+    const recuoDepois = recuos[i];
+
+    const canto = mitra(anterior, atual, proximo, recuoAntes, lado, recuoDepois);
+    if (!canto) {
+      // Colinear ou mitra estourada: desloca em reta pelo lado que segue.
+      const nrm = normalDoLado(atual, proximo, lado);
+      if (!nrm) return [];
+      saida.push(
+        point(roundToMm(atual.x + nrm.x * recuoDepois), roundToMm(atual.y + nrm.y * recuoDepois)),
+      );
+      continue;
+    }
+    saida.push(canto);
+  }
+  return saida;
+}
+
+/**
+ * O envelope ainda é um polígono de verdade?
+ *
+ * Recuos maiores que o lote produzem um anel invertido — área positiva que não
+ * significa nada. Três checagens, e **a terceira é a que pega o caso simétrico**:
+ *
+ * 1. o polígono é simples (nenhum lado cruza outro);
+ * 2. o sentido do contorno é o mesmo do lote;
+ * 3. **cada lado mantém a DIREÇÃO do lado que o originou.**
+ *
+ * Sem a terceira, um retângulo recuado além da metade passa: os dois eixos se
+ * invertem, a orientação inverte DUAS vezes e volta ao normal, e o resultado é
+ * um retângulo perfeitamente simples, do lado errado do lote. Foi exatamente o
+ * que o teste "recuo maior que o lote" pegou. Um lado que apontava para a
+ * direita e passou a apontar para a esquerda cruzou o lado oposto — e isso é
+ * local, barato e não depende de simetria nenhuma.
+ */
+export function envelopeValido(anel: Point[], envelope: Point[]): boolean {
+  if (anel.length < 3 || envelope.length !== anel.length) return false;
+  if (!isSimplePolygon(envelope)) return false;
+  if (signedArea(anel) > 0 !== signedArea(envelope) > 0) return false;
+
+  const n = anel.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const original = { x: anel[j].x - anel[i].x, y: anel[j].y - anel[i].y };
+    const recuado = { x: envelope[j].x - envelope[i].x, y: envelope[j].y - envelope[i].y };
+    if (original.x * recuado.x + original.y * recuado.y <= 0) return false;
+  }
+  return true;
 }
 
 /**

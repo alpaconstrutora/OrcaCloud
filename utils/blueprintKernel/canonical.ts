@@ -16,7 +16,13 @@
  *     identidade de conteúdo.
  */
 
-import { type BlueprintModel, emptyModel, nextId } from './model';
+import {
+  type BlueprintModel,
+  type BoundaryKind,
+  type BoundaryPapel,
+  emptyModel,
+  nextId,
+} from './model';
 import { recomputeSpaces } from './arrangement';
 import { KERNEL_VERSION, DEFAULT_TOLERANCE_MM } from './units';
 
@@ -212,6 +218,8 @@ export function canonicalPayload(model: BlueprintModel): string {
       )
       .map((b) => ({
         level: levelIndex.get(b.levelId) ?? 0,
+        kind: b.kind,
+        papel: b.papel ?? null,
         a: { x: b.a.x, y: b.a.y },
         b: { x: b.b.x, y: b.b.y },
       })),
@@ -279,7 +287,14 @@ export interface CanonicalPayload {
     hingeAtStart?: boolean;
     swingReversed?: boolean;
   }[];
-  boundaries: { level: number; a: { x: number; y: number }; b: { x: number; y: number } }[];
+  boundaries: {
+    level: number;
+    /** Ausentes em payload gravado sob kernel < 0.5.0. */
+    kind?: BoundaryKind;
+    papel?: BoundaryPapel | null;
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+  }[];
   labels: { level: number; at: { x: number; y: number }; name: string }[];
   spaces: {
     level: number;
@@ -356,6 +371,12 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       levelId: levelIds[b.level],
       a: { x: b.a.x, y: b.a.y },
       b: { x: b.b.x, y: b.b.y },
+      // Payload de antes do terreno existir não tem `kind`. `DIVISA` é o que
+      // aquele desenho significava: um limite solto, que divide ambiente e não
+      // participa de anel de lote nenhum. Ler como TERRENO inventaria um lote
+      // que ninguém desenhou, com área e recuos saindo do nada.
+      kind: b.kind ?? 'DIVISA',
+      papel: b.papel ?? null,
     });
   }
 

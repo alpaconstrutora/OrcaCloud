@@ -104,12 +104,13 @@ function App() {
         selectedIds={selectedIds}
         onSelecionar={setSelectedIds}
         arrastarVizinhas={arrastarVizinhas}
-        onMoverSelecao={(wallIds, delta) => {
+        onMoverSelecao={(wallIds, boundaryIds, delta) => {
           setModel(
             (atual) =>
               applyCommand(atual, {
-                type: 'TranslateWalls',
+                type: 'TranslateEntities',
                 wallIds,
+                boundaryIds,
                 delta,
                 arrastarVizinhas,
               }).model,

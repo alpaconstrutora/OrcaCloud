@@ -14,7 +14,7 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { costCenterService } from '../services/costCenterService';
 import MaterialSelectionModal from './MaterialSelectionModal';
 import DatabasePickerModal from './DatabasePickerModal';
-import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, ChartOfAccount, CompositionComponent } from '../types';
+import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, CompositionComponent } from '../types';
 import { CostCenterV2 } from '../types/financial';
 import { formatCurrency } from '../utils/financialMath';
 
@@ -51,7 +51,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenterV2[]>([]);
-    const [coa, setCoa] = React.useState<ChartOfAccount[]>([]);
+    // Plano de Contas (tabela `plano_de_contas` — dimensão canônica, distinta de
+    // Centro de Custo e de financial_categories). Ver memória
+    // centro-custo-vs-plano-de-contas-canonico.
+    const [planoContas, setPlanoContas] = React.useState<CostCenter[]>([]);
 
     const [selectedSupplierId, setSelectedSupplierId] = React.useState('');
     const [selectedProjectId, setSelectedProjectId] = React.useState('');
@@ -66,7 +69,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // derivado dela no submit, só para não quebrar telas que ainda leem o
     // texto (FinancialOrderDetails, financialService).
     const [costCenterId, setCostCenterId] = React.useState('');
-    const [chartOfAccounts, setChartOfAccounts] = React.useState('');
+    // chartOfAccounts (texto legado) não tem estado próprio no formulário —
+    // é derivado do nome do item selecionado em planoDeContasId, só no submit.
+    const [planoDeContasId, setPlanoDeContasId] = React.useState('');
     const [deliveryMethod, setDeliveryMethod] = React.useState('CIF - Entrega por conta do fornecedor');
     const [deliveryLocation, setDeliveryLocation] = React.useState('Canteiro de Obras');
 
@@ -106,15 +111,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 // usava `orgs[0]`, oferecendo conta/centro de custo de OUTRA
                 // empresa no pedido. `undefined` = "Todas as organizações": os
                 // services não filtram e a RLS recorta. Ver hooks/useOrgContext.tsx.
-                const [accs, centers, accounts_coa] = await Promise.all([
+                const [accs, centers, planoContasList] = await Promise.all([
                     financialRegistryService.listPaymentAccounts(contextOrgId ?? undefined),
                     costCenterService.list(contextOrgId),
-                    financialRegistryService.listChartOfAccounts(contextOrgId ?? undefined)
+                    financialRegistryService.listPlanoContas(contextOrgId ?? undefined)
                 ]);
                 if (cancelled) return;
                 setAccounts(accs);
                 setCostCenters(centers);
-                setCoa(accounts_coa);
+                setPlanoContas(planoContasList);
             } catch (error) {
                 console.error("Error loading form data:", error);
             } finally {
@@ -144,7 +149,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     setNotes(existingOrder.notes || '');
                     setBankAccount(existingOrder.bankAccount || '');
                     setCostCenterId(existingOrder.costCenterId || '');
-                    setChartOfAccounts(existingOrder.chartOfAccounts || '');
+                    setPlanoDeContasId(existingOrder.planoDeContasId || '');
                     // Separate avulso items from budget items
                     type OrderItemWithAvulso = typeof existingOrder.items[number] & { avulso?: boolean };
                     const allItems = existingOrder.items as OrderItemWithAvulso[];
@@ -468,10 +473,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 return;
             }
 
-            // costCenter (texto) é derivado do id selecionado — mantém telas
-            // legadas (FinancialOrderDetails, financialService) funcionando
-            // enquanto cost_center_id (FK) é a fonte de verdade daqui pra frente.
+            // costCenter/chartOfAccounts (texto) são derivados do id selecionado —
+            // mantém telas legadas (FinancialOrderDetails, financialService)
+            // funcionando enquanto cost_center_id/plano_de_contas_id (FK) são a
+            // fonte de verdade daqui pra frente.
             const costCenterName = costCenters.find(c => c.id === costCenterId)?.name || '';
+            const planoDeContasName = planoContas.find(c => c.id === planoDeContasId)?.name || '';
 
             if (isEditing && editingOrderId) {
                 await orderService.updateOrder(editingOrderId, {
@@ -486,7 +493,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     bankAccount: bankAccount,
                     costCenterId: costCenterId || undefined,
                     costCenter: costCenterName,
-                    chartOfAccounts: chartOfAccounts,
+                    planoDeContasId: planoDeContasId || undefined,
+                    chartOfAccounts: planoDeContasName,
                     deliveryMethod: deliveryMethod,
                     deliveryLocation: deliveryLocation,
                     items: orderItems,
@@ -505,7 +513,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     bankAccount: bankAccount,
                     costCenterId: costCenterId || undefined,
                     costCenter: costCenterName,
-                    chartOfAccounts: chartOfAccounts,
+                    planoDeContasId: planoDeContasId || undefined,
+                    chartOfAccounts: planoDeContasName,
                     deliveryMethod: deliveryMethod,
                     deliveryLocation: deliveryLocation,
                     items: orderItems,
@@ -780,6 +789,18 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 onChange={setCostCenterId}
                                                 placeholder="Selecione o centro de custo..."
                                                 hoverCls="hover:bg-indigo-50"
+                                            />
+                                        </div>
+                                        <div className="space-y-3">
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de contas</label>
+                                            <HierarchicalSelect
+                                                items={planoContas}
+                                                value={planoDeContasId}
+                                                onChange={setPlanoDeContasId}
+                                                placeholder="Selecione o plano de contas..."
+                                                hoverCls="hover:bg-indigo-50"
+                                                panelVariant="drawer"
+                                                drawerTitle="Selecionar Plano de Contas"
                                             />
                                         </div>
                                     </div>

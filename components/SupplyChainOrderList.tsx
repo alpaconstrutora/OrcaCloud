@@ -9,13 +9,21 @@ import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
 import EmpreendimentoCell, { resolveOrderEmpreendimento } from './empreendimento/EmpreendimentoCell';
 
+// Número da NF-e (não confundir com a chave de acesso de 44 dígitos) — mesmos
+// dígitos 26-34 da chave, convenção usada em FiscalDocuments.tsx.
+const nfNumber = (accessKey: string | null | undefined) =>
+    accessKey && accessKey.length === 44 ? String(Number(accessKey.slice(25, 34))) : null;
+
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'orcamento', label: 'Orçamento', sortable: true },
+    { key: 'costCenter', label: 'Centro de Custo', sortable: true },
+    { key: 'chartOfAccounts', label: 'Plano de Contas', sortable: true },
     { key: 'supplier', label: 'Fornecedor', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
+    { key: 'nfe', label: 'NF-e', sortable: false },
     { key: 'date', label: 'Data do Pedido', sortable: true },
     { key: 'value', label: 'Valor Total', sortable: true },
     { key: 'items', label: 'Itens', sortable: true },
@@ -24,7 +32,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, empreendimento: 184, obra: 160, orcamento: 144, supplier: 200, status: 140, date: 171, value: 141, items: 102, actions: 220,
+    number: 123, empreendimento: 184, obra: 160, orcamento: 144, costCenter: 160, chartOfAccounts: 160, supplier: 200, status: 140, nfe: 160, date: 171, value: 141, items: 102, actions: 220,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -34,6 +42,8 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'supplier', label: 'Fornecedor', type: 'text' },
     { key: 'obra', label: 'Obra', type: 'text' },
     { key: 'empreendimento', label: 'Empreendimento', type: 'text' },
+    { key: 'costCenter', label: 'Centro de Custo', type: 'text' },
+    { key: 'chartOfAccounts', label: 'Plano de Contas', type: 'text' },
     { key: 'status', label: 'Status', type: 'select', options: [
         'Rascunho', 'Enviado', 'Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido', 'Divergência', 'Cancelado',
     ].map(s => ({ value: s, label: s })) },
@@ -50,8 +60,11 @@ const ORDER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; 
     empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     orcamento: { label: 'Orçamento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    costCenter: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    chartOfAccounts: { label: 'Plano de Contas', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     supplier: { label: 'Fornecedor', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    nfe: { label: 'NF-e', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     date: { label: 'Data do Pedido', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     value: { label: 'Valor Total', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     items: { label: 'Itens', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -84,7 +97,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 function renderOrderCell(
     key: string,
     order: any,
-    ctx: { linkedNfeOrderIds: Set<string>; empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }> },
+    ctx: { nfeNumbersByOrderId: Record<string, string[]>; empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }> },
 ): React.ReactNode {
     switch (key) {
         case 'number':
@@ -99,19 +112,23 @@ function renderOrderCell(
             );
         case 'orcamento':
             return <span className="text-sm font-normal text-blue-600">{order.projectClassification === 'ORCAMENTO' ? order.projectName : '-'}</span>;
+        case 'costCenter':
+            return <span className="text-sm font-normal text-gray-700">{order.costCenter || '-'}</span>;
+        case 'chartOfAccounts':
+            return <span className="text-sm font-normal text-gray-700">{order.chartOfAccounts || '-'}</span>;
         case 'supplier':
             return <span className="text-sm font-normal text-gray-700">{order.supplierName || '-'}</span>;
         case 'status':
+            return <StatusBadge status={order.status} />;
+        case 'nfe': {
+            const numbers = ctx.nfeNumbersByOrderId[order.id];
+            if (!numbers?.length) return <span className="text-sm font-normal text-gray-400">-</span>;
             return (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                    <StatusBadge status={order.status} />
-                    {ctx.linkedNfeOrderIds.has(order.id) && (
-                        <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-600">
-                            <FileCheck className="w-4 h-4" />NF-e
-                        </span>
-                    )}
-                </div>
+                <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-600">
+                    <FileCheck className="w-4 h-4 shrink-0" />NF-e: {numbers.join(', ')}
+                </span>
             );
+        }
         case 'date':
             return <span className="text-sm font-normal text-gray-600">{order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '-'}</span>;
         case 'value':
@@ -133,6 +150,8 @@ function getAdvancedFilterValue(
         case 'supplier': return order.supplierName ?? '';
         case 'obra': return order.projectClassification === 'ORCAMENTO' ? (order.linkedProjectName || '') : (order.projectName || '');
         case 'empreendimento': return resolveOrderEmpreendimento(order, empreendimentoByProject)?.name ?? '';
+        case 'costCenter': return order.costCenter ?? '';
+        case 'chartOfAccounts': return order.chartOfAccounts ?? '';
         case 'status': return order.status;
         case 'value': return order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
         case 'date': return order.created_at ? String(order.created_at).slice(0, 10) : null;
@@ -179,7 +198,9 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainOrderFilters:advanced');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const confirm = useConfirm();
-    const [linkedNfeOrderIds, setLinkedNfeOrderIds] = React.useState<Set<string>>(new Set());
+    // Pedido → número(s) da NF-e vinculada (mais de uma NF-e por pedido é possível
+    // em entregas parciais). Vazio/ausente = sem NF-e.
+    const [nfeNumbersByOrderId, setNfeNumbersByOrderId] = React.useState<Record<string, string[]>>({});
     const [nfFilter, setNfFilter] = usePersistedState<'all' | 'sem-nf'>('supplyChainOrderFilters:nf', 'all');
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
     const [lastCheckedIndex, setLastCheckedIndex] = React.useState<number | null>(null);
@@ -199,17 +220,19 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     orderService.listOrders(),
                     supabase
                         .from('nfe_invoices')
-                        .select('purchase_order_id')
+                        .select('purchase_order_id, access_key')
                         .not('purchase_order_id', 'is', null),
                     empreendimentoService.mapObrasToEmpreendimentos(orgId).catch(() => ({})),
                 ]);
                 if (!cancelled) {
                     setOrders(data);
-                    const ids = new Set<string>(
-                        ((nfeRes.data ?? []) as { purchase_order_id: string }[])
-                            .map(r => r.purchase_order_id)
-                    );
-                    setLinkedNfeOrderIds(ids);
+                    const byOrder: Record<string, string[]> = {};
+                    ((nfeRes.data ?? []) as { purchase_order_id: string; access_key: string }[]).forEach(r => {
+                        const num = nfNumber(r.access_key);
+                        if (!num) return;
+                        (byOrder[r.purchase_order_id] ??= []).push(num);
+                    });
+                    setNfeNumbersByOrderId(byOrder);
                     setEmpreendimentoByProject(empMap);
                 }
             } catch (error) {
@@ -282,7 +305,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 order.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 order.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 order.linkedProjectName?.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchNf = nfFilter === 'all' || !linkedNfeOrderIds.has(order.id);
+            const matchNf = nfFilter === 'all' || !nfeNumbersByOrderId[order.id]?.length;
             return matchSearch && matchNf;
         });
 
@@ -304,6 +327,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     const nb = b.projectClassification === 'ORCAMENTO' ? (b.linkedProjectName || '') : b.projectName || '';
                     return na.localeCompare(nb) * dir;
                 }
+                if (tableColumns.sortColumn === 'costCenter') return (a.costCenter || '').localeCompare(b.costCenter || '') * dir;
+                if (tableColumns.sortColumn === 'chartOfAccounts') return (a.chartOfAccounts || '').localeCompare(b.chartOfAccounts || '') * dir;
                 if (tableColumns.sortColumn === 'supplier') return (a.supplierName || '').localeCompare(b.supplierName || '') * dir;
                 if (tableColumns.sortColumn === 'date') return (new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()) * dir;
                 if (tableColumns.sortColumn === 'value') return (calculateTotal(a) - calculateTotal(b)) * dir;
@@ -328,7 +353,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         }
 
         return filtered;
-    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, linkedNfeOrderIds, advancedFilters.rules, empreendimentoByProject]);
+    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, nfeNumbersByOrderId, advancedFilters.rules, empreendimentoByProject]);
 
     const selectableVisible = React.useMemo(
         () => filteredOrders.filter(o => canDeleteOrder(o.status)),
@@ -666,7 +691,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         </td>
                                         {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                {renderOrderCell(key, order, { linkedNfeOrderIds, empreendimentoByProject })}
+                                                {renderOrderCell(key, order, { nfeNumbersByOrderId, empreendimentoByProject })}
                                             </td>
                                         ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -731,9 +756,9 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         <Package className="w-6 h-6" />
                                     </div>
                                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                                        {linkedNfeOrderIds.has(order.id) && (
+                                        {!!nfeNumbersByOrderId[order.id]?.length && (
                                             <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-600">
-                                                <FileCheck className="w-4 h-4" />NF-e
+                                                <FileCheck className="w-4 h-4 shrink-0" />NF-e: {nfeNumbersByOrderId[order.id].join(', ')}
                                             </span>
                                         )}
                                         <StatusBadge status={order.status} />

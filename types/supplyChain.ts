@@ -49,7 +49,11 @@ export interface PurchaseOrder {
     // telas que ainda leem o texto (FinancialOrderDetails, financialService).
     costCenter?: string;
     costCenterId?: string;
+    // Mesmo padrão de costCenter/costCenterId: chartOfAccounts (texto legado)
+    // é derivado do nome do item selecionado em planoDeContasId (FK para
+    // plano_de_contas — ver memória centro-custo-vs-plano-de-contas-canonico).
     chartOfAccounts?: string;
+    planoDeContasId?: string;
     notes?: string;
     items: PurchaseOrderItem[];
     version?: number;

@@ -312,6 +312,38 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
     }
 };
 
+/** Forma do rodapé da tabela "Por empreendimento" — ver `analysisFooter`
+ *  (useMemo, no componente) para como cada campo é calculado. */
+interface AnalysisFooterTotals {
+    monthlyRevenue: number;
+    referenceMonthlyRevenue: number;
+    annualRevenue: number;
+    valuePerSqmAvg: number | null;
+    occupancyRate: number | null;
+    financialRate: number | null;
+}
+
+/** Célula do rodapé — só as 6 colunas pedidas têm soma/média; as demais ficam
+ *  em branco (não "0", que afirmaria uma medição que não foi feita). */
+const renderAnalysisFooterCell = (key: string, footer: AnalysisFooterTotals): React.ReactNode => {
+    switch (key) {
+        case 'monthlyRevenue':
+            return moneyBRL(footer.monthlyRevenue);
+        case 'referenceMonthlyRevenue':
+            return moneyBRL(footer.referenceMonthlyRevenue);
+        case 'annualRevenue':
+            return moneyBRL(footer.annualRevenue);
+        case 'valuePerSqmAvg':
+            return orDash(footer.valuePerSqmAvg, moneyBRL);
+        case 'occupancyRate':
+            return orDash(footer.occupancyRate, percent1);
+        case 'financialRate':
+            return orDash(footer.financialRate, percent1);
+        default:
+            return '';
+    }
+};
+
 // Colunas da tabela "Por tipo de cliente" da aba Análise — segundo eixo de
 // partição, ao lado de "Por empreendimento" (ver lib/rentalByClientType.ts).
 // Sem coluna de ações, mesmo motivo da tabela irmã: não há ação por linha.
@@ -1561,6 +1593,36 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     }, [analysis.rows, analysisSearch, analysisTableColumns.sortColumn, analysisTableColumns.sortDirection]);
 
     /**
+     * Rodapé da tabela "Por empreendimento" — somatório/média sobre as linhas
+     * VISÍVEIS (`analysisRows`, já filtradas pela busca), não o total bruto da
+     * carteira. Um rodapé de tabela lê como "some/tire a média do que está na
+     * tela" — usar `analysis.total` (que ignora a busca) mostraria um número
+     * maior que a soma das linhas visíveis sempre que houvesse filtro ativo.
+     *
+     * Soma: Receita mensal, Receita mensal de referência, Receita anual —
+     * grandezas que se somam por construção (ver `RentalAnalysisScope`).
+     * Média simples (não ponderada): Valor médio de locação /m², Ocupação
+     * física, Ocupação financeira — `null` ("não medido") sai do denominador,
+     * não vira 0.
+     */
+    const analysisFooter = useMemo(() => {
+        const soma = (valorDe: (r: RentalAnalysisScope) => number) =>
+            analysisRows.reduce((acc, r) => acc + valorDe(r), 0);
+        const media = (valorDe: (r: RentalAnalysisScope) => number | null) => {
+            const valores = analysisRows.map(valorDe).filter((v): v is number => v != null);
+            return valores.length > 0 ? valores.reduce((a, v) => a + v, 0) / valores.length : null;
+        };
+        return {
+            monthlyRevenue: soma(r => r.monthlyRevenue),
+            referenceMonthlyRevenue: soma(r => r.referenceMonthlyRevenue),
+            annualRevenue: soma(r => r.monthlyRevenue * 12),
+            valuePerSqmAvg: media(r => r.valuePerSqm.avg),
+            occupancyRate: media(r => r.occupancyRate),
+            financialRate: media(r => r.financial.rate),
+        };
+    }, [analysisRows]);
+
+    /**
      * A aba Análise, agrupada por TIPO DE CLIENTE (`clients.category`) — segundo
      * eixo de partição, independente de empreendimento (cliente não pertence a
      * um único empreendimento). Mesmo bruto já carregado (`deals`/`properties`/
@@ -2207,6 +2269,27 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         </tr>
                                     ))}
                                 </tbody>
+                                {/* Rodapé (§6.7-adjacente, mesmo padrão do modo Unidades
+                                    acima): soma nas 3 colunas de receita, média simples nas
+                                    3 de ocupação/valor-m² pedidas pelo usuário — as demais
+                                    colunas ficam em branco, não "0". */}
+                                <tfoot>
+                                    <tr className="border-t border-gray-100 bg-gray-50/80">
+                                        {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map((c, idx) => (
+                                            <td
+                                                key={c.key}
+                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                    ['monthlyRevenue', 'referenceMonthlyRevenue', 'annualRevenue', 'valuePerSqmAvg'].includes(c.key)
+                                                        ? 'font-medium text-gray-800'
+                                                        : 'font-normal text-gray-500'
+                                                }`}
+                                            >
+                                                {idx === 0 ? 'Totais / médias' : renderAnalysisFooterCell(c.key, analysisFooter)}
+                                            </td>
+                                        ))}
+                                        <td aria-hidden="true"></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     )}

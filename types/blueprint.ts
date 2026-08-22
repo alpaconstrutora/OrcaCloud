@@ -132,6 +132,14 @@ export interface BlueprintUrbanContext {
   /** Em METRO. */
   gabarito_altura_max_m: number | null;
   gabarito_pavimentos: number | null;
+  /**
+   * Em qual tabela procurar `regulatory_zone_id`. `null` em linha anterior à
+   * migration `aplicar_20270914000001` — lida como EMPREENDIMENTO, que é o que
+   * ela era: à época o catálogo ainda não era um caminho.
+   */
+  zona_origem: 'EMPREENDIMENTO' | 'CATALOGO' | null;
+  /** Só com origem CATALOGO: por onde a zona do mapa da cidade é relida. */
+  regulatory_map_id: string | null;
   /** Por campo: veio da lei ou foi digitado por cima. */
   origem_valores: Record<string, 'ZONA' | 'MANUAL'>;
   aplicado_em: string | null;

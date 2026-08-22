@@ -136,6 +136,7 @@ function App() {
     } as EmpreendimentoRegulatoryZone;
 
     const comZona = painel !== 'vazio';
+    // `cidade` exercita o caminho do catálogo, para estudo sem empreendimento.
     const zonaAtiva = painel === 'na' ? zonaIlegivel : zonaBase;
     const lida = lerZona(zonaAtiva).valores;
 
@@ -168,9 +169,16 @@ function App() {
           alturaDesenhadaM={24}
           zonaSlot={
             <PainelZonaUrbanistica
+              origemDaZona={painel === 'cidade' ? 'CATALOGO' : 'EMPREENDIMENTO'}
+              onOrigemDaZona={() => {}}
               empreendimentos={[{ id: 'e1', nome: 'Residencial Acácias' }]}
               empreendimentoId={comZona ? 'e1' : ''}
               onEmpreendimento={() => {}}
+              cidade={painel === 'cidade' ? { id: 'c1', name: 'Cambuí', state_code: 'MG' } : null}
+              onCidade={() => {}}
+              mapas={painel === 'cidade' ? [{ id: 'm1', name: 'Mapa Regulatório - Cambuí' } as never] : []}
+              mapaId={painel === 'cidade' ? 'm1' : ''}
+              onMapa={() => {}}
               zonas={comZona ? [zonaAtiva] : []}
               zonaAplicadaId={comZona ? 'z1' : null}
               zonaRotuloSalvo={comZona ? 'ZR-2 · Zona Residencial 2' : null}

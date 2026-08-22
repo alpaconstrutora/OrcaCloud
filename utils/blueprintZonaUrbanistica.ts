@@ -17,9 +17,37 @@
  * faltando, porque parece conferida.
  */
 
-import type { EmpreendimentoRegulatoryZone } from '../types/empreendimento';
 import { lerMilimetros, lerPorcentagem, lerValorRegulatorio } from './regulatoryValue';
 import { RECUOS_ZERO, type Recuos } from './blueprintTerreno';
+
+/**
+ * O que este módulo precisa de uma zona — e só isso.
+ *
+ * ⚠️ Tipo ESTRUTURAL de propósito, em vez do tipo da tabela do empreendimento. A
+ * zona existe em DUAS tabelas com os MESMOS 21 campos de conteúdo:
+ * `empreendimento_regulatory_zones` (a cópia editável do empreendimento) e
+ * `regulatory_map_zones` (o catálogo por cidade). Amarrar a tradução a um dos
+ * dois obrigaria a converter um no outro só para ler um recuo — e foi
+ * justamente para o estudo SEM empreendimento poder ler o catálogo direto que
+ * esta generalização existe.
+ */
+export interface ZonaRegulatoria {
+  id: string;
+  zona?: string;
+  macroarea?: string;
+  recuo_frente?: string;
+  recuo_fundos?: string;
+  recuo_lateral_direita?: string;
+  recuo_lateral_esquerda?: string;
+  taxa_ocupacao_maxima?: string;
+  taxa_permeabilidade_minima?: string;
+  ca_maximo?: string;
+  gabarito_altura_maxima?: string;
+  gabarito_pavimentos?: string;
+  lei_referencia?: string;
+  nivel_confianca?: string;
+}
+
 
 /** Cada número que o editor toma da lei. A chave é a mesma de `origem_valores`. */
 export type CampoDaZona =
@@ -69,17 +97,8 @@ export interface LeituraDaZona {
   naoAplicados: { campo: CampoDaZona; textoOriginal: string }[];
 }
 
-const VAZIO: ValoresDaZona = {
-  recuoMm: { FRENTE: null, FUNDOS: null, LATERAL_DIREITA: null, LATERAL_ESQUERDA: null },
-  taxaOcupacaoMax: null,
-  taxaPermeabilidadeMin: null,
-  coeficienteMax: null,
-  gabaritoAlturaMaxM: null,
-  gabaritoPavimentos: null,
-};
-
 /** Traduz a zona. Sempre devolve leitura — zona vazia devolve tudo `null`. */
-export function lerZona(zona: EmpreendimentoRegulatoryZone): LeituraDaZona {
+export function lerZona(zona: ZonaRegulatoria): LeituraDaZona {
   const naoAplicados: LeituraDaZona['naoAplicados'] = [];
 
   /** Converte e, se o texto existia e não virou número, denuncia o campo. */
@@ -149,7 +168,7 @@ export function recuosDaZona(valores: ValoresDaZona): Recuos {
 }
 
 /** Rótulo curto da zona para a tela e para a cópia guardada no estudo. */
-export function rotuloDaZona(zona: EmpreendimentoRegulatoryZone): string {
+export function rotuloDaZona(zona: ZonaRegulatoria): string {
   const partes = [zona.zona, zona.macroarea].map((p) => (p ?? '').trim()).filter(Boolean);
   return partes.length > 0 ? partes.join(' · ') : 'Zona sem nome';
 }
@@ -172,7 +191,7 @@ export interface ValoresAplicados extends ValoresDaZona {}
 export function zonaDerivou(
   aplicados: ValoresAplicados,
   origem: Record<CampoDaZona, 'ZONA' | 'MANUAL'> | Record<string, string>,
-  zonaAtual: EmpreendimentoRegulatoryZone,
+  zonaAtual: ZonaRegulatoria,
 ): boolean {
   const hoje = lerZona(zonaAtual).valores;
   const daZona = (campo: CampoDaZona) => origem[campo] !== 'MANUAL';

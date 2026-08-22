@@ -435,3 +435,41 @@ mudou.
   `zones[0]`; a escolha aqui é por estudo de blueprint.
 - **Área permeável no modelo** — sem entidade para isso, o limite fica como
   referência, dito na tela.
+
+## Ajustes de 2026-08-22, depois do primeiro uso
+
+> cliquei em zona urbnanistica e nao trouxe todos impreendimento, sendo que o
+> seletor de organizacao esta em todos os empeendimentos, deve ser o velho
+> conhecido bug.
+> outro ponto, se for um estudo que não esta relacionado a nenhum empreendimento,
+> como vincular a um mapa regulatório? Poderia poder buscar diretamente em mapa
+> regularorio
+
+**1. O bug da organização — era `study.organization_id` fixo.** O efeito que
+carrega os empreendimentos filtrava pela org DO ESTUDO, ignorando o seletor do
+topo. Parecia defensável (o estudo pertence a uma org só), mas contraria a
+REGRA #5: o topo é a autoridade, e em "Todas" o `orgId` é `null`, o service não
+aplica `.eq()` e a RLS recorta. Pior no caso real: quem mantém a obra numa org e
+a incorporação em outra não achava o alvo. Passou a usar `useOrgContext()`.
+`__tests__/orgContextGuard.test.ts` segue verde.
+
+**2. Estudo sem empreendimento agora busca direto no catálogo.** Trilho de origem
+no painel: **Do empreendimento** (o caminho principal, a cópia que a incorporação
+já ajustou) × **Buscar por cidade** (cidade → mapa → zona, reusando o
+`CitySearchSelect` do cadastro de mapas). É o começo natural de quem abre a
+Planta Inteligente antes de cadastrar a incorporação.
+
+⚠️ **Migration nova: `aplicar_20270914000001_blueprint_urban_context_origem.sql`**
+— aditiva (`zona_origem`, `regulatory_map_id`). Sem ela, `regulatory_zone_id`
+passaria a apontar para duas tabelas sem dizer qual, e a releitura para detectar
+deriva procuraria na tabela errada, achando "zona apagada" em silêncio. Linha já
+gravada é lida como `EMPREENDIMENTO`, que é o que ela é.
+
+`lerZona`/`rotuloDaZona`/`zonaDerivou` passaram a receber um tipo **estrutural**
+(`ZonaRegulatoria`) em vez do tipo da tabela do empreendimento: as duas tabelas
+têm os mesmos 21 campos, e converter uma na outra só para ler um recuo seria
+cerimônia.
+
+**Conferido por print** nos quatro estados: zona aplicada, zona com campo
+ilegível, sem empreendimento, e o caminho pela cidade
+(`docs/spikes/terreno/quadro.html?painel=ok|na|vazio|cidade`).

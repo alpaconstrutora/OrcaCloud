@@ -14,7 +14,8 @@ import type { BlueprintUrbanContext } from '../types/blueprint';
 
 const COLS =
   'id, study_id, organization_id, empreendimento_id, regulatory_zone_id, ' +
-  'zona_rotulo, lei_referencia, recuo_frente_mm, recuo_fundos_mm, ' +
+  'zona_rotulo, lei_referencia, zona_origem, regulatory_map_id, '  +
+  'recuo_frente_mm, recuo_fundos_mm, ' +
   'recuo_lateral_direita_mm, recuo_lateral_esquerda_mm, taxa_ocupacao_max, ' +
   'taxa_permeabilidade_min, coeficiente_max, gabarito_altura_max_m, ' +
   'gabarito_pavimentos, origem_valores, aplicado_em, created_at, updated_at';

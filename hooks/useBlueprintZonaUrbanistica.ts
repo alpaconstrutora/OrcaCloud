@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EmpreendimentoRegulatoryZone } from '../types/empreendimento';
 import type { BlueprintUrbanContext } from '../types/blueprint';
+import type { RegulatoryMapWithCity } from '../types/regulatoryMap';
+import type { CitySearchValue } from '../components/regulatoryMap/CitySearchSelect';
 import { empreendimentoService } from '../services/empreendimentoService';
+import { regulatoryMapService } from '../services/regulatoryMapService';
 import {
   blueprintUrbanContextService,
   type UrbanContextInput,
@@ -14,6 +16,7 @@ import {
   zonaDerivou,
   type CampoDaZona,
   type ValoresDaZona,
+  type ZonaRegulatoria,
 } from '../utils/blueprintZonaUrbanistica';
 
 /**
@@ -22,25 +25,49 @@ import {
  * ─── POR QUE UM HOOK, E NÃO MAIS ESTADO NO EDITOR ───────────────────────────
  *
  * `BlueprintEditor` passa de 1.800 linhas. Isto aqui é um assunto fechado —
- * escolher zona, traduzir a lei, guardar, detectar deriva — com quatro pedaços
- * de estado que só conversam entre si. Deixá-lo lá dentro seria somar ruído a um
- * arquivo que já é o mais difícil do módulo.
+ * escolher zona, traduzir a lei, guardar, detectar deriva — com estado que só
+ * conversa consigo mesmo. Deixá-lo lá dentro seria somar ruído ao arquivo mais
+ * difícil do módulo.
  *
  * ─── DEGRADA SEM A MIGRATION ────────────────────────────────────────────────
  *
- * ⚠️ `aplicar_20270914000000` é aplicada À MÃO no SQL Editor, e o deploy da
- * Vercel publica só o front. Entre um e outro existe uma janela em que a tabela
- * não existe. Se o `get` explodisse, o painel de terreno inteiro morreria por
- * causa de um recurso novo. Então falha de persistência vira
- * `persistenciaIndisponivel` e o editor segue funcionando em memória, como
- * funcionava antes desta feature.
+ * ⚠️ As migrations `aplicar_20270914000000` e `...0001` são aplicadas À MÃO no
+ * SQL Editor, e o deploy da Vercel publica só o front. Entre um e outro existe
+ * uma janela em que a tabela (ou a coluna) não existe. Se a leitura explodisse,
+ * o painel de terreno inteiro morreria por causa de um recurso novo — então
+ * falha de persistência vira `persistenciaIndisponivel` e o editor segue em
+ * memória, como funcionava antes desta feature.
  */
 
+/**
+ * De onde a zona vem.
+ *
+ * `EMPREENDIMENTO` é o caminho principal: a cópia que o empreendimento já
+ * ajustou, com os desvios que a incorporação negociou. `CATALOGO` existe porque
+ * o estudo sem empreendimento nenhum — quem abre a Planta Inteligente antes de
+ * cadastrar a incorporação, que é o começo natural — ficava sem caminho para a
+ * lei e tinha de digitar os recuos à mão.
+ */
+export type OrigemDaZona = 'EMPREENDIMENTO' | 'CATALOGO';
+
 export interface ZonaUrbanistica {
+  origemDaZona: OrigemDaZona;
+  setOrigemDaZona: (o: OrigemDaZona) => void;
+
   /** Empreendimento escolhido — serve à zona E ao write-back de área. */
   empreendimentoId: string;
   setEmpreendimentoId: (id: string) => void;
-  zonas: EmpreendimentoRegulatoryZone[];
+
+  /** Caminho do catálogo: cidade → mapa → zona. */
+  cidade: CitySearchValue | null;
+  setCidade: (c: CitySearchValue | null) => void;
+  mapas: RegulatoryMapWithCity[];
+  mapaId: string;
+  setMapaId: (id: string) => void;
+  carregandoMapas: boolean;
+
+  /** As zonas da origem ativa. */
+  zonas: ZonaRegulatoria[];
   carregandoZonas: boolean;
 
   /** Em vigor no desenho. */
@@ -75,27 +102,57 @@ const CAMPO_DO_RECUO: Record<keyof Recuos, CampoDaZona> = {
   LATERAL_ESQUERDA: 'recuo_lateral_esquerda',
 };
 
+const COLUNA_DO_RECUO: Record<keyof Recuos, keyof UrbanContextInput> = {
+  FRENTE: 'recuo_frente_mm',
+  FUNDOS: 'recuo_fundos_mm',
+  LATERAL_DIREITA: 'recuo_lateral_direita_mm',
+  LATERAL_ESQUERDA: 'recuo_lateral_esquerda_mm',
+};
+
+const TODOS_OS_CAMPOS: CampoDaZona[] = [
+  'recuo_frente',
+  'recuo_fundos',
+  'recuo_lateral_direita',
+  'recuo_lateral_esquerda',
+  'taxa_ocupacao_max',
+  'coeficiente_max',
+  'gabarito_altura_max',
+  'gabarito_pavimentos',
+  'taxa_permeabilidade_min',
+];
+
+const SEM_LIMITES: Omit<ValoresDaZona, 'recuoMm'> = {
+  taxaOcupacaoMax: null,
+  coeficienteMax: null,
+  gabaritoAlturaMaxM: null,
+  gabaritoPavimentos: null,
+  taxaPermeabilidadeMin: null,
+};
+
 export function useBlueprintZonaUrbanistica(
   studyId: string,
   organizationId: string,
   /** Sugestão vinda da obra do estudo. Só vale enquanto ninguém escolheu nada. */
   empreendimentoSugerido: string | null,
+  /** Contexto do topo. `null` = "Todas" — o catálogo então não filtra por org. */
+  orgId: string | null,
 ): ZonaUrbanistica {
+  const [origemDaZona, setOrigemDaZona] = useState<OrigemDaZona>('EMPREENDIMENTO');
   const [empreendimentoId, setEmpreendimentoIdBruto] = useState('');
-  const [zonas, setZonas] = useState<EmpreendimentoRegulatoryZone[]>([]);
+
+  const [cidade, setCidade] = useState<CitySearchValue | null>(null);
+  const [mapas, setMapas] = useState<RegulatoryMapWithCity[]>([]);
+  const [mapaId, setMapaId] = useState('');
+  const [carregandoMapas, setCarregandoMapas] = useState(false);
+
+  const [zonas, setZonas] = useState<ZonaRegulatoria[]>([]);
   const [carregandoZonas, setCarregandoZonas] = useState(false);
 
   const [recuos, setRecuos] = useState<Recuos>(RECUOS_ZERO);
-  const [valores, setValores] = useState<Omit<ValoresDaZona, 'recuoMm'>>({
-    taxaOcupacaoMax: null,
-    coeficienteMax: null,
-    gabaritoAlturaMaxM: null,
-    gabaritoPavimentos: null,
-    taxaPermeabilidadeMin: null,
-  });
+  const [limites, setLimites] = useState<Omit<ValoresDaZona, 'recuoMm'>>(SEM_LIMITES);
 
   const [contexto, setContexto] = useState<BlueprintUrbanContext | null>(null);
-  const [origem, setOrigem] = useState<Record<string, 'ZONA' | 'MANUAL'>>({});
+  const [origemDosValores, setOrigemDosValores] = useState<Record<string, 'ZONA' | 'MANUAL'>>({});
   const [salvando, setSalvando] = useState(false);
   const [persistenciaIndisponivel, setPersistencia] = useState(false);
 
@@ -108,30 +165,36 @@ export function useBlueprintZonaUrbanistica(
     (async () => {
       try {
         const ctx = await blueprintUrbanContextService.get(studyId);
-        if (!vivo) return;
-        if (!ctx) return;
+        if (!vivo || !ctx) return;
 
         setContexto(ctx);
-        setOrigem(ctx.origem_valores ?? {});
+        setOrigemDosValores(ctx.origem_valores ?? {});
         setRecuos({
           FRENTE: ctx.recuo_frente_mm ?? 0,
           FUNDOS: ctx.recuo_fundos_mm ?? 0,
           LATERAL_DIREITA: ctx.recuo_lateral_direita_mm ?? 0,
           LATERAL_ESQUERDA: ctx.recuo_lateral_esquerda_mm ?? 0,
         });
-        setValores({
+        setLimites({
           taxaOcupacaoMax: ctx.taxa_ocupacao_max,
           coeficienteMax: ctx.coeficiente_max,
           gabaritoAlturaMaxM: ctx.gabarito_altura_max_m,
           gabaritoPavimentos: ctx.gabarito_pavimentos,
           taxaPermeabilidadeMin: ctx.taxa_permeabilidade_min,
         });
+
+        // Linha gravada antes de `zona_origem` existir veio do empreendimento:
+        // à época era o único caminho.
+        const origemSalva: OrigemDaZona = ctx.zona_origem ?? 'EMPREENDIMENTO';
+        setOrigemDaZona(origemSalva);
+        if (origemSalva === 'CATALOGO' && ctx.regulatory_map_id) {
+          setMapaId(ctx.regulatory_map_id);
+        }
         if (ctx.empreendimento_id) {
           escolheuAMao.current = true;
           setEmpreendimentoIdBruto(ctx.empreendimento_id);
         }
       } catch (e) {
-        // Sem a migration aplicada, seguir em memória — ver o cabeçalho.
         if (vivo) setPersistencia(true);
         console.warn('[zona urbanística] persistência indisponível:', e);
       }
@@ -147,17 +210,46 @@ export function useBlueprintZonaUrbanistica(
     setEmpreendimentoIdBruto(empreendimentoSugerido);
   }, [empreendimentoSugerido, empreendimentoId]);
 
-  // ── Zonas do empreendimento escolhido ─────────────────────────────────────
+  // ── Mapas da cidade (só no caminho do catálogo) ───────────────────────────
   useEffect(() => {
-    if (!empreendimentoId) {
+    if (origemDaZona !== 'CATALOGO' || !cidade) {
+      setMapas([]);
+      return;
+    }
+    let vivo = true;
+    setCarregandoMapas(true);
+    regulatoryMapService
+      .list(orgId ?? undefined, cidade.id)
+      .then((m) => vivo && setMapas(m))
+      .catch((e) => {
+        if (vivo) setMapas([]);
+        console.warn('[zona urbanística] não deu para listar os mapas:', e);
+      })
+      .finally(() => vivo && setCarregandoMapas(false));
+    return () => {
+      vivo = false;
+    };
+  }, [origemDaZona, cidade, orgId]);
+
+  // ── Zonas da origem ativa ─────────────────────────────────────────────────
+  useEffect(() => {
+    const buscar =
+      origemDaZona === 'EMPREENDIMENTO'
+        ? empreendimentoId
+          ? () => empreendimentoService.listRegulatoryZones(empreendimentoId)
+          : null
+        : mapaId
+          ? () => regulatoryMapService.listZones(mapaId)
+          : null;
+
+    if (!buscar) {
       setZonas([]);
       return;
     }
     let vivo = true;
     setCarregandoZonas(true);
-    empreendimentoService
-      .listRegulatoryZones(empreendimentoId)
-      .then((z) => vivo && setZonas(z))
+    buscar()
+      .then((z) => vivo && setZonas(z as ZonaRegulatoria[]))
       .catch((e) => {
         if (vivo) setZonas([]);
         console.warn('[zona urbanística] não deu para listar as zonas:', e);
@@ -166,7 +258,7 @@ export function useBlueprintZonaUrbanistica(
     return () => {
       vivo = false;
     };
-  }, [empreendimentoId]);
+  }, [origemDaZona, empreendimentoId, mapaId]);
 
   const setEmpreendimentoId = useCallback((id: string) => {
     escolheuAMao.current = true;
@@ -201,7 +293,7 @@ export function useBlueprintZonaUrbanistica(
       const novosRecuos = recuosDaZona(lidos);
 
       setRecuos(novosRecuos);
-      setValores({
+      setLimites({
         taxaOcupacaoMax: lidos.taxaOcupacaoMax,
         coeficienteMax: lidos.coeficienteMax,
         gabaritoAlturaMaxM: lidos.gabaritoAlturaMaxM,
@@ -210,22 +302,17 @@ export function useBlueprintZonaUrbanistica(
       });
 
       // Aplicar zera os ajustes manuais anteriores: é a ação explícita de dizer
-      // "quero o que a lei diz". Manter marcas de MANUAL aqui faria o rótulo
-      // "ajustado à mão" ficar aceso sobre valores que acabaram de vir da lei.
+      // "quero o que a lei diz". Manter marcas de MANUAL faria o rótulo
+      // "ajustado à mão" ficar aceso sobre valores recém-vindos da lei.
       const todosDaZona: Record<string, 'ZONA' | 'MANUAL'> = {};
-      for (const c of Object.values(CAMPO_DO_RECUO)) todosDaZona[c] = 'ZONA';
-      for (const c of [
-        'taxa_ocupacao_max',
-        'coeficiente_max',
-        'gabarito_altura_max',
-        'gabarito_pavimentos',
-        'taxa_permeabilidade_min',
-      ] as CampoDaZona[]) {
-        todosDaZona[c] = 'ZONA';
-      }
-      setOrigem(todosDaZona);
+      for (const c of TODOS_OS_CAMPOS) todosDaZona[c] = 'ZONA';
+      setOrigemDosValores(todosDaZona);
 
       void persistir({
+        zona_origem: origemDaZona,
+        // Só o caminho do catálogo precisa do mapa: é por ele que a zona é
+        // relida para conferir se a lei mudou.
+        regulatory_map_id: origemDaZona === 'CATALOGO' ? mapaId || null : null,
         empreendimento_id: empreendimentoId || null,
         regulatory_zone_id: zona.id,
         zona_rotulo: rotuloDaZona(zona),
@@ -243,20 +330,14 @@ export function useBlueprintZonaUrbanistica(
         aplicado_em: new Date().toISOString(),
       });
     },
-    [zonas, empreendimentoId, persistir],
+    [zonas, empreendimentoId, mapaId, origemDaZona, persistir],
   );
 
   const desligar = useCallback(() => {
     setContexto(null);
-    setOrigem({});
+    setOrigemDosValores({});
     setRecuos(RECUOS_ZERO);
-    setValores({
-      taxaOcupacaoMax: null,
-      coeficienteMax: null,
-      gabaritoAlturaMaxM: null,
-      gabaritoPavimentos: null,
-      taxaPermeabilidadeMin: null,
-    });
+    setLimites(SEM_LIMITES);
     if (persistenciaIndisponivel) return;
     blueprintUrbanContextService
       .clear(studyId)
@@ -267,7 +348,7 @@ export function useBlueprintZonaUrbanistica(
 
   const marcarManual = useCallback(
     (campo: CampoDaZona, patch: UrbanContextInput) => {
-      setOrigem((o) => {
+      setOrigemDosValores((o) => {
         const nova = { ...o, [campo]: 'MANUAL' as const };
         void persistir({ ...patch, origem_valores: nova });
         return nova;
@@ -279,20 +360,14 @@ export function useBlueprintZonaUrbanistica(
   const ajustarRecuo = useCallback(
     (papel: keyof Recuos, mm: number) => {
       setRecuos((r) => ({ ...r, [papel]: mm }));
-      const coluna = {
-        FRENTE: 'recuo_frente_mm',
-        FUNDOS: 'recuo_fundos_mm',
-        LATERAL_DIREITA: 'recuo_lateral_direita_mm',
-        LATERAL_ESQUERDA: 'recuo_lateral_esquerda_mm',
-      }[papel];
-      marcarManual(CAMPO_DO_RECUO[papel], { [coluna]: mm } as UrbanContextInput);
+      marcarManual(CAMPO_DO_RECUO[papel], { [COLUNA_DO_RECUO[papel]]: mm } as UrbanContextInput);
     },
     [marcarManual],
   );
 
   const ajustarTaxaOcupacaoMax = useCallback(
     (v: number | null) => {
-      setValores((s) => ({ ...s, taxaOcupacaoMax: v }));
+      setLimites((s) => ({ ...s, taxaOcupacaoMax: v }));
       marcarManual('taxa_ocupacao_max', { taxa_ocupacao_max: v });
     },
     [marcarManual],
@@ -300,7 +375,7 @@ export function useBlueprintZonaUrbanistica(
 
   const ajustarCoeficienteMax = useCallback(
     (v: number | null) => {
-      setValores((s) => ({ ...s, coeficienteMax: v }));
+      setLimites((s) => ({ ...s, coeficienteMax: v }));
       marcarManual('coeficiente_max', { coeficiente_max: v });
     },
     [marcarManual],
@@ -310,26 +385,34 @@ export function useBlueprintZonaUrbanistica(
 
   const zonaAplicadaId = contexto?.regulatory_zone_id ?? null;
   const ajustadoAMao = useMemo(
-    () => Object.values(origem).some((o) => o === 'MANUAL'),
-    [origem],
+    () => Object.values(origemDosValores).some((o) => o === 'MANUAL'),
+    [origemDosValores],
   );
 
   const derivou = useMemo(() => {
     if (!zonaAplicadaId) return false;
     const zonaAtual = zonas.find((z) => z.id === zonaAplicadaId);
-    // Zona de origem apagada não é deriva: não há com o que comparar, e o
-    // estudo continua válido com os números que já tinha.
+    // Zona de origem apagada — ou fora da lista carregada agora — não é deriva:
+    // não há com o que comparar, e o estudo segue válido com o que já tinha.
     if (!zonaAtual) return false;
-    return zonaDerivou({ recuoMm: recuos, ...valores }, origem, zonaAtual);
-  }, [zonaAplicadaId, zonas, recuos, valores, origem]);
+    return zonaDerivou({ recuoMm: recuos, ...limites }, origemDosValores, zonaAtual);
+  }, [zonaAplicadaId, zonas, recuos, limites, origemDosValores]);
 
   return {
+    origemDaZona,
+    setOrigemDaZona,
     empreendimentoId,
     setEmpreendimentoId,
+    cidade,
+    setCidade,
+    mapas,
+    mapaId,
+    setMapaId,
+    carregandoMapas,
     zonas,
     carregandoZonas,
     recuos,
-    ...valores,
+    ...limites,
     ajustarRecuo,
     ajustarTaxaOcupacaoMax,
     ajustarCoeficienteMax,

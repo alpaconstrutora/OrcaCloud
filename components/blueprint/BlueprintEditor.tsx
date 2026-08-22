@@ -39,6 +39,7 @@ import PainelTerreno from './PainelTerreno';
 import PainelZonaUrbanistica from './PainelZonaUrbanistica';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
+import { useOrgContext } from '../../hooks/useOrgContext';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 import {
@@ -165,9 +166,18 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
 
   const levelId = editor.model.levels[0]?.id ?? null;
   const confirmar = useConfirm();
+  const { orgId } = useOrgContext();
 
   /**
-   * Empreendimentos da organização, para o write-back da área do terreno.
+   * Empreendimentos do CONTEXTO DO TOPO — para a zona urbanística e para o
+   * write-back da área do terreno.
+   *
+   * ⚠️ `orgId` do `useOrgContext`, NÃO `study.organization_id`. O seletor do topo
+   * é a autoridade (REGRA #5): em "Todas as organizações" ele vale `null`, o
+   * service não aplica `.eq()` e a RLS recorta o resto. Filtrar pela org DO
+   * ESTUDO parecia certo — o estudo pertence a uma org só — mas escondia
+   * empreendimentos que o usuário estava vendo no topo, e o incorporador que
+   * mantém a obra numa org e a incorporação em outra não achava o alvo.
    *
    * Carregados aqui, e não no painel, porque o painel é apresentacional — a
    * mesma divisão de `PainelParedeSelecionada`, que é o que permitiu testá-lo
@@ -176,7 +186,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
   useEffect(() => {
     let vivo = true;
     empreendimentoService
-      .list(study.organization_id)
+      .list(orgId ?? undefined)
       .then((lista) => vivo && setEmpreendimentos(lista))
       // Silencioso de propósito: não poder listar empreendimento não pode
       // impedir de desenhar. O bloco de gravação simplesmente não aparece.
@@ -184,7 +194,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     return () => {
       vivo = false;
     };
-  }, [study.organization_id]);
+  }, [orgId]);
 
   /**
    * O empreendimento sugerido pela OBRA do estudo.
@@ -213,6 +223,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     study.id,
     study.organization_id,
     empreendimentoSugerido,
+    orgId,
   );
   const recuos = zona.recuos;
 
@@ -1697,9 +1708,17 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
             alturaDesenhadaM={alturaDesenhadaM}
             zonaSlot={
               <PainelZonaUrbanistica
+                origemDaZona={zona.origemDaZona}
+                onOrigemDaZona={zona.setOrigemDaZona}
                 empreendimentos={empreendimentos.map((e) => ({ id: e.id, nome: e.name }))}
                 empreendimentoId={zona.empreendimentoId}
                 onEmpreendimento={zona.setEmpreendimentoId}
+                cidade={zona.cidade}
+                onCidade={zona.setCidade}
+                mapas={zona.mapas}
+                mapaId={zona.mapaId}
+                onMapa={zona.setMapaId}
+                carregandoMapas={zona.carregandoMapas}
                 zonas={zona.zonas}
                 carregandoZonas={zona.carregandoZonas}
                 zonaAplicadaId={zona.zonaAplicadaId}

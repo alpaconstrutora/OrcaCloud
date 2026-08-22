@@ -167,6 +167,79 @@ export function escalaAparente(u: Underlay, dpi = 150): number {
   return u.mmPorPixel / mmPorPixelDoPapel;
 }
 
+/** Escalas de projeto que aparecem numa prancha brasileira. */
+const ESCALAS_PADRAO = [20, 25, 50, 75, 100, 125, 200, 250, 500];
+
+/**
+ * A escala padrão que a aferição quase acertou — ou `null`.
+ *
+ * ─── POR QUE ISTO VALE UMA FUNÇÃO ───────────────────────────────────────────
+ *
+ * Medido num caso real em 22/08/2026: uma aferição declarada sobre uma cota de
+ * 1,1 m saiu em 1:101,5 em vez de 1:100. A causa é banal — 1,1 m ocupa 65 px no
+ * raster, e o clique caiu em 64. **Um pixel.**
+ *
+ * O estrago não é banal. Os 1,45% empurram a parede de 20 cm para 20,6 cm, em
+ * cima da fronteira do arredondamento: na geração a partir do PDF, 14 paredes
+ * viraram 21 cm e 7 ficaram em 20 cm. **A mesma alvenaria em duas linhas de
+ * orçamento** — exatamente o que `espessuraDeConstrucao` existe para evitar. O
+ * arredondamento absorve erro pequeno, mas não erro que joga o valor em cima da
+ * borda do balde.
+ *
+ * Como ninguém desenha em 1:101,5, a proximidade de uma escala padrão é um
+ * sinal forte de erro de clique — e é barato perguntar.
+ *
+ * A faixa tem PISO: abaixo de `minPct` a aferição já está boa, e avisar viraria
+ * ruído que se aprende a ignorar.
+ */
+export function escalaPadraoProxima(
+  aparente: number,
+  minPct = 0.5,
+  maxPct = 3,
+): number | null {
+  if (!(aparente > 0)) return null;
+  let melhor: number | null = null;
+  let menorDesvio = Infinity;
+
+  for (const padrao of ESCALAS_PADRAO) {
+    const desvio = Math.abs(aparente - padrao) / padrao;
+    if (desvio < menorDesvio) {
+      menorDesvio = desvio;
+      melhor = padrao;
+    }
+  }
+
+  const pct = menorDesvio * 100;
+  return melhor !== null && pct >= minPct && pct <= maxPct ? melhor : null;
+}
+
+/**
+ * Quanto vale UM PIXEL de erro na aferição que foi feita.
+ *
+ * A precisão da escala não depende de quão bem se clica: depende de sobre QUE
+ * COMPRIMENTO se clicou. Aferir sobre 65 px faz cada pixel valer 1,5%; sobre
+ * 600 px, 0,17%. É a mesma mão, nove vezes mais precisa.
+ *
+ * Por isso a tela mostra o vão em pixels e não só o resultado: é o número que
+ * diz se vale a pena refazer, e é acionável — "use a cota mais longa" é
+ * conselho que se pode seguir, "clique com cuidado" não é.
+ */
+export function precisaoDaAfericao(
+  p1: PontoPx,
+  p2: PontoPx,
+): { vaoPx: number; pctPorPixel: number } {
+  const vaoPx = Math.hypot(p2.px - p1.px, p2.py - p1.py);
+  return { vaoPx, pctPorPixel: vaoPx > 0 ? 100 / vaoPx : Infinity };
+}
+
+/**
+ * Abaixo disto a aferição é curta o bastante para valer o aviso.
+ *
+ * 200 px faz um pixel valer 0,5% — metade do piso de `escalaPadraoProxima`, e
+ * confortavelmente dentro do balde de centímetro de uma parede de 20 cm.
+ */
+export const VAO_CURTO_PX = 200;
+
 /**
  * TRAÇAR SOBRE RASTER HERDA A DISTORÇÃO DO RASTER.
  *

@@ -2,8 +2,11 @@ import React, { useRef, useState } from 'react';
 import { AlertTriangle, Image as ImageIcon, Layers, Ruler, Trash2 } from 'lucide-react';
 import {
   AVISO_RASTER,
+  VAO_CURTO_PX,
   distanciaMedidaMm,
   escalaAparente,
+  escalaPadraoProxima,
+  precisaoDaAfericao,
   type Underlay,
 } from '../../utils/blueprintUnderlay';
 import type { UnderlayRow } from '../../services/blueprintUnderlayService';
@@ -120,8 +123,8 @@ export default function ControlesDeFundo({
             aria-pressed={calibrando}
             title={
               calibrando
-                ? 'Clique dois pontos de distância conhecida na planta'
-                : 'Aferir a escala: dois cliques e a distância real entre eles'
+                ? 'Clique dois pontos de distância conhecida — use a cota MAIS LONGA da planta'
+                : 'Aferir a escala: dois cliques e a distância real entre eles. Prefira a cota mais longa: sobre 65 px um pixel de erro vale 1,5%; sobre 600 px, 0,17%'
             }
             className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium ${
               calibrando
@@ -130,7 +133,7 @@ export default function ControlesDeFundo({
             }`}
           >
             <Ruler className="h-3.5 w-3.5" />
-            {calibrando ? 'Clique 2 pontos…' : 'Aferir escala'}
+            {calibrando ? 'Clique 2 pontos (cota longa)…' : 'Aferir escala'}
           </button>
 
           <label className="flex items-center gap-1.5 text-[11px] text-slate-600">
@@ -188,6 +191,23 @@ export function ResumoDaAfericao({
       )
     : null;
 
+  const aparente = escalaAparente(underlay);
+
+  // A sugestão de escala padrão só vale para prancha vinda de PDF.
+  //
+  // `escalaAparente` supõe 150 dpi, que é como `rasterizarPdf` gera — para PDF
+  // o número é exato. Numa foto ou num JPG solto o dpi é desconhecido, "1:101,5"
+  // não significa nada, e sugerir 1:100 seria inventar precisão que não existe.
+  const precisao = temAfericao
+    ? precisaoDaAfericao(
+        { px: linha.calib_p1_px!, py: linha.calib_p1_py! },
+        { px: linha.calib_p2_px!, py: linha.calib_p2_py! },
+      )
+    : null;
+  const padrao =
+    temAfericao && linha.pdf_pagina !== null ? escalaPadraoProxima(aparente) : null;
+  const vaoCurto = precisao !== null && precisao.vaoPx < VAO_CURTO_PX;
+
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-2">
       <p className="flex items-start gap-1.5 text-[11px] text-amber-800">
@@ -196,15 +216,48 @@ export function ResumoDaAfericao({
       </p>
 
       {temAfericao ? (
-        <p className="mt-1 text-[11px] text-amber-700">
-          Aferido em <strong>{(linha.calib_distancia_mm! / 1000).toFixed(2).replace('.', ',')} m</strong>
-          {conferida !== null && (
-            <> · confere em {(conferida / 1000).toFixed(2).replace('.', ',')} m</>
-          )}{' '}
-          · {underlay.mmPorPixel.toFixed(2).replace('.', ',')} mm por pixel · equivale a 1:
-          {Math.round(escalaAparente(underlay))} num escaneamento de 150 dpi
-          {linha.calib_alinhado && ' · planta alinhada pela referência'}
-        </p>
+        <>
+          <p className="mt-1 text-[11px] text-amber-700">
+            Aferido em <strong>{(linha.calib_distancia_mm! / 1000).toFixed(2).replace('.', ',')} m</strong>
+            {conferida !== null && (
+              <> · confere em {(conferida / 1000).toFixed(2).replace('.', ',')} m</>
+            )}{' '}
+            · {underlay.mmPorPixel.toFixed(2).replace('.', ',')} mm por pixel · equivale a 1:
+            {aparente.toFixed(1).replace('.', ',')}
+            {linha.pdf_pagina === null && ' num escaneamento de 150 dpi'}
+            {linha.calib_alinhado && ' · planta alinhada pela referência'}
+          </p>
+
+          {/* A SUGESTÃO DE ESCALA PADRÃO.
+              Ninguém desenha em 1:101,5 — a proximidade de uma escala redonda
+              denuncia erro de clique. O texto diz a CONSEQUÊNCIA, não só o
+              desvio: "1,5%" não move ninguém, "parte a espessura das paredes em
+              dois valores" move. */}
+          {padrao !== null && (
+            <p className="mt-1.5 flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-100 px-2 py-1.5 text-[11px] font-medium text-amber-900">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>
+                Isso dá <strong>1:{aparente.toFixed(1).replace('.', ',')}</strong> — quis dizer{' '}
+                <strong>1:{padrao}</strong>? Uma diferença dessas parte a espessura das paredes
+                entre dois valores (20 cm e 21 cm), e a mesma alvenaria vira duas linhas no
+                orçamento.
+              </span>
+            </p>
+          )}
+
+          {/* O VÃO DA AFERIÇÃO.
+              A precisão não depende de clicar bem, e sim de sobre que
+              comprimento se clicou — e este é o número que diz se vale refazer. */}
+          {precisao !== null && (
+            <p
+              className={`mt-1 text-[11px] ${vaoCurto ? 'font-medium text-amber-900' : 'text-amber-700'}`}
+            >
+              Medido sobre {Math.round(precisao.vaoPx)} px da imagem: aqui, 1 pixel de erro vale{' '}
+              {precisao.pctPorPixel.toFixed(2).replace('.', ',')}%
+              {vaoCurto && ' — refaça sobre a cota mais longa da planta para reduzir isso'}
+            </p>
+          )}
+        </>
       ) : (
         <p className="mt-1 text-[11px] font-medium text-amber-900">
           Escala ainda NÃO aferida — o que for traçado agora sai fora de escala.

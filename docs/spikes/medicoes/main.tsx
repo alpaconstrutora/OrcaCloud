@@ -19,7 +19,7 @@ import { createRoot } from 'react-dom/client';
 // mediria uma tela que não existe.
 import '../../../index.css';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
-import ControlesDeFundo from '../../../components/blueprint/ControlesDeFundo';
+import ControlesDeFundo, { ResumoDaAfericao } from '../../../components/blueprint/ControlesDeFundo';
 import PainelMedicoes from '../../../components/blueprint/PainelMedicoes';
 import AbasDoPainel from '../../../components/blueprint/AbasDoPainel';
 import type { UnderlayRow } from '../../../services/blueprintUnderlayService';
@@ -355,6 +355,55 @@ function Painel() {
   );
 }
 
+/**
+ * A faixa de aferição, com números REAIS lidos do banco em 22/08/2026.
+ *
+ * Existe porque o aviso de escala próxima de uma padrão é texto condicional, e
+ * texto condicional é o tipo de coisa que passa no teste de unidade e não
+ * aparece na tela. Aqui ele é fotografado.
+ */
+function Resumo() {
+  const linhaReal = {
+    ...prancha('u1', 'Térreo', 0),
+    pdf_pagina: 1,
+    // Aferição real: 1,1 m sobre 64 px, que dá 1:101,5 em vez de 1:100.
+    mm_por_pixel: 17.178867814079,
+    calib_p1_px: 100,
+    calib_p1_py: 100,
+    calib_p2_px: 164,
+    calib_p2_py: 100,
+    calib_distancia_mm: 1100,
+  };
+  const uReal: Underlay = {
+    origemXMm: 0,
+    origemYMm: 0,
+    mmPorPixel: 17.178867814079,
+    rotacaoMrad: 0,
+  };
+
+  const linhaBoa = {
+    ...linhaReal,
+    mm_por_pixel: (25.4 / 150) * 100,
+    calib_p2_px: 690,
+    calib_distancia_mm: 10000,
+  };
+  const uBoa: Underlay = { ...uReal, mmPorPixel: (25.4 / 150) * 100 };
+
+  return (
+    <div className="w-[720px] bg-white">
+      <ResumoDaAfericao linha={linhaReal} underlay={uReal} />
+      <div className="h-4" />
+      <ResumoDaAfericao linha={linhaBoa} underlay={uBoa} />
+    </div>
+  );
+}
+
+if (cena === 'resumo') {
+  document.body.setAttribute('data-cena', 'painel');
+  createRoot(document.getElementById('raiz')!).render(<Resumo />);
+  document.body.setAttribute('data-pronto', '1');
+}
+
 if (cena === 'painel') {
   document.body.setAttribute('data-cena', 'painel');
   createRoot(document.getElementById('raiz')!).render(<Painel />);
@@ -362,7 +411,10 @@ if (cena === 'painel') {
 }
 
 imagemDeFundo().then((img) => {
-  if (cena === 'painel') return;
+  // As cenas SEM canvas precisam sair aqui. Sem esta guarda o `render` de baixo
+  // sobrescreve o que a cena montou, e a captura mostra o canvas achando que
+  // mostra o painel — aconteceu com `resumo` na primeira tentativa.
+  if (cena === 'painel' || cena === 'resumo') return;
   createRoot(document.getElementById('raiz')!).render(<Harness imagem={img} />);
   // Sinaliza que a imagem já carregou: sem isto o driver mediria o canvas antes
   // do `drawImage`, encontraria zero pixel preto e chamaria de defeito.

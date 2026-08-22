@@ -238,3 +238,85 @@ Buscar no carregamento cobraria de todos o custo de algo que a maioria não abre
 - **Pranchas já importadas não ganham vetor retroativamente** — não há PDF
   guardado para extrair. Elas caem no caminho da Fase 1, e a tela diz isso.
 - Mitrar cantos, ambiente/cômodo, foto e scan: inalterados.
+
+---
+
+# Fase 3 — a tela avisa quando a aferição está torta
+
+## Pedido
+
+Depois do primeiro teste com dado real, mostrei que a aferição do usuário estava
+1,45% longa e propus duas correções na tela. Resposta:
+
+> sim
+
+## O caso real que motivou
+
+Lido do banco em 22/08/2026 (usuário de leitura), estudo "Planta 22/08/2026":
+
+```
+mm_por_pixel = 17,178867814079   ·   cota declarada = 1100 mm
+1:100 exato  = 16,9333            →   +1,45%
+```
+
+A causa é banal: 1,1 m ocupa **65 px** no raster, e o clique caiu em **64**.
+Um pixel.
+
+O efeito não é banal. Gerando a mesma planta com as duas aferições:
+
+| | paredes | comprimento | espessuras |
+|---|---|---|---|
+| aferição do usuário | 59 | 86,87 m | **21cm ×14** · 15cm ×11 · 10cm ×8 · **20cm ×7** |
+| 1:100 exato | 59 | 85,63 m | **20cm ×20** · 15cm ×11 · 10cm ×8 |
+
+Os 1,45% empurram a parede de 20 cm para 20,6 cm, **em cima da fronteira do
+arredondamento**: 14 viram 21 cm e 7 ficam em 20 cm. A mesma alvenaria em duas
+linhas de orçamento — exatamente o que `espessuraDeConstrucao` existe para
+evitar. O arredondamento absorve erro pequeno, mas não erro que joga o valor na
+borda do balde.
+
+## Itens
+
+- [x] **`utils/blueprintUnderlay.ts`** — `escalaPadraoProxima` (a escala redonda
+      que a aferição quase acertou, com PISO para não virar ruído) e
+      `precisaoDaAfericao` (quanto vale um pixel de erro na aferição feita).
+- [x] **`components/blueprint/ControlesDeFundo.tsx`** — o aviso de escala e a
+      linha do vão em pixels; o botão e o tooltip passam a pedir a cota MAIS
+      LONGA.
+- [x] **`__tests__/blueprintAfericaoQualidade.test.ts`** — 9 testes, um deles
+      com os números reais lidos do banco.
+- [x] **`docs/spikes/medicoes/`** — cena `resumo`, que fotografa a faixa.
+
+## As duas decisões
+
+### O aviso diz a CONSEQUÊNCIA, não o desvio
+
+"1,5% de diferença" não move ninguém. "Parte a espessura das paredes entre 20 e
+21 cm, e a mesma alvenaria vira duas linhas no orçamento" move — e é verdade
+medida, não retórica.
+
+### O vão em pixels é o número acionável
+
+A precisão da escala não depende de clicar bem: depende de sobre QUE
+COMPRIMENTO se clicou. 65 px faz um pixel valer 1,5%; 590 px, 0,17%. Mesma mão,
+nove vezes mais precisa. Por isso a tela mostra o vão — "use a cota mais longa"
+é conselho que se pode seguir, "clique com cuidado" não é.
+
+### Só para prancha vinda de PDF
+
+`escalaAparente` supõe 150 dpi, que é como `rasterizarPdf` gera — para PDF o
+número é exato. Numa foto ou num JPG solto o dpi é desconhecido, "1:101,5" não
+significa nada, e sugerir 1:100 seria inventar precisão inexistente. A sugestão
+é calada por `linha.pdf_pagina !== null`.
+
+## Verificações
+
+- `__tests__/blueprintAfericaoQualidade.test.ts` — **9/9**, incluindo o caso
+  real e os dois casos em que a tela deve CALAR (aferição já boa; escala longe
+  demais de qualquer padrão)
+- `npx vitest run __tests__` — **1489 passaram**, 24 puladas
+- `docs/spikes/medicoes/passeio.mjs` — **9/9**
+- Faixa **fotografada** na cena `resumo`, com os números reais do banco de um
+  lado e uma aferição sobre 10 m do outro — texto condicional é o tipo de coisa
+  que passa no teste de unidade e não aparece na tela
+- `npx tsc --noEmit` — limpo · `check-ui-standard.sh` — sem violação

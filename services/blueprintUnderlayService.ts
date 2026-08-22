@@ -9,7 +9,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { supabase } from '../lib/supabase';
 import type { Underlay } from '../utils/blueprintUnderlay';
-import type { SegmentoVetor } from '../utils/blueprintVetor';
+import { DPI_DO_FUNDO, type ParaPixel, type SegmentoVetor } from '../utils/blueprintVetor';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -19,7 +19,7 @@ const COLS =
   'id, study_id, organization_id, level_id, storage_path, nome_arquivo, nome, ordem, ' +
   'file_sha256, pdf_pagina, origem_x_mm, origem_y_mm, mm_por_pixel, rotacao_mrad, ' +
   'calib_p1_px, calib_p1_py, calib_p2_px, calib_p2_py, calib_distancia_mm, ' +
-  'calib_alinhado, opacidade, created_at, updated_at';
+  'calib_alinhado, escala_desenho, opacidade, created_at, updated_at';
 
 export interface UnderlayRow {
   id: string;
@@ -43,6 +43,15 @@ export interface UnderlayRow {
   calib_p2_py: number | null;
   calib_distancia_mm: number | null;
   calib_alinhado: boolean;
+  /**
+   * Denominador da escala DECLARADA (100 = 1:100), só para prancha de PDF.
+   *
+   * Exclusivo com `calib_*` de propósito: ou a escala foi declarada e é exata,
+   * ou foi medida por dois cliques e os `calib_*` dizem sobre qual cota. Um par
+   * sintético gravado para representar escala declarada mentiria sobre a origem
+   * do número para quem for revisar.
+   */
+  escala_desenho: number | null;
   opacidade: number;
   created_at: string;
   updated_at: string;
@@ -139,7 +148,17 @@ export async function rasterizarPdf(
 
 export interface SegmentosDaPagina {
   segmentos: SegmentoVetor[];
-  /** Tamanho da página em pontos — a altura é o que inverte o Y. */
+  /**
+   * A matriz do pdf.js que leva o espaço do PDF ao pixel do raster, no MESMO
+   * dpi da planta de fundo.
+   *
+   * ⚠️ Vem da biblioteca e não é derivada aqui. A prancha do usuário tem
+   * `page.rotate = 270` com MediaBox em retrato: `x` e `y` trocam de lugar e
+   * os dois invertem. Uma conta caseira de "espelhar o Y pela altura da
+   * página" acerta só a página sem rotação — e erra em silêncio na girada.
+   */
+  paraPixel: ParaPixel;
+  /** Tamanho do VIEWPORT em pontos (já girado). Informativo. */
   larguraPt: number;
   alturaPt: number;
   totalPaginas: number;
@@ -185,8 +204,9 @@ export async function extrairSegmentosPdf(
   const page = await doc.getPage(pagina);
   const ops = await page.getOperatorList();
   const OPS = pdfjsLib.OPS;
-  // `scale: 1` devolve o tamanho em pontos, que é o espaço dos operadores.
-  const vp = page.getViewport({ scale: 1 });
+  // O MESMO dpi do raster da planta de fundo: é a matriz deste viewport que
+  // faz o traço cair sobre a imagem, e ela já resolve rotação e inversão.
+  const vp = page.getViewport({ scale: DPI_DO_FUNDO / 72 });
 
   const mul = (m: number[], n: number[]) => [
     m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3],
@@ -258,6 +278,7 @@ export async function extrairSegmentosPdf(
 
   return {
     segmentos,
+    paraPixel: [...vp.transform] as ParaPixel,
     larguraPt: vp.width,
     alturaPt: vp.height,
     totalPaginas: doc.numPages,
@@ -274,8 +295,19 @@ export async function extrairSegmentosPdf(
  * centenas de kilobytes.
  */
 export interface VetorDaPrancha {
-  /** Versão do formato. Um leitor que não reconheça deve ignorar o arquivo. */
-  v: 1;
+  /**
+   * Versão do formato.
+   *
+   * **v1 é REJEITADO de propósito, não migrado.** Ele guardava só a altura da
+   * página, e quem lê precisava derivar a conversão espelhando o Y — o que
+   * erra em página com rotação, exatamente o caso da prancha que expôs o
+   * defeito. Não há como recuperar a matriz de um v1 sem o PDF original, e
+   * aceitar o v1 assumindo "sem rotação" reintroduziria o mesmo erro calado.
+   * Lido como ausente, a tela pede o PDF e o arquivo volta correto.
+   */
+  v: 2;
+  /** A matriz do pdf.js: espaço do PDF → pixel do raster. */
+  paraPixel: ParaPixel;
   larguraPt: number;
   alturaPt: number;
   /** ax, ay, bx, by, larguraPt — nesta ordem, repetindo. */
@@ -338,7 +370,9 @@ export async function carregarVetor(storagePath: string): Promise<VetorDaPrancha
     const r = await fetch(data.signedUrl);
     if (!r.ok) return null;
     const json = (await r.json()) as VetorDaPrancha;
-    return json?.v === 1 && Array.isArray(json.seg) ? json : null;
+    return json?.v === 2 && Array.isArray(json.seg) && Array.isArray(json.paraPixel)
+      ? json
+      : null;
   } catch {
     return null;
   }
@@ -349,13 +383,14 @@ export function achatarSegmentos(
   segmentos: SegmentoVetor[],
   larguraPt: number,
   alturaPt: number,
+  paraPixel: ParaPixel,
 ): VetorDaPrancha {
   const seg: number[] = [];
   const r = (n: number) => Math.round(n * 100) / 100;
   for (const s of segmentos) {
     seg.push(r(s.a.x), r(s.a.y), r(s.b.x), r(s.b.y), r(s.larguraPt));
   }
-  return { v: 1, larguraPt, alturaPt, seg };
+  return { v: 2, paraPixel, larguraPt, alturaPt, seg };
 }
 
 /** Volta da forma achatada para os segmentos. */
@@ -451,6 +486,12 @@ export interface SalvarUnderlay {
     distanciaMm: number;
     alinhado: boolean;
   };
+  /**
+   * Denominador da escala declarada. Exclusivo com `calibracao`: quem declara a
+   * escala não clicou cota nenhuma, e gravar um par sintético mentiria sobre a
+   * origem do número.
+   */
+  escalaDesenho?: number | null;
   opacidade: number;
 }
 
@@ -476,6 +517,7 @@ export async function salvarUnderlay(e: SalvarUnderlay): Promise<UnderlayRow> {
     calib_p2_py: e.calibracao?.p2.py ?? null,
     calib_distancia_mm: e.calibracao?.distanciaMm ?? null,
     calib_alinhado: e.calibracao?.alinhado ?? false,
+    escala_desenho: e.escalaDesenho ?? null,
     opacidade: e.opacidade,
     updated_at: new Date().toISOString(),
   };

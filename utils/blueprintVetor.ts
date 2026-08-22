@@ -271,36 +271,60 @@ export function parearFaces(faces: Face[], opcoes: OpcoesPareamento): EixoDeriva
 export const DPI_DO_FUNDO = 150;
 
 /**
- * Ponto do PDF (pt, Y para cima) → milímetro do modelo.
+ * A matriz do pdf.js que leva o espaço do PDF ao pixel do raster.
  *
- * ─── POR QUE NÃO SE PERGUNTA A ESCALA ───────────────────────────────────────
+ * `[a, b, c, d, e, f]`, aplicada como `px = a*x + c*y + e` e
+ * `py = b*x + d*y + f` — a mesma convenção de `viewport.transform`.
+ */
+export type ParaPixel = [number, number, number, number, number, number];
+
+/**
+ * Ponto do PDF → milímetro do modelo.
  *
- * O raster do fundo saiu do MESMO PDF, na mesma página, a `DPI_DO_FUNDO`.
- * Então o pt do vetor e o pixel da imagem são o mesmo espaço a menos de um
- * fator constante — e a aferição que o usuário já fez sobre a imagem vale, sem
- * mudança, para o vetor.
+ * ─── POR QUE UMA MATRIZ, E NÃO UM ESPELHO DE Y ──────────────────────────────
  *
- * O resultado prático é que as paredes geradas caem EXATAMENTE em cima da
- * planta de fundo. Pedir a escala de novo criaria um segundo número para
- * divergir do primeiro.
+ * A primeira versão fazia `py = (alturaPagina - y) * dpi/72`, tratando a
+ * conversão como uma inversão de Y. Funciona só para página sem rotação, e
+ * ELA MESMA foi contradita pela prancha do usuário em 22/08/2026:
  *
- * ⚠️ O Y inverte DUAS vezes e as duas são reais: o PDF tem Y para cima, a
- * imagem rasterizada tem Y para baixo (daí `alturaPaginaPt - y`), e o modelo
- * volta a ter Y para cima (dentro de `pixelParaModelo`). Cancelar mentalmente
- * as duas e omitir ambas dá uma planta espelhada que só aparece quando a porta
- * está do lado errado, já na obra.
+ *     page.rotate = 270 · page.view = [0, 0, 2384, 3370]
+ *     viewport 1x = 3370 × 2384   (girado)
+ *     transform   = [0, -1, -1, 0, 3370, 2384]
+ *
+ * A MediaBox é RETRATO e o desenho é girado 270° para virar paisagem. Três
+ * erros de uma vez: `x` e `y` estão trocados, os dois invertem, e a "altura"
+ * que o espelho usava (2384, do viewport) não é a do eixo Y do espaço do PDF
+ * (3370). O resultado: paredes geradas a dezenas de metros ACIMA da imagem, e
+ * o recorte da tela — correto — não achava nenhuma. O painel dizia
+ * "0 paredes na área visível" com a planta bem visível.
+ *
+ * A matriz do pdf.js já resolve rotação, deslocamento e inversão de uma vez.
+ * Derivar a conta à mão é reimplementar, pior, o que a biblioteca entrega
+ * pronto — e sem nenhum sinal quando erra.
+ *
+ * ⚠️ A rotação de página NÃO é exótica: quem plota A0 a partir de um template
+ * retrato produz exatamente isso, e nenhum teste com página comum a encontra.
  */
 export function ptParaModelo(
   underlay: Underlay,
   p: { x: number; y: number },
-  alturaPaginaPt: number,
-  dpi = DPI_DO_FUNDO,
+  paraPixel: ParaPixel,
 ): { x: number; y: number } {
-  const k = dpi / 72;
   return pixelParaModelo(underlay, {
-    px: p.x * k,
-    py: (alturaPaginaPt - p.y) * k,
+    px: paraPixel[0] * p.x + paraPixel[2] * p.y + paraPixel[4],
+    py: paraPixel[1] * p.x + paraPixel[3] * p.y + paraPixel[5],
   });
+}
+
+/**
+ * A matriz de uma página SEM rotação, para teste e para vetor antigo.
+ *
+ * É exatamente o que a versão defeituosa fazia — mantida com nome explícito
+ * para que usá-la seja uma escolha visível, e não o padrão silencioso.
+ */
+export function paraPixelSemRotacao(alturaPaginaPt: number, dpi = DPI_DO_FUNDO): ParaPixel {
+  const k = dpi / 72;
+  return [k, 0, 0, -k, 0, alturaPaginaPt * k];
 }
 
 /** Milímetros reais por ponto de papel, deduzidos da aferição do fundo. */
@@ -350,7 +374,7 @@ export interface ParedeGerada {
 export function gerarParedes(
   segmentos: SegmentoVetor[],
   underlay: Underlay,
-  alturaPaginaPt: number,
+  paraPixel: ParaPixel,
   limites?: { x0: number; y0: number; x1: number; y1: number } | null,
   opcoes?: Partial<OpcoesPareamento>,
 ): ParedeGerada[] {
@@ -363,8 +387,8 @@ export function gerarParedes(
 
   const saida: ParedeGerada[] = [];
   for (const e of eixos) {
-    const a = ptParaModelo(underlay, e.a, alturaPaginaPt);
-    const b = ptParaModelo(underlay, e.b, alturaPaginaPt);
+    const a = ptParaModelo(underlay, e.a, paraPixel);
+    const b = ptParaModelo(underlay, e.b, paraPixel);
     // AMBAS as pontas dentro: uma parede metade dentro metade fora sairia
     // cortada no meio, e uma parede cortada é pior que uma parede ausente —
     // parece certa e mede errado.

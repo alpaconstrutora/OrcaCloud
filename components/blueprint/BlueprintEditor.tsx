@@ -1353,6 +1353,11 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
           totalPaginas={fundo.totalPaginas}
           onSelecionar={fundo.selecionar}
           onImportar={(arquivo, pagina) => void fundo.importar(arquivo, pagina)}
+          // A escala declarada NÃO passa por `reposicionar` das medições como a
+          // recalibração passa: quem declara a escala está corrigindo o número,
+          // e as formas devem acompanhar. `declararEscala` pivota no mesmo
+          // ponto de referência da aferição anterior, então o traçado fica.
+          onDeclararEscala={(n) => void fundo.declararEscala(n)}
           onCalibrar={() => {
             setAfericao(null);
             editor.setTool(editor.tool === 'calibrar' ? 'selecionar' : 'calibrar');
@@ -1659,6 +1664,7 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               ocupado={fundo.ocupado}
               onExtrair={(arquivo, pag) => extrairSegmentosPdf(arquivo, pag)}
               onVetorGuardado={fundo.vetorDaPranchaAtiva}
+              onRegravar={(segs, larg, alt, m) => void fundo.regravarVetor(segs, larg, alt, m)}
               onGerar={aplicarParedesGeradas}
             />
           ) : aba === 'medicoes' ? (

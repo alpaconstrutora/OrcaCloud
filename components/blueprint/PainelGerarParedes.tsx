@@ -4,6 +4,7 @@ import {
   gerarParedes,
   histogramaEspessura,
   mmPorPt,
+  type ParaPixel,
   type ParedeGerada,
   type SegmentoVetor,
 } from '../../utils/blueprintVetor';
@@ -38,6 +39,7 @@ export default function PainelGerarParedes({
   limitesDaVista,
   onExtrair,
   onVetorGuardado,
+  onRegravar,
   onGerar,
   ocupado,
 }: {
@@ -49,11 +51,20 @@ export default function PainelGerarParedes({
   limitesDaVista: { x0: number; y0: number; x1: number; y1: number } | null;
   onExtrair: (arquivo: File, pagina: number) => Promise<{
     segmentos: SegmentoVetor[];
+    paraPixel: ParaPixel;
+    larguraPt: number;
     alturaPt: number;
     totalPaginas: number;
   }>;
+  /** Regrava o vetor guardado — para a prancha não pedir o PDF de novo. */
+  onRegravar: (
+    segmentos: SegmentoVetor[],
+    larguraPt: number,
+    alturaPt: number,
+    paraPixel: ParaPixel,
+  ) => void;
   /** O vetor guardado na importação. `null` = não tem, e é caso normal. */
-  onVetorGuardado: () => Promise<{ segmentos: SegmentoVetor[]; alturaPt: number } | null>;
+  onVetorGuardado: () => Promise<{ segmentos: SegmentoVetor[]; paraPixel: ParaPixel } | null>;
   onGerar: (paredes: ParedeGerada[]) => void;
   ocupado: boolean;
 }) {
@@ -63,7 +74,7 @@ export default function PainelGerarParedes({
   const [erro, setErro] = useState<string | null>(null);
   const [extraido, setExtraido] = useState<{
     segmentos: SegmentoVetor[];
-    alturaPt: number;
+    paraPixel: ParaPixel;
     nome: string;
     guardado: boolean;
   } | null>(null);
@@ -89,7 +100,7 @@ export default function PainelGerarParedes({
         if (cancelado || !v) return;
         setExtraido({
           segmentos: v.segmentos,
-          alturaPt: v.alturaPt,
+          paraPixel: v.paraPixel,
           nome: 'guardado na importação',
           guardado: true,
         });
@@ -117,7 +128,7 @@ export default function PainelGerarParedes({
     const doGrupo = extraido.segmentos.filter(
       (s) => Math.abs(s.larguraPt - espessuraPt) < 0.01,
     );
-    return gerarParedes(doGrupo, underlay, extraido.alturaPt, limitesDaVista);
+    return gerarParedes(doGrupo, underlay, extraido.paraPixel, limitesDaVista);
   }, [extraido, underlay, espessuraPt, limitesDaVista]);
 
   const porEspessura = useMemo(() => {
@@ -134,10 +145,15 @@ export default function PainelGerarParedes({
       const r = await onExtrair(arquivo, pagina);
       setExtraido({
         segmentos: r.segmentos,
-        alturaPt: r.alturaPt,
+        paraPixel: r.paraPixel,
         nome: arquivo.name,
         guardado: false,
       });
+      // Regrava para a próxima visita: prancha com vetor em formato antigo
+      // pediria o PDF para sempre, a cada vez que o painel abrisse.
+      if (r.segmentos.length > 0) {
+        onRegravar(r.segmentos, r.larguraPt, r.alturaPt, r.paraPixel);
+      }
       if (r.segmentos.length === 0) {
         setErro(
           'Este PDF não tem traço vetorial nesta página — provavelmente é um ' +

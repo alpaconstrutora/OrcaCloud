@@ -4,8 +4,10 @@ import {
   histogramaEspessura,
   juntarColineares,
   mmPorPt,
+  paraPixelSemRotacao,
   parearFaces,
   ptParaModelo,
+  type ParaPixel,
   type SegmentoVetor,
 } from '../utils/blueprintVetor';
 import type { Underlay } from '../utils/blueprintUnderlay';
@@ -146,15 +148,15 @@ describe('ptParaModelo', () => {
     const alturaPagina = 800;
     // Um ponto no TOPO da página (y alto em pt) tem py pequeno na imagem, e
     // volta a ser Y alto (menos negativo) no modelo.
-    const topo = ptParaModelo(underlay, { x: 0, y: 800 }, alturaPagina);
-    const base = ptParaModelo(underlay, { x: 0, y: 0 }, alturaPagina);
+    const topo = ptParaModelo(underlay, { x: 0, y: 800 }, paraPixelSemRotacao(alturaPagina));
+    const base = ptParaModelo(underlay, { x: 0, y: 0 }, paraPixelSemRotacao(alturaPagina));
     expect(topo.y).toBeGreaterThan(base.y);
   });
 
   it('a escala sai da aferição do fundo, sem número novo', () => {
     // 1 pt a 150 dpi = 2,0833 px; com 10 mm/px, 20,83 mm.
-    const p0 = ptParaModelo(underlay, { x: 0, y: 0 }, 100);
-    const p1 = ptParaModelo(underlay, { x: 1, y: 0 }, 100);
+    const p0 = ptParaModelo(underlay, { x: 0, y: 0 }, paraPixelSemRotacao(100));
+    const p1 = ptParaModelo(underlay, { x: 1, y: 0 }, paraPixelSemRotacao(100));
     expect(p1.x - p0.x).toBeCloseTo(10 * (150 / 72), 6);
     expect(mmPorPt(underlay)).toBeCloseTo(10 * (150 / 72), 6);
   });
@@ -173,7 +175,7 @@ describe('gerarParedes', () => {
     const paredes = gerarParedes(
       [seg(0, 400, 100, 400), seg(0, 404.25, 100, 404.25)],
       underlay,
-      800,
+      paraPixelSemRotacao(800),
     );
     expect(paredes).toHaveLength(1);
     expect(paredes[0].espessuraMm).toBe(150);
@@ -184,7 +186,7 @@ describe('gerarParedes', () => {
 
   it('recorta pela região, e recusa parede que sai dela pela metade', () => {
     const segmentos = [seg(0, 400, 100, 400), seg(0, 404.25, 100, 404.25)];
-    const inteira = gerarParedes(segmentos, underlay, 800);
+    const inteira = gerarParedes(segmentos, underlay, paraPixelSemRotacao(800));
     expect(inteira).toHaveLength(1);
 
     // Região que corta a parede no meio: ela NÃO deve sair cortada.
@@ -195,7 +197,8 @@ describe('gerarParedes', () => {
       y0: Math.min(meio.a.y, meio.b.y) - 10,
       y1: Math.max(meio.a.y, meio.b.y) + 10,
     };
-    expect(gerarParedes(segmentos, underlay, 800, limites)).toHaveLength(0);
+    expect(gerarParedes(segmentos, underlay,
+      paraPixelSemRotacao(800), limites)).toHaveLength(0);
   });
 
   it('encosta a espessura no centímetro — sem precisão falsa', () => {
@@ -212,7 +215,7 @@ describe('gerarParedes', () => {
         seg(0, 700 + fina, 100, 700 + fina),
       ],
       underlay,
-      800,
+      paraPixelSemRotacao(800),
     );
     expect(paredes).toHaveLength(2);
     expect(new Set(paredes.map((p) => p.espessuraMm))).toEqual(new Set([200]));
@@ -225,14 +228,104 @@ describe('gerarParedes', () => {
     const paredes = gerarParedes(
       [seg(0, 400, 100, 400), seg(0, 400 + doze, 100, 400 + doze)],
       underlay,
-      800,
+      paraPixelSemRotacao(800),
     );
     expect(paredes[0].espessuraMm).toBe(120);
   });
 
   it('não devolve parede degenerada', () => {
     // Faces que mal se sobrepõem não podem virar uma parede de 0 mm.
-    const paredes = gerarParedes([seg(0, 400, 1, 400), seg(0, 404.25, 1, 404.25)], underlay, 800);
+    const paredes = gerarParedes([seg(0, 400, 1, 400), seg(0, 404.25, 1, 404.25)], underlay, paraPixelSemRotacao(800));
     expect(paredes.every((p) => p.comprimentoMm >= 1)).toBe(true);
+  });
+});
+
+describe('PÁGINA GIRADA — o defeito que chegou a produção', () => {
+  /**
+   * A prancha do usuário, medida em 22/08/2026:
+   *
+   *     page.rotate = 270 · page.view = [0, 0, 2384, 3370]
+   *     viewport 150dpi = 7021 × 4967
+   *     transform = [0, -2.0833, -2.0833, 0, 7020.83, 4966.67]
+   *
+   * A MediaBox é RETRATO e o desenho gira 270° para virar paisagem. A versão
+   * defeituosa espelhava o Y pela altura do VIEWPORT (2384) e ignorava o giro:
+   * as paredes caíam dezenas de metros ACIMA da imagem, o recorte da tela
+   * corretamente não achava nenhuma, e o painel dizia "0 paredes na área
+   * visível" com a planta bem visível.
+   */
+  const GIRADA: ParaPixel = [0, -150 / 72, -150 / 72, 0, 3370 * (150 / 72), 2384 * (150 / 72)];
+  const underlay: Underlay = {
+    origemXMm: 0,
+    origemYMm: 0,
+    mmPorPixel: MM_POR_PT / (150 / 72),
+    rotacaoMrad: 0,
+  };
+
+  it('leva o canto do espaço do PDF ao canto certo da imagem', () => {
+    // user(2384, 3370) é o canto que a rotação leva ao pixel (0, 0).
+    const canto = ptParaModelo(underlay, { x: 2384, y: 3370 }, GIRADA);
+    expect(canto.x).toBeCloseTo(0, 3);
+    expect(canto.y).toBeCloseTo(0, 3);
+  });
+
+  it('TROCA os eixos — é o que o espelho de Y não fazia', () => {
+    // Andar em X no espaço do PDF move em Y na imagem, e vice-versa. Um
+    // espelho de Y mantinha os eixos, e era esse o erro.
+    const o = ptParaModelo(underlay, { x: 0, y: 0 }, GIRADA);
+    const emX = ptParaModelo(underlay, { x: 100, y: 0 }, GIRADA);
+    const emY = ptParaModelo(underlay, { x: 0, y: 100 }, GIRADA);
+
+    expect(Math.abs(emX.x - o.x)).toBeLessThan(1e-6);
+    expect(Math.abs(emX.y - o.y)).toBeGreaterThan(1000);
+    expect(Math.abs(emY.y - o.y)).toBeLessThan(1e-6);
+    expect(Math.abs(emY.x - o.x)).toBeGreaterThan(1000);
+  });
+
+  it('A PAREDE CAI DENTRO DA IMAGEM — a invariante que faltava', () => {
+    // É esta a conferência cuja ausência deixou o defeito passar: eu media
+    // QUANTAS paredes saíam, nunca ONDE elas caíam. Contagem certa com posição
+    // errada passa em tudo — e foi o usuário quem viu.
+    const LARGURA_PX = 3370 * (150 / 72);
+    const ALTURA_PX = 2384 * (150 / 72);
+    const caixa = {
+      x0: 0,
+      x1: LARGURA_PX * underlay.mmPorPixel,
+      y0: -ALTURA_PX * underlay.mmPorPixel,
+      y1: 0,
+    };
+
+    // Coordenadas REAIS da planta das LOJAS na prancha do usuário: y≈3000, que
+    // só existe porque o espaço do PDF é retrato (0..3370). É justamente a
+    // faixa y > 2384 que o espelho pela altura do viewport jogava para fora.
+    const paredes = gerarParedes(
+      [seg(1000, 3000, 1000, 3100), seg(1004.25, 3000, 1004.25, 3100)],
+      underlay,
+      GIRADA,
+    );
+    expect(paredes.length).toBeGreaterThan(0);
+    for (const p of paredes) {
+      for (const v of [p.a, p.b]) {
+        expect(v.x).toBeGreaterThanOrEqual(caixa.x0);
+        expect(v.x).toBeLessThanOrEqual(caixa.x1);
+        expect(v.y).toBeGreaterThanOrEqual(caixa.y0);
+        expect(v.y).toBeLessThanOrEqual(caixa.y1);
+      }
+    }
+  });
+
+  it('a versão antiga REPROVA nessa mesma invariante', () => {
+    // Contra-caso: sem ele, o teste acima poderia estar aprovando por acaso.
+    const ALTURA_PX = 2384 * (150 / 72);
+    const antiga = gerarParedes(
+      [seg(1000, 3000, 1000, 3100), seg(1004.25, 3000, 1004.25, 3100)],
+      underlay,
+      paraPixelSemRotacao(2384),
+    );
+    expect(antiga.length).toBeGreaterThan(0);
+    // Y POSITIVO = acima da imagem, que ocupa Y negativo. É exatamente para
+    // onde as paredes do usuário foram: dezenas de metros fora do desenho.
+    expect(antiga[0].a.y).toBeGreaterThan(0);
+    expect(antiga[0].a.y).toBeGreaterThan(0.2 * ALTURA_PX * underlay.mmPorPixel);
   });
 });

@@ -320,3 +320,86 @@ significa nada, e sugerir 1:100 seria inventar precisão inexistente. A sugestã
   lado e uma aferição sobre 10 m do outro — texto condicional é o tipo de coisa
   que passa no teste de unidade e não aparece na tela
 - `npx tsc --noEmit` — limpo · `check-ui-standard.sh` — sem violação
+
+---
+
+# Correção — página girada: as paredes caíam fora do desenho
+
+## Como apareceu
+
+O usuário abriu a aba "Do PDF" com a planta bem visível na tela, escolheu
+0,60 pt, e o painel disse **"Na área visível da tela: 0 paredes"**, com o botão
+desabilitado.
+
+## O diagnóstico, por eliminação medida
+
+Cada hipótese foi descartada com dado, não com leitura:
+
+| hipótese | como caiu |
+|---|---|
+| essa planta não usa 0,60 pt | tem 117 traços de 0,60 pt na região |
+| o vetor guardado está corrompido | baixado do bucket: 686.057 bytes, íntegro |
+| o algoritmo não acha paredes ali | gerando na região da PAV.01: **47 paredes** |
+| `limitesDaVista` está errado | instrumentado no canvas: cobre a imagem ✓ |
+
+Sobrou uma: as paredes não estavam onde a região procurava.
+
+## A causa
+
+```
+page.rotate = 270
+page.view   = [0, 0, 2384, 3370]     ← MediaBox em RETRATO
+viewport    = 3370 × 2384            ← paisagem, depois do giro
+transform   = [0, −2.0833, −2.0833, 0, 7020.8, 4966.7]
+```
+
+`ptParaModelo` fazia `py = (alturaPagina − y) × dpi/72` — um espelho de Y.
+**Errado em três frentes ao mesmo tempo:** `x` e `y` estão trocados pelo giro,
+os dois invertem, e a "altura" usada (2384, do viewport) não é a do eixo Y do
+espaço do PDF (3370).
+
+A planta das LOJAS fica em `y ≈ 3000`, acima de 2384 — então `py` saía
+NEGATIVO, e as paredes iam parar dezenas de metros **acima** da imagem. O
+recorte da tela, correto, não achava nenhuma.
+
+Rotação de página não é exótica: quem plota A0 a partir de um template retrato
+produz exatamente isso.
+
+## Por que passou por tudo
+
+Eu conferia **quantas** paredes saíam, nunca **onde** elas caíam. Contagem certa
+com posição errada aprova em teste de unidade, no spike e no harness — os três
+usavam a mesma conversão defeituosa dos dois lados, então eram consistentes
+entre si e errados juntos.
+
+É a mesma lição que o harness de `medicoes/` já trazia escrita — *"caixa
+envolvente prova enquadramento, nunca orientação"* — aplicada a um eixo em que
+eu não a apliquei.
+
+## Itens
+
+- [x] **`utils/blueprintVetor.ts`** — `ptParaModelo` passa a receber a MATRIZ do
+      pdf.js (`ParaPixel`) em vez da altura da página. `paraPixelSemRotacao`
+      existe com nome explícito, para que usar o caminho antigo seja escolha
+      visível.
+- [x] **`services/blueprintUnderlayService.ts`** — `extrairSegmentosPdf`
+      devolve `viewport.transform` no dpi do fundo; formato guardado vai a
+      **v2** com a matriz. **v1 é rejeitado, não migrado**: não há como
+      recuperar a matriz sem o PDF, e aceitá-lo assumindo "sem rotação"
+      reintroduziria o mesmo erro calado.
+- [x] **`hooks/useBlueprintUnderlay.ts`** — `regravarVetor`, para que a prancha
+      com vetor v1 volte a abrir pronta depois de apontar o PDF uma vez.
+- [x] **`__tests__/blueprintVetor.test.ts`** — bloco novo com a prancha girada
+      real, incluindo a invariante **"toda parede cai dentro da imagem"** e o
+      contra-caso que mostra a versão antiga reprovando nela.
+- [x] **`docs/spikes/prancha-real/`** — a mesma invariante, sobre a prancha
+      real, no navegador.
+
+## Verificações
+
+- `blueprintVetor.test.ts` — **24/24**
+- `npx vitest run __tests__` — **1501 passaram**
+- `docs/spikes/prancha-real/conferir.mjs` — **14/14**, com a conferência nova:
+  *"toda parede gerada cai DENTRO da imagem — 59 paredes, nenhuma fora"*
+- `docs/spikes/medicoes/passeio.mjs` — 9/9
+- `tsc` limpo · `check-ui-standard.sh` sem violação

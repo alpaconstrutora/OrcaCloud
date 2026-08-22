@@ -345,6 +345,22 @@ console.log('\n4 · Gerar paredes do vetor (caminho do app, no navegador)');
       `${v.guardado.segmentos} tracos em ${v.guardado.kb} KB`,
   );
 
+  // ── A INVARIANTE QUE FALTAVA ─────────────────────────────────────────
+  //
+  // Conferir a CONTAGEM de paredes aprova um resultado inteiramente fora do
+  // lugar. Esta conferência nasceu de um defeito que chegou a producao: a
+  // prancha tem page.rotate = 270, a conversao ignorava o giro, e as paredes
+  // caiam dezenas de metros ACIMA do desenho.
+  registrar(
+    'toda parede gerada cai DENTRO da imagem',
+    v.foraDaImagem === 0,
+    v.foraDaImagem === 0
+      ? `${v.paredes} paredes, nenhuma fora · caixa da imagem ` +
+        `x ${v.caixaImagem.x0.toFixed(0)}..${v.caixaImagem.x1.toFixed(0)} · ` +
+        `y ${v.caixaImagem.y0.toFixed(0)}..${v.caixaImagem.y1.toFixed(0)} mm`
+      : `${v.foraDaImagem} de ${v.paredes} paredes FORA da imagem`,
+  );
+
   const dominantes = v.espessuras.slice(0, 3).map((e) => e.mm);
   registrar(
     'as espessuras dominantes são de construção (20/15/10 cm)',

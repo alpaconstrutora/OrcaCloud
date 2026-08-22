@@ -15,9 +15,10 @@ import {
   urlAssinada,
   type UnderlayRow,
 } from '../services/blueprintUnderlayService';
-import type { SegmentoVetor } from '../utils/blueprintVetor';
+import type { ParaPixel, SegmentoVetor } from '../utils/blueprintVetor';
 import {
   UNDERLAY_NEUTRO,
+  aplicarEscalaDeclarada,
   calibrar,
   type PontoPx,
   type Underlay,
@@ -153,7 +154,12 @@ export function useBlueprintUnderlay(
             const vetor = await extrairSegmentosPdf(arquivo, paginaGravada);
             await salvarVetor(
               storagePath,
-              achatarSegmentos(vetor.segmentos, vetor.larguraPt, vetor.alturaPt),
+              achatarSegmentos(
+                vetor.segmentos,
+                vetor.larguraPt,
+                vetor.alturaPt,
+                vetor.paraPixel,
+              ),
             );
           } catch {
             /* o fundo já subiu; o vetor é conveniência */
@@ -249,6 +255,65 @@ export function useBlueprintUnderlay(
     [linha, opacidade],
   );
 
+  /**
+   * Declara a escala do desenho — sem clicar em nada.
+   *
+   * Para prancha vinda de PDF esta é a via CERTA, e a aferição por dois cliques
+   * passa a ser o caminho de exceção (foto, escaneamento, ou conferência).
+   * O raster é gerado pelo próprio sistema a 150 dpi conhecidos; o único
+   * desconhecido é o denominador, que está escrito na prancha.
+   *
+   * Medido em 22/08/2026: aferir 1,10 m a 1:100 dá 65 px de vão, o clique caiu
+   * em 64, e 1 px virou 1,45% — o bastante para partir a parede de 20 cm entre
+   * 20 e 21 cm na geração. Declarada, a escala tem erro ZERO.
+   *
+   * ⚠️ APAGA os `calib_*`. Não é descuido: eles significam "esta cota foi
+   * clicada", e mantê-los ao lado de uma escala declarada faria a tela mostrar
+   * uma medição que não vale mais e que ninguém refez.
+   */
+  const declararEscala = useCallback(
+    async (denominador: number): Promise<Underlay | null> => {
+      if (!linha) return null;
+      setOcupado(true);
+      setErro(null);
+      try {
+        const anterior = underlayDaLinha(linha);
+        // Pivota no ponto que já servia de referência, se houver — assim o
+        // traçado feito com a escala antiga não sai do lugar.
+        const pivo: PontoPx =
+          linha.calib_p1_px !== null && linha.calib_p1_py !== null
+            ? { px: linha.calib_p1_px, py: linha.calib_p1_py }
+            : { px: 0, py: 0 };
+
+        const novo = aplicarEscalaDeclarada(denominador, anterior, pivo);
+
+        const salvo = await salvarUnderlay({
+          id: linha.id,
+          study_id: linha.study_id,
+          organization_id: linha.organization_id,
+          level_id: linha.level_id,
+          storage_path: linha.storage_path,
+          nome_arquivo: linha.nome_arquivo,
+          nome: linha.nome,
+          ordem: linha.ordem,
+          file_sha256: linha.file_sha256 ?? '',
+          pdf_pagina: linha.pdf_pagina,
+          underlay: novo,
+          escalaDesenho: denominador,
+          opacidade,
+        });
+        setLinhas((atual) => atual.map((l) => (l.id === salvo.id ? salvo : l)));
+        return novo;
+      } catch (e) {
+        setErro(e instanceof Error ? e.message : String(e));
+        return null;
+      } finally {
+        setOcupado(false);
+      }
+    },
+    [linha, opacidade],
+  );
+
   const remover = useCallback(async () => {
     if (!linha) return;
     setOcupado(true);
@@ -276,18 +341,38 @@ export function useBlueprintUnderlay(
    */
   const vetorDaPranchaAtiva = useCallback(async (): Promise<{
     segmentos: SegmentoVetor[];
-    larguraPt: number;
-    alturaPt: number;
+    paraPixel: ParaPixel;
   } | null> => {
     if (!linha) return null;
     const v = await carregarVetor(linha.storage_path);
     if (!v) return null;
-    return {
-      segmentos: desachatarSegmentos(v),
-      larguraPt: v.larguraPt,
-      alturaPt: v.alturaPt,
-    };
+    return { segmentos: desachatarSegmentos(v), paraPixel: v.paraPixel };
   }, [linha]);
+
+  /**
+   * Regrava o vetor da prancha ativa a partir de uma extração feita à mão.
+   *
+   * Serve à prancha cujo vetor guardado é de um formato antigo e foi
+   * rejeitado: sem isto o usuário teria de apontar o PDF a cada visita, para
+   * sempre. Com isto, aponta uma vez e a prancha volta a abrir pronta.
+   *
+   * Silencioso por decisão: é conveniência sobre conveniência, e falhar aqui
+   * não pode atrapalhar quem acabou de conseguir extrair o vetor.
+   */
+  const regravarVetor = useCallback(
+    async (segmentos: SegmentoVetor[], larguraPt: number, alturaPt: number, paraPixel: ParaPixel) => {
+      if (!linha) return;
+      try {
+        await salvarVetor(
+          linha.storage_path,
+          achatarSegmentos(segmentos, larguraPt, alturaPt, paraPixel),
+        );
+      } catch {
+        /* o vetor já está em memória; regravar é só para a próxima visita */
+      }
+    },
+    [linha],
+  );
 
   return {
     linhas,
@@ -295,6 +380,7 @@ export function useBlueprintUnderlay(
     ativaId,
     selecionar: setAtivaId,
     vetorDaPranchaAtiva,
+    regravarVetor,
     imagem,
     underlay,
     opacidade,
@@ -304,8 +390,13 @@ export function useBlueprintUnderlay(
     totalPaginas,
     importar,
     aplicarCalibracao,
+    declararEscala,
     remover,
-    /** `true` quando há fundo mas ninguém aferiu — o traçado sairia fora de escala. */
-    semAfericao: !!linha && linha.calib_distancia_mm === null,
+    /**
+     * `true` quando há fundo mas a escala não foi estabelecida por nenhuma das
+     * duas vias — nem declarada, nem aferida. O traçado sairia fora de escala.
+     */
+    semAfericao:
+      !!linha && linha.calib_distancia_mm === null && (linha.escala_desenho ?? null) === null,
   };
 }

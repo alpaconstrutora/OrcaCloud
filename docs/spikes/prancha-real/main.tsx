@@ -305,6 +305,64 @@ async function principal() {
 
   if (defeito === 'espelho') img = await virarNaVertical(img);
 
+  // ── Cena `regiao`: o que `onVistaMudou` reporta vs onde a imagem está ─────
+  //
+  // Reproduz o caso do usuário em 22/08/2026: painel dizendo "0 paredes na
+  // área visível" com a planta bem visível na tela. Tudo o mais já foi
+  // descartado por medição — o vetor guardado está íntegro, a espessura existe
+  // na região, e gerar sem recorte devolve 259 paredes. Resta a REGIÃO.
+  //
+  // Usa a aferição REAL do usuário, lida do banco, porque o defeito pode
+  // depender de onde a origem cai.
+  if (cena === 'regiao') {
+    const uReal: Underlay = {
+      origemXMm: -5147.36455864463,
+      origemYMm: 13241.379092261,
+      mmPorPixel: 16.9241757697357,
+      rotacaoMrad: 0,
+    };
+
+    // A caixa da IMAGEM em milímetro do modelo — a verdade contra a qual a
+    // região reportada é comparada.
+    const cantos = [
+      { px: 0, py: 0 },
+      { px: img.naturalWidth, py: 0 },
+      { px: img.naturalWidth, py: img.naturalHeight },
+      { px: 0, py: img.naturalHeight },
+    ].map((p) => pixelParaModelo(uReal, p));
+    const xs = cantos.map((c) => c.x);
+    const ys = cantos.map((c) => c.y);
+
+    (window as unknown as Record<string, unknown>).__caixaImagem = {
+      x0: Math.min(...xs), x1: Math.max(...xs),
+      y0: Math.min(...ys), y1: Math.max(...ys),
+    };
+
+    createRoot(document.getElementById('raiz')!).render(
+      <BlueprintCanvas
+        model={emptyModel()}
+        tool="selecionar"
+        levelId={null}
+        selectedIds={[]}
+        onSelecionar={() => {}}
+        onAddWall={() => null}
+        onAddOpening={() => {}}
+        onDelete={() => {}}
+        larguraAberturaMm={900}
+        espessuraMm={150}
+        passoGradeMm={null}
+        fundo={{ imagem: img, underlay: uReal, opacidade: 0.55 }}
+        enquadrarPrancha="u1"
+        onVistaMudou={(l) => {
+          (window as unknown as Record<string, unknown>).__regiao = l;
+        }}
+        onMedicaoPronta={() => {}}
+      />,
+    );
+    document.body.setAttribute('data-pronto', '1');
+    return;
+  }
+
   // ── Cena `vetor`: o caminho de gerar parede, NO NAVEGADOR ─────────────────
   //
   // O algoritmo já é medido duas vezes fora daqui: por teste de unidade e pelo
@@ -335,7 +393,7 @@ async function principal() {
     const cantos = [
       { x: 1780, y: 1840 },
       { x: 2330, y: 2270 },
-    ].map((p) => ptParaModelo(u, p, vetor.alturaPt));
+    ].map((p) => ptParaModelo(u, p, vetor.paraPixel));
     const limites = {
       x0: Math.min(cantos[0].x, cantos[1].x),
       x1: Math.max(cantos[0].x, cantos[1].x),
@@ -344,7 +402,7 @@ async function principal() {
     };
 
     const doGrupo = vetor.segmentos.filter((s) => Math.abs(s.larguraPt - 0.6) < 0.01);
-    const paredes = gerarParedes(doGrupo, u, vetor.alturaPt, limites);
+    const paredes = gerarParedes(doGrupo, u, vetor.paraPixel, limites);
 
     // ── A VOLTA PELO ARQUIVO GUARDADO ────────────────────────────────────
     //
@@ -354,20 +412,52 @@ async function principal() {
     // perceber: o agrupamento de colineares compara offsets com uma casa
     // decimal, e um arredondamento anterior pode empurrar um traço para o
     // grupo vizinho. Aqui se mede se empurra.
-    const achatado = achatarSegmentos(vetor.segmentos, vetor.larguraPt, vetor.alturaPt);
+    const achatado = achatarSegmentos(vetor.segmentos, vetor.larguraPt, vetor.alturaPt, vetor.paraPixel);
     const bytesGuardados = new Blob([JSON.stringify(achatado)]).size;
     const devolta = desachatarSegmentos(achatado);
     const paredesDaVolta = gerarParedes(
       devolta.filter((s) => Math.abs(s.larguraPt - 0.6) < 0.01),
       u,
-      vetor.alturaPt,
+      vetor.paraPixel,
       limites,
     );
 
     const porEsp: Record<number, number> = {};
     for (const p of paredes) porEsp[p.espessuraMm] = (porEsp[p.espessuraMm] ?? 0) + 1;
 
+    // ── A INVARIANTE QUE FALTAVA ──────────────────────────────────────────
+    //
+    // As paredes têm de cair DENTRO da imagem. Parece óbvio demais para medir,
+    // e é exatamente por isso que passou: eu conferia QUANTAS paredes saíam,
+    // nunca ONDE. Contagem certa com posição errada aprova em tudo.
+    //
+    // O defeito real: a prancha tem `page.rotate = 270`, a conversão espelhava
+    // o Y pela altura do viewport e ignorava o giro, e as paredes iam parar
+    // dezenas de metros ACIMA do desenho. O recorte da tela — correto — não
+    // achava nenhuma, e o painel dizia "0 paredes na área visível".
+    const cantosImg = [
+      { px: 0, py: 0 },
+      { px: img.naturalWidth, py: 0 },
+      { px: img.naturalWidth, py: img.naturalHeight },
+      { px: 0, py: img.naturalHeight },
+    ].map((p) => pixelParaModelo(u, p));
+    const ix = cantosImg.map((c) => c.x);
+    const iy = cantosImg.map((c) => c.y);
+    const caixaImg = {
+      x0: Math.min(...ix), x1: Math.max(...ix),
+      y0: Math.min(...iy), y1: Math.max(...iy),
+    };
+    const foraDaImagem = paredes.filter(
+      (p) =>
+        [p.a, p.b].some(
+          (v) =>
+            v.x < caixaImg.x0 || v.x > caixaImg.x1 || v.y < caixaImg.y0 || v.y > caixaImg.y1,
+        ),
+    ).length;
+
     (window as unknown as Record<string, unknown>).__vetor = {
+      caixaImagem: caixaImg,
+      foraDaImagem,
       msVetor,
       totalSegmentos: vetor.segmentos.length,
       paginaPt: { largura: vetor.larguraPt, altura: vetor.alturaPt },

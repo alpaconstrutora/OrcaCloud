@@ -14,6 +14,8 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import QuadroDeDivisas from '../../../components/blueprint/QuadroDeDivisas';
 import PainelTerreno from '../../../components/blueprint/PainelTerreno';
+import PainelZonaUrbanistica from '../../../components/blueprint/PainelZonaUrbanistica';
+import type { EmpreendimentoRegulatoryZone } from '../../../types/empreendimento';
 import {
   applyBatch,
   applyCommand,
@@ -28,6 +30,7 @@ import {
   medirTerreno,
   papeisSugeridos,
 } from '../../../utils/blueprintTerreno';
+import { lerZona, recuosDaZona } from '../../../utils/blueprintZonaUrbanistica';
 
 /** Lote de 5 lados: frente ao sul, fundo partido em dois trechos da mesma reta. */
 const CANTOS = [
@@ -99,31 +102,84 @@ function App() {
     setModel((atual) => applyBatch(atual, comandos).model);
   const terreno = medirTerreno(model.boundaries);
 
-  if (new URLSearchParams(location.search).get('painel') === '1') {
+  const painel = new URLSearchParams(location.search).get('painel');
+  if (painel) {
     const linhas = terreno ? linhasDoQuadro(terreno, model.boundaries) : [];
-    // A largura real da coluna de propriedades do editor. Sem fixá-la, o painel
-    // se espalha na tela e o teste não mostra o aperto que ele vive.
+
+    /** Zona como o usuário digita lendo a lei: texto BR, com "N.A." e tudo. */
+    const zonaBase: EmpreendimentoRegulatoryZone = {
+      id: 'z1',
+      empreendimento_id: 'e1',
+      organization_id: 'o1',
+      zona: 'ZR-2',
+      macroarea: 'Zona Residencial 2',
+      recuo_frente: '5,00',
+      recuo_fundos: '3,00',
+      recuo_lateral_direita: '1,50',
+      recuo_lateral_esquerda: '1,50',
+      taxa_ocupacao_maxima: '0,8',
+      taxa_permeabilidade_minima: '20',
+      ca_maximo: '3',
+      gabarito_altura_maxima: '18',
+      gabarito_pavimentos: '6',
+      lei_referencia: 'Lei 1.234/2019',
+      nivel_confianca: 'Validado na prefeitura',
+      created_at: '2026-08-22T00:00:00Z',
+      updated_at: '2026-08-22T00:00:00Z',
+    } as EmpreendimentoRegulatoryZone;
+
+    // `na` = zona com campos ilegíveis; `vazio` = nenhum empreendimento escolhido.
+    const zonaIlegivel = {
+      ...zonaBase,
+      recuo_fundos: 'N.A.',
+      ca_maximo: 'conforme art. 42',
+    } as EmpreendimentoRegulatoryZone;
+
+    const comZona = painel !== 'vazio';
+    const zonaAtiva = painel === 'na' ? zonaIlegivel : zonaBase;
+    const lida = lerZona(zonaAtiva).valores;
+
     return (
       <div className="w-[320px] border-l border-slate-200 bg-white">
         <PainelTerreno
           terreno={terreno}
-          divisaSelecionada={model.boundaries[1] ?? null}
+          divisaSelecionada={null}
           onComprimento={() => {}}
           onPapel={() => {}}
-          recuos={{ FRENTE: 5000, FUNDOS: 3000, LATERAL_DIREITA: 1500, LATERAL_ESQUERDA: 1500 }}
+          recuos={comZona ? recuosDaZona(lida) : { FRENTE: 0, FUNDOS: 0, LATERAL_DIREITA: 0, LATERAL_ESQUERDA: 0 }}
           onRecuo={() => {}}
           envelope={null}
           aproveitamento={null}
-          taxaOcupacaoMax={null}
-          coeficienteMax={null}
+          taxaOcupacaoMax={comZona ? lida.taxaOcupacaoMax : null}
+          coeficienteMax={comZona ? lida.coeficienteMax : null}
           onTaxaOcupacaoMax={() => {}}
           onCoeficienteMax={() => {}}
           empreendimentos={[{ id: 'e1', nome: 'Residencial Acácias', areaAtualM2: 358 }]}
-          empreendimentoSugerido="e1"
+          empreendimentoId={comZona ? 'e1' : ''}
+          onEmpreendimento={() => {}}
           onGravarArea={() => {}}
           onAbrirQuadro={() => {}}
           ladosSemPapel={linhas.filter((l) => l.papel === null).length}
           ladosDivergentes={linhas.filter(divergente).length}
+          gabaritoAlturaMaxM={comZona ? lida.gabaritoAlturaMaxM : null}
+          gabaritoPavimentos={comZona ? lida.gabaritoPavimentos : null}
+          taxaPermeabilidadeMin={comZona ? lida.taxaPermeabilidadeMin : null}
+          pavimentosDesenhados={8}
+          alturaDesenhadaM={24}
+          zonaSlot={
+            <PainelZonaUrbanistica
+              empreendimentos={[{ id: 'e1', nome: 'Residencial Acácias' }]}
+              empreendimentoId={comZona ? 'e1' : ''}
+              onEmpreendimento={() => {}}
+              zonas={comZona ? [zonaAtiva] : []}
+              zonaAplicadaId={comZona ? 'z1' : null}
+              zonaRotuloSalvo={comZona ? 'ZR-2 · Zona Residencial 2' : null}
+              ajustadoAMao={painel === 'na'}
+              derivou={painel === 'na'}
+              onAplicar={() => {}}
+              onDesligar={() => {}}
+            />
+          }
         />
       </div>
     );

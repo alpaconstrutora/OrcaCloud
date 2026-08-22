@@ -11,12 +11,26 @@
 
 import { EmpreendimentoRegulatoryZone } from '../../types/empreendimento';
 import { PlantUrbanRuleset } from '../../types/plantaAi';
+import { lerValorRegulatorio } from '../../utils/regulatoryValue';
 
-/** Número em formato BR ("0,8" → 0.8). parseFloat direto pararia na vírgula. */
+/**
+ * Número em formato BR ("0,8" → 0.8), no formato que o motor espera (`undefined`
+ * quando não há valor, não `null`).
+ *
+ * A regra em si vive em `utils/regulatoryValue.ts` — era daqui que ela vinha, e
+ * saiu para parar de existir em cinco cópias divergentes (ver o cabeçalho de
+ * lá). Duas diferenças herdadas da mudança, as duas para melhor: "N.A." agora é
+ * reconhecido em qualquer caixa, e string que só COMEÇA com número ("5 a 7")
+ * deixa de virar `5` calado e passa a ser "sem valor".
+ *
+ * ⚠️ Deliberadamente NÃO usa `lerPorcentagem` aqui. `plantaAiEngine` divide
+ * `occupancy_rate` por 100, então uma zona gravada como fração ('0,8') já entra
+ * errada no motor hoje — bug real e anterior a este arquivo. Corrigi-lo é mexer
+ * no comportamento do Planta AI v1, que não está sob teste nesta frente;
+ * trocar a semântica de passagem aqui seria fazer isso de lado, sem medir.
+ */
 function regNum(v?: string): number | undefined {
-    if (!v || v === 'N.A.' || v.trim() === '') return undefined;
-    const n = parseFloat(v.replace(',', '.'));
-    return Number.isNaN(n) ? undefined : n;
+    return lerValorRegulatorio(v) ?? undefined;
 }
 
 const CONFIDENCE_LEVELS = ['Baixo', 'Médio', 'Alto', 'Validado por profissional', 'Validado na prefeitura'] as const;

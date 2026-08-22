@@ -36,6 +36,7 @@ import PainelMedicoes from './PainelMedicoes';
 import PainelParedeSelecionada from './PainelParedeSelecionada';
 import PainelSelecaoMultipla from './PainelSelecaoMultipla';
 import PainelTerreno from './PainelTerreno';
+import PainelZonaUrbanistica from './PainelZonaUrbanistica';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -49,11 +50,10 @@ import {
   medidasPorPapel,
   medirTerreno,
   papeisSugeridos,
-  RECUOS_ZERO,
   ROTULO_DO_PAPEL,
-  type Recuos,
 } from '../../utils/blueprintTerreno';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
+import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
 import type { PontoPx } from '../../utils/blueprintUnderlay';
 import type { BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
@@ -138,17 +138,6 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
    * regra escondida.
    */
   const [modoMover, setModoMover] = useState<'MOVER' | 'ESTICAR'>('MOVER');
-  /**
-   * Recuos e limites da zona — estado de TELA, não do modelo.
-   *
-   * Não entram no payload canônico de propósito: são parâmetro urbanístico do
-   * município, não geometria do desenho, e gravá-los no snapshot faria o hash da
-   * planta mudar porque alguém digitou um recuo. O que É do desenho — qual lado
-   * é a frente — vive no modelo, em `Boundary.papel`.
-   */
-  const [recuos, setRecuos] = useState<Recuos>(RECUOS_ZERO);
-  const [taxaOcupacaoMax, setTaxaOcupacaoMax] = useState<number | null>(null);
-  const [coeficienteMax, setCoeficienteMax] = useState<number | null>(null);
   const [empreendimentos, setEmpreendimentos] = useState<Empreendimento[]>([]);
   const [gravandoArea, setGravandoArea] = useState(false);
   const [erroArea, setErroArea] = useState<string | null>(null);
@@ -209,6 +198,37 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
     if (!study.project_id) return null;
     return empreendimentos.find((e) => e.project_id === study.project_id)?.id ?? null;
   }, [empreendimentos, study.project_id]);
+
+  /**
+   * Recuos e limites — agora vindos do Mapa Regulatório, não mais digitados do zero.
+   *
+   * Continuam FORA do payload canônico pela razão de sempre: são parâmetro
+   * urbanístico do município, não geometria, e gravá-los no snapshot faria o
+   * hash da planta mudar porque alguém digitou um recuo. O que mudou é que
+   * agora eles têm casa própria (`blueprint_study_urban_context`) e sobrevivem
+   * ao recarregar. O que É do desenho — qual lado é a frente — segue no modelo,
+   * em `Boundary.papel`.
+   */
+  const zona = useBlueprintZonaUrbanistica(
+    study.id,
+    study.organization_id,
+    empreendimentoSugerido,
+  );
+  const recuos = zona.recuos;
+
+  /**
+   * Altura do que está desenhado, em metros — para confrontar com o gabarito.
+   *
+   * Topo do nível mais alto: `elevationMm + defaultHeightMm`. Usar só a maior
+   * `elevationMm` mediria até o PISO do último pavimento e deixaria a última
+   * altura de pé-direito de fora, o que subestima justamente onde o gabarito
+   * costuma apertar.
+   */
+  const alturaDesenhadaM = useMemo(() => {
+    if (editor.model.levels.length === 0) return null;
+    const topoMm = Math.max(...editor.model.levels.map((l) => l.elevationMm + l.defaultHeightMm));
+    return Number((topoMm / 1000).toFixed(2));
+  }, [editor.model.levels]);
 
   const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
   const [camadaAtiva, setCamadaAtiva] = useState('Geral');
@@ -1650,25 +1670,47 @@ export default function BlueprintEditor({ study, branchId, onBack }: Props) {
               limiteSel && editor.run({ type: 'SetBoundaryPapel', boundaryId: limiteSel.id, papel })
             }
             recuos={recuos}
-            onRecuo={(papel, mm) => setRecuos((r) => ({ ...r, [papel]: mm }))}
+            onRecuo={zona.ajustarRecuo}
             envelope={envelope}
             aproveitamento={aproveitamento}
-            taxaOcupacaoMax={taxaOcupacaoMax}
-            coeficienteMax={coeficienteMax}
-            onTaxaOcupacaoMax={setTaxaOcupacaoMax}
-            onCoeficienteMax={setCoeficienteMax}
+            taxaOcupacaoMax={zona.taxaOcupacaoMax}
+            coeficienteMax={zona.coeficienteMax}
+            onTaxaOcupacaoMax={zona.ajustarTaxaOcupacaoMax}
+            onCoeficienteMax={zona.ajustarCoeficienteMax}
             empreendimentos={empreendimentos.map((e) => ({
               id: e.id,
               nome: e.name,
               areaAtualM2: e.terreno_area ?? null,
             }))}
-            empreendimentoSugerido={empreendimentoSugerido}
+            empreendimentoId={zona.empreendimentoId}
+            onEmpreendimento={zona.setEmpreendimentoId}
             onGravarArea={(id) => void gravarAreaNoEmpreendimento(id)}
             gravando={gravandoArea}
             erro={erroArea}
             onAbrirQuadro={() => setQuadroAberto(true)}
             ladosSemPapel={ladosSemPapel}
             ladosDivergentes={ladosDivergentes}
+            gabaritoAlturaMaxM={zona.gabaritoAlturaMaxM}
+            gabaritoPavimentos={zona.gabaritoPavimentos}
+            taxaPermeabilidadeMin={zona.taxaPermeabilidadeMin}
+            pavimentosDesenhados={editor.model.levels.length}
+            alturaDesenhadaM={alturaDesenhadaM}
+            zonaSlot={
+              <PainelZonaUrbanistica
+                empreendimentos={empreendimentos.map((e) => ({ id: e.id, nome: e.name }))}
+                empreendimentoId={zona.empreendimentoId}
+                onEmpreendimento={zona.setEmpreendimentoId}
+                zonas={zona.zonas}
+                carregandoZonas={zona.carregandoZonas}
+                zonaAplicadaId={zona.zonaAplicadaId}
+                zonaRotuloSalvo={zona.zonaRotuloSalvo}
+                ajustadoAMao={zona.ajustadoAMao}
+                derivou={zona.derivou}
+                onAplicar={zona.aplicarZona}
+                onDesligar={zona.desligar}
+                salvando={zona.salvando}
+              />
+            }
           />
 
           <PainelParedeSelecionada

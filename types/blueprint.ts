@@ -101,3 +101,40 @@ export class BlueprintRevisionConflict extends Error {
     this.name = 'BlueprintRevisionConflict';
   }
 }
+
+/**
+ * Zona do Mapa Regulatório aplicada a um estudo, com os números em vigor.
+ *
+ * Vive FORA do payload canônico de propósito: parâmetro urbanístico do município
+ * não é geometria do desenho, e gravá-lo no snapshot faria o hash da planta
+ * mudar porque alguém digitou um recuo. Tabela
+ * `blueprint_study_urban_context` (migration `aplicar_20270914000000`).
+ */
+export interface BlueprintUrbanContext {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  /** De onde os números vieram. `null` = zona de origem apagada ou nunca houve. */
+  empreendimento_id: string | null;
+  regulatory_zone_id: string | null;
+  /** Cópia do rótulo, para a tela continuar legível se a zona sumir. */
+  zona_rotulo: string | null;
+  lei_referencia: string | null;
+  /** Recuos em MILÍMETRO inteiro — a unidade do kernel. */
+  recuo_frente_mm: number | null;
+  recuo_fundos_mm: number | null;
+  recuo_lateral_direita_mm: number | null;
+  recuo_lateral_esquerda_mm: number | null;
+  /** Taxas em PORCENTAGEM (80 = 80%), já resolvidas na leitura. */
+  taxa_ocupacao_max: number | null;
+  taxa_permeabilidade_min: number | null;
+  coeficiente_max: number | null;
+  /** Em METRO. */
+  gabarito_altura_max_m: number | null;
+  gabarito_pavimentos: number | null;
+  /** Por campo: veio da lei ou foi digitado por cima. */
+  origem_valores: Record<string, 'ZONA' | 'MANUAL'>;
+  aplicado_em: string | null;
+  created_at: string;
+  updated_at: string;
+}

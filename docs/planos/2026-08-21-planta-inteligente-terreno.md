@@ -330,3 +330,108 @@ escritura sai espelhada.
 - **Memorial por rumo/azimute** e gerar o polígono a partir dele.
 - **Quadro de divisas na prancha exportada** (PDF/DXF) — o dado passa a existir e pode ser exportado depois.
 - Gleba multi-lote, georreferenciamento, topografia, ligar recuos à base regulatória — seguem como estavam.
+
+---
+
+# Pedido posterior — 2026-08-22: integração com o Mapa Regulatório
+
+## Pedido original
+
+> implemente integração com incorporação < maparegulatório
+
+Sessão: `7bfce59b-9974-4a15-a43f-7cd693deda82` · 2026-08-22
+
+É o item que a F3 deste plano deixou explicitamente em aberto (*"Ligar recuos à
+base regulatória"*), e que `PainelTerreno.tsx` justificava assim: *"o produto tem
+duas [bases], com tipos incompatíveis […] a ligação entra quando essa bagunça
+for resolvida"*.
+
+## O que a exploração mudou no diagnóstico
+
+**A bagunça era menor do que o comentário dizia.** `empreendimento_regulatory_zones`
+é a fonte viva (Planta AI, Imovib e a aba do Empreendimento leem dela).
+`plant_urban_rulesets` **está aplicada no banco** — o comentário acertava que a
+DDL vive em `migrations_pending_review/` e induzia a crer que a tabela não
+existia — mas está **morta no app**: zero `.from('plant_urban_rulesets')` em
+`components/`, `services/`, `hooks/`. Não havia duas bases competindo; havia uma
+viva e uma órfã.
+
+**A ponte TEXT→número já existia**, em `services/sync/regulatoryAdapter.ts`, e
+era a única de **cinco** cópias que não transformava `"0"` em `null`.
+
+## Decisões tomadas com o usuário
+
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 2026-08-22 | De onde vem a zona? | **Zonas do empreendimento** — respeita a cópia editável ("pin"), não o catálogo cru da cidade. |
+| 2026-08-22 | Sobrevive ao F5? | **Sim**, tabela nova por estudo, fora do payload canônico. |
+| 2026-08-22 | Quais parâmetros? | **Todos**: 4 recuos + T.O. + C.A. + gabarito (altura e pavimentos) + permeabilidade. |
+
+## Estado
+
+Tudo entregue em 2026-08-22.
+
+- [x] F1 — `utils/regulatoryValue.ts`, conversor único; `regulatoryAdapter` passa a importá-lo
+- [x] F2 — migration `aplicar_20270914000000_blueprint_study_urban_context.sql` + `services/blueprintUrbanContextService.ts` + tipo em `types/blueprint.ts`
+- [x] F3 — `components/blueprint/PainelZonaUrbanistica.tsx` + `hooks/useBlueprintZonaUrbanistica.ts`; o empreendimento subiu para o editor e serve à zona E ao write-back
+- [x] F4 — gabarito e permeabilidade no painel, com confronto onde é honesto
+- [x] Testes: 1452 na suíte (+23) — `regulatoryValue` (12) e `blueprintZonaUrbanistica` (11)
+- [x] Padrão de UI — `check-ui-standard.sh` limpo; conferido por print nos 3 estados
+- [ ] ⚠️ **Migration NÃO aplicada** — rodar à mão no SQL Editor (ver abaixo)
+
+### Notas de implementação
+
+**Sem bump de kernel.** Recuo e limite de zona continuam fora do payload
+canônico — gravá-los mudaria o hash da planta porque alguém digitou um recuo, e
+publicar deixaria de ser idempotente. O que mudou é que agora têm casa própria e
+sobrevivem ao recarregar.
+
+⚠️ **O editor DEGRADA sem a migration.** O deploy da Vercel publica só o
+front-end, então existe uma janela entre o push e o SQL rodar. Se o `get`
+explodisse, o painel de terreno inteiro morreria por causa de um recurso novo —
+então falha de persistência vira `persistenciaIndisponivel` e o editor segue em
+memória, exatamente como funcionava antes desta entrega.
+
+⚠️ **Fundos com `"N.A."` acusava deriva no instante seguinte a aplicar.** O valor
+aplicado passa por `recuosDaZona` (`null` → 0) e a releitura devolvia `null` cru:
+a comparação dizia "a zona mudou" sem nada ter mudado. `zonaDerivou` normaliza os
+dois lados. Há teste.
+
+⚠️ **A unidade da taxa de ocupação é ambígua na base, e é anterior a esta
+entrega.** O select da tabela oferece fração (`'0,8'`), a planilha da prefeitura
+traz `70`, `plantaAiEngine` divide por 100 e o `Indicador` multiplica. A regra
+adotada — **`≤ 1` é fração** — é a única que não erra: não existe zona com taxa
+de ocupação de 0,8 %. O caso `1` entra como 100 % (lote inteiro), que é como a
+lei escreve.
+
+**`regulatoryAdapter` deliberadamente NÃO passou a usar `lerPorcentagem`.** Isso
+corrigiria o bug de unidade do Planta AI v1 de lado, sem medir, num módulo que
+não está sob teste nesta frente.
+
+## Verificação
+
+**Testes** — `regulatoryValue`: `"0"→0`, `"5 a 7"→null` (não 5), `N.A.` em
+qualquer caixa, `"3,00 m"→3`, fração × porcentagem. `blueprintZonaUrbanistica`:
+zona completa → recuos em mm; campo ilegível **nomeado** e não zerado; C.A. `1`
+continua 1 enquanto T.O. `1` vira 100; deriva ignora campo ajustado à mão.
+
+**Harness visual** — `docs/spikes/terreno/quadro.html?painel=ok|na|vazio`, sem
+login. Os três printados: zona aplicada, zona com `"N.A."`/texto livre, e sem
+empreendimento.
+
+**No app (pendente do usuário):** aplicar a migration; importar zonas na aba do
+empreendimento; aplicar no editor e ver o envelope mudar; F5 e conferir que
+voltou; editar a zona e ver a deriva; publicar e conferir que o hash **não**
+mudou.
+
+## Fora de escopo (declarado)
+
+- **As três cópias de `parseRegVal` do Imovib** (`ImovibBlocksTypologyTab`,
+  `ImovibCapexForm`, `ImovibStaticViability`) seguem com o bug do `"0"` virar
+  `null`. Migrá-las para `utils/regulatoryValue.ts` é limpeza de outra frente.
+- **Aposentar `plant_urban_rulesets`** (aplicada e órfã) e mover a DDL de
+  `migrations_pending_review/`.
+- **Campo "zona aplicável" no empreendimento** — o resto do app segue em
+  `zones[0]`; a escolha aqui é por estudo de blueprint.
+- **Área permeável no modelo** — sem entidade para isso, o limite fica como
+  referência, dito na tela.

@@ -101,6 +101,43 @@ function Indicador({
   );
 }
 
+/**
+ * Um limite da zona com o que o desenho tem hoje ao lado.
+ *
+ * Vermelho só quando estourou de verdade. Sem valor desenhado (`atual` nulo) não
+ * se pinta nada — dizer que passou de um limite sem ter medido é a mesma mentira
+ * que o `Indicador` de T.O. evita quando ninguém informou o máximo.
+ */
+function LimiteConferido({
+  rotulo,
+  limite,
+  atual,
+  atualTexto,
+  maximo,
+}: {
+  rotulo: string;
+  limite: string;
+  /** O número, só para comparar. */
+  atual: number | null;
+  /** Como ele aparece — formatado pelo chamador, que sabe se é metro ou nível. */
+  atualTexto: string;
+  maximo: number;
+}) {
+  const estourou = atual !== null && atual > maximo;
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <span className="text-slate-600">{rotulo}</span>
+      <span className="flex items-center gap-1.5">
+        <strong className={estourou ? 'text-red-700' : 'text-slate-800'}>
+          {atual === null ? '—' : atualTexto}
+        </strong>
+        <span className="text-slate-400">/</span>
+        <span className="text-slate-600">{limite}</span>
+      </span>
+    </div>
+  );
+}
+
 interface Props {
   /** O lote medido. `null` quando não há divisa de terreno desenhada. */
   terreno: Terreno | null;
@@ -128,8 +165,15 @@ interface Props {
    * descobre até a hora do memorial de incorporação.
    */
   empreendimentos: { id: string; nome: string; areaAtualM2: number | null }[];
-  /** Id sugerido pela obra do estudo. Vem PRÉ-SELECIONADO, nunca gravado sozinho. */
-  empreendimentoSugerido: string | null;
+  /**
+   * O empreendimento escolhido. Vive no EDITOR, não aqui.
+   *
+   * Subiu quando a zona urbanística passou a precisar do mesmo empreendimento do
+   * write-back de área: dois seletores da mesma coisa na mesma caixa seriam duas
+   * respostas possíveis para uma pergunta só.
+   */
+  empreendimentoId: string;
+  onEmpreendimento: (id: string) => void;
   onGravarArea: (empreendimentoId: string) => void;
   gravando?: boolean;
   /** Falha da última gravação. Aparece onde a ação foi pedida, não no topo. */
@@ -140,6 +184,21 @@ interface Props {
   ladosSemPapel: number;
   /** Quantos lados divergem da medida da escritura além da tolerância. */
   ladosDivergentes: number;
+  /**
+   * O painel de zona urbanística, montado pelo editor.
+   *
+   * Slot em vez de props: o seletor de zona precisa de zonas, carregamento,
+   * deriva e proveniência — sete props que esta caixa só repassaria. É o mesmo
+   * padrão de `tabsSlot` do guia de UI (§19.3).
+   */
+  zonaSlot?: React.ReactNode;
+  /** Limites da zona que o desenho ainda não confronta sozinho. */
+  gabaritoAlturaMaxM: number | null;
+  gabaritoPavimentos: number | null;
+  taxaPermeabilidadeMin: number | null;
+  /** O que o modelo tem hoje, para confrontar com o gabarito. */
+  pavimentosDesenhados: number;
+  alturaDesenhadaM: number | null;
 }
 
 export default function PainelTerreno({
@@ -156,17 +215,22 @@ export default function PainelTerreno({
   onTaxaOcupacaoMax,
   onCoeficienteMax,
   empreendimentos,
-  empreendimentoSugerido,
+  empreendimentoId,
+  onEmpreendimento,
   onGravarArea,
   gravando = false,
   erro = null,
   onAbrirQuadro,
   ladosSemPapel,
   ladosDivergentes,
+  zonaSlot,
+  gabaritoAlturaMaxM,
+  gabaritoPavimentos,
+  taxaPermeabilidadeMin,
+  pavimentosDesenhados,
+  alturaDesenhadaM,
 }: Props) {
-  const [alvo, setAlvo] = useState<string>('');
-  const escolhido = alvo || empreendimentoSugerido || '';
-  const empSelecionado = empreendimentos.find((e) => e.id === escolhido) ?? null;
+  const empSelecionado = empreendimentos.find((e) => e.id === empreendimentoId) ?? null;
   if (!terreno && !divisaSelecionada) return null;
 
   const comprimentoMm = divisaSelecionada
@@ -218,6 +282,10 @@ export default function PainelTerreno({
           barra.
         </p>
       )}
+
+      {/* A zona vem ANTES dos recuos: é de onde eles saem. Fora do `terreno &&`
+          porque escolher a lei não depende de já haver lote desenhado. */}
+      {zonaSlot}
 
       {terreno && (
         <div className="mt-3 border-t border-slate-200 pt-3">
@@ -316,26 +384,24 @@ export default function PainelTerreno({
           {/* Só com o contorno FECHADO. Área de contorno aberto veio de fechar em
               reta, é estimativa — e estimativa não pode virar o número oficial
               do terreno na ficha do empreendimento. */}
+          {/* Sem seletor próprio: o empreendimento é o mesmo escolhido lá em
+              cima, na zona urbanística. Perguntar de novo aqui abriria a porta
+              para gravar a área num empreendimento e ler a lei de outro. */}
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <select
-              value={escolhido}
-              onChange={(e) => setAlvo(e.target.value)}
-              aria-label="Empreendimento onde gravar a área do terreno"
-              className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-800"
+            {/* `truncate` só no NOME — nome de empreendimento estoura a coluna,
+                a dica não pode ser cortada no meio. */}
+            <p
+              className={`min-w-0 flex-1 text-xs ${
+                empSelecionado ? 'truncate text-slate-600' : 'text-slate-500'
+              }`}
             >
-              <option value="">Escolha o empreendimento…</option>
-              {empreendimentos.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nome}
-                  {e.id === empreendimentoSugerido ? ' (obra deste estudo)' : ''}
-                </option>
-              ))}
-            </select>
+              {empSelecionado ? empSelecionado.nome : 'Escolha o empreendimento acima.'}
+            </p>
 
             <button
               type="button"
-              disabled={!escolhido || gravando}
-              onClick={() => escolhido && onGravarArea(escolhido)}
+              disabled={!empreendimentoId || gravando}
+              onClick={() => empreendimentoId && onGravarArea(empreendimentoId)}
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save className="h-3.5 w-3.5" />
@@ -390,6 +456,63 @@ export default function PainelTerreno({
           <p className="mt-1.5 text-xs text-slate-500">
             Um nível desenhado: o coeficiente ainda não soma pavimentos.
           </p>
+        </div>
+      )}
+
+      {/* ── Gabarito e permeabilidade ────────────────────────────────────────
+          Só aparecem quando a zona disse alguma coisa sobre eles. Linha vazia de
+          limite não informado seria ruído — o painel já é estreito. */}
+      {(gabaritoPavimentos !== null ||
+        gabaritoAlturaMaxM !== null ||
+        taxaPermeabilidadeMin !== null) && (
+        <div className="mt-3 border-t border-slate-200 pt-3">
+          <p className="text-xs font-medium text-slate-700">Limites da zona</p>
+
+          <div className="mt-1.5 space-y-1">
+            {gabaritoPavimentos !== null && (
+              <LimiteConferido
+                rotulo="Gabarito (pavimentos)"
+                limite={`${gabaritoPavimentos}`}
+                atual={pavimentosDesenhados}
+                atualTexto={`${pavimentosDesenhados} ${pavimentosDesenhados === 1 ? 'nível' : 'níveis'}`}
+                maximo={gabaritoPavimentos}
+              />
+            )}
+
+            {gabaritoAlturaMaxM !== null && (
+              <LimiteConferido
+                rotulo="Gabarito (altura)"
+                limite={`${gabaritoAlturaMaxM.toFixed(2).replace('.', ',')} m`}
+                atual={alturaDesenhadaM}
+                atualTexto={
+                  alturaDesenhadaM === null
+                    ? '—'
+                    : `${alturaDesenhadaM.toFixed(2).replace('.', ',')} m`
+                }
+                maximo={gabaritoAlturaMaxM}
+              />
+            )}
+
+            {taxaPermeabilidadeMin !== null && (
+              // ⚠️ SEM confronto, e isso é dito na tela. O modelo não tem
+              // entidade de área permeável (piso drenante, jardim); comparar
+              // exigiria inventar o dado, e um número inventado que parece
+              // conferido é pior que número nenhum.
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-slate-600">Permeabilidade mínima</span>
+                <span className="text-slate-800">
+                  {taxaPermeabilidadeMin.toFixed(1).replace('.', ',')}%
+                  <span className="ml-1 text-slate-400">(referência)</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {taxaPermeabilidadeMin !== null && (
+            <p className="mt-1.5 text-xs text-slate-500">
+              O desenho não modela área permeável, então este limite não é conferido aqui.
+            </p>
+          )}
         </div>
       )}
 
